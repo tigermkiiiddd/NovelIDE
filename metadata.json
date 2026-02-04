@@ -1,0 +1,5 @@
+{
+  "name": "NovelGenie IDE",
+  "description": "A mobile-first IDE for novelists featuring an emergent AI agent capable of managing your file system and drafting content.",
+  "requestFramePermissions": []
+}
