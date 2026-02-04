@@ -17,6 +17,10 @@ interface AgentState {
   isLoading: boolean;
   pendingChanges: PendingChange[];
   
+  // UI State for Reviewing
+  reviewingChangeId: string | null;
+  setReviewingChangeId: (id: string | null) => void;
+  
   // Actions
   createSession: (initialTitle?: string) => string;
   switchSession: (id: string) => void;
@@ -47,6 +51,9 @@ export const useAgentStore = create<AgentState>()(
       currentSessionId: null,
       isLoading: false,
       pendingChanges: [],
+      reviewingChangeId: null,
+
+      setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
 
       createSession: (initialTitle = '新会话') => {
         const newSession: ChatSession = {
@@ -59,13 +66,14 @@ export const useAgentStore = create<AgentState>()(
         set(state => ({
           sessions: [newSession, ...state.sessions],
           currentSessionId: newSession.id,
-          pendingChanges: [] // Clear pending changes on new session
+          pendingChanges: [], // Clear pending changes on new session
+          reviewingChangeId: null
         }));
         return newSession.id;
       },
 
       switchSession: (id) => {
-        set({ currentSessionId: id, pendingChanges: [] });
+        set({ currentSessionId: id, pendingChanges: [], reviewingChangeId: null });
       },
 
       deleteSession: (id) => {
@@ -134,10 +142,12 @@ export const useAgentStore = create<AgentState>()(
       })),
 
       removePendingChange: (id) => set(state => ({ 
-          pendingChanges: state.pendingChanges.filter(c => c.id !== id) 
+          pendingChanges: state.pendingChanges.filter(c => c.id !== id),
+          // Clear reviewing state if the removed change was the one being viewed
+          reviewingChangeId: state.reviewingChangeId === id ? null : state.reviewingChangeId
       })),
 
-      clearPendingChanges: () => set({ pendingChanges: [] })
+      clearPendingChanges: () => set({ pendingChanges: [], reviewingChangeId: null })
     }),
     {
       name: 'novel-genie-agent-storage',

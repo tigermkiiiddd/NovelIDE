@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { FileNode, FileType } from '../types';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2 } from 'lucide-react';
 
 interface FileExplorerProps {
   files: FileNode[];
@@ -10,6 +10,7 @@ interface FileExplorerProps {
   onDeleteFile: (id: string) => void;
   onCreateFile?: (parentId: string, name: string) => void;
   onCreateFolder?: (parentId: string, name: string) => void;
+  onRenameFile?: (id: string, newName: string) => void;
   className?: string;
 }
 
@@ -20,14 +21,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   onDeleteFile,
   onCreateFile,
   onCreateFolder,
+  onRenameFile,
   className 
 }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']));
 
   // --- Modal State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'FILE' | 'FOLDER'>('FILE');
-  const [modalParentId, setModalParentId] = useState<string | null>(null);
+  const [modalType, setModalType] = useState<'FILE' | 'FOLDER' | 'RENAME'>('FILE');
+  const [modalTargetId, setModalTargetId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,25 +53,38 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   const handleCreateClick = (e: React.MouseEvent, parentId: string, type: 'FILE' | 'FOLDER') => {
       e.stopPropagation();
       setModalType(type);
-      setModalParentId(parentId);
+      setModalTargetId(parentId);
       setInputValue('');
+      setIsModalOpen(true);
+  };
+
+  const handleRenameClick = (e: React.MouseEvent, node: FileNode) => {
+      e.stopPropagation();
+      setModalType('RENAME');
+      setModalTargetId(node.id);
+      setInputValue(node.name);
       setIsModalOpen(true);
   };
 
   const handleModalSubmit = (e?: React.FormEvent) => {
       if (e) e.preventDefault();
-      if (!inputValue.trim() || !modalParentId) return;
+      if (!inputValue.trim() || !modalTargetId) return;
 
       if (modalType === 'FILE' && onCreateFile) {
-          onCreateFile(modalParentId, inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`);
+          onCreateFile(modalTargetId, inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`);
+          // Auto expand
+          const newSet = new Set(expandedFolders);
+          newSet.add(modalTargetId);
+          setExpandedFolders(newSet);
       } else if (modalType === 'FOLDER' && onCreateFolder) {
-          onCreateFolder(modalParentId, inputValue);
+          onCreateFolder(modalTargetId, inputValue);
+          // Auto expand
+          const newSet = new Set(expandedFolders);
+          newSet.add(modalTargetId);
+          setExpandedFolders(newSet);
+      } else if (modalType === 'RENAME' && onRenameFile) {
+          onRenameFile(modalTargetId, inputValue);
       }
-      
-      // Auto expand the folder where we created something
-      const newSet = new Set(expandedFolders);
-      newSet.add(modalParentId);
-      setExpandedFolders(newSet);
       
       setIsModalOpen(false);
   };
@@ -126,40 +141,53 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
               {node.name}
             </span>
 
-            {/* Folder Actions */}
-            {node.type === FileType.FOLDER && (
-                <div className="flex gap-1 mr-1">
-                    <button
-                        onClick={(e) => handleCreateClick(e, node.id, 'FILE')}
-                        className="p-1 hover:text-blue-400 text-gray-500 transition-opacity opacity-0 group-hover:opacity-100"
-                        title="新建文件"
-                    >
-                        <FilePlus size={14} />
-                    </button>
-                    <button
-                        onClick={(e) => handleCreateClick(e, node.id, 'FOLDER')}
-                        className="p-1 hover:text-yellow-400 text-gray-500 transition-opacity opacity-0 group-hover:opacity-100"
-                        title="新建文件夹"
-                    >
-                        <FolderPlus size={14} />
-                    </button>
-                </div>
-            )}
-
-            {/* Delete Button - Hidden for System Directories */}
-            {!isSystemDir && (
-                <button 
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        // Removed confirm dialog check
-                        onDeleteFile(node.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-gray-500 transition-opacity"
-                    title="删除"
+            {/* Actions Group */}
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                
+                {/* Rename Button */}
+                <button
+                    onClick={(e) => handleRenameClick(e, node)}
+                    className="p-1 hover:text-white text-gray-500 transition-colors"
+                    title="重命名"
                 >
-                    <Trash2 size={14} />
+                    <Edit2 size={14} />
                 </button>
-            )}
+
+                {/* Folder Creation Actions */}
+                {node.type === FileType.FOLDER && (
+                    <>
+                        <button
+                            onClick={(e) => handleCreateClick(e, node.id, 'FILE')}
+                            className="p-1 hover:text-blue-400 text-gray-500 transition-colors"
+                            title="新建文件"
+                        >
+                            <FilePlus size={14} />
+                        </button>
+                        <button
+                            onClick={(e) => handleCreateClick(e, node.id, 'FOLDER')}
+                            className="p-1 hover:text-yellow-400 text-gray-500 transition-colors"
+                            title="新建文件夹"
+                        >
+                            <FolderPlus size={14} />
+                        </button>
+                    </>
+                )}
+
+                {/* Delete Button - Hidden for System Directories */}
+                {!isSystemDir && (
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            // Removed confirm dialog check
+                            onDeleteFile(node.id);
+                        }}
+                        className="p-1 hover:text-red-400 text-gray-500 transition-colors"
+                        title="删除"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                )}
+            </div>
           </div>
           
           {node.type === FileType.FOLDER && isExpanded && (
@@ -179,7 +207,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
         {renderTree('root')}
       </div>
 
-      {/* Input Modal for Creating Files/Folders */}
+      {/* Input Modal for Creating/Renaming */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
             <div 
@@ -188,8 +216,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             >
                 <div className="px-4 py-3 border-b border-gray-700 flex justify-between items-center bg-gray-850">
                     <h3 className="font-medium text-gray-200 flex items-center gap-2">
-                        {modalType === 'FILE' ? <FilePlus size={16} className="text-blue-400"/> : <FolderPlus size={16} className="text-yellow-400"/>}
-                        {modalType === 'FILE' ? '新建文件' : '新建文件夹'}
+                        {modalType === 'RENAME' 
+                            ? <Edit2 size={16} className="text-purple-400"/> 
+                            : (modalType === 'FILE' ? <FilePlus size={16} className="text-blue-400"/> : <FolderPlus size={16} className="text-yellow-400"/>)
+                        }
+                        {modalType === 'RENAME' ? '重命名' : (modalType === 'FILE' ? '新建文件' : '新建文件夹')}
                     </h3>
                     <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white transition-colors">
                         <X size={18} />
@@ -197,7 +228,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 </div>
                 <form onSubmit={handleModalSubmit} className="p-4">
                     <label className="block text-xs text-gray-400 mb-1.5 uppercase tracking-wide">
-                        {modalType === 'FILE' ? '文件名' : '文件夹名称'}
+                        {modalType === 'FILE' ? '文件名' : (modalType === 'FOLDER' ? '文件夹名称' : '新名称')}
                     </label>
                     <input 
                         ref={inputRef}
@@ -220,7 +251,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                             disabled={!inputValue.trim()}
                             className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
                         >
-                            创建
+                            {modalType === 'RENAME' ? '确认修改' : '创建'}
                         </button>
                     </div>
                 </form>

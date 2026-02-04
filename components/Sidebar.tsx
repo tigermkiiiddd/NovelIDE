@@ -4,6 +4,7 @@ import { Menu, ArrowLeft, Settings } from 'lucide-react';
 import FileExplorer from './FileExplorer';
 import { useFileStore } from '../stores/fileStore';
 import { useShallow } from 'zustand/react/shallow';
+import { getNodePath } from '../services/fileSystem';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface SidebarProps {
   onBackToProjects: () => void;
   onOpenSettings: () => void;
   className?: string;
+  width?: number; // 新增：支持动态宽度
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -18,24 +20,36 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   onBackToProjects,
   onOpenSettings,
-  className = ''
+  className = '',
+  width = 256 // 默认宽度
 }) => {
   // Use shallow selection to prevent Sidebar rerender when file CONTENT changes
-  const { files, activeFileId, setActiveFileId, deleteFile, createFileById, createFolderById } = useFileStore(
+  const { files, activeFileId, setActiveFileId, deleteFile, createFileById, createFolderById, renameFile } = useFileStore(
     useShallow(state => ({
         files: state.files,
         activeFileId: state.activeFileId,
         setActiveFileId: state.setActiveFileId,
         deleteFile: state.deleteFile,
         createFileById: state.createFileById,
-        createFolderById: state.createFolderById
+        createFolderById: state.createFolderById,
+        renameFile: state.renameFile
     }))
   );
+
+  const handleRename = (id: string, newName: string) => {
+      const node = files.find(f => f.id === id);
+      if (!node) return;
+      // Get the full path before renaming
+      const oldPath = getNodePath(node, files);
+      renameFile(oldPath, newName);
+  };
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   return (
     <>
       {/* Mobile Overlay */}
-      {isOpen && window.innerWidth < 768 && (
+      {isOpen && isMobile && (
         <div 
           className="absolute inset-0 bg-black/50 z-20"
           onClick={onClose}
@@ -44,9 +58,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Content */}
       <aside 
-        className={`absolute md:relative z-30 h-full w-64 bg-gray-850 border-r border-gray-700 transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`absolute md:relative z-30 h-full bg-gray-850 border-r border-gray-700 transform transition-transform duration-300 ease-in-out flex flex-col ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:hidden'
         } ${className}`}
+        style={{ 
+            width: isMobile ? '16rem' : width, // 移动端保持默认，桌面端使用动态宽度
+            minWidth: isMobile ? '16rem' : 'auto'
+        }} 
       >
         <div className="p-4 flex items-center justify-between md:hidden">
             <span className="font-bold text-lg">NovelGenie</span>
@@ -70,11 +88,12 @@ const Sidebar: React.FC<SidebarProps> = ({
                 activeFileId={activeFileId} 
                 onSelectFile={(id) => {
                   setActiveFileId(id);
-                  if (window.innerWidth < 768) onClose();
+                  if (isMobile) onClose();
                 }}
                 onDeleteFile={deleteFile}
                 onCreateFile={createFileById}
                 onCreateFolder={createFolderById}
+                onRenameFile={handleRename}
                 className="flex-1"
             />
         </div>

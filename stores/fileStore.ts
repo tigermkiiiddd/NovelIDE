@@ -16,7 +16,26 @@ import {
   SKILL_EROTIC_WRITER
 } from '../services/templates';
 
-// Protected files logic reused
+const TEMPLATE_WORLD_TIMELINE = `---
+summarys: ["此文件为标准的世界线记录模板，提供了表格格式以供复制使用，旨在规范化记录剧情事件与状态变更。"]
+tags: ["模板"]
+---
+# 世界线记录
+
+| 章节 | 事件 | 状态变更 | 伏笔 |
+|---|---|---|---|
+`;
+
+const TEMPLATE_CLUES = `---
+summarys: ["此文件为标准的伏笔追踪模板，采用了任务列表的格式，方便作者在创作过程中随时添加和勾选已回收的伏笔。"]
+tags: ["模板"]
+---
+# 伏笔记录
+
+- [ ] [章节名] 伏笔内容 (未回收)
+`;
+
+// Define Protected Content Structure (The "Source of Truth" for system integrity)
 const PROTECTED_FILES: Record<string, Record<string, string>> = {
   '98_技能配置': {
     'agent_core.md': DEFAULT_AGENT_SKILL,
@@ -27,10 +46,22 @@ const PROTECTED_FILES: Record<string, Record<string, string>> = {
     '模板_项目档案.md': PROJECT_PROFILE_TEMPLATE,
     '模板_角色档案.md': CHARACTER_CARD_TEMPLATE,
     '模板_全书总纲.md': OUTLINE_MASTER_TEMPLATE,
-    '模板_章节细纲.md': OUTLINE_CHAPTER_TEMPLATE
+    '模板_章节细纲.md': OUTLINE_CHAPTER_TEMPLATE,
+    '模板_世界线记录.md': TEMPLATE_WORLD_TIMELINE,
+    '模板_伏笔记录.md': TEMPLATE_CLUES
   },
   'subskill': {
-      '技能_涩涩扩写.md': SKILL_EROTIC_WRITER
+      '技能_涩涩扩写.md': SKILL_EROTIC_WRITER,
+      '示例_战斗扩写增强.md': `---
+name: 战斗扩写增强
+description: 强化战斗场面的描写，侧重动作连贯性。
+summarys: ["本技能模块专注于提升战斗场景的描写质量，特别强调招式动作的流畅连贯性、环境破坏的视觉效果渲染以及技能命名与喊招的格调。"]
+tags: ["技能", "战斗"]
+---
+
+# 战斗描写增强指令
+
+当涉及战斗场景时，请重点关注：动作连贯性、环境破坏效果、招式名称的格调。`
   }
 };
 
@@ -57,6 +88,7 @@ interface FileState {
   
   // Internal Helper
   _saveToDB: () => void;
+  _restoreSystemFiles: () => void;
 }
 
 export const useFileStore = create<FileState>((set, get) => ({
@@ -68,13 +100,20 @@ export const useFileStore = create<FileState>((set, get) => ({
     let loadedFiles = await dbAPI.getFiles(projectId);
     
     if (!loadedFiles) {
-      loadedFiles = initialFileSystem;
+      loadedFiles = JSON.parse(JSON.stringify(initialFileSystem)); // Deep copy initial
     }
     
-    // 2. Migration & Integrity Check
     let hasChanges = false;
-    
-    // Parse metadata for all loaded files (Ensure metadata is sync'd with content)
+
+    // --- MIGRATION & FIXES ---
+    // Fix: 98_灵感碎片 -> 04_灵感碎片 (Legacy fix)
+    const oldInspiration = loadedFiles.find(f => f.name === '98_灵感碎片');
+    if (oldInspiration) {
+        loadedFiles = loadedFiles.map(f => f.id === oldInspiration.id ? { ...f, name: '04_灵感碎片' } : f);
+        hasChanges = true;
+    }
+
+    // Sync Metadata
     loadedFiles = loadedFiles.map(f => {
         if (f.type === FileType.FILE && f.content && !f.metadata) {
             const meta = parseFrontmatter(f.content);
@@ -85,87 +124,74 @@ export const useFileStore = create<FileState>((set, get) => ({
         }
         return f;
     });
-
-    // Fix: 98_灵感碎片 -> 04_灵感碎片
-    const oldInspiration = loadedFiles.find(f => f.name === '98_灵感碎片');
-    if (oldInspiration) {
-        loadedFiles = loadedFiles.map(f => f.id === oldInspiration.id ? { ...f, name: '04_灵感碎片' } : f);
-        hasChanges = true;
-    }
-
-    // Ensure 98_技能配置
-    let skillFolder = loadedFiles.find(f => f.name === '98_技能配置');
-    if (!skillFolder) {
-        const initSkillFolder = initialFileSystem.find(f => f.name === '98_技能配置');
-        if (initSkillFolder) {
-            skillFolder = initSkillFolder; 
-            loadedFiles.push(skillFolder);
-            hasChanges = true;
-        }
-    }
-
-    // Ensure subskill
-    if (skillFolder) {
-        let subskillFolder = loadedFiles.find(f => f.name === 'subskill' && f.parentId === skillFolder!.id);
-        if (!subskillFolder) {
-            const initSub = initialFileSystem.find(f => f.name === 'subskill');
-            subskillFolder = { ...(initSub || { id: generateId(), name: 'subskill', type: FileType.FOLDER, lastModified: Date.now() }), parentId: skillFolder.id };
-            loadedFiles.push(subskillFolder);
-            
-            // Add example skill
-            loadedFiles.push({
-                id: generateId(), parentId: subskillFolder.id, name: '示例_战斗扩写增强.md', type: FileType.FILE,
-                content: initialFileSystem.find(f => f.name === '示例_战斗扩写增强.md')?.content || '',
-                metadata: parseFrontmatter(initialFileSystem.find(f => f.name === '示例_战斗扩写增强.md')?.content || ''),
-                lastModified: Date.now()
-            });
-            hasChanges = true;
-        }
-         // Ensure Erotic Skill
-         if (subskillFolder) {
-             const eroticSkill = loadedFiles.find(f => f.parentId === subskillFolder!.id && f.name === '技能_涩涩扩写.md');
-             if (!eroticSkill) {
-                 const content = SKILL_EROTIC_WRITER;
-                 loadedFiles.push({ 
-                     id: generateId(), 
-                     parentId: subskillFolder.id, 
-                     name: '技能_涩涩扩写.md', 
-                     type: FileType.FILE, 
-                     content: content, 
-                     metadata: parseFrontmatter(content),
-                     lastModified: Date.now() 
-                 });
-                 hasChanges = true;
-             }
-         }
-    }
-
-    // Ensure agent_core.md and persona
-    if (skillFolder) {
-        const agentFile = loadedFiles.find(f => f.name === 'agent_core.md');
-        if (!agentFile) {
-             const initAgentFile = initialFileSystem.find(f => f.name === 'agent_core.md')!;
-             loadedFiles.push({ ...initAgentFile, parentId: skillFolder.id, metadata: parseFrontmatter(initAgentFile.content || '') }); 
-             hasChanges = true;
-        } else if (agentFile.parentId !== skillFolder.id) {
-            loadedFiles = loadedFiles.map(f => f.id === agentFile.id ? { ...f, parentId: skillFolder!.id } : f);
-            hasChanges = true;
-        }
-
-        const personaFile = loadedFiles.find(f => f.name === '助手人设.md');
-        if (!personaFile) {
-            loadedFiles.push({ 
-                id: generateId(), parentId: skillFolder.id, name: '助手人设.md', type: FileType.FILE, 
-                content: DEFAULT_AGENT_PERSONA, metadata: parseFrontmatter(DEFAULT_AGENT_PERSONA), lastModified: Date.now() 
-            });
-            hasChanges = true;
-        }
+    
+    if (hasChanges) {
+       dbAPI.saveFiles(projectId, loadedFiles);
     }
 
     set({ files: loadedFiles });
     
+    // Check and restore missing system files
+    get()._restoreSystemFiles();
+  },
+
+  _restoreSystemFiles: () => {
+    const { files, _saveToDB } = get();
+    // Clone to avoid mutating state directly in loops before set
+    const updatedFiles = [...files];
+    let hasChanges = false;
+
+    // Helper to ensure folder existence
+    const ensureFolder = (name: string, parentId: string) => {
+        let folder = updatedFiles.find(f => f.name === name && f.parentId === parentId && f.type === FileType.FOLDER);
+        if (!folder) {
+            folder = { id: generateId(), parentId, name, type: FileType.FOLDER, lastModified: Date.now() };
+            updatedFiles.push(folder);
+            hasChanges = true;
+            console.log(`[Auto-Restore] Created missing folder: ${name}`);
+        }
+        return folder;
+    };
+
+    // Helper to ensure file existence (and restore content if missing)
+    const ensureFile = (name: string, parentId: string, defaultContent: string) => {
+        const file = updatedFiles.find(f => f.name === name && f.parentId === parentId && f.type === FileType.FILE);
+        if (!file) {
+             updatedFiles.push({ 
+                id: generateId(), 
+                parentId, 
+                name, 
+                type: FileType.FILE, 
+                content: defaultContent, 
+                metadata: parseFrontmatter(defaultContent),
+                lastModified: Date.now() 
+            });
+            hasChanges = true;
+            console.log(`[Auto-Restore] Created missing file: ${name}`);
+        }
+    };
+
+    // 1. Ensure 98_技能配置 & Files
+    const skillFolder = ensureFolder('98_技能配置', 'root');
+    Object.entries(PROTECTED_FILES['98_技能配置']).forEach(([fName, fContent]) => {
+        ensureFile(fName, skillFolder.id, fContent);
+    });
+
+    // 2. Ensure 99_创作规范 & Files
+    const rulesFolder = ensureFolder('99_创作规范', 'root');
+    Object.entries(PROTECTED_FILES['99_创作规范']).forEach(([fName, fContent]) => {
+        ensureFile(fName, rulesFolder.id, fContent);
+    });
+
+    // 3. Ensure subskill & Files
+    const subskillFolder = ensureFolder('subskill', skillFolder.id);
+    Object.entries(PROTECTED_FILES['subskill']).forEach(([fName, fContent]) => {
+        ensureFile(fName, subskillFolder.id, fContent);
+    });
+
     if (hasChanges) {
-       dbAPI.saveFiles(projectId, loadedFiles);
+        set({ files: updatedFiles });
+        _saveToDB();
     }
   },
 
@@ -288,7 +314,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   deleteFile: (pathOrId) => {
-    const { files, _saveToDB, activeFileId, setActiveFileId } = get();
+    const { files, _saveToDB, activeFileId, setActiveFileId, _restoreSystemFiles } = get();
     let targetNode = files.find(f => f.id === pathOrId) || findNodeByPath(files, pathOrId);
     if (!targetNode) return `Error: File not found`;
     
@@ -303,11 +329,15 @@ export const useFileStore = create<FileState>((set, get) => ({
     set({ files: newFiles });
     if (activeFileId === targetNode.id) setActiveFileId(null);
     _saveToDB();
+
+    // Trigger auto-restore for system files immediately after deletion
+    _restoreSystemFiles();
+
     return `Deleted "${targetNode.name}"`;
   },
 
   renameFile: (oldPath, newName) => {
-    const { files, _saveToDB } = get();
+    const { files, _saveToDB, _restoreSystemFiles } = get();
     const file = findNodeByPath(files, oldPath);
     if (!file) return `Error: File not found.`;
     
@@ -315,6 +345,10 @@ export const useFileStore = create<FileState>((set, get) => ({
         files: state.files.map(f => f.id === file.id ? { ...f, name: newName } : f)
     }));
     _saveToDB();
+
+    // Trigger auto-restore (e.g., if we renamed a protected file, restore the original)
+    _restoreSystemFiles();
+
     return `Renamed "${oldPath}" to "${newName}"`;
   },
 

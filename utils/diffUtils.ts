@@ -8,6 +8,7 @@ export interface DiffLine {
 
 export interface DiffHunk {
   id: string;
+  type: 'change' | 'unchanged'; // New field to distinguish active diffs from context
   lines: DiffLine[];
   startLineOriginal: number;
   endLineOriginal: number;
@@ -100,47 +101,65 @@ export const computeLineDiff = (original: string, modified: string): DiffLine[] 
 
 /**
  * Group flat diff lines into interactive hunks (chunks of changes).
- * Contiguous changes are grouped. Equal lines separate groups.
+ * Returns a sequence of hunks that cover the ENTIRE file content.
+ * 'change' hunks contain the diffs + contextLines.
+ * 'unchanged' hunks contain the rest of the file.
  */
-export const groupDiffIntoHunks = (diffLines: DiffLine[]): DiffHunk[] => {
-    const hunks: DiffHunk[] = [];
-    let currentHunkLines: DiffLine[] = [];
+export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): DiffHunk[] => {
+    const activeIndices = new Set<number>();
     
-    // We want to group contiguous 'add' or 'remove' lines. 
-    // 'equal' lines break the groups.
-    
-    // Helper to flush current hunk
-    const flush = () => {
-        if (currentHunkLines.length > 0) {
-             const first = currentHunkLines[0];
-             const last = currentHunkLines[currentHunkLines.length - 1];
-             
-             // Calculate simplistic range
-             const startLineOriginal = currentHunkLines.find(l => l.lineNumOriginal)?.lineNumOriginal || 0;
-             const endLineOriginal = [...currentHunkLines].reverse().find(l => l.lineNumOriginal)?.lineNumOriginal || 0;
-             const startLineNew = currentHunkLines.find(l => l.lineNumNew)?.lineNumNew || 0;
-             const endLineNew = [...currentHunkLines].reverse().find(l => l.lineNumNew)?.lineNumNew || 0;
-
-             hunks.push({
-                 id: Math.random().toString(36).substring(7),
-                 lines: [...currentHunkLines],
-                 startLineOriginal,
-                 endLineOriginal,
-                 startLineNew,
-                 endLineNew
-             });
-             currentHunkLines = [];
-        }
-    };
-
-    diffLines.forEach((line) => {
-        if (line.type === 'equal') {
-            flush(); // Context break
-        } else {
-            currentHunkLines.push(line);
+    // 1. Identify "Active" lines (Changes + Context)
+    diffLines.forEach((line, index) => {
+        if (line.type !== 'equal') {
+            activeIndices.add(index);
+            // Add context before
+            for (let i = 1; i <= contextLines; i++) {
+                 if (index - i >= 0) activeIndices.add(index - i);
+            }
+            // Add context after
+            for (let i = 1; i <= contextLines; i++) {
+                 if (index + i < diffLines.length) activeIndices.add(index + i);
+            }
         }
     });
-    flush(); // Final flush
+
+    const hunks: DiffHunk[] = [];
+    if (diffLines.length === 0) return hunks;
+
+    let currentHunkLines: DiffLine[] = [];
+    let isCurrentHunkActive = activeIndices.has(0);
+
+    const flush = () => {
+        if (currentHunkLines.length === 0) return;
+
+        const firstOriginal = currentHunkLines.find(l => l.lineNumOriginal !== undefined);
+        const lastOriginal = [...currentHunkLines].reverse().find(l => l.lineNumOriginal !== undefined);
+        const firstNew = currentHunkLines.find(l => l.lineNumNew !== undefined);
+        const lastNew = [...currentHunkLines].reverse().find(l => l.lineNumNew !== undefined);
+
+        hunks.push({
+            id: Math.random().toString(36).substring(7),
+            lines: [...currentHunkLines],
+            startLineOriginal: firstOriginal?.lineNumOriginal || 0,
+            endLineOriginal: lastOriginal?.lineNumOriginal || 0,
+            startLineNew: firstNew?.lineNumNew || 0,
+            endLineNew: lastNew?.lineNumNew || 0,
+            type: isCurrentHunkActive ? 'change' : 'unchanged'
+        });
+        currentHunkLines = [];
+    };
+
+    diffLines.forEach((line, index) => {
+        const isActive = activeIndices.has(index);
+        
+        // If state flips, start a new hunk
+        if (isActive !== isCurrentHunkActive) {
+            flush();
+            isCurrentHunkActive = isActive;
+        }
+        currentHunkLines.push(line);
+    });
+    flush();
 
     return hunks;
 };
@@ -167,100 +186,36 @@ export const rejectHunkInNewContent = (
     fullOldContent: string, 
     hunk: DiffHunk
 ): string => {
+    // This function attempts to revert `fullNewContent` to `fullOldContent` ONLY for the lines in `hunk`.
+    
     const newLines = fullNewContent.split(/\r?\n/);
     const oldLines = fullOldContent.split(/\r?\n/);
     
-    // Logic: We need to replace the lines in 'newLines' identified by the hunk
-    // with the lines from 'oldLines' identified by the hunk.
+    const startNewIndex = hunk.startLineNew - 1; 
+    const endNewIndex = hunk.endLineNew - 1; 
     
-    // The hunk tells us which lines in the NEW content are affected (hunk.startLineNew to hunk.endLineNew)
-    // And which lines in the OLD content they corresponded to (hunk.startLineOriginal to hunk.endLineOriginal)
+    const startOldIndex = hunk.startLineOriginal - 1;
+    const endOldIndex = hunk.endLineOriginal - 1;
     
-    // If it was a pure ADD (startLineOriginal is 0/undefined context), we just remove lines from New.
-    // If it was a pure REMOVE (startLineNew is 0/undefined context), we insert lines from Old into New.
+    // Validate indices
+    if (startNewIndex < 0 || endNewIndex >= newLines.length) return fullNewContent;
     
-    // But since line numbers in Hunk are 1-based and absolute to the *files passed to diff*,
-    // we can use them directly if we are careful.
-
-    // 1. Identify where in New Content to splice
-    // Note: Diff line numbers are stable relative to the content generated.
+    // Extract the original segment
+    let originalSegment: string[] = [];
     
-    const linesToInsertFromOld = hunk.lines
-        .filter(l => l.type === 'remove')
-        .map(l => l.content);
-        
-    // Identify range to remove from New
-    // Hunk might contain adds and removes mixed. 
-    // The 'Add' lines in hunk exist in NewContent. The 'Remove' lines do not exist in NewContent.
-    
-    // Actually, simpler logic:
-    // We are replacing the "New Version of this Hunk" with the "Old Version of this Hunk".
-    // "New Version of Hunk" = All lines in hunk where type='add' (or implicitly lines that replaced removes).
-    // "Old Version of Hunk" = All lines in hunk where type='remove'.
-    
-    // We need to find the splice index in newLines.
-    // The hunk.startLineNew indicates where the hunk STARTS in the new file.
-    // However, if the hunk is PURE REMOVE, startLineNew might be the line *before* or *after* where it was? 
-    // Actually computeLineDiff usually attaches 'remove' lines to the original index.
-    
-    // Let's use a simpler robust approach for this specific IDE context:
-    // We trust startLineNew and endLineNew derived from the diff.
-    
-    let startIndexNew = -1;
-    let endIndexNew = -1;
-    
-    // Find valid new line indices in the hunk
-    const validNewLines = hunk.lines.filter(l => l.lineNumNew !== undefined);
-    if (validNewLines.length > 0) {
-        startIndexNew = validNewLines[0].lineNumNew! - 1; // 0-based
-        endIndexNew = validNewLines[validNewLines.length - 1].lineNumNew! - 1;
+    if (hunk.startLineOriginal === 0 && hunk.endLineOriginal === 0) {
+        // It was a pure addition in New. Original had nothing here.
+        // To reject, we replace with empty array.
+        originalSegment = [];
     } else {
-        // Pure remove. We need to find insertion point.
-        // This is tricky without context. 
-        // BUT, we handle pure removes by looking at where the diff says they *would* be.
-        // Actually, for a pure remove, we need to INSERT old text back. 
-        // We need context 'equal' lines to locate, but `groupDiffIntoHunks` strips equal lines.
-        
-        // Strategy B: 
-        // We can't easily patch the string without context.
-        // BUT, we are in an IDE. We can cheat:
-        // When "Rejecting", we are essentially "Accepting the Old Content" for that block.
-        // "Accepting Old Content" means applying a patch to NewContent that turns it into OldContent.
-        
-        // Let's rely on `applyPatchInMemory` but we need to construct the patch.
-        // The patch should replace [StartNew, EndNew] with [OldLines].
+        // Normal case
+        if (startOldIndex >= 0 && endOldIndex < oldLines.length) {
+            originalSegment = oldLines.slice(startOldIndex, endOldIndex + 1);
+        }
     }
-
-    // Get the segment of text from Old Content that this hunk represents
-    const originalTextSegment = hunk.lines
-        .filter(l => l.type === 'remove')
-        .map(l => l.content);
     
-    // Calculate range in New Content to replace
-    // If it's an Addition, we remove it.
-    // If it's a Removal, we insert original text.
-    // If it's a Modification, we replace new text with old text.
+    const before = newLines.slice(0, startNewIndex);
+    const after = newLines.slice(endNewIndex + 1);
     
-    // If validNewLines exists, we have a range in NewContent to replace.
-    if (startIndexNew !== -1 && endIndexNew !== -1) {
-         const before = newLines.slice(0, startIndexNew);
-         const after = newLines.slice(endIndexNew + 1);
-         return [...before, ...originalTextSegment, ...after].join('\n');
-    } 
-    
-    // If no validNewLines (Pure Remove from Original), we need to insert `originalTextSegment` back into `fullNewContent`.
-    // But where? We need the line number from the diff.
-    // In a pure remove, `computeLineDiff` aligns it with original index. 
-    // We need the index in NEW content.
-    // Let's re-run diff with context or pass context.
-    // Alternative: The UI passes us the context index? No.
-    
-    // Fallback: If we can't determine exact location (rare in simple edits), fail safe or reject all.
-    // However, usually a "Remove" hunk is surrounded by 'equal' lines in the raw diff. 
-    // If we passed the full diff to this function, we could find the index.
-    
-    // For now, to keep it safe, if we can't easily revert partial, we might force user to Reject All.
-    // BUT, let's try to find the 'equal' line preceding this hunk in the full diff (not passed here).
-    
-    return fullNewContent; // Fallback (No-op)
+    return [...before, ...originalSegment, ...after].join('\n');
 };

@@ -6,6 +6,7 @@ import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
 import AgentTodoList from './AgentTodoList';
 import { useFileStore } from '../stores/fileStore';
+import { useAgentStore } from '../stores/agentStore'; // Import AgentStore
 import { findNodeByPath } from '../services/fileSystem';
 
 interface AgentChatProps {
@@ -25,6 +26,7 @@ interface AgentChatProps {
   files: FileNode[];
   // Approval Props
   pendingChanges?: PendingChange[];
+  width?: number; 
 }
 
 const AgentChat: React.FC<AgentChatProps> = ({ 
@@ -40,45 +42,54 @@ const AgentChat: React.FC<AgentChatProps> = ({
   onSwitchSession,
   onDeleteSession,
   files,
-  pendingChanges = []
+  pendingChanges = [],
+  width = 384
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
   
   // Use file store to navigate
   const setActiveFileId = useFileStore(state => state.setActiveFileId);
+  // Use agent store to set reviewing change
+  const setReviewingChangeId = useAgentStore(state => state.setReviewingChangeId);
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   if (!isOpen) return null;
 
   const pendingApprovalsCount = pendingChanges.length;
 
   const handleReviewClick = (change: PendingChange) => {
-      // Find file by name/path and open it. 
-      // The Editor will automatically detect the pending change and show Diff UI.
       const node = findNodeByPath(files, change.fileName);
       if (node) {
+          // If file exists, open it and set review mode
           setActiveFileId(node.id);
       } else {
-          // If file doesn't exist (creation), we might need to handle differently or 
-          // Editor logic handles "Pending Creation". 
-          // Currently Editor expects an active file.
-          // For 'createFile', we don't have an ID yet. 
-          // Ideally, we should create a temporary node or the Agent logic 
-          // should have created a placeholder.
-          alert("此文件尚未创建，无法预览 Diff。(当前 Diff 模式仅支持修改现有文件)");
+          // If file doesn't exist (New File), clear active file but still trigger review
+          setActiveFileId(null);
       }
-      // On mobile, maybe close chat to see editor
-      if (window.innerWidth < 768) {
+      
+      // Explicitly set the change ID being reviewed. 
+      // The Editor will detect this and show DiffViewer even if activeFile is null.
+      setReviewingChangeId(change.id);
+
+      // On mobile, close chat to see editor
+      if (isMobile) {
           onClose();
       }
   };
 
   return (
-    <div className={`
-      fixed inset-0 z-50 flex flex-col bg-gray-900 
-      md:relative md:inset-auto md:w-96 md:h-full md:border-l md:border-gray-700 md:shadow-none md:z-0
-      shadow-2xl transition-all duration-300 h-[100dvh] md:h-auto
-    `}>
+    <div 
+      className={`
+        fixed inset-0 z-50 flex flex-col bg-gray-900 
+        md:relative md:inset-auto md:h-full md:border-l md:border-gray-700 md:shadow-none md:z-0
+        shadow-2xl transition-all duration-300 h-[100dvh] md:h-auto
+      `}
+      style={{ 
+        width: isMobile ? '100%' : width 
+      }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 shrink-0 safe-area-top">
         <div className="flex items-center space-x-2 text-blue-400">
