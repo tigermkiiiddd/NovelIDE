@@ -45,10 +45,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   const [isProjectOverviewOpen, setIsProjectOverviewOpen] = useState(false);
   const [isResizing, setIsResizing] = useState<'sidebar' | 'agent' | null>(null);
-
-  // Mobile check helper
-  const isMobileView = () => typeof window !== 'undefined' && window.innerWidth < 768;
-  const isMobile = isMobileView();
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
   // Use Store Hooks (Single Source of Truth)
   const currentProject = useProjectStore(state => state.getCurrentProject());
@@ -122,8 +119,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   // Responsive Layout Handler
   useEffect(() => {
     const handleResize = () => {
-      // Optional: Add logic here if you want to auto-close sidebars when resizing from desktop to mobile
+      setIsMobile(window.innerWidth < 768);
     };
+    
+    // Initial check
+    handleResize();
     
     // Initial Mobile Check on Mount: Close sidebars to ensure clean state
     if (window.innerWidth < 768) {
@@ -133,7 +133,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []); // Empty dependency array ensures this only runs on mount/unmount, fixing the infinite loop/auto-close bug
+  }, []); // Empty dependency array ensures this only runs on mount/unmount
 
   // --- Resizing Logic ---
   useEffect(() => {
@@ -185,6 +185,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             if (isMobile) setSidebarOpen(false);
         }}
         width={sidebarWidth}
+        isMobile={isMobile}
       />
 
       {/* Sidebar Resizer (Desktop Only) */}
@@ -284,6 +285,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         files={files} 
         pendingChanges={pendingChanges}
         width={agentWidth}
+        isMobile={isMobile}
       />
 
       <ProjectOverview 

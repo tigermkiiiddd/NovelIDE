@@ -27,6 +27,7 @@ interface AgentChatProps {
   // Approval Props
   pendingChanges?: PendingChange[];
   width?: number; 
+  isMobile: boolean;
 }
 
 const AgentChat: React.FC<AgentChatProps> = ({ 
@@ -43,7 +44,8 @@ const AgentChat: React.FC<AgentChatProps> = ({
   onDeleteSession,
   files,
   pendingChanges = [],
-  width = 384
+  width = 384,
+  isMobile
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
@@ -52,8 +54,6 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const setActiveFileId = useFileStore(state => state.setActiveFileId);
   // Use agent store to set reviewing change
   const setReviewingChangeId = useAgentStore(state => state.setReviewingChangeId);
-
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   if (!isOpen) return null;
 

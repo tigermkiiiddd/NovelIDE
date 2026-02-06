@@ -13,6 +13,7 @@ interface SidebarProps {
   onOpenSettings: () => void;
   className?: string;
   width?: number; // 新增：支持动态宽度
+  isMobile: boolean;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -21,7 +22,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onBackToProjects,
   onOpenSettings,
   className = '',
-  width = 256 // 默认宽度
+  width = 256, // 默认宽度
+  isMobile
 }) => {
   // Use shallow selection to prevent Sidebar rerender when file CONTENT changes
   const { files, activeFileId, setActiveFileId, deleteFile, createFileById, createFolderById, renameFile } = useFileStore(
@@ -43,8 +45,6 @@ const Sidebar: React.FC<SidebarProps> = ({
       const oldPath = getNodePath(node, files);
       renameFile(oldPath, newName);
   };
-
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   return (
     <>
