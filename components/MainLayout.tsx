@@ -46,8 +46,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const [isProjectOverviewOpen, setIsProjectOverviewOpen] = useState(false);
   const [isResizing, setIsResizing] = useState<'sidebar' | 'agent' | null>(null);
 
-  // Mobile check
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  // Mobile check helper
+  const isMobileView = () => typeof window !== 'undefined' && window.innerWidth < 768;
+  const isMobile = isMobileView();
 
   // Use Store Hooks (Single Source of Truth)
   const currentProject = useProjectStore(state => state.getCurrentProject());
@@ -118,26 +119,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       updateProjectMeta: handleAgentUpdateProject 
   });
 
-  // Responsive Layout Handler: Force close on mobile mount/resize
+  // Responsive Layout Handler
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth < 768) {
-         if (isSidebarOpen) setSidebarOpen(false);
-         // Note: We typically don't force close chat on resize to preserve context, 
-         // but on strict mobile entry we might.
-      }
+      // Optional: Add logic here if you want to auto-close sidebars when resizing from desktop to mobile
     };
     
-    // Initial Mobile Check
+    // Initial Mobile Check on Mount: Close sidebars to ensure clean state
     if (window.innerWidth < 768) {
         setSidebarOpen(false);
-        // Also default chat to closed on mobile initial load to give space to editor
-        if (isChatOpen) setChatOpen(false);
+        setChatOpen(false);
     } 
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [isSidebarOpen, isChatOpen, setSidebarOpen, setChatOpen]);
+  }, []); // Empty dependency array ensures this only runs on mount/unmount, fixing the infinite loop/auto-close bug
 
   // --- Resizing Logic ---
   useEffect(() => {

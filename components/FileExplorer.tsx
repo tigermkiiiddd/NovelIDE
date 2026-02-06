@@ -1,7 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { FileNode, FileType } from '../types';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2 } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2, Download } from 'lucide-react';
+import { downloadSingleFile, downloadFolderAsZip } from '../utils/exportUtils';
 
 interface FileExplorerProps {
   files: FileNode[];
@@ -64,6 +65,15 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       setModalTargetId(node.id);
       setInputValue(node.name);
       setIsModalOpen(true);
+  };
+
+  const handleDownloadClick = (e: React.MouseEvent, node: FileNode) => {
+      e.stopPropagation();
+      if (node.type === FileType.FILE) {
+          downloadSingleFile(node);
+      } else {
+          downloadFolderAsZip(node, files);
+      }
   };
 
   const handleModalSubmit = (e?: React.FormEvent) => {
@@ -142,8 +152,17 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             </span>
 
             {/* Actions Group - Always visible for mobile */}
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 
+                {/* Download Button (New) */}
+                <button
+                    onClick={(e) => handleDownloadClick(e, node)}
+                    className="p-1 hover:text-green-400 text-gray-500 transition-colors"
+                    title={node.type === FileType.FOLDER ? "下载文件夹 (Zip)" : "下载文件"}
+                >
+                    <Download size={14} />
+                </button>
+
                 {/* Rename Button */}
                 <button
                     onClick={(e) => handleRenameClick(e, node)}
