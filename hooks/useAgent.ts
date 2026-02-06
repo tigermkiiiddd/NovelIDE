@@ -34,6 +34,8 @@ export const useAgent = (
       aiConfig, setAiConfig,
       sessions, currentSessionId, createSession, switchSession, deleteSession,
       addMessage,
+      editMessageContent,
+      deleteMessagesFrom,
       isLoading, setLoading,
       pendingChanges, addPendingChange, removePendingChange,
       setTodos
@@ -43,6 +45,9 @@ export const useAgent = (
   const todos = currentSession?.todos || [];
 
   const accessedFiles = useRef<Set<string>>(new Set());
+  
+  // Abort Controller Ref
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // --- 2. Sync AI Service Config ---
   useEffect(() => {
@@ -95,45 +100,44 @@ export const useAgent = (
       addMessage(rejectMsg);
   }, [addMessage, removePendingChange]);
 
+  // --- 5. Main LLM Interaction Loop (Extracted for Re-run) ---
+  const processTurn = useCallback(async () => {
+    if (!aiServiceInstance || !currentSessionId) return;
 
-  // --- 5. Main LLM Interaction Loop ---
-  const sendMessage = async (text: string) => {
-    if (!aiServiceInstance) return;
+    // Reset abort controller
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const signal = controller.signal;
 
-    // A. Prepare Context for User Message
+    // A. Prepare Context
+    // NOTE: We get the LATEST state from store directly inside logic or via refs if needed.
     const freshTodos = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.todos || [];
     const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, freshTodos);
 
-    // B. Add User Message with Debug Metadata
-    const userMsg: ChatMessage = { 
-        id: generateId(), 
-        role: 'user', 
-        text, 
-        timestamp: Date.now(),
-        metadata: {
-            systemPrompt: fullSystemInstruction
-        }
-    };
-    addMessage(userMsg);
     setLoading(true);
 
     try {
-        let currentLoopMessages = [...(currentSession?.messages || []), userMsg];
-        
-        let keepGoing = true;
         let loopCount = 0;
         const MAX_LOOPS = 10; 
+        let keepGoing = true;
 
         while (keepGoing && loopCount < MAX_LOOPS) {
+            if (signal.aborted) break;
+
             loopCount++;
+            
+            // Re-fetch session messages every loop iteration to ensure we have the latest (including tools added in previous loop)
+            const currentMessages = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.messages || [];
 
             if (loopCount === 1) {
-                // FIXED: Do not JSON.parse, as fullSystemInstruction is now a raw string
-                console.log("🤖 [System Prompt Generated]:", fullSystemInstruction);
+                 console.log("🤖 [System Prompt Generated]:", fullSystemInstruction);
             }
 
             // Format History for API
-            const apiHistory = currentLoopMessages.map(m => {
+            const apiHistory = currentMessages.map(m => {
                 let apiRole = m.role;
                 if (m.role === 'system' && m.isToolOutput) apiRole = 'user'; 
                 if (m.rawParts) return { role: apiRole, parts: m.rawParts };
@@ -141,14 +145,16 @@ export const useAgent = (
             });
 
             // C. Call AI
-            // NOTE: We use the SAME system instruction for the whole loop of this turn
             const response = await aiServiceInstance.sendMessage(
                 apiHistory, 
                 '', 
                 fullSystemInstruction, 
-                allTools
+                allTools,
+                signal
             );
             
+            if (signal.aborted) break;
+
             const candidates = response.candidates;
             if (!candidates || candidates.length === 0) throw new Error("No response from Agent");
 
@@ -162,34 +168,30 @@ export const useAgent = (
             if (textPart && textPart.text) {
                 const agentMsg: ChatMessage = { id: generateId(), role: 'model', text: textPart.text, rawParts: parts, timestamp: Date.now() };
                 addMessage(agentMsg);
-                currentLoopMessages.push(agentMsg);
             } else if (toolParts.length > 0) {
                  const toolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
                  const agentMsg: ChatMessage = { id: generateId(), role: 'model', text: `🛠️ Action: ${toolNames}`, rawParts: parts, timestamp: Date.now() };
                  addMessage(agentMsg);
-                 currentLoopMessages.push(agentMsg);
             }
 
             // E. Handle Tools
             if (toolParts.length > 0) {
                 const functionResponses = [];
                 let uiLog = '';
-
-                // Helper to buffer UI logs from async tools (like Sub-Agents)
                 const logBuffer: string[] = [];
 
                 for (const part of toolParts) {
+                    if (signal.aborted) break;
                     if (!part.functionCall) continue;
                     const { name, args, id } = part.functionCall;
 
-                    // Execute via Runner (Now Awaited)
+                    // Execute via Runner
                     const execResult = await executeTool(name, args, {
                         files,
                         todos: freshTodos,
-                        aiService: aiServiceInstance, // Pass Service for Sub-Agents
-                        onUiLog: (msg) => {
-                            logBuffer.push(msg);
-                        },
+                        aiService: aiServiceInstance,
+                        onUiLog: (msg) => logBuffer.push(msg),
+                        signal, // Pass signal to sub-agents
                         actions: {
                             ...tools,
                             setTodos: setTodos,
@@ -205,7 +207,6 @@ export const useAgent = (
                         resultString = `REQUEST QUEUED (ID: ${execResult.change.id}). Waiting for user approval.`;
                     } else if (execResult.type === 'EXECUTED') {
                         resultString = execResult.result;
-                        // Combine execution log + internal buffered logs
                         const subLogs = logBuffer.length > 0 ? logBuffer.join('\n') + '\n' : '';
                         uiLog += subLogs;
                         uiLog += `[${name}] Done.\n`; 
@@ -217,6 +218,8 @@ export const useAgent = (
                     functionResponses.push({ functionResponse: { name, id, response: { result: resultString } } });
                 }
 
+                if (signal.aborted) break;
+
                 // Add System/Tool Message
                 const toolMsg: ChatMessage = { 
                     id: generateId(), 
@@ -227,23 +230,66 @@ export const useAgent = (
                     timestamp: Date.now() 
                 };
                 addMessage(toolMsg);
-                currentLoopMessages.push(toolMsg);
             } else {
                 keepGoing = false; // No tools called, done.
             }
         }
-    } catch (error) {
-        console.error(error);
-        addMessage({ id: generateId(), role: 'system', text: 'Agent Error: ' + (error instanceof Error ? error.message : 'Unknown'), timestamp: Date.now() });
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+             addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now() });
+        } else {
+             console.error(error);
+             addMessage({ id: generateId(), role: 'system', text: 'Agent Error: ' + (error instanceof Error ? error.message : 'Unknown'), timestamp: Date.now() });
+        }
     } finally {
         setLoading(false);
+        abortControllerRef.current = null;
     }
-  };
+  }, [currentSessionId, files, project, activeFile, tools, aiConfig, addMessage, addPendingChange, setLoading, setTodos]);
+
+  // --- 6. Stop Function ---
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        setLoading(false); // Force state reset immediately for UI responsiveness
+    }
+  }, [setLoading]);
+
+  // --- 7. Interaction Handlers ---
+
+  const sendMessage = useCallback(async (text: string) => {
+    const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, todos);
+    const userMsg: ChatMessage = { 
+        id: generateId(), 
+        role: 'user', 
+        text, 
+        timestamp: Date.now(),
+        metadata: { systemPrompt: fullSystemInstruction }
+    };
+    addMessage(userMsg);
+    
+    // Defer the turn processing to ensure store update is processed
+    setTimeout(() => processTurn(), 0);
+  }, [addMessage, processTurn, files, project, activeFile, todos]);
+
+  const regenerateMessage = useCallback(async (messageId: string) => {
+      deleteMessagesFrom(messageId, true);
+      setTimeout(() => processTurn(), 0);
+  }, [deleteMessagesFrom, processTurn]);
+
+  const editUserMessage = useCallback(async (messageId: string, newText: string) => {
+      editMessageContent(messageId, newText);
+      deleteMessagesFrom(messageId, false);
+      setTimeout(() => processTurn(), 0);
+  }, [editMessageContent, deleteMessagesFrom, processTurn]);
 
   return {
     messages: currentSession?.messages || [],
     isLoading,
     sendMessage,
+    stopGeneration, // Export
+    regenerateMessage, 
+    editUserMessage,
     todos,
     sessions,
     currentSessionId,

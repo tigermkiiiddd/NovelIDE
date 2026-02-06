@@ -29,6 +29,11 @@ interface AgentState {
   
   // Message Helpers (Shortcuts to update current session)
   addMessage: (message: ChatMessage) => void;
+  // 新增：修改特定消息内容
+  editMessageContent: (messageId: string, newText: string) => void;
+  // 新增：删除指定消息ID之后（包含该消息或不包含）的所有消息，用于回滚上下文
+  deleteMessagesFrom: (startMessageId: string, inclusive: boolean) => void;
+
   setLoading: (loading: boolean) => void;
   
   // Todo Helpers
@@ -120,6 +125,30 @@ export const useAgentStore = create<AgentState>()(
                 ...session,
                 title,
                 messages: [...session.messages, message],
+                lastModified: Date.now()
+            };
+        });
+      },
+
+      editMessageContent: (messageId, newText) => {
+        get().updateCurrentSession(session => ({
+            ...session,
+            messages: session.messages.map(m => m.id === messageId ? { ...m, text: newText } : m),
+            lastModified: Date.now()
+        }));
+      },
+
+      deleteMessagesFrom: (startMessageId, inclusive) => {
+        get().updateCurrentSession(session => {
+            const index = session.messages.findIndex(m => m.id === startMessageId);
+            if (index === -1) return session;
+
+            const cutIndex = inclusive ? index : index + 1;
+            const newMessages = session.messages.slice(0, cutIndex);
+
+            return {
+                ...session,
+                messages: newMessages,
                 lastModified: Date.now()
             };
         });

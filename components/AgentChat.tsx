@@ -8,10 +8,18 @@ import AgentTodoList from './AgentTodoList';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore'; // Import AgentStore
 import { findNodeByPath } from '../services/fileSystem';
+import { useAgent } from '../hooks/useAgent'; // Note: AgentChat receives hooks props, but we need types
 
+// AgentChat receives everything from MainLayout which calls useAgent
+// We need to extend props to include the new handlers
 interface AgentChatProps {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
+  // New handlers
+  onRegenerate?: (id: string) => void;
+  onEditMessage?: (id: string, newText: string) => void;
+  onStop?: () => void;
+  
   isLoading: boolean;
   isOpen: boolean;
   onClose: () => void;
@@ -33,6 +41,9 @@ interface AgentChatProps {
 const AgentChat: React.FC<AgentChatProps> = ({ 
   messages, 
   onSendMessage, 
+  onRegenerate,
+  onEditMessage,
+  onStop,
   isLoading, 
   isOpen, 
   onClose,
@@ -79,11 +90,19 @@ const AgentChat: React.FC<AgentChatProps> = ({
       }
   };
 
+  const handleDeleteSession = (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      // Simple confirm is effective for preventing accidental mobile deletions
+      if (window.confirm("确定要删除此会话吗？")) {
+          onDeleteSession(id);
+      }
+  };
+
   return (
     <div 
       className={`
-        fixed inset-0 z-50 flex flex-col bg-gray-900 
-        md:relative md:inset-auto md:h-full md:border-l md:border-gray-700 md:shadow-none md:z-0
+        fixed inset-0 z-50 flex flex-col bg-gray-950
+        md:relative md:inset-auto md:h-full md:border-l md:border-gray-800 md:shadow-none md:z-0
         shadow-2xl transition-all duration-300 h-[100dvh] md:h-auto
       `}
       style={{ 
@@ -91,50 +110,53 @@ const AgentChat: React.FC<AgentChatProps> = ({
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 shrink-0 safe-area-top">
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0 safe-area-top">
         <div className="flex items-center space-x-2 text-blue-400">
           <Sparkles size={20} />
-          <span className="font-bold text-white">Novel Agent</span>
+          <span className="font-bold text-gray-100">NovelGenie</span>
         </div>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center gap-2">
             <button 
                 onClick={() => setIsDebugMode(!isDebugMode)} 
-                className={`p-1.5 rounded-lg transition-colors ${isDebugMode ? 'bg-purple-900/50 text-purple-400' : 'hover:bg-gray-700 text-gray-500'}`}
+                className={`p-2 rounded-lg transition-colors ${isDebugMode ? 'bg-purple-900/50 text-purple-400' : 'hover:bg-gray-800 text-gray-500'}`}
                 title="开发者调试模式"
             >
-                <Bug size={16} />
+                <Bug size={18} />
             </button>
             <button 
                 onClick={() => setShowHistory(!showHistory)} 
-                className={`p-1.5 rounded-lg transition-colors ${showHistory ? 'bg-blue-600 text-white' : 'hover:bg-gray-700 text-gray-400'}`}
+                className={`p-2 rounded-lg transition-colors ${showHistory ? 'bg-blue-600 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
                 title="历史记录"
             >
-                <History size={18} />
+                <History size={20} />
             </button>
-            <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded-full text-gray-400 hover:text-white md:hidden">
-                <X size={20} />
+            <button 
+                onClick={onClose} 
+                className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white md:hidden active:bg-gray-700"
+            >
+                <X size={22} />
             </button>
         </div>
       </div>
 
       {showHistory ? (
         // --- History View ---
-        <div className="flex-1 overflow-y-auto bg-gray-900 p-4 animate-in slide-in-from-right-10 fade-in duration-200">
-            <div className="flex justify-between items-center mb-4">
+        <div className="flex-1 overflow-y-auto bg-gray-950 p-4 animate-in slide-in-from-right-10 fade-in duration-200">
+            <div className="flex justify-between items-center mb-6">
                 <h3 className="text-gray-300 font-medium">会话历史</h3>
                 <button 
                     onClick={() => {
                         onCreateSession();
                         setShowHistory(false);
                     }}
-                    className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-full transition-colors"
+                    className="flex items-center gap-1 text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-blue-900/20 active:scale-95"
                 >
-                    <Plus size={14} />
+                    <Plus size={16} />
                     新会话
                 </button>
             </div>
             
-            <div className="space-y-3">
+            <div className="space-y-3 pb-20">
                 {sessions.map(session => (
                     <div 
                         key={session.id}
@@ -142,30 +164,30 @@ const AgentChat: React.FC<AgentChatProps> = ({
                             onSwitchSession(session.id);
                             setShowHistory(false);
                         }}
-                        className={`group p-3 rounded-lg border cursor-pointer transition-all ${
+                        className={`group relative p-4 rounded-xl border cursor-pointer transition-all active:scale-[0.98] ${
                             session.id === currentSessionId 
-                                ? 'bg-blue-900/30 border-blue-500/50' 
-                                : 'bg-gray-800 border-gray-700 hover:bg-gray-750'
+                                ? 'bg-blue-900/20 border-blue-500/50' 
+                                : 'bg-gray-900 border-gray-800 hover:bg-gray-800'
                         }`}
                     >
                         <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-2 mb-1">
-                                <MessageSquare size={14} className={session.id === currentSessionId ? "text-blue-400" : "text-gray-500"} />
-                                <span className={`font-medium text-sm truncate max-w-[180px] ${session.id === currentSessionId ? 'text-blue-100' : 'text-gray-300'}`}>
+                            <div className="flex items-center gap-3 mb-1 pr-10">
+                                <MessageSquare size={16} className={`shrink-0 ${session.id === currentSessionId ? "text-blue-400" : "text-gray-600"}`} />
+                                <span className={`font-medium text-base truncate ${session.id === currentSessionId ? 'text-blue-100' : 'text-gray-300'}`}>
                                     {session.title || '无标题会话'}
                                 </span>
                             </div>
+                            
+                            {/* Delete Button: Always visible, larger touch target */}
                             <button 
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDeleteSession(session.id);
-                                }}
-                                className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                                onClick={(e) => handleDeleteSession(e, session.id)}
+                                className="absolute top-3 right-3 p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                                title="删除会话"
                             >
-                                <Trash2 size={14} />
+                                <Trash2 size={18} />
                             </button>
                         </div>
-                        <div className="text-xs text-gray-500 flex justify-between mt-2">
+                        <div className="text-xs text-gray-500 flex justify-between mt-3 px-1">
                             <span>{new Date(session.lastModified).toLocaleString([], {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
                             <span>{session.messages.length} 条消息</span>
                         </div>
@@ -201,8 +223,20 @@ const AgentChat: React.FC<AgentChatProps> = ({
             )}
 
             <AgentTodoList todos={todos} />
-            <AgentMessageList messages={messages} isLoading={isLoading} isDebugMode={isDebugMode} />
-            <AgentInput onSendMessage={onSendMessage} isLoading={isLoading} files={files} autoFocus={isOpen} />
+            <AgentMessageList 
+                messages={messages} 
+                isLoading={isLoading} 
+                isDebugMode={isDebugMode}
+                onRegenerate={onRegenerate}
+                onEditMessage={onEditMessage}
+            />
+            <AgentInput 
+                onSendMessage={onSendMessage} 
+                onStop={onStop}
+                isLoading={isLoading} 
+                files={files} 
+                autoFocus={isOpen} 
+            />
         </>
       )}
     </div>

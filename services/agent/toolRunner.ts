@@ -13,6 +13,8 @@ export interface ToolContext {
     // Inject AI Service for Sub-Agents
     aiService?: AIService; 
     onUiLog?: (msg: string) => void;
+    // Add Signal
+    signal?: AbortSignal;
     actions: {
         createFile: (path: string, content: string) => string;
         updateFile: (path: string, content: string) => string;
@@ -42,7 +44,12 @@ export const executeTool = async (
     args: any, 
     context: ToolContext
 ): Promise<ToolExecutionResult> => {
-    const { files, actions, aiService, onUiLog } = context;
+    const { files, actions, aiService, onUiLog, signal } = context;
+
+    // 0. Check Signal
+    if (signal?.aborted) {
+        throw new Error("Tool execution aborted by user.");
+    }
 
     // --- 1. Check for Approval Requirements (Write Operations) ---
     const requiresApproval = ['createFile', 'updateFile', 'patchFile', 'deleteFile', 'renameFile'];
@@ -126,7 +133,8 @@ export const executeTool = async (
                 args.request_description,
                 files,
                 actions, // Pass the read-only tools
-                onUiLog
+                onUiLog,
+                signal // Pass signal to sub-agent
             );
         }
         else {
@@ -152,6 +160,7 @@ export const executeTool = async (
         return { type: 'EXECUTED', result };
 
     } catch (e: any) {
+        if (e.message === "Tool execution aborted by user.") throw e;
         return { type: 'ERROR', message: `Tool Execution Error: ${e.message}` };
     }
 };

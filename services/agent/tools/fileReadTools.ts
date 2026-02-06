@@ -5,7 +5,7 @@ import { FileType, FileNode } from '../../../types';
 
 export const listFilesTool: FunctionDeclaration = {
   name: 'listFiles',
-  description: 'List the entire project file structure. NOW INCLUDES METADATA: Each file will show its [Tags] and [Summary] if available. Use this to quickly scan project content without reading every file. [READ TOOL]',
+  description: 'List the entire project file structure. [DO NOT USE FOR CHITCHAT OR GREETINGS]. Only use this when the user explicitly asks about project structure, or when you need to find a file path to execute a specific task.',
   parameters: { type: Type.OBJECT, properties: {} }
 };
 

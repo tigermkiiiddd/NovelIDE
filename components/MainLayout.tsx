@@ -107,7 +107,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   // Initialize Agent Hook (No longer manages UI open state)
   const { 
     messages, isLoading, 
-    sendMessage, todos, sessions, currentSessionId, 
+    sendMessage, 
+    stopGeneration,
+    regenerateMessage,
+    editUserMessage,
+    todos, sessions, currentSessionId, 
     createNewSession, switchSession, deleteSession,
     aiConfig, updateAiConfig, pendingChanges
   } = useAgent(files, currentProject, activeFile, { 
@@ -273,6 +277,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       <AgentChat 
         messages={messages} 
         onSendMessage={sendMessage}
+        onRegenerate={regenerateMessage}
+        onEditMessage={editUserMessage}
+        onStop={stopGeneration}
         isLoading={isLoading}
         isOpen={isChatOpen}
         onClose={() => setChatOpen(false)}

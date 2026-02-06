@@ -79,7 +79,8 @@ export async function runSearchSubAgent(
   requestDescription: string,
   files: FileNode[],
   fileActions: any, // Read-only subset
-  onLog?: (msg: string) => void
+  onLog?: (msg: string) => void,
+  signal?: AbortSignal
 ): Promise<string> {
   
   const history: any[] = [];
@@ -95,6 +96,10 @@ export async function runSearchSubAgent(
   if(onLog) onLog(`🔍 [Sub-Agent] 接到任务: "${requestDescription.substring(0, 30)}..."`);
 
   while (loopCount < MAX_LOOPS) {
+    if (signal?.aborted) {
+        throw new Error("Search Agent Aborted");
+    }
+
     loopCount++;
     
     // 2. Call AI
@@ -102,7 +107,8 @@ export async function runSearchSubAgent(
         history,
         '',
         systemPrompt,
-        SEARCH_AGENT_TOOLS
+        SEARCH_AGENT_TOOLS,
+        signal
     );
 
     const candidates = response.candidates;
@@ -127,6 +133,8 @@ export async function runSearchSubAgent(
         const functionResponses = [];
 
         for (const part of toolParts) {
+            if (signal?.aborted) throw new Error("Search Agent Aborted");
+
             const { name, args, id } = part.functionCall;
             
             // Check for Terminal Tool

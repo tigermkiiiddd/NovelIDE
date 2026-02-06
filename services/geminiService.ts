@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, FunctionDeclaration } from "@google/genai";
 import OpenAI from "openai";
 import { AIConfig, AIProvider } from "../types";
@@ -67,6 +68,9 @@ export class AIService {
       try {
         return await operation();
       } catch (error: any) {
+        // Don't retry if aborted
+        if (error?.name === 'AbortError') throw error;
+        
         lastError = error;
         
         // Identify Retryable Errors:
@@ -100,9 +104,14 @@ export class AIService {
     history: any[], 
     message: string, 
     systemInstruction: string,
-    tools: FunctionDeclaration[]
+    tools: FunctionDeclaration[],
+    signal?: AbortSignal
   ): Promise<any> {
     
+    if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+    }
+
     // --- Google GenAI Path ---
     if (this.config.provider === AIProvider.GOOGLE) {
       if (!this.googleClient) throw new Error("Google API Key not configured.");
@@ -121,8 +130,15 @@ export class AIService {
             }
           })
         );
+        
+        // Manual check after await since SDK might not support signal directly yet
+        if (signal?.aborted) {
+             throw new DOMException('Aborted', 'AbortError');
+        }
+
         return response;
       } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') throw error;
         console.error("Gemini API Error:", error);
         throw error;
       }
@@ -167,7 +183,7 @@ export class AIService {
               messages: openAIMessages,
               tools: mapToolsToOpenAI(tools),
               tool_choice: 'auto'
-            })
+            }, { signal })
         );
 
         // SAFEGUARD: Check if choices exist
@@ -209,6 +225,11 @@ export class AIService {
         };
 
       } catch (error) {
+         if (error instanceof DOMException && error.name === 'AbortError') throw error;
+         // OpenAI throws a specific error structure, but also supports standard AbortError name
+         // @ts-ignore
+         if (error?.name === 'AbortError') throw error;
+         
          console.error("OpenAI API Error:", error);
          throw error;
       }

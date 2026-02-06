@@ -1,18 +1,18 @@
 
-
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Send, FileText, Folder } from 'lucide-react';
+import { Send, FileText, Folder, Square } from 'lucide-react';
 import { FileNode, FileType } from '../types';
 import { getNodePath } from '../services/fileSystem';
 
 interface AgentInputProps {
   onSendMessage: (text: string) => void;
+  onStop?: () => void;
   isLoading: boolean;
   files: FileNode[];
   autoFocus?: boolean;
 }
 
-const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, isLoading, files, autoFocus }) => {
+const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoading, files, autoFocus }) => {
   const [input, setInput] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -160,17 +160,30 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, isLoading, files
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="输入 @ 引用文件..."
-            className="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-full px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+            placeholder={isLoading ? "正在生成中..." : "输入 @ 引用文件..."}
+            className="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-full px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm disabled:opacity-70"
             autoComplete="off"
+            disabled={isLoading}
         />
-        <button
-            type="submit"
-            disabled={isLoading || !input.trim()}
-            className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-            <Send size={18} />
-        </button>
+        
+        {isLoading ? (
+            <button
+                type="button"
+                onClick={onStop}
+                className="p-2 bg-red-600 text-white rounded-full hover:bg-red-500 transition-colors shadow-lg animate-in zoom-in-50 duration-200"
+                title="停止生成"
+            >
+                <Square size={18} fill="currentColor" />
+            </button>
+        ) : (
+            <button
+                type="submit"
+                disabled={!input.trim()}
+                className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+                <Send size={18} />
+            </button>
+        )}
         </form>
     </div>
   );
