@@ -84,19 +84,10 @@ export const constructSystemPrompt = (
     const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
     const fileTree = getFileTreeStructure(folderOnlyFiles);
     
-    // Active File
-    let activeFileContext = "当前未打开任何文件。";
+    // Active File Info (CONTENT REMOVED BY USER REQUEST)
+    let activeFileInfo = "当前未打开任何文件。";
     if (activeFile) {
-        const content = activeFile.content || '';
-        const lines = content.split('\n');
-        // Truncate if too long to save tokens, but keep head/tail
-        if (lines.length > 800) {
-            const head = lines.slice(0, 100).join('\n');
-            const tail = lines.slice(-300).join('\n');
-            activeFileContext = `文件名: ${activeFile.name} (已截断显示)\n---\n${head}\n\n... [中间 ${lines.length - 400} 行已隐藏] ...\n\n${tail}`;
-        } else {
-            activeFileContext = `文件名: ${activeFile.name}\n---\n${content}`;
-        }
+        activeFileInfo = `当前打开的文件名: ${activeFile.name}\n> 注意：为了节省上下文，文件内容**未自动注入**。如果你需要结合当前文件内容进行写作，**必须先调用 \`readFile\` 读取它**。`;
     }
 
     // Task Context
@@ -159,8 +150,8 @@ ${fileTree}
 > - 如需查找特定文件，请使用 \`searchFiles\` 或 \`listFiles\` 工具。
 > - 核心设定（如角色、世界观）的摘要已在上文提供，无需重复读取。
 
-## 4. 用户正在编辑的文件 (Active Editor Content)
-${activeFileContext}
+## 4. 用户正在编辑的文件 (Active File Info)
+${activeFileInfo}
 
 ==================================================
 【系统指令 (System Note)】

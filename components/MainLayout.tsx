@@ -113,7 +113,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     editUserMessage,
     todos, sessions, currentSessionId, 
     createNewSession, switchSession, deleteSession,
-    aiConfig, updateAiConfig, pendingChanges
+    aiConfig, updateAiConfig, pendingChanges,
+    tokenUsage
   } = useAgent(files, currentProject, activeFile, { 
       ...fileSystemActions, 
       deleteFile, 
@@ -293,6 +294,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         pendingChanges={pendingChanges}
         width={agentWidth}
         isMobile={isMobile}
+        tokenUsage={tokenUsage}
       />
 
       <ProjectOverview 

@@ -1,6 +1,6 @@
 
-import { useRef, useCallback, useEffect, useState } from 'react';
-import { ChatMessage, FileNode, ProjectMeta, PendingChange } from '../types';
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
+import { ChatMessage, FileNode, ProjectMeta, PendingChange, AIProvider } from '../types';
 import { AIService } from '../services/geminiService';
 import { generateId } from '../services/fileSystem';
 import { constructSystemPrompt } from '../services/agent/tools/promptBuilder';
@@ -66,6 +66,46 @@ export const useAgent = (
           switchSession(sessions[0].id);
       }
   }, [currentSessionId, sessions.length, createSession, switchSession]);
+
+  // --- 3.5 Token Usage Estimation ---
+  const tokenUsage = useMemo(() => {
+      // Configurable Limits
+      // Gemini 1.5 Pro/Flash typically supports 1M or 2M tokens. User requested 100m (Assuming 1M for practical UI display, or 100M if technically valid but 1M is standard high context)
+      // Setting 1M as a safe huge number for "Gemini"
+      const MAX_TOKENS_GEMINI = 1000000; 
+      const MAX_TOKENS_DEFAULT = 128000; // GPT-4o approx
+
+      const limit = aiConfig.provider === AIProvider.GOOGLE ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
+
+      // 1. Calculate System Prompt Size
+      const sysPrompt = constructSystemPrompt(files, project, activeFile, todos);
+      
+      // 2. Calculate Messages Size
+      // Basic JSON stringify approximation for structure overhead + raw text
+      const msgs = currentSession?.messages || [];
+      const msgsText = msgs.reduce((acc, m) => {
+          let content = m.text;
+          if (m.rawParts) {
+             content += JSON.stringify(m.rawParts);
+          }
+          return acc + content;
+      }, "");
+
+      const totalChars = sysPrompt.length + msgsText.length;
+
+      // Heuristic: Mixed CJK/English content. 
+      // English is ~4 chars/token, Chinese is ~1 char/0.7 token.
+      // We use a conservative estimate: 1 token ~= 2 chars on average for mixed code/chinese
+      const estimatedTokens = Math.ceil(totalChars / 2);
+      
+      const percent = Math.min(100, (estimatedTokens / limit) * 100);
+
+      return {
+          used: estimatedTokens,
+          limit: limit,
+          percent: parseFloat(percent.toFixed(2)) // Keep 2 decimals
+      };
+  }, [aiConfig.provider, files, project, activeFile, todos, currentSession?.messages]);
 
 
   // --- 4. Core Execution Logic (Approval) ---
@@ -300,6 +340,7 @@ export const useAgent = (
     updateAiConfig: setAiConfig,
     pendingChanges,
     approveChange,
-    rejectChange
+    rejectChange,
+    tokenUsage // Export token estimation
   };
 };

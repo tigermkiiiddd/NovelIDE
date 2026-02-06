@@ -84,6 +84,7 @@ const Editor: React.FC<EditorProps> = ({
   // Sync content from store
   const prevFileIdRef = useRef<string | null>(null);
   useEffect(() => {
+      // Logic 1: File Switch
       if (activeFileId !== prevFileIdRef.current) {
           if (activeFile) {
               resetHistory(activeFile.content || '');
@@ -93,8 +94,16 @@ const Editor: React.FC<EditorProps> = ({
           prevFileIdRef.current = activeFileId;
           // Reset cursor stats on file change
           setCursorStats({ line: 1, col: 1 });
+      } 
+      // Logic 2: External Update (e.g. Agent Diff Apply)
+      // Check if store content differs from local content.
+      // Since user typing updates store synchronously via saveFileContent, 
+      // activeFile.content === content usually.
+      // If they differ, it means the store was updated externally (Agent).
+      else if (activeFile && activeFile.content !== content) {
+          setContent(activeFile.content || '');
       }
-  }, [activeFileId, activeFile, resetHistory]);
+  }, [activeFileId, activeFile, content, resetHistory, setContent]);
 
   // --- Preview Logic ---
   const { previewMetadata, previewBody } = useMemo(() => {
@@ -225,7 +234,7 @@ const Editor: React.FC<EditorProps> = ({
       }
   }, [isDirty]);
 
-  // --- Approval Logic Proxies (Truncated for brevity, logic unchanged) ---
+  // --- Approval Logic Proxies ---
   const handleAcceptHunk = (hunk: DiffHunk) => {
       if (!activePendingChange) return;
       let targetFile = activeFile;

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Bug } from 'lucide-react';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Bug, Cpu, Download } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
@@ -9,6 +9,7 @@ import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore'; // Import AgentStore
 import { findNodeByPath } from '../services/fileSystem';
 import { useAgent } from '../hooks/useAgent'; // Note: AgentChat receives hooks props, but we need types
+import { downloadChatSession } from '../utils/exportUtils';
 
 // AgentChat receives everything from MainLayout which calls useAgent
 // We need to extend props to include the new handlers
@@ -36,6 +37,8 @@ interface AgentChatProps {
   pendingChanges?: PendingChange[];
   width?: number; 
   isMobile: boolean;
+  // Token Usage
+  tokenUsage?: { used: number; limit: number; percent: number };
 }
 
 const AgentChat: React.FC<AgentChatProps> = ({ 
@@ -56,7 +59,8 @@ const AgentChat: React.FC<AgentChatProps> = ({
   files,
   pendingChanges = [],
   width = 384,
-  isMobile
+  isMobile,
+  tokenUsage
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
@@ -98,6 +102,25 @@ const AgentChat: React.FC<AgentChatProps> = ({
       }
   };
 
+  const handleExportSession = (e: React.MouseEvent, session: ChatSession) => {
+      e.stopPropagation();
+      downloadChatSession(session);
+  };
+
+  const handleExportCurrentSession = () => {
+      const current = sessions.find(s => s.id === currentSessionId);
+      if (current) {
+          downloadChatSession(current);
+      }
+  };
+
+  // Helper to format large numbers
+  const formatTokenCount = (num: number) => {
+      if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+      if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+      return num.toString();
+  };
+
   return (
     <div 
       className={`
@@ -111,11 +134,41 @@ const AgentChat: React.FC<AgentChatProps> = ({
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0 safe-area-top">
-        <div className="flex items-center space-x-2 text-blue-400">
-          <Sparkles size={20} />
-          <span className="font-bold text-gray-100">NovelGenie</span>
+        <div className="flex items-center space-x-2 text-blue-400 overflow-hidden">
+          <Sparkles size={20} className="shrink-0" />
+          <div className="flex flex-col min-w-0">
+             <span className="font-bold text-gray-100 truncate text-sm">NovelGenie</span>
+             {tokenUsage && (
+                 <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono leading-none mt-0.5">
+                     <div className="flex items-center gap-1">
+                        <Cpu size={10} />
+                        <span>{formatTokenCount(tokenUsage.used)} / {formatTokenCount(tokenUsage.limit)}</span>
+                     </div>
+                     <span>({tokenUsage.percent}%)</span>
+                 </div>
+             )}
+          </div>
         </div>
+
+        {/* Token Progress Bar (Visual) */}
+        {tokenUsage && (
+             <div 
+                className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+                style={{ width: `${tokenUsage.percent}%` }}
+                title={`Context Usage: ${tokenUsage.percent}%`}
+             />
+        )}
+
         <div className="flex items-center gap-2">
+            {!showHistory && (
+                <button 
+                    onClick={handleExportCurrentSession}
+                    className="p-2 rounded-lg transition-colors hover:bg-gray-800 text-gray-500 hover:text-white"
+                    title="导出当前会话 (Markdown)"
+                >
+                    <Download size={18} />
+                </button>
+            )}
             <button 
                 onClick={() => setIsDebugMode(!isDebugMode)} 
                 className={`p-2 rounded-lg transition-colors ${isDebugMode ? 'bg-purple-900/50 text-purple-400' : 'hover:bg-gray-800 text-gray-500'}`}
@@ -171,21 +224,29 @@ const AgentChat: React.FC<AgentChatProps> = ({
                         }`}
                     >
                         <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3 mb-1 pr-10">
+                            <div className="flex items-center gap-3 mb-1 pr-16">
                                 <MessageSquare size={16} className={`shrink-0 ${session.id === currentSessionId ? "text-blue-400" : "text-gray-600"}`} />
                                 <span className={`font-medium text-base truncate ${session.id === currentSessionId ? 'text-blue-100' : 'text-gray-300'}`}>
                                     {session.title || '无标题会话'}
                                 </span>
                             </div>
                             
-                            {/* Delete Button: Always visible, larger touch target */}
-                            <button 
-                                onClick={(e) => handleDeleteSession(e, session.id)}
-                                className="absolute top-3 right-3 p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                                title="删除会话"
-                            >
-                                <Trash2 size={18} />
-                            </button>
+                            <div className="absolute top-3 right-3 flex items-center gap-1">
+                                <button 
+                                    onClick={(e) => handleExportSession(e, session)}
+                                    className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                                    title="导出会话"
+                                >
+                                    <Download size={16} />
+                                </button>
+                                <button 
+                                    onClick={(e) => handleDeleteSession(e, session.id)}
+                                    className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                                    title="删除会话"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
                         </div>
                         <div className="text-xs text-gray-500 flex justify-between mt-3 px-1">
                             <span>{new Date(session.lastModified).toLocaleString([], {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
