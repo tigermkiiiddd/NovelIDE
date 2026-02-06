@@ -8,7 +8,13 @@ import {
   CHARACTER_CARD_TEMPLATE,
   DEFAULT_AGENT_SKILL,
   DEFAULT_AGENT_PERSONA,
-  SKILL_EROTIC_WRITER
+  SKILL_EROTIC_WRITER,
+  SKILL_WORLD_BUILDER,
+  SKILL_OUTLINE_ARCHITECT,
+  SKILL_CHARACTER_DESIGNER,
+  SKILL_DRAFT_EXPANDER,
+  SKILL_EDITOR_REVIEW,
+  SKILL_HUMANIZER_STYLE
 } from './templates';
 
 // 生成唯一ID
@@ -64,31 +70,19 @@ export const initialFileSystem: FileNode[] = [
   subskillFolder, 
   rulesFolder,
   
-  // --- 00_基础信息 ---
-  createFile('项目档案.md', infoFolder.id, PROJECT_PROFILE_TEMPLATE),
-  createFile('世界线记录.md', infoFolder.id, withMeta('# 世界线记录 (Timeline Log)\n\n> 记录实际发生的剧情，作为后续章节的历史参考。\n\n| 章节 | 事件 | 状态变更 | 伏笔 |\n|---|---|---|---|\n', '本文件用于详细记录故事发展过程中发生的关键事件、世界状态的变更以及埋下的伏笔信息，作为后续创作的严谨参考依据。', ['记录', '世界线'])),
-  createFile('伏笔记录.md', infoFolder.id, withMeta('# 伏笔记录 (Foreshadowing Log)\n\n> 记录未回收的伏笔。\n\n- [ ] [第一章] 主角捡到的黑色戒指 (未回收)\n', '本文件专门用于追踪故事中埋设的各类伏笔和悬念，详细记录其出处及回收状态，确保故事逻辑闭环，提升读者阅读体验。', ['记录', '伏笔'])),
-  
-  // --- 02_角色档案 (示例) ---
-  createFile('主角_李逍遥.md', charFolder.id, CHARACTER_CARD_TEMPLATE.replace('姓名：', '姓名：李逍遥')),
-  
-  // --- 03_剧情大纲 (示例) ---
-  createFile('第一章_细纲.md', outlineFolder.id, OUTLINE_CHAPTER_TEMPLATE.replace('章节名：', '章节名：霓虹觉醒')),
+  // --- 00-05 业务文件夹初始为空 (用户要求) ---
   
   // --- 98_技能配置 (Agent Skills) ---
   createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
   createFile('助手人设.md', skillFolder.id, DEFAULT_AGENT_PERSONA),
-  // subskill
-  createFile('示例_战斗扩写增强.md', subskillFolder.id, `---
-name: 战斗扩写增强
-description: 强化战斗场面的描写，侧重动作连贯性。
-summarys: ["本技能模块专注于提升战斗场景的描写质量，特别强调招式动作的流畅连贯性、环境破坏的视觉效果渲染以及技能命名与喊招的格调。"]
-tags: ["技能", "战斗"]
----
-
-# 战斗描写增强指令
-
-当涉及战斗场景时，请重点关注：动作连贯性、环境破坏效果、招式名称的格调。`),
+  
+  // --- Sub Skills (Enhanced) ---
+  createFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER),
+  createFile('技能_大纲构建.md', subskillFolder.id, SKILL_OUTLINE_ARCHITECT),
+  createFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER),
+  createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
+  createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
+  createFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE),
   createFile('技能_涩涩扩写.md', subskillFolder.id, SKILL_EROTIC_WRITER),
 
   // --- 99_创作规范 (Templates & Guides) ---

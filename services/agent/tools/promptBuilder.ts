@@ -1,6 +1,6 @@
 
 import { FileNode, ProjectMeta, FileType, TodoItem } from '../../../types';
-import { getFileTreeStructure } from '../../fileSystem';
+import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 import { DEFAULT_AGENT_SKILL, DEFAULT_AGENT_PERSONA, PERSONA_SYSTEM_PREFIX } from '../../templates';
 
 // Helper to extract summary from file nodes for Emergent Context
@@ -43,22 +43,28 @@ export const constructSystemPrompt = (
     
     const activePersonaContent = personaFile?.content || DEFAULT_AGENT_PERSONA;
 
-    // 1.3 Resolve Emergent Skills (Sub-skills)
-    let emergentSkillsData = "";
+    // 1.3 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
+    let emergentSkillsData = "(无额外技能)";
     let subSkillFolder = files.find(f => f.name === 'subskill');
     if (!subSkillFolder && skillFolder) {
         subSkillFolder = files.find(f => f.parentId === skillFolder.id && f.name === 'subskill');
     }
+    
     if (subSkillFolder) {
         const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE);
         const validSkills = subSkillFiles.map(f => {
             const meta = f.metadata || {};
             if (meta.name && meta.description) {
-                return `### 技能模块: ${meta.name}\n> 描述: ${meta.description}\n${f.content}`;
+                // Modified: Only provide Meta info + Path. Content is NOT loaded to save tokens.
+                const path = getNodePath(f, files);
+                return `- **${meta.name}**\n  - 描述: ${meta.description}\n  - 挂载路径: \`${path}\``;
             }
             return null;
         }).filter(Boolean);
-        if (validSkills.length > 0) emergentSkillsData = validSkills.join('\n\n');
+        
+        if (validSkills.length > 0) {
+            emergentSkillsData = validSkills.join('\n');
+        }
     }
 
     // --- 2. 上下文构建 (Context Construction) ---
@@ -73,8 +79,10 @@ export const constructSystemPrompt = (
     const charactersSummary = extractFolderSummary(files, '角色档案');
     const worldSummary = extractFolderSummary(files, '世界观');
     
-    // File Context
-    const fileTree = getFileTreeStructure(files);
+    // File Context (Folders Only)
+    // 优化：仅提供文件夹结构，减少 Context 占用。Agent 需通过工具查找具体文件。
+    const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
+    const fileTree = getFileTreeStructure(folderOnlyFiles);
     
     // Active File
     let activeFileContext = "当前未打开任何文件。";
@@ -96,8 +104,6 @@ export const constructSystemPrompt = (
     const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
 
     // --- 3. 最终组装 (Final Assembly) ---
-    // 必须使用显式的字符串拼接，确保指令层级清晰
-    // 即使 Agent 不查文件，也能直接通过这里的 activePersonaContent 获得人设
     return `
 ${agentInstruction}
 
@@ -127,11 +133,15 @@ ${worldSummary}
 ## 1. 待办事项 (Todos)
 ${pendingTodos}
 
-## 2. 挂载的特殊技能 (Emergent Skills)
-${emergentSkillsData || "(无额外技能)"}
+## 2. 可用技能列表 (Available Skills - Lazy Load)
+> 下列技能处于"未激活"状态。如果你判断当前任务需要用到某个特定技能（如涩涩描写、战斗优化），**必须先调用 \`readFile\` 读取对应的挂载路径**，获取具体指令后方可执行。
+${emergentSkillsData}
 
-## 3. 文件目录结构 (File Tree)
+## 3. 文件目录结构 (File Tree - Folders Only)
 ${fileTree}
+> 注意：此视图仅显示文件夹结构，文件已被隐藏以节省空间。
+> - 如需查找特定文件，请使用 \`searchFiles\` 或 \`listFiles\` 工具。
+> - 核心设定（如角色、世界观）的摘要已在上文提供，无需重复读取。
 
 ## 4. 用户正在编辑的文件 (Active Editor Content)
 ${activeFileContext}
@@ -140,7 +150,16 @@ ${activeFileContext}
 【系统指令 (System Note)】
 1. 你必须时刻扮演【Active Persona Definition】中的角色。
 2. 利用【Emergent World Context】中的信息来保证设定准确。
-3. 如果用户要求修改文件，请使用相应的写工具。
-4. ⚠️【模板严格执行令】：当用户要求创建“角色档案”或“大纲”时，你必须先读取 '99_创作规范' 下对应的模板文件。生成的 Markdown 内容结构必须与模板**完全一致**（包括标题层级、字段名称）。绝对禁止 Agent 自作聪明添加“生平经历”、“能力数值”等模板里没有的章节，除非用户显式要求增加。
+3. **动态技能加载**：请关注【可用技能列表】。不要凭空捏造写作指导，如果需要特定风格的描写，先读对应的技能文件。
+4. ⚠️【模板严格执行令】：当用户要求创建“角色档案”或“大纲”时，你必须先读取 '99_创作规范' 下对应的模板文件。生成的 Markdown 内容结构必须与模板**完全一致**。
+5. 📝【登记制度 (Mandatory Registration)】：
+   - **写完正文后**：你必须立即执行两项更新：
+     1. 更新 \`00_基础信息/世界线记录.md\`：记录本章发生的关键事件、状态变更。
+     2. 更新 \`00_基础信息/伏笔记录.md\`：登记本章埋下的新伏笔，或勾选已回收的伏笔。
+   - **这是强制流程**：严禁写完正文就直接向用户交付，必须连续调用工具完成这两项记录更新。
+6. ⚡ **连续执行协议 (Batch Processing Protocol)**:
+   - **拒绝中断 (NO INTERRUPTIONS)**：当 Todos 列表有多个 Pending 任务，或者完成一个目标明显需要多个步骤（如：读取细纲 -> 写正文 -> 更新世界线 & 伏笔）时，**必须连续调用工具**。
+   - **禁止微汇报 (NO MICRO-REPORTING)**：严禁每完成一个小步骤（例如只是创建了文件）就停止并向用户汇报。
+   - **自动推进**：在工具执行成功后，立即检查是否能执行下一步。只有当所有逻辑上连贯的任务全部完成，或者遇到必须由用户决策的阻碍时，才停止并输出最终总结。
 `;
 };

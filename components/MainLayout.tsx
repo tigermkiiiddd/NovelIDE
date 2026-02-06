@@ -9,6 +9,7 @@ import StatusBar from './StatusBar';
 import { useAgent } from '../hooks/useAgent';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
+import { useUiStore } from '../stores/uiStore';
 import { useShallow } from 'zustand/react/shallow';
 
 interface MainLayoutProps {
@@ -17,12 +18,32 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // --- UI Store (Persisted State) ---
+  const { 
+      isSidebarOpen, 
+      isChatOpen, 
+      sidebarWidth, 
+      agentWidth, 
+      setSidebarOpen, 
+      setChatOpen, 
+      setSidebarWidth, 
+      setAgentWidth,
+      toggleChat,
+      toggleSidebar
+  } = useUiStore(useShallow(state => ({
+      isSidebarOpen: state.isSidebarOpen,
+      isChatOpen: state.isChatOpen,
+      sidebarWidth: state.sidebarWidth,
+      agentWidth: state.agentWidth,
+      setSidebarOpen: state.setSidebarOpen,
+      setChatOpen: state.setChatOpen,
+      setSidebarWidth: state.setSidebarWidth,
+      setAgentWidth: state.setAgentWidth,
+      toggleChat: state.toggleChat,
+      toggleSidebar: state.toggleSidebar
+  })));
+
   const [isProjectOverviewOpen, setIsProjectOverviewOpen] = useState(false);
-  
-  // --- Resizing State ---
-  const [sidebarWidth, setSidebarWidth] = useState(256);
-  const [agentWidth, setAgentWidth] = useState(384);
   const [isResizing, setIsResizing] = useState<'sidebar' | 'agent' | null>(null);
 
   // Mobile check
@@ -85,9 +106,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   const activeFile = files.find(f => f.id === activeFileId) || null;
 
-  // Initialize Agent Hook
+  // Initialize Agent Hook (No longer manages UI open state)
   const { 
-    messages, isLoading, isOpen: isChatOpen, setIsOpen: setIsChatOpen, 
+    messages, isLoading, 
     sendMessage, todos, sessions, currentSessionId, 
     createNewSession, switchSession, deleteSession,
     aiConfig, updateAiConfig, pendingChanges
@@ -97,20 +118,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       updateProjectMeta: handleAgentUpdateProject 
   });
 
-  // Responsive Layout Handler
+  // Responsive Layout Handler: Force close on mobile mount/resize
   useEffect(() => {
     const handleResize = () => {
       if (window.innerWidth < 768) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
+         if (isSidebarOpen) setSidebarOpen(false);
+         // Note: We typically don't force close chat on resize to preserve context, 
+         // but on strict mobile entry we might.
       }
     };
-    if (window.innerWidth < 768) setIsSidebarOpen(false);
     
+    // Initial Mobile Check
+    if (window.innerWidth < 768) {
+        setSidebarOpen(false);
+        // Also default chat to closed on mobile initial load to give space to editor
+        if (isChatOpen) setChatOpen(false);
+    } 
+
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [isSidebarOpen, isChatOpen, setSidebarOpen, setChatOpen]);
 
   // --- Resizing Logic ---
   useEffect(() => {
@@ -119,7 +146,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       e.preventDefault();
 
       if (isResizing === 'sidebar') {
-         // Sidebar: Min 180px, Max 50% of screen or 600px
+         // Sidebar: Min 180px, Max 600px
          const newWidth = Math.max(180, Math.min(e.clientX, 600));
          setSidebarWidth(newWidth);
       } else if (isResizing === 'agent') {
@@ -146,7 +173,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing]);
+  }, [isResizing, setSidebarWidth, setAgentWidth]);
 
   if (!currentProject) return <div className="h-screen w-full flex items-center justify-center bg-gray-900 text-gray-500">Loading Context...</div>;
 
@@ -155,11 +182,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       
       <Sidebar 
         isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
+        onClose={() => setSidebarOpen(false)}
         onBackToProjects={onBack}
         onOpenSettings={() => {
             setIsProjectOverviewOpen(true);
-            if (isMobile) setIsSidebarOpen(false);
+            if (isMobile) setSidebarOpen(false);
         }}
         width={sidebarWidth}
       />
@@ -177,14 +204,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         
         {/* Mobile Header */}
         <header className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 md:hidden shrink-0">
-          <button onClick={() => setIsSidebarOpen(true)} className="p-1 -ml-1 text-gray-400 active:text-white">
+          <button onClick={() => setSidebarOpen(true)} className="p-1 -ml-1 text-gray-400 active:text-white">
             <Menu size={24} />
           </button>
           <span className="font-bold text-gray-200 truncate max-w-[200px] text-sm">
             {activeFile ? activeFile.name : currentProject.name}
           </span>
           <button 
-            onClick={() => setIsChatOpen(!isChatOpen)} 
+            onClick={toggleChat}
             className={`p-1 -mr-1 ${isChatOpen ? 'text-blue-400' : 'text-gray-400'}`}
           >
             <MessageSquare size={24} />
@@ -194,7 +221,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         {/* Desktop Header / Toolbar */}
         <div className="hidden md:flex items-center justify-between bg-gray-900 border-b border-gray-800 h-10 px-4 shrink-0">
             <div className="flex items-center gap-2 text-gray-500">
-               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="hover:text-white transition-colors">
+               <button onClick={toggleSidebar} className="hover:text-white transition-colors">
                   {isSidebarOpen ? <PanelLeftClose size={16}/> : <PanelLeftOpen size={16}/>}
                </button>
                <span className="text-xs">
@@ -203,7 +230,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             </div>
             <div className="flex items-center gap-2">
                  <button 
-                    onClick={() => setIsChatOpen(!isChatOpen)}
+                    onClick={toggleChat}
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isChatOpen ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}
                  >
                     <MessageSquare size={14} />
@@ -229,7 +256,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         {/* Mobile Floating Action Button (Only if chat is closed) */}
         {!isChatOpen && isMobile && (
             <button
-            onClick={() => setIsChatOpen(true)}
+            onClick={() => setChatOpen(true)}
             className="absolute bottom-12 right-6 p-3.5 bg-blue-600 hover:bg-blue-500 rounded-full shadow-lg shadow-blue-900/50 z-20 transition-transform active:scale-95 md:hidden"
             >
             <MessageSquare size={24} color="white" />
@@ -251,7 +278,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         onSendMessage={sendMessage}
         isLoading={isLoading}
         isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
+        onClose={() => setChatOpen(false)}
         todos={todos}
         sessions={sessions}
         currentSessionId={currentSessionId}

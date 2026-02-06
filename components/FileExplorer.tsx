@@ -141,8 +141,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
               {node.name}
             </span>
 
-            {/* Actions Group */}
-            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Actions Group - Always visible for mobile */}
+            <div className="flex items-center gap-0.5">
                 
                 {/* Rename Button */}
                 <button

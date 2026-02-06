@@ -350,14 +350,14 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                     <div className="flex gap-1">
                         <button 
                             onClick={(e) => handleExport(e, project.id)}
-                            className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                            className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-full transition-colors"
                             title="导出项目"
                         >
                             <Download size={16} />
                         </button>
                         <button 
                             onClick={(e) => handleDelete(e, project.id)}
-                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-full transition-colors opacity-0 group-hover:opacity-100"
+                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-full transition-colors"
                             title="删除项目"
                         >
                             <Trash2 size={16} />

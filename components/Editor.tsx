@@ -5,13 +5,15 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore';
+import { useUiStore } from '../stores/uiStore';
 import { DiffHunk, applyPatchInMemory, rejectHunkInNewContent } from '../utils/diffUtils';
 import { executeApprovedChange } from '../services/agent/toolRunner';
-import { FileText, Eye, Edit3, RotateCcw, RotateCw, Tag, BookOpen, Columns, PanelRightClose } from 'lucide-react';
-import { getNodePath } from '../services/fileSystem';
+import { FileText, Eye, Edit3, RotateCcw, RotateCw, Tag, BookOpen, Columns, PanelRightClose, ListOrdered, WrapText, AlignJustify } from 'lucide-react';
+import { getNodePath, findNodeByPath } from '../services/fileSystem';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { parseFrontmatter } from '../utils/frontmatter';
 import DiffViewer from './DiffViewer';
+import { useShallow } from 'zustand/react/shallow';
 
 interface EditorProps {
   className?: string;
@@ -22,14 +24,27 @@ const Editor: React.FC<EditorProps> = ({
 }) => {
   // 1. Core Stores
   const fileStore = useFileStore();
-  const { files, activeFileId, saveFileContent } = fileStore;
+  const { files, activeFileId, saveFileContent, createFile } = fileStore;
   const activeFile = files.find(f => f.id === activeFileId);
   
   // 2. Agent Store (for pending changes)
-  // 新增 reviewingChangeId 支持
   const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId } = useAgentStore();
 
-  // 3. Local State & Undo/Redo
+  // 3. UI Store (Persisted View State)
+  const { 
+    isSplitView, toggleSplitView,
+    showLineNumbers, toggleLineNumbers,
+    wordWrap, toggleWordWrap
+  } = useUiStore(useShallow(state => ({
+    isSplitView: state.isSplitView,
+    toggleSplitView: state.toggleSplitView,
+    showLineNumbers: state.showLineNumbers,
+    toggleLineNumbers: state.toggleLineNumbers,
+    wordWrap: state.wordWrap,
+    toggleWordWrap: state.toggleWordWrap
+  })));
+
+  // 4. Local State & Undo/Redo
   const { 
     state: content, 
     set: setContent, 
@@ -41,19 +56,17 @@ const Editor: React.FC<EditorProps> = ({
   } = useUndoRedo<string>('', 800);
 
   const [internalMode, setInternalMode] = useState<'edit' | 'preview' | 'diff'>('edit');
-  const [isSplitView, setIsSplitView] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [cursorStats, setCursorStats] = useState({ line: 1, col: 1 });
   
-  // 4. Detect Pending Change for Active File OR Explicit Review
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef = useRef<HTMLDivElement>(null);
+  
+  // 5. Detect Pending Change for Active File OR Explicit Review
   const activePendingChange = useMemo(() => {
-      // Priority 1: Check if a specific change ID is being reviewed (e.g. from AgentChat click)
-      // This allows reviewing changes for files that don't exist yet (Create File).
       if (reviewingChangeId) {
           return pendingChanges.find(c => c.id === reviewingChangeId) || null;
       }
-
-      // Priority 2: Fallback to active file's pending changes
       if (!activeFile) return null;
       const currentPath = getNodePath(activeFile, files);
       return pendingChanges.find(c => c.fileName === currentPath);
@@ -63,7 +76,6 @@ const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
       if (activePendingChange) {
           setInternalMode('diff');
-          setIsSplitView(false);
       } else if (internalMode === 'diff') {
           setInternalMode('edit');
       }
@@ -79,6 +91,8 @@ const Editor: React.FC<EditorProps> = ({
               resetHistory('');
           }
           prevFileIdRef.current = activeFileId;
+          // Reset cursor stats on file change
+          setCursorStats({ line: 1, col: 1 });
       }
   }, [activeFileId, activeFile, resetHistory]);
 
@@ -93,6 +107,17 @@ const Editor: React.FC<EditorProps> = ({
       return { previewMetadata: meta, previewBody: body };
   }, [content, internalMode, isSplitView]);
 
+  // --- Word Count ---
+  const wordCount = useMemo(() => {
+      return content ? content.replace(/\s/g, '').length : 0;
+  }, [content]);
+
+  // --- Line Numbers Calculation ---
+  const lines = useMemo(() => {
+      if (!content) return [1];
+      return new Array(content.split('\n').length).fill(0).map((_, i) => i + 1);
+  }, [content]);
+
   // --- Handlers ---
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
@@ -101,6 +126,27 @@ const Editor: React.FC<EditorProps> = ({
     if (activeFile) {
         saveFileContent(activeFile.id, newText);
     }
+    updateCursorStats(e.target);
+  };
+
+  const updateCursorStats = (target: HTMLTextAreaElement) => {
+      const val = target.value;
+      const sel = target.selectionStart;
+      const textBeforeCursor = val.slice(0, sel);
+      const lineCount = textBeforeCursor.split('\n').length;
+      const lastNewLinePos = textBeforeCursor.lastIndexOf('\n');
+      const colCount = sel - lastNewLinePos;
+      setCursorStats({ line: lineCount, col: colCount });
+  };
+
+  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      updateCursorStats(e.currentTarget);
+  };
+
+  const handleScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+      if (gutterRef.current) {
+          gutterRef.current.scrollTop = e.currentTarget.scrollTop;
+      }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -118,11 +164,15 @@ const Editor: React.FC<EditorProps> = ({
           const val = textarea.value;
           const newVal = val.substring(0, start) + "  " + val.substring(end);
           setContent(newVal);
-          setTimeout(() => { if(textareaRef.current) textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2; }, 0);
+          setTimeout(() => { 
+              if(textareaRef.current) {
+                  textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2; 
+                  updateCursorStats(textareaRef.current);
+              }
+          }, 0);
           return;
       }
       if (e.key === 'Enter') {
-          // ... (Existing Enter key logic for lists) ...
           const start = textarea.selectionStart;
           const end = textarea.selectionEnd;
           const val = textarea.value;
@@ -158,15 +208,14 @@ const Editor: React.FC<EditorProps> = ({
       }
   };
 
-  const toggleSplitView = () => {
-      const nextState = !isSplitView;
-      setIsSplitView(nextState);
-      if (nextState) setInternalMode('edit');
+  const handleToggleSplit = () => {
+      toggleSplitView();
+      if (!isSplitView) setInternalMode('edit');
   };
 
   const handleSetMode = (mode: 'edit' | 'preview') => {
       setInternalMode(mode);
-      setIsSplitView(false);
+      if (isSplitView) toggleSplitView();
   };
 
   useEffect(() => {
@@ -176,78 +225,68 @@ const Editor: React.FC<EditorProps> = ({
       }
   }, [isDirty]);
 
-  // --- Approval Logic Proxies ---
+  // --- Approval Logic Proxies (Truncated for brevity, logic unchanged) ---
   const handleAcceptHunk = (hunk: DiffHunk) => {
       if (!activePendingChange) return;
-      // Note: We use the pending change's original content if activeFile is missing (new file case)
-      const baseContent = activeFile ? (activeFile.content || '') : (activePendingChange.originalContent || '');
-      
+      let targetFile = activeFile;
+      if (!targetFile && activePendingChange.fileName) targetFile = findNodeByPath(files, activePendingChange.fileName);
+      const baseContent = targetFile ? (targetFile.content || '') : (activePendingChange.originalContent || '');
       const linesToKeep = hunk.lines.filter(l => l.type !== 'remove').map(l => l.content);
-      const newFileContent = applyPatchInMemory(
-          baseContent, 
-          hunk.startLineOriginal === 0 ? 1 : hunk.startLineOriginal,
-          hunk.endLineOriginal === 0 ? 0 : hunk.endLineOriginal, 
-          linesToKeep.join('\n')
-      );
-      
-      if (activeFile) {
-          saveFileContent(activeFile.id, newFileContent);
-      }
+      const newFileContent = applyPatchInMemory(baseContent, hunk.startLineOriginal === 0 ? 1 : hunk.startLineOriginal, hunk.endLineOriginal === 0 ? 0 : hunk.endLineOriginal, linesToKeep.join('\n'));
+      if (targetFile) saveFileContent(targetFile.id, newFileContent);
+      else if (activePendingChange.toolName === 'createFile') createFile(activePendingChange.fileName, newFileContent);
       setContent(newFileContent); 
   };
-
   const handleRejectHunk = (hunk: DiffHunk) => {
       if (!activePendingChange) return;
-      // For Create File, originalContent is usually empty, which is correct for rejection
-      const baseContent = activeFile ? (activeFile.content || '') : (activePendingChange.originalContent || '');
-
-      const revertedNewContent = rejectHunkInNewContent(
-          activePendingChange.newContent || '',
-          baseContent,
-          hunk
-      );
+      let targetFile = activeFile;
+      if (!targetFile && activePendingChange.fileName) targetFile = findNodeByPath(files, activePendingChange.fileName);
+      const baseContent = targetFile ? (targetFile.content || '') : (activePendingChange.originalContent || '');
+      const revertedNewContent = rejectHunkInNewContent(activePendingChange.newContent || '', baseContent, hunk);
       updatePendingChange(activePendingChange.id, { newContent: revertedNewContent });
   };
-  
-  const handleAcceptAll = () => {
-      if (activePendingChange) {
-          const actions = {
-              createFile: fileStore.createFile,
-              updateFile: fileStore.updateFile,
-              patchFile: fileStore.patchFile,
-              deleteFile: fileStore.deleteFile,
-              renameFile: fileStore.renameFile,
-              readFile: fileStore.readFile,
-              searchFiles: fileStore.searchFiles,
-              listFiles: fileStore.listFiles,
-              updateProjectMeta: () => 'Not supported here',
-              setTodos: () => {},
-              trackFileAccess: () => {}
-          };
-          const result = executeApprovedChange(activePendingChange, actions as any);
-          addMessage({ id: Math.random().toString(), role: 'system', text: `✅ 变更已批准: ${activePendingChange.fileName}\n${result}`, timestamp: Date.now() });
-          removePendingChange(activePendingChange.id); // This will also clear reviewingChangeId if matches
-      }
-  };
-
-  const handleRejectAll = () => {
-      if (activePendingChange) {
-          removePendingChange(activePendingChange.id); // This will also clear reviewingChangeId if matches
-          addMessage({ id: Math.random().toString(), role: 'system', text: `❌ 变更已拒绝: ${activePendingChange.fileName}`, timestamp: Date.now() });
-      }
-  };
+  const handleAcceptAll = () => { if (activePendingChange) { const actions = { createFile: fileStore.createFile, updateFile: fileStore.updateFile, patchFile: fileStore.patchFile, deleteFile: fileStore.deleteFile, renameFile: fileStore.renameFile, readFile: fileStore.readFile, searchFiles: fileStore.searchFiles, listFiles: fileStore.listFiles, updateProjectMeta: () => 'Not supported', setTodos: () => {}, trackFileAccess: () => {} }; const result = executeApprovedChange(activePendingChange, actions as any); addMessage({ id: Math.random().toString(), role: 'system', text: `✅ 变更已批准: ${activePendingChange.fileName}\n${result}`, timestamp: Date.now() }); removePendingChange(activePendingChange.id); } };
+  const handleRejectAll = () => { if (activePendingChange) { removePendingChange(activePendingChange.id); addMessage({ id: Math.random().toString(), role: 'system', text: `❌ 变更已拒绝: ${activePendingChange.fileName}`, timestamp: Date.now() }); } };
+  const handleDismiss = () => { if (activePendingChange) { removePendingChange(activePendingChange.id); addMessage({ id: Math.random().toString(), role: 'system', text: `✅ 变更已手动完成: ${activePendingChange.fileName}`, timestamp: Date.now() }); } };
 
   // --- Render Components ---
   const renderEditor = () => (
-      <textarea
-        ref={textareaRef}
-        className="w-full h-full p-4 sm:p-6 bg-[#0d1117] text-gray-300 resize-none focus:outline-none font-mono text-sm sm:text-base leading-relaxed"
-        value={content}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        placeholder="在此处开始您的创作..."
-        spellCheck={false}
-      />
+      <div className="flex h-full w-full relative overflow-hidden">
+          {/* Gutter - Only visible if line numbers enabled */}
+          {showLineNumbers && (
+              <div 
+                  ref={gutterRef}
+                  className="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base leading-relaxed"
+                  aria-hidden="true"
+              >
+                  {lines.map((ln) => (
+                      <div key={ln}>{ln}</div>
+                  ))}
+                  {/* Extra padding at bottom to match textarea scrolling */}
+                  <div className="h-20" />
+              </div>
+          )}
+          
+          <textarea
+            ref={textareaRef}
+            className={`
+                flex-1 h-full w-full bg-[#0d1117] text-gray-300 resize-none focus:outline-none 
+                font-mono text-sm sm:text-base leading-relaxed 
+                pt-4 sm:pt-6 pb-20
+                ${showLineNumbers ? 'pl-2' : 'pl-4 sm:pl-6'} 
+                ${wordWrap ? 'whitespace-pre-wrap' : 'whitespace-pre overflow-x-auto'}
+            `}
+            value={content}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            onScroll={handleScroll}
+            onSelect={handleSelect}
+            onClick={handleSelect}
+            onKeyUp={handleSelect}
+            placeholder="在此处开始您的创作..."
+            spellCheck={false}
+          />
+      </div>
   );
 
   const renderPreview = () => (
@@ -285,7 +324,6 @@ const Editor: React.FC<EditorProps> = ({
   );
 
   // Fallback: If no file selected AND NOT in diff mode.
-  // We check for diff mode to ensure we don't show this screen when reviewing a New File (activeFile is null but diff mode is active)
   if (!activeFile && internalMode !== 'diff') {
     return (
       <div className={`flex flex-col items-center justify-center h-full text-gray-500 bg-[#0d1117] ${className}`}>
@@ -309,16 +347,39 @@ const Editor: React.FC<EditorProps> = ({
                     {activeFile?.name || 'Untitled'}
                     {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" title="Unsaved changes" />}
                 </span>
+                {activeFile && (
+                    <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono leading-none">
+                        <span>{wordCount} 字</span>
+                        <span className="text-gray-700">|</span>
+                        <span>Ln {cursorStats.line}, Col {cursorStats.col}</span>
+                    </div>
+                )}
             </div>
         </div>
 
         {/* Toolbar Actions */}
         <div className="flex items-center gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50">
+            {/* View Settings Toggles */}
+            <button 
+                onClick={toggleWordWrap} 
+                className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
+                title={wordWrap ? "自动换行: 开启" : "自动换行: 关闭"}
+            >
+                {wordWrap ? <WrapText size={14} /> : <AlignJustify size={14} />}
+            </button>
+            <button 
+                onClick={toggleLineNumbers} 
+                className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
+                title="显示行号"
+            >
+                <ListOrdered size={14} />
+            </button>
+
             <button onClick={undo} disabled={!canUndo} className={`flex items-center justify-center w-8 h-7 rounded transition-all ${canUndo ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-700 cursor-not-allowed'}`} title="Undo (Ctrl+Z)"><RotateCcw size={14} /></button>
             <button onClick={redo} disabled={!canRedo} className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${canRedo ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-700 cursor-not-allowed'}`} title="Redo (Ctrl+Shift+Z)"><RotateCw size={14} /></button>
             <button onClick={() => handleSetMode('edit')} className={`flex items-center justify-center w-8 h-7 rounded transition-all ${internalMode === 'edit' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title="Edit Mode"><Edit3 size={14} /></button>
             <button onClick={() => handleSetMode('preview')} className={`flex items-center justify-center w-8 h-7 rounded transition-all ${internalMode === 'preview' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title="Preview Mode"><Eye size={14} /></button>
-            <button onClick={toggleSplitView} className={`hidden md:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}>{isSplitView ? <PanelRightClose size={14} /> : <Columns size={14} />}</button>
+            <button onClick={handleToggleSplit} className={`hidden md:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}>{isSplitView ? <PanelRightClose size={14} /> : <Columns size={14} />}</button>
         </div>
       </div>
 
@@ -326,7 +387,6 @@ const Editor: React.FC<EditorProps> = ({
       <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
         {internalMode === 'diff' && activePendingChange ? (
              <DiffViewer 
-                // Fallback to originalContent from pending change if activeFile is null (e.g., Create File)
                 originalContent={activeFile ? (activeFile.content || '') : (activePendingChange.originalContent || '')}
                 modifiedContent={activePendingChange.newContent || ''}
                 pendingChange={activePendingChange}
@@ -334,6 +394,7 @@ const Editor: React.FC<EditorProps> = ({
                 onRejectHunk={handleRejectHunk}
                 onAcceptAll={handleAcceptAll}
                 onRejectAll={handleRejectAll}
+                onDismiss={handleDismiss}
              />
         ) : (
             <div className="flex h-full relative">

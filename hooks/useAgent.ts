@@ -44,14 +44,6 @@ export const useAgent = (
 
   const accessedFiles = useRef<Set<string>>(new Set());
 
-  // Default open state based on screen size
-  const [isOpen, setIsOpen] = useState(() => {
-      if (typeof window !== 'undefined') {
-          return window.innerWidth >= 768;
-      }
-      return false;
-  });
-
   // --- 2. Sync AI Service Config ---
   useEffect(() => {
       if (!aiServiceInstance) {
@@ -251,8 +243,6 @@ export const useAgent = (
   return {
     messages: currentSession?.messages || [],
     isLoading,
-    isOpen,
-    setIsOpen,
     sendMessage,
     todos,
     sessions,

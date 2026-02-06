@@ -12,6 +12,7 @@ interface DiffViewerProps {
   onRejectHunk: (hunk: DiffHunk) => void;
   onAcceptAll: () => void;
   onRejectAll: () => void;
+  onDismiss?: () => void;
 }
 
 const DiffViewer: React.FC<DiffViewerProps> = ({
@@ -21,21 +22,30 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
   onAcceptHunk,
   onRejectHunk,
   onAcceptAll,
-  onRejectAll
+  onRejectAll,
+  onDismiss
 }) => {
   const diffHunks = useMemo(() => {
     const rawLines = computeLineDiff(originalContent, modifiedContent);
     return groupDiffIntoHunks(rawLines, 3);
   }, [originalContent, modifiedContent]);
 
-  if (diffHunks.length === 0) {
+  const hasChanges = useMemo(() => diffHunks.some(h => h.type === 'change'), [diffHunks]);
+
+  // If there are no diffs AT ALL (files are identical) OR if all diffs are "unchanged" (equal) context
+  if (diffHunks.length === 0 || !hasChanges) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4 opacity-70">
-        <CheckCheck size={48} className="text-green-500/50"/>
-        <p>所有变更已处理或文件无实际差异。</p>
+        <div className="p-4 bg-green-500/10 rounded-full text-green-500">
+             <CheckCheck size={48} />
+        </div>
+        <div className="text-center">
+            <p className="text-lg text-gray-300 font-medium">变更已全部处理</p>
+            <p className="text-sm">文件内容现已与目标一致。</p>
+        </div>
         <button 
-            onClick={onAcceptAll} 
-            className="px-4 py-2 bg-green-600/20 text-green-400 border border-green-600/30 rounded hover:bg-green-600/30 transition-colors"
+            onClick={onDismiss || onRejectAll} 
+            className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg transition-colors shadow-lg shadow-green-900/20 mt-2"
         >
             完成并退出
         </button>

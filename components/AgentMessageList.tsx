@@ -19,7 +19,7 @@ const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; co
                 <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">Click to expand</span>
             </summary>
             <div className="mt-1 p-2 bg-black/50 rounded border border-gray-800 overflow-x-auto">
-                <pre className="font-mono text-[10px] text-gray-400 leading-normal">
+                <pre className="font-mono text-[10px] text-gray-400 leading-normal whitespace-pre-wrap">
                     {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
                 </pre>
             </div>
@@ -71,7 +71,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({ messages, isLoading
                         {/* DEBUG INFO: System Prompt (Attached to User Message) */}
                         {isDebugMode && msg.metadata?.systemPrompt && (
                              <JsonView 
-                                data={JSON.parse(msg.metadata.systemPrompt)} 
+                                data={msg.metadata.systemPrompt} 
                                 label="SYSTEM PROMPT (Context)" 
                                 icon={<Cpu size={12}/>}
                                 color="text-purple-400"

@@ -12,7 +12,12 @@ export const useProjectStats = (project: ProjectMeta, files: FileNode[]) => {
     if (draftFolder) {
       const drafts = files.filter(f => f.parentId === draftFolder.id);
       chapterCount = drafts.length;
-      wordCount = drafts.reduce((acc, f) => acc + (f.content?.length || 0), 0);
+      // 修正：去除所有空白字符（空格、换行）后再统计长度，符合中文正文字数统计习惯
+      wordCount = drafts.reduce((acc, f) => {
+          const content = f.content || '';
+          const cleanContent = content.replace(/\s/g, '');
+          return acc + cleanContent.length;
+      }, 0);
     }
 
     let charCount = 0;

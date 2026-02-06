@@ -13,7 +13,13 @@ import {
   CHARACTER_CARD_TEMPLATE,
   OUTLINE_MASTER_TEMPLATE,
   OUTLINE_CHAPTER_TEMPLATE,
-  SKILL_EROTIC_WRITER
+  SKILL_EROTIC_WRITER,
+  SKILL_WORLD_BUILDER,
+  SKILL_OUTLINE_ARCHITECT,
+  SKILL_CHARACTER_DESIGNER,
+  SKILL_DRAFT_EXPANDER,
+  SKILL_EDITOR_REVIEW,
+  SKILL_HUMANIZER_STYLE
 } from '../services/templates';
 
 const TEMPLATE_WORLD_TIMELINE = `---
@@ -52,16 +58,12 @@ const PROTECTED_FILES: Record<string, Record<string, string>> = {
   },
   'subskill': {
       '技能_涩涩扩写.md': SKILL_EROTIC_WRITER,
-      '示例_战斗扩写增强.md': `---
-name: 战斗扩写增强
-description: 强化战斗场面的描写，侧重动作连贯性。
-summarys: ["本技能模块专注于提升战斗场景的描写质量，特别强调招式动作的流畅连贯性、环境破坏的视觉效果渲染以及技能命名与喊招的格调。"]
-tags: ["技能", "战斗"]
----
-
-# 战斗描写增强指令
-
-当涉及战斗场景时，请重点关注：动作连贯性、环境破坏效果、招式名称的格调。`
+      '技能_世界观构建.md': SKILL_WORLD_BUILDER,
+      '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+      '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
+      '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
+      '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
+      '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE
   }
 };
 
