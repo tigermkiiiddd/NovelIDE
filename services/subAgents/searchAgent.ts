@@ -16,6 +16,7 @@ const submitReportTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Final reflection: Are you confident in your findings? Is anything missing?' },
       summary: { type: Type.STRING, description: '对搜索结果的浓缩简介 (Executive Summary)。必须超过30个中文字符，详细概括关键发现，不能只有一句话。' },
       findings: { 
         type: Type.ARRAY, 
@@ -31,7 +32,7 @@ const submitReportTool: FunctionDeclaration = {
       },
       reasoning: { type: Type.STRING, description: '你的综合分析与判断理由：将碎片化的线索串联起来，解释为什么这些信息满足了主 Agent 的需求。' }
     },
-    required: ['summary', 'findings', 'reasoning']
+    required: ['thinking', 'summary', 'findings', 'reasoning']
   }
 };
 
@@ -52,6 +53,13 @@ const getSystemPrompt = (contextFiles: string) => `
 1. **自主规划**：你不是只会执行一次搜索。你需要制定计划，比如先看文件列表，再关键词搜索，再读取具体文件内容。
 2. **多轮行动 (Emergent Behavior)**：如果第一次搜索没结果，你需要尝试同义词、或者根据文件目录结构去猜测可能的位置。不要轻易放弃。
 3. **深度阅读**：找到文件后，必须读取内容来验证相关性。
+
+## Chain of Thought (Thinking) 协议
+**CRITICAL**: 你所有的工具调用都包含一个 \`thinking\` 参数。
+你必须利用这个参数来记录你的“内心独白”。在执行工具前，告诉自己：
+- 为什么我要用这个工具？
+- 我期望得到什么结果？
+- 如果失败了，我的备选方案是什么？
 
 ## 环境上下文
 ${contextFiles}
@@ -137,6 +145,11 @@ export async function runSearchSubAgent(
 
             const { name, args, id } = part.functionCall;
             
+            // Log thinking process
+            if (args.thinking && onLog) {
+                 onLog(`🤔 [Sub-Agent 思考]: ${args.thinking}`);
+            }
+
             // Check for Terminal Tool
             if (name === 'submit_report') {
                 if(onLog) onLog(`✅ [Sub-Agent] 任务完成，正在生成报告...`);
@@ -167,7 +180,7 @@ ${args.reasoning}
             // Execute Read Tools
             let result = '';
             try {
-                if(onLog) onLog(`🛠️ [Sub-Agent] 执行工具: ${name} (${JSON.stringify(args)})`);
+                if(onLog) onLog(`🛠️ [Sub-Agent] 执行工具: ${name}`);
                 
                 switch (name) {
                     case 'listFiles':
@@ -192,14 +205,11 @@ ${args.reasoning}
         }
         
         // Add Tool Results to History
-        history.push({ role: 'function', parts: functionResponses }); // Google format
-        // Note: OpenAI mapping handles role mapping in service layer if needed
+        history.push({ role: 'function', parts: functionResponses }); 
         
     } else {
-        // No tools called? Agent might be asking a question or just talking.
-        // Force it to conclude if it's just chatting.
         if (textPart) {
-             // Let it loop, maybe it's thinking aloud.
+             // Let it loop
         } else {
              return "Sub-Agent 异常结束：未提交报告。";
         }

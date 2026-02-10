@@ -9,7 +9,7 @@ interface AgentState {
   aiConfig: AIConfig;
   setAiConfig: (config: AIConfig) => void;
 
-  // Sessions
+  // Sessions (Global list, filtering happens in hooks)
   sessions: ChatSession[];
   currentSessionId: string | null;
   
@@ -22,7 +22,7 @@ interface AgentState {
   setReviewingChangeId: (id: string | null) => void;
   
   // Actions
-  createSession: (initialTitle?: string) => string;
+  createSession: (projectId: string, initialTitle?: string) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
   updateCurrentSession: (updater: (session: ChatSession) => ChatSession) => void;
@@ -60,9 +60,10 @@ export const useAgentStore = create<AgentState>()(
 
       setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
 
-      createSession: (initialTitle = '新会话') => {
+      createSession: (projectId, initialTitle = '新会话') => {
         const newSession: ChatSession = {
           id: generateId(),
+          projectId, // Bind to project
           title: initialTitle,
           messages: [],
           todos: [],
@@ -87,16 +88,13 @@ export const useAgentStore = create<AgentState>()(
           let newCurrentId = state.currentSessionId;
           
           if (state.currentSessionId === id) {
-             newCurrentId = newSessions.length > 0 ? newSessions[0].id : null;
+             // Logic here is tricky because we don't know the project context inside the store easily.
+             // The hook will handle switching to a valid session if current becomes null.
+             newCurrentId = null; 
           }
           
           return { sessions: newSessions, currentSessionId: newCurrentId };
         });
-        
-        // If no sessions left, create one automatically
-        if (get().sessions.length === 0) {
-            get().createSession();
-        }
       },
 
       updateCurrentSession: (updater) => {

@@ -9,6 +9,7 @@ export const manageTodosTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: Explain the plan update strategy.' },
       action: { 
         type: Type.STRING, 
         enum: ['add', 'complete', 'remove', 'update', 'list'], 
@@ -38,7 +39,7 @@ export const manageTodosTool: FunctionDeclaration = {
         description: 'Array of update objects. Required for action="update".'
       }
     },
-    required: ['action']
+    required: ['thinking', 'action']
   }
 };
 

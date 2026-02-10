@@ -7,11 +7,13 @@ export const updateProjectMetaTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: Summary of changes being applied.' },
       name: { type: Type.STRING, description: 'New project name (Book Title).' },
       description: { type: Type.STRING, description: 'Project description or core hook.' },
       genre: { type: Type.STRING, description: 'Genre (e.g. Fantasy, Sci-Fi).' },
       wordsPerChapter: { type: Type.INTEGER, description: 'Target words per chapter.' },
       targetChapters: { type: Type.INTEGER, description: 'Target total chapters.' }
     },
+    required: ['thinking']
   }
 };

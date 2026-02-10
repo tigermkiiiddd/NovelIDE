@@ -7,11 +7,12 @@ export const callSearchAgentTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: Why do you need to start a sub-agent? What is the core question?' },
       request_description: { 
         type: Type.STRING, 
         description: '用自然语言清楚描述你要找什么。例如：“找到所有提到‘黑色戒指’的地方” 或 “帮我梳理李逍遥在第二章的心理变化”。' 
       }
     },
-    required: ['request_description']
+    required: ['thinking', 'request_description']
   }
 };

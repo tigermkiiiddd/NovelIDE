@@ -6,7 +6,6 @@ import { initialFileSystem, generateId, findNodeByPath, getFileTreeStructure, ge
 import { parseFrontmatter } from '../utils/frontmatter';
 import { useProjectStore } from './projectStore';
 import { 
-  DEFAULT_AGENT_PERSONA, 
   DEFAULT_AGENT_SKILL,
   STYLE_GUIDE_TEMPLATE,
   PROJECT_PROFILE_TEMPLATE,
@@ -44,8 +43,7 @@ tags: ["模板"]
 // Define Protected Content Structure (The "Source of Truth" for system integrity)
 const PROTECTED_FILES: Record<string, Record<string, string>> = {
   '98_技能配置': {
-    'agent_core.md': DEFAULT_AGENT_SKILL,
-    '助手人设.md': DEFAULT_AGENT_PERSONA
+    'agent_core.md': DEFAULT_AGENT_SKILL
   },
   '99_创作规范': {
     '指南_文风规范.md': STYLE_GUIDE_TEMPLATE,

@@ -58,6 +58,7 @@ export interface ProjectMeta {
 
 export interface ChatSession {
   id: string;
+  projectId: string; // 关联的项目ID
   title: string; // 会话标题，通常取第一条消息的前几个字
   messages: ChatMessage[];
   todos: TodoItem[]; // 每个会话有独立的任务状态

@@ -7,7 +7,6 @@ import {
   OUTLINE_MASTER_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
   DEFAULT_AGENT_SKILL,
-  DEFAULT_AGENT_PERSONA,
   SKILL_EROTIC_WRITER,
   SKILL_WORLD_BUILDER,
   SKILL_OUTLINE_ARCHITECT,
@@ -74,7 +73,6 @@ export const initialFileSystem: FileNode[] = [
   
   // --- 98_技能配置 (Agent Skills) ---
   createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
-  createFile('助手人设.md', skillFolder.id, DEFAULT_AGENT_PERSONA),
   
   // --- Sub Skills (Enhanced) ---
   createFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER),

@@ -1,7 +1,7 @@
 
 import { FileNode, ProjectMeta, FileType, TodoItem } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
-import { DEFAULT_AGENT_SKILL, DEFAULT_AGENT_PERSONA, PERSONA_SYSTEM_PREFIX } from '../../templates';
+import { DEFAULT_AGENT_SKILL } from '../../templates';
 
 // Helper to extract summary from file nodes for Emergent Context
 const extractFolderSummary = (files: FileNode[], folderName: string): string => {
@@ -28,7 +28,7 @@ export const constructSystemPrompt = (
     activeFile: FileNode | null,
     todos: TodoItem[]
 ): string => {
-    // --- 1. 变量组装 (Variable Assembly): Protocol & Persona ---
+    // --- 1. 变量组装 (Variable Assembly) ---
     const skillFolder = files.find(f => f.name === '98_技能配置');
     
     // 1.1 Resolve Agent Core Protocol
@@ -36,14 +36,7 @@ export const constructSystemPrompt = (
     if (!agentFile) agentFile = files.find(f => f.name === 'agent_core.md');
     const agentInstruction = agentFile?.content || DEFAULT_AGENT_SKILL;
 
-    // 1.2 Resolve Active Persona
-    // 优先读取用户自定义的 '助手人设.md'，如果没有则使用 DEFAULT_AGENT_PERSONA
-    let personaFile = skillFolder ? files.find(f => f.parentId === skillFolder.id && f.name === '助手人设.md') : null;
-    if (!personaFile) personaFile = files.find(f => f.name === '助手人设.md');
-    
-    const activePersonaContent = personaFile?.content || DEFAULT_AGENT_PERSONA;
-
-    // 1.3 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
+    // 1.2 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
     let emergentSkillsData = "(无额外技能)";
     let subSkillFolder = files.find(f => f.name === 'subskill');
     if (!subSkillFolder && skillFolder) {
@@ -84,12 +77,6 @@ export const constructSystemPrompt = (
     const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
     const fileTree = getFileTreeStructure(folderOnlyFiles);
     
-    // Active File Info (CONTENT REMOVED BY USER REQUEST)
-    let activeFileInfo = "当前未打开任何文件。";
-    if (activeFile) {
-        activeFileInfo = `当前打开的文件名: ${activeFile.name}\n> 注意：为了节省上下文，文件内容**未自动注入**。如果你需要结合当前文件内容进行写作，**必须先调用 \`readFile\` 读取它**。`;
-    }
-
     // Task Context
     const pendingList = todos.filter(t => t.status === 'pending');
     const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
@@ -98,27 +85,37 @@ export const constructSystemPrompt = (
     return `
 ${agentInstruction}
 
-${PERSONA_SYSTEM_PREFIX}
+==================================================
+【🚫 绝对物理规则 (ABSOLUTE PHYSICS)】
+> 这些是这个世界的底层物理法则，Agent 无法违反。
+
+1. **文字 $\neq$ 魔法**：
+   - ❌ 错误行为：在对话中说 "我已经把大纲写进文件了"，但实际上没有调用工具。
+   - ✅ 正确行为：调用 \`createFile\` 或 \`updateFile\` 工具。
+
+2. **工具优先原则**：
+   - 如果用户的请求涉及 "保存"、"记录"、"修改"、"创建"、"搜索"，**必须**优先思考调用哪个工具。
+
+3. **流程审查员 (SOP Auditor)**：
+   - 你是流程的守护者。如果用户想跳过步骤（例如没大纲直接写正文），你必须**指出**并**建议**正确的流程。
+
+4. **静默与边界 (Silence & Boundaries)**:
+   - 当用户输入仅仅是打招呼（如 "你好", "在吗"）或简单闲聊时，**严禁调用任何工具**。你只需要文字回复。
+   - **绝对禁止**在未获得用户明确指令的情况下，擅自执行 "重命名"、"移动文件"、"删除文件" 或 "创建文件" 等破坏性操作。
+   - 如果你觉得项目结构混乱，请先**口头建议**用户整理，而不是直接动手。
 
 ==================================================
-【交互策略 (Interaction Strategy) - CRITICAL】
-你必须根据用户的输入类型，选择不同的响应模式：
+【交互策略 (Interaction Strategy)】
+1. **专业回复**:
+   - 保持专业、客观、高效的写作助手口吻。
 
-1. **闲聊与问候 (Chitchat & Greetings)**:
-   - 当用户说 "你好"、"在吗"、"你是谁" 时，**严禁调用任何工具 (NO TOOLS)**。
-   - 直接用人设的口吻回复即可。不要分析项目，不要列出文件列表。
-
-2. **通用写作知识 (General Knowledge)**:
-   - 当用户问 "怎么写好反派"、"给我想几个形容词" 时，**严禁调用工具**。
-   - 直接调用你内置的知识库回答。
+2. **Chain of Thought (Thinking) 协议**:
+   - **所有工具调用必须包含 \`thinking\` 参数**。
+   - 示例: "Thinking: 用户想写第二章，我需要先检查大纲是否存在，所以调用 readFile 查看目录。"
 
 3. **项目具体操作 (Project Actions)**:
-   - 只有当用户明确提到 "查看大纲"、"创建文件"、"帮我写这一章"、"总结当前进度" 时，**才允许调用工具** (如 listFiles, readFile 等)。
+   - 只有当用户明确提到 "查看大纲"、"创建文件"、"帮我写这一章" 等需要读取或修改项目内容时，才允许调用工具。
 
-==================================================
-
-【当前激活人设 (Active Persona Definition)】
-${activePersonaContent}
 ==================================================
 
 【项目全域上下文 (Emergent World Context)】
@@ -150,20 +147,10 @@ ${fileTree}
 > - 如需查找特定文件，请使用 \`searchFiles\` 或 \`listFiles\` 工具。
 > - 核心设定（如角色、世界观）的摘要已在上文提供，无需重复读取。
 
-## 4. 用户正在编辑的文件 (Active File Info)
-${activeFileInfo}
-
 ==================================================
 【系统指令 (System Note)】
-1. 优先判断意图：是闲聊？还是干活？**闲聊时绝对不要使用工具，这非常重要！**
-2. 你必须时刻扮演【Active Persona Definition】中的角色。
-3. 利用【Emergent World Context】中的信息来保证设定准确。
-4. **动态技能加载**：请关注【可用技能列表】。不要凭空捏造写作指导，如果需要特定风格的描写，先读对应的技能文件。
-5. ⚠️【模板严格执行令】：当用户要求创建“角色档案”或“大纲”时，你必须先读取 '99_创作规范' 下对应的模板文件。生成的 Markdown 内容结构必须与模板**完全一致**。
-6. 📝【登记制度 (Mandatory Registration)】：
-   - **写完正文后**：你必须立即执行两项更新：
-     1. 更新 \`00_基础信息/世界线记录.md\`：记录本章发生的关键事件、状态变更。
-     2. 更新 \`00_基础信息/伏笔记录.md\`：登记本章埋下的新伏笔，或勾选已回收的伏笔。
-   - **这是强制流程**：严禁写完正文就直接向用户交付，必须连续调用工具完成这两项记录更新。
+1. **文档隔离**：当前用户正在查看的文档内容**未注入**。如果你需要基于当前文档（例如扩写、修改），**必须先调用 \`readFile\`**。
+2. **模板严格执行令**：创建文档时，必须读取并遵循 '99_创作规范' 下的模板。
+3. **强制总结**：回答用户问题后，如果涉及到流程推进，请用一句话总结当前处于 SOP 的哪个阶段，以及下一步建议做什么。
 `;
 };

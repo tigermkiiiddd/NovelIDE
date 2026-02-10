@@ -29,10 +29,11 @@ export const useAgent = (
     activeFile: FileNode | null, 
     tools: AgentToolsImplementation
 ) => {
-  // --- 1. Access State from Store (Single Source of Truth) ---
+  // --- 1. Access State from Store ---
   const { 
       aiConfig, setAiConfig,
-      sessions, currentSessionId, createSession, switchSession, deleteSession,
+      sessions: allSessions, // Rename to allSessions
+      currentSessionId, createSession, switchSession, deleteSession,
       addMessage,
       editMessageContent,
       deleteMessagesFrom,
@@ -41,7 +42,16 @@ export const useAgent = (
       setTodos
   } = useAgentStore();
 
-  const currentSession = sessions.find(s => s.id === currentSessionId);
+  // --- 1.5 Filter Sessions by Project ---
+  const projectId = project?.id;
+  
+  // Only show sessions belonging to this project (or sessions with no projectId for backward compatibility if needed, though we force it now)
+  const projectSessions = useMemo(() => {
+      if (!projectId) return [];
+      return allSessions.filter(s => s.projectId === projectId);
+  }, [allSessions, projectId]);
+
+  const currentSession = projectSessions.find(s => s.id === currentSessionId);
   const todos = currentSession?.todos || [];
 
   const accessedFiles = useRef<Set<string>>(new Set());
@@ -58,22 +68,36 @@ export const useAgent = (
       }
   }, [aiConfig]);
 
-  // --- 3. Auto-Create Session if none ---
+  // --- 3. Auto-Session Management (Context Aware) ---
   useEffect(() => {
-      if (!currentSessionId && sessions.length === 0) {
-          createSession();
-      } else if (!currentSessionId && sessions.length > 0) {
-          switchSession(sessions[0].id);
+      if (!projectId) return;
+
+      // Check if current active session ID is valid for this project
+      const isCurrentSessionValid = projectSessions.some(s => s.id === currentSessionId);
+
+      if (!isCurrentSessionValid) {
+          if (projectSessions.length > 0) {
+              // Switch to the most recent session for this project
+              switchSession(projectSessions[0].id);
+          } else {
+              // Create a new session for this project
+              createSession(projectId, '新会话');
+          }
       }
-  }, [currentSessionId, sessions.length, createSession, switchSession]);
+  }, [projectId, projectSessions, currentSessionId, createSession, switchSession]);
+
+  // Wrapper for Create Session to inject Project ID
+  const handleCreateSession = useCallback(() => {
+      if (projectId) {
+          createSession(projectId);
+      }
+  }, [projectId, createSession]);
 
   // --- 3.5 Token Usage Estimation ---
   const tokenUsage = useMemo(() => {
       // Configurable Limits
-      // Gemini 1.5 Pro/Flash typically supports 1M or 2M tokens. User requested 100m (Assuming 1M for practical UI display, or 100M if technically valid but 1M is standard high context)
-      // Setting 1M as a safe huge number for "Gemini"
       const MAX_TOKENS_GEMINI = 1000000; 
-      const MAX_TOKENS_DEFAULT = 128000; // GPT-4o approx
+      const MAX_TOKENS_DEFAULT = 128000;
 
       const limit = aiConfig.provider === AIProvider.GOOGLE ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
@@ -81,7 +105,6 @@ export const useAgent = (
       const sysPrompt = constructSystemPrompt(files, project, activeFile, todos);
       
       // 2. Calculate Messages Size
-      // Basic JSON stringify approximation for structure overhead + raw text
       const msgs = currentSession?.messages || [];
       const msgsText = msgs.reduce((acc, m) => {
           let content = m.text;
@@ -94,8 +117,6 @@ export const useAgent = (
       const totalChars = sysPrompt.length + msgsText.length;
 
       // Heuristic: Mixed CJK/English content. 
-      // English is ~4 chars/token, Chinese is ~1 char/0.7 token.
-      // We use a conservative estimate: 1 token ~= 2 chars on average for mixed code/chinese
       const estimatedTokens = Math.ceil(totalChars / 2);
       
       const percent = Math.min(100, (estimatedTokens / limit) * 100);
@@ -140,7 +161,7 @@ export const useAgent = (
       addMessage(rejectMsg);
   }, [addMessage, removePendingChange]);
 
-  // --- 5. Main LLM Interaction Loop (Extracted for Re-run) ---
+  // --- 5. Main LLM Interaction Loop ---
   const processTurn = useCallback(async () => {
     if (!aiServiceInstance || !currentSessionId) return;
 
@@ -153,8 +174,12 @@ export const useAgent = (
     const signal = controller.signal;
 
     // A. Prepare Context
-    // NOTE: We get the LATEST state from store directly inside logic or via refs if needed.
-    const freshTodos = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.todos || [];
+    // NOTE: We get the LATEST state from store directly inside logic.
+    // We must find the specific session object from the store's global list.
+    const globalSessions = useAgentStore.getState().sessions;
+    const freshSession = globalSessions.find(s => s.id === currentSessionId);
+    const freshTodos = freshSession?.todos || [];
+    
     const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, freshTodos);
 
     setLoading(true);
@@ -169,14 +194,17 @@ export const useAgent = (
 
             loopCount++;
             
-            // Re-fetch session messages every loop iteration to ensure we have the latest (including tools added in previous loop)
-            const currentMessages = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.messages || [];
+            // Re-fetch session messages every loop iteration
+            const currentGlobalSessions = useAgentStore.getState().sessions;
+            const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
+            const currentMessages = currentFreshSession?.messages || [];
 
             if (loopCount === 1) {
                  console.log("🤖 [System Prompt Generated]:", fullSystemInstruction);
             }
 
             // Format History for API
+            // This represents the EXACT array we are sending to the LLM (rawParts or text wrapped in parts)
             const apiHistory = currentMessages.map(m => {
                 let apiRole = m.role;
                 if (m.role === 'system' && m.isToolOutput) apiRole = 'user'; 
@@ -184,7 +212,14 @@ export const useAgent = (
                 return { role: apiRole === 'system' ? 'user' : apiRole, parts: [{ text: m.text }] };
             });
 
+            // Capture the Payload for Debugging (Snapshot)
+            const debugPayload = {
+                systemInstruction: fullSystemInstruction,
+                contents: apiHistory
+            };
+
             // C. Call AI
+            // Note: we pass '' as message because apiHistory already contains the latest user message
             const response = await aiServiceInstance.sendMessage(
                 apiHistory, 
                 '', 
@@ -206,11 +241,25 @@ export const useAgent = (
             const toolParts = parts.filter((p: any) => p.functionCall);
             
             if (textPart && textPart.text) {
-                const agentMsg: ChatMessage = { id: generateId(), role: 'model', text: textPart.text, rawParts: parts, timestamp: Date.now() };
+                const agentMsg: ChatMessage = { 
+                    id: generateId(), 
+                    role: 'model', 
+                    text: textPart.text, 
+                    rawParts: parts, 
+                    timestamp: Date.now(),
+                    metadata: { debugPayload } // Attach raw payload snapshot
+                };
                 addMessage(agentMsg);
             } else if (toolParts.length > 0) {
                  const toolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
-                 const agentMsg: ChatMessage = { id: generateId(), role: 'model', text: `🛠️ Action: ${toolNames}`, rawParts: parts, timestamp: Date.now() };
+                 const agentMsg: ChatMessage = { 
+                    id: generateId(), 
+                    role: 'model', 
+                    text: `🛠️ Action: ${toolNames}`, 
+                    rawParts: parts, 
+                    timestamp: Date.now(),
+                    metadata: { debugPayload } // Attach raw payload snapshot
+                 };
                  addMessage(agentMsg);
             }
 
@@ -298,19 +347,22 @@ export const useAgent = (
   // --- 7. Interaction Handlers ---
 
   const sendMessage = useCallback(async (text: string) => {
-    const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, todos);
+    // Only allow sending if we have a valid session
+    if (!currentSessionId) return;
+
+    // IMPORTANT: We do NOT define metadata here anymore to avoid clutter.
+    // The "snapshot" is now taken at the moment of API call inside processTurn.
     const userMsg: ChatMessage = { 
         id: generateId(), 
         role: 'user', 
         text, 
-        timestamp: Date.now(),
-        metadata: { systemPrompt: fullSystemInstruction }
+        timestamp: Date.now()
     };
     addMessage(userMsg);
     
     // Defer the turn processing to ensure store update is processed
     setTimeout(() => processTurn(), 0);
-  }, [addMessage, processTurn, files, project, activeFile, todos]);
+  }, [addMessage, processTurn, currentSessionId]);
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);
@@ -331,9 +383,9 @@ export const useAgent = (
     regenerateMessage, 
     editUserMessage,
     todos,
-    sessions,
+    sessions: projectSessions, // Return filtered sessions
     currentSessionId,
-    createNewSession: createSession,
+    createNewSession: handleCreateSession, // Use wrapper
     switchSession,
     deleteSession,
     aiConfig,

@@ -51,6 +51,9 @@ export const executeTool = async (
         throw new Error("Tool execution aborted by user.");
     }
 
+    // Extract Thinking for Logging
+    const thinkingLog = args.thinking ? `🤔 ${args.thinking}\n` : '';
+
     // --- 1. Check for Approval Requirements (Write Operations) ---
     const requiresApproval = ['createFile', 'updateFile', 'patchFile', 'deleteFile', 'renameFile'];
     
@@ -99,13 +102,13 @@ export const executeTool = async (
                 originalContent, 
                 newContent, 
                 timestamp: Date.now(), 
-                description 
+                description: `${description}\n${args.thinking ? `Thinking: ${args.thinking}` : ''}`
             };
             
             return { 
                 type: 'APPROVAL_REQUIRED', 
                 change, 
-                uiLog: `[${name}] ⏸️ Waiting for approval for "${filePath}"...` 
+                uiLog: `${thinkingLog}[${name}] ⏸️ Waiting for approval for "${filePath}"...` 
             };
 
         } catch (e: any) {
@@ -128,6 +131,9 @@ export const executeTool = async (
         else if (name === 'call_search_agent') {
             if (!aiService) return { type: 'ERROR', message: 'AI Service not available for Sub-Agent' };
             
+            // Log thinking for sub-agent call
+            if(onUiLog && args.thinking) onUiLog(`🤔 Main Agent 思考: ${args.thinking}`);
+
             result = await runSearchSubAgent(
                 aiService,
                 args.request_description,
@@ -157,6 +163,13 @@ export const executeTool = async (
                     result = `Error: Unknown tool ${name}`;
             }
         }
+        
+        // Log Thinking success
+        if (onUiLog && args.thinking && name !== 'call_search_agent') {
+            // We already logged for search agent in the block above
+            onUiLog(`${thinkingLog}✅ Executed ${name}`);
+        }
+
         return { type: 'EXECUTED', result };
 
     } catch (e: any) {

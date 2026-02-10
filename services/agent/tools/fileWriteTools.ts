@@ -1,5 +1,4 @@
 
-
 import { Type, FunctionDeclaration } from "@google/genai";
 
 export const createFileTool: FunctionDeclaration = {
@@ -8,10 +7,11 @@ export const createFileTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: Why are you creating this file? Does it comply with the naming convention?' },
       path: { type: Type.STRING, description: 'The FULL PATH including folder and extension (e.g., "03_剧情大纲/第一章_细纲.md"). The folder must exist.' },
       content: { type: Type.STRING, description: 'The content of the file.' }
     },
-    required: ['path', 'content']
+    required: ['thinking', 'path', 'content']
   }
 };
 
@@ -21,10 +21,11 @@ export const updateFileTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: Why are you overwriting this file? Have you read the original content?' },
       path: { type: Type.STRING, description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
       content: { type: Type.STRING, description: 'The new FULL content.' }
     },
-    required: ['path', 'content']
+    required: ['thinking', 'path', 'content']
   }
 };
 
@@ -34,12 +35,13 @@ export const patchFileTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: What specific lines are you changing and why?' },
       path: { type: Type.STRING, description: 'The FULL PATH of the file to patch.' },
       startLine: { type: Type.INTEGER, description: 'The starting line number to replace (1-based).' },
       endLine: { type: Type.INTEGER, description: 'The ending line number to replace (1-based, inclusive).' },
       newContent: { type: Type.STRING, description: 'The new content to insert at these lines.' }
     },
-    required: ['path', 'startLine', 'endLine', 'newContent']
+    required: ['thinking', 'path', 'startLine', 'endLine', 'newContent']
   }
 };
 
@@ -49,10 +51,11 @@ export const renameFileTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
+      thinking: { type: Type.STRING, description: 'Internal thought process: Why is the rename necessary?' },
       oldPath: { type: Type.STRING, description: 'The current full path (e.g. "05_正文草稿/old.md")' },
       newName: { type: Type.STRING, description: 'The new FILENAME only (e.g. "new.md")' }
     },
-    required: ['oldPath', 'newName']
+    required: ['thinking', 'oldPath', 'newName']
   }
 };
 
@@ -62,8 +65,9 @@ export const deleteFileTool: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: { 
+      thinking: { type: Type.STRING, description: 'Internal thought process: Why must this file be deleted? Is it safe?' },
       path: { type: Type.STRING, description: 'The full path of the file or folder to delete.' } 
     },
-    required: ['path']
+    required: ['thinking', 'path']
   }
 };

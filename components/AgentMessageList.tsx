@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, X, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface AgentMessageListProps {
@@ -43,17 +43,17 @@ const ToolLogMessage: React.FC<{ text: string; rawParts?: any[] }> = ({ text, ra
     );
 };
 
-const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; color?: string }> = ({ data, label, icon, color = "text-gray-400" }) => {
+const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; color?: string; defaultOpen?: boolean }> = ({ data, label, icon, color = "text-gray-400", defaultOpen = false }) => {
     if (!data) return null;
     return (
-        <details className="group mt-2 text-xs">
+        <details className="group mt-2 text-xs" open={defaultOpen}>
             <summary className={`cursor-pointer list-none flex items-center gap-2 ${color} hover:text-white transition-colors bg-gray-950/50 p-1.5 rounded border border-gray-800`}>
                 {icon || <Code size={12} />}
                 <span className="font-mono font-bold opacity-80">{label || 'RAW DATA'}</span>
                 <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">Click to expand</span>
             </summary>
             <div className="mt-1 p-2 bg-black/50 rounded border border-gray-800 overflow-x-auto">
-                <pre className="font-mono text-[10px] text-gray-400 leading-normal whitespace-pre-wrap">
+                <pre className="font-mono text-[10px] text-gray-400 leading-normal whitespace-pre-wrap select-all">
                     {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
                 </pre>
             </div>
@@ -178,26 +178,45 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
 
                         {/* DEBUG INFO */}
                         {isDebugMode && (
-                            <>
-                                {msg.metadata?.systemPrompt && (
-                                    <JsonView data={msg.metadata.systemPrompt} label="SYSTEM PROMPT" icon={<Cpu size={12}/>} color="text-purple-400"/>
+                            <div className="mt-3 pt-2 border-t border-white/20 space-y-1">
+                                <div className="text-[10px] text-gray-300/70 font-mono mb-1 px-1 flex items-center gap-2">
+                                    <Server size={10} /> DEBUG MODE
+                                </div>
+                                
+                                {/* RAW API PAYLOAD (If available - usually on Model messages) */}
+                                {msg.metadata?.debugPayload && (
+                                    <>
+                                        <JsonView 
+                                            data={msg.metadata.debugPayload.systemInstruction} 
+                                            label="RAW: SYSTEM PROMPT (Generated)" 
+                                            icon={<Cpu size={12}/>} 
+                                            color="text-purple-300" 
+                                        />
+                                        <JsonView 
+                                            data={msg.metadata.debugPayload.contents} 
+                                            label="RAW: FULL HISTORY ARRAY (Sent to API)" 
+                                            icon={<FileJson size={12}/>} 
+                                            color="text-orange-300" 
+                                        />
+                                    </>
                                 )}
-                                {toolCalls && toolCalls.length > 0 && toolCalls.map((tc: any, idx: number) => (
-                                    <JsonView key={idx} data={tc.args} label={`CALL: ${tc.name}`} icon={<Terminal size={12}/>} color="text-yellow-400"/>
+
+                                {/* Fallback/Auxiliary Data */}
+                                {!msg.metadata?.debugPayload && toolCalls && toolCalls.length > 0 && toolCalls.map((tc: any, idx: number) => (
+                                    <JsonView key={`tc-${idx}`} data={tc.args} label={`CALL: ${tc.name}`} icon={<Terminal size={12}/>} color="text-yellow-300"/>
                                 ))}
-                                {toolResponses && toolResponses.length > 0 && toolResponses.map((tr: any, idx: number) => (
-                                    <JsonView key={idx} data={tr.response} label={`RESULT: ${tr.name}`} icon={<Database size={12}/>} color="text-green-400"/>
+                                {!msg.metadata?.debugPayload && toolResponses && toolResponses.length > 0 && toolResponses.map((tr: any, idx: number) => (
+                                    <JsonView key={`tr-${idx}`} data={tr.response} label={`RESULT: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
                                 ))}
-                            </>
+                            </div>
                         )}
                     </div>
 
-                    {/* Action Buttons (Always visible on mobile, Hover on desktop) */}
+                    {/* Action Buttons */}
                     <div className={`flex items-center gap-2 mt-1.5 
                         opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity 
                         ${isUser ? 'justify-end pr-1' : 'justify-start pl-1'}`
                     }>
-                        {/* User Edit Button */}
                         {isUser && onEditMessage && (
                             <button 
                                 onClick={() => startEdit(msg)}
@@ -208,7 +227,6 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             </button>
                         )}
                         
-                        {/* Model Regenerate Button */}
                         {isModel && onRegenerate && (
                              <button 
                                 onClick={() => onRegenerate(msg.id)}
