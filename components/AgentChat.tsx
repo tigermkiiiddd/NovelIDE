@@ -133,7 +133,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
       }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0 safe-area-top">
+      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0 safe-area-top select-none">
         <div className="flex items-center space-x-2 text-blue-400 overflow-hidden">
           <Sparkles size={20} className="shrink-0" />
           <div className="flex flex-col min-w-0">

@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, FunctionDeclaration } from "@google/genai";
 import OpenAI from "openai";
 import { AIConfig, AIProvider } from "../types";
@@ -127,6 +128,7 @@ export class AIService {
             config: {
               systemInstruction: systemInstruction,
               tools: [{ functionDeclarations: tools }],
+              maxOutputTokens: this.config.maxOutputTokens,
             }
           })
         );
@@ -182,7 +184,8 @@ export class AIService {
               model: this.config.modelName || 'gpt-4o',
               messages: openAIMessages,
               tools: mapToolsToOpenAI(tools),
-              tool_choice: 'auto'
+              tool_choice: 'auto',
+              max_tokens: this.config.maxOutputTokens,
             }, { signal })
         );
 

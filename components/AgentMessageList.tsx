@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server } from 'lucide-react';
+import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2 } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface AgentMessageListProps {
@@ -12,31 +12,67 @@ interface AgentMessageListProps {
 }
 
 // --- Internal Component: Collapsible Tool Log ---
-const ToolLogMessage: React.FC<{ text: string; rawParts?: any[] }> = ({ text, rawParts }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
+const ToolLogMessage: React.FC<{ 
+    text: string; 
+    rawParts?: any[]; 
+    isLast: boolean;
+    isLoading: boolean;
+}> = ({ text, rawParts, isLast, isLoading }) => {
+    // 自动展开逻辑：如果是最后一条消息且正在加载，或者刚刚加载完成，默认展开
+    const [isExpanded, setIsExpanded] = useState(isLast && isLoading);
+
+    // 当消息变成最后一条且处于加载状态时，自动展开
+    useEffect(() => {
+        if (isLast && isLoading) {
+            setIsExpanded(true);
+        }
+    }, [isLast, isLoading]);
+
+    // 提取最后一行日志用于标题栏显示实时状态
+    const lines = text ? text.split('\n').filter(l => l.trim()) : [];
+    const lastLine = lines.length > 0 ? lines[lines.length - 1] : 'Initializing...';
     
-    // Extract tool names for header
+    // 提取工具名称（用于完成后的静态标题）
     const toolNames = rawParts
         ?.filter((p: any) => p.functionResponse)
         .map((p: any) => p.functionResponse.name)
-        .join(', ') || 'System Action';
+        .join(', ');
+
+    // 动态标题：正在运行时显示最后一行日志，完成后显示工具名
+    const headerTitle = (isLast && isLoading) 
+        ? lastLine 
+        : (toolNames ? `Executed: ${toolNames}` : 'System Output');
 
     return (
         <div className="w-full max-w-[95%] sm:max-w-[85%] my-2">
             <button 
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="flex items-center gap-2 w-full bg-gray-800/80 border border-gray-700/50 rounded-lg px-3 py-2 text-xs font-mono text-blue-300 hover:bg-gray-800 transition-colors text-left"
+                className={`flex items-center gap-2 w-full border rounded-lg px-3 py-2 text-xs font-mono transition-colors text-left ${
+                    (isLast && isLoading)
+                        ? 'bg-blue-900/20 border-blue-500/30 text-blue-300' 
+                        : 'bg-gray-800/80 border-gray-700/50 text-gray-400 hover:bg-gray-800'
+                }`}
             >
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <Terminal size={12} className="shrink-0"/>
-                <span className="truncate flex-1">
-                    {isExpanded ? 'Hide System Output' : `Executed: ${toolNames}`}
+                
+                {/* 状态图标：加载中显示转圈，完成后显示终端图标 */}
+                {(isLast && isLoading) ? (
+                    <Loader2 size={12} className="shrink-0 animate-spin text-blue-400"/>
+                ) : (
+                    <Terminal size={12} className="shrink-0"/>
+                )}
+                
+                <span className="truncate flex-1 font-mono opacity-90">
+                    {headerTitle}
                 </span>
             </button>
             
             {isExpanded && (
-                <div className="mt-1 bg-gray-900/50 border border-gray-800 rounded-lg p-3 text-gray-400 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
-                    <div className="whitespace-pre-wrap leading-relaxed">{text}</div>
+                <div className="mt-1 bg-gray-950 border border-gray-800 rounded-lg p-3 text-gray-300 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
+                    <div className="whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar">
+                        {/* 这里显示完整的日志历史，不仅仅是最后一行 */}
+                        {text || <span className="text-gray-600 italic">Waiting for output...</span>}
+                    </div>
                 </div>
             )}
         </div>
@@ -126,12 +162,18 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
 
             const isUser = msg.role === 'user';
             const isModel = msg.role === 'model';
+            const isLast = index === messages.length - 1;
             
             // 1. Tool Outputs (Collapsible)
             if (msg.isToolOutput) {
                 return (
-                    <div key={msg.id} className="flex flex-col items-start">
-                        <ToolLogMessage text={msg.text} rawParts={msg.rawParts} />
+                    <div key={msg.id} className="flex flex-col items-start w-full">
+                        <ToolLogMessage 
+                            text={msg.text} 
+                            rawParts={msg.rawParts} 
+                            isLast={isLast}
+                            isLoading={isLoading}
+                        />
                     </div>
                 );
             }

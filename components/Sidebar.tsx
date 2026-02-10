@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar Content */}
       <aside 
-        className={`absolute md:relative z-30 h-full bg-gray-850 border-r border-gray-700 transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`absolute md:relative z-30 h-full bg-gray-850 border-r border-gray-700 transform transition-transform duration-300 ease-in-out flex flex-col select-none ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:hidden'
         } ${className}`}
         style={{ 

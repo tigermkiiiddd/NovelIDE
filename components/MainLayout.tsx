@@ -205,7 +205,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       <main className={`flex-1 flex flex-col min-w-0 relative transition-all duration-300`}>
         
         {/* Mobile Header */}
-        <header className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 md:hidden shrink-0">
+        <header className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 md:hidden shrink-0 select-none">
           <button onClick={() => setSidebarOpen(true)} className="p-1 -ml-1 text-gray-400 active:text-white">
             <Menu size={24} />
           </button>
@@ -221,7 +221,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         </header>
 
         {/* Desktop Header / Toolbar */}
-        <div className="hidden md:flex items-center justify-between bg-gray-900 border-b border-gray-800 h-10 px-4 shrink-0">
+        <div className="hidden md:flex items-center justify-between bg-gray-900 border-b border-gray-800 h-10 px-4 shrink-0 select-none">
             <div className="flex items-center gap-2 text-gray-500">
                <button onClick={toggleSidebar} className="hover:text-white transition-colors">
                   {isSidebarOpen ? <PanelLeftClose size={16}/> : <PanelLeftOpen size={16}/>}

@@ -1,4 +1,5 @@
 
+
 export enum FileType {
   FILE = 'FILE',
   FOLDER = 'FOLDER'
@@ -90,10 +91,12 @@ export interface AIConfig {
   // OpenAI Specifics (Also used for compatible APIs like DeepSeek)
   baseUrl?: string; 
   modelName: string;
+  maxOutputTokens?: number; // 控制单次回复的最大长度
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
   provider: AIProvider.GOOGLE,
   apiKey: '', // Start empty, let user fill or pull from env if configured in code (though here strictly UI driven)
-  modelName: 'gemini-3-flash-preview'
+  modelName: 'gemini-3-flash-preview',
+  maxOutputTokens: 8192
 };

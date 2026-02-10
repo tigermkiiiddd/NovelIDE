@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { AIConfig, AIProvider } from '../types';
-import { Cpu, Key, Globe, Box, Save } from 'lucide-react';
+import { Cpu, Key, Globe, Box, Save, Hash } from 'lucide-react';
 
 interface AISettingsFormProps {
   config: AIConfig;
@@ -106,19 +106,36 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                 </div>
             )}
 
-            {/* Model Name */}
-            <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                    <Box size={16}/> Model Name
-                </label>
-                <input 
-                    type="text"
-                    value={tempConfig.modelName}
-                    onChange={e => setTempConfig({...tempConfig, modelName: e.target.value})}
-                    placeholder="e.g. gemini-2.0-flash"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                />
+            {/* Model Name & Max Tokens Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                        <Box size={16}/> Model Name
+                    </label>
+                    <input 
+                        type="text"
+                        value={tempConfig.modelName}
+                        onChange={e => setTempConfig({...tempConfig, modelName: e.target.value})}
+                        placeholder="e.g. gemini-2.0-flash"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                    />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                        <Hash size={16}/> Max Output Tokens
+                    </label>
+                    <input 
+                        type="number"
+                        value={tempConfig.maxOutputTokens || ''}
+                        onChange={e => setTempConfig({...tempConfig, maxOutputTokens: parseInt(e.target.value) || undefined})}
+                        placeholder="Default (Model Limit)"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                    />
+                </div>
             </div>
+            <p className="text-xs text-gray-600 -mt-2">
+                Tip: 较小的 Max Tokens 会截断回答，较大的值允许更长的创作内容。推荐值: 8192。
+            </p>
         </div>
 
         <div className="pt-6 border-t border-gray-800 flex justify-end">

@@ -259,15 +259,30 @@ export const useAgent = (
                     rawParts: parts, 
                     timestamp: Date.now(),
                     metadata: { debugPayload } // Attach raw payload snapshot
-                 };
-                 addMessage(agentMsg);
+                };
+                addMessage(agentMsg);
             }
 
             // E. Handle Tools
             if (toolParts.length > 0) {
                 const functionResponses = [];
-                let uiLog = '';
-                const logBuffer: string[] = [];
+                
+                // --- REAL-TIME LOGGING ---
+                // Create placeholder message
+                const toolMsgId = generateId();
+                let streamedLog = '';
+                const logToUi = (text: string) => {
+                    streamedLog += (streamedLog ? '\n' : '') + text;
+                    editMessageContent(toolMsgId, streamedLog);
+                };
+
+                addMessage({ 
+                    id: toolMsgId, 
+                    role: 'system', 
+                    text: '⏳ Agent 正在执行工具...', 
+                    isToolOutput: true, 
+                    timestamp: Date.now() 
+                });
 
                 for (const part of toolParts) {
                     if (signal.aborted) break;
@@ -279,7 +294,7 @@ export const useAgent = (
                         files,
                         todos: freshTodos,
                         aiService: aiServiceInstance,
-                        onUiLog: (msg) => logBuffer.push(msg),
+                        onUiLog: logToUi,
                         signal, // Pass signal to sub-agents
                         actions: {
                             ...tools,
@@ -292,16 +307,14 @@ export const useAgent = (
 
                     if (execResult.type === 'APPROVAL_REQUIRED') {
                         addPendingChange(execResult.change);
-                        uiLog += execResult.uiLog + '\n';
+                        logToUi(`⏸️ 变更请求已排队: ${execResult.change.description}`);
                         resultString = `REQUEST QUEUED (ID: ${execResult.change.id}). Waiting for user approval.`;
                     } else if (execResult.type === 'EXECUTED') {
                         resultString = execResult.result;
-                        const subLogs = logBuffer.length > 0 ? logBuffer.join('\n') + '\n' : '';
-                        uiLog += subLogs;
-                        uiLog += `[${name}] Done.\n`; 
+                        // Log success implicit in most tools or sub-agent logs
                     } else {
                         resultString = execResult.message;
-                        uiLog += `[${name}] Error: ${resultString}\n`;
+                        logToUi(`❌ [${name}] Error: ${resultString}`);
                     }
 
                     functionResponses.push({ functionResponse: { name, id, response: { result: resultString } } });
@@ -309,16 +322,17 @@ export const useAgent = (
 
                 if (signal.aborted) break;
 
-                // Add System/Tool Message
-                const toolMsg: ChatMessage = { 
-                    id: generateId(), 
-                    role: 'system', 
-                    text: uiLog.trim(), 
-                    isToolOutput: true, 
-                    rawParts: functionResponses, 
-                    timestamp: Date.now() 
-                };
-                addMessage(toolMsg);
+                // Finalize Message with RawParts (Critical for Context)
+                useAgentStore.getState().updateCurrentSession(session => ({
+                    ...session,
+                    messages: session.messages.map(m => m.id === toolMsgId ? { 
+                        ...m, 
+                        text: streamedLog.trim() || '✅ 执行完成', 
+                        rawParts: functionResponses // Attach tool outputs for next turn
+                    } : m),
+                    lastModified: Date.now()
+                }));
+
             } else {
                 keepGoing = false; // No tools called, done.
             }
@@ -334,7 +348,7 @@ export const useAgent = (
         setLoading(false);
         abortControllerRef.current = null;
     }
-  }, [currentSessionId, files, project, activeFile, tools, aiConfig, addMessage, addPendingChange, setLoading, setTodos]);
+  }, [currentSessionId, files, project, activeFile, tools, aiConfig, addMessage, addPendingChange, setLoading, setTodos, editMessageContent]);
 
   // --- 6. Stop Function ---
   const stopGeneration = useCallback(() => {
