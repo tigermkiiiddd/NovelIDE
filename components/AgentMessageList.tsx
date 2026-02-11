@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench } from 'lucide-react';
+import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench, ArrowRight } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface AgentMessageListProps {
@@ -11,7 +11,7 @@ interface AgentMessageListProps {
   onEditMessage?: (id: string, newText: string) => void;
 }
 
-// --- Internal Component: Collapsible Tool Log ---
+// --- Internal Component: Collapsible Tool Log (Output) ---
 const ToolLogMessage: React.FC<{ 
     text: string; 
     rawParts?: any[]; 
@@ -93,13 +93,17 @@ const ToolLogMessage: React.FC<{
     );
 };
 
+// --- Tool Call Block (Input Visualization) ---
 const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) => (
-    <div className="mt-2 text-xs font-mono bg-black/20 rounded-lg border border-white/10 overflow-hidden shadow-sm">
-        <div className="px-3 py-1.5 bg-white/5 border-b border-white/5 text-blue-200 font-semibold flex items-center gap-2">
-            <Wrench size={12} className="text-blue-400"/>
-            Call: {name}
+    <div className="mt-2 text-xs font-mono bg-gray-900/80 rounded-lg border border-gray-700/50 overflow-hidden shadow-sm">
+        <div className="px-3 py-1.5 bg-gray-800/50 border-b border-gray-700/50 text-blue-300 font-semibold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                <Wrench size={12} className="text-blue-400"/>
+                <span>Request: {name}</span>
+            </div>
+            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Input</span>
         </div>
-        <div className="p-3 bg-gray-950/30 text-gray-300 whitespace-pre-wrap overflow-x-auto select-text">
+        <div className="p-3 text-gray-300 whitespace-pre-wrap overflow-x-auto select-text">
              {Object.keys(args).length > 0 
                 ? JSON.stringify(args, null, 2)
                 : <span className="text-gray-500 italic">(No arguments)</span>
@@ -193,10 +197,10 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             const isModel = msg.role === 'model';
             const isLast = index === messages.length - 1;
             
-            // 1. Tool Outputs (Collapsible)
+            // 1. Tool Outputs (System Message - Collapsible Log)
             if (msg.isToolOutput) {
                 return (
-                    <div key={msg.id} className="flex flex-col items-start w-full">
+                    <div key={msg.id} className="flex flex-col items-start w-full animate-in fade-in duration-300">
                         <ToolLogMessage 
                             text={msg.text} 
                             rawParts={msg.rawParts} 
@@ -246,12 +250,15 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         : 'bg-gray-700 text-gray-100 rounded-tl-none'
                     }`}
                     >
+                        {/* Message Text */}
                         <div className="whitespace-pre-wrap select-text cursor-text leading-relaxed">{msg.text}</div>
 
-                        {/* TOOL CALL VISUALIZATION (ALWAYS VISIBLE for Model) */}
+                        {/* TOOL CALL VISUALIZATION (Input) - Always visible in Model message */}
                         {isModel && toolCalls && toolCalls.length > 0 && (
                             <div className="mt-3 pt-2 border-t border-white/10 space-y-2">
-                                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Requested Actions</div>
+                                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1 flex items-center gap-1">
+                                    <ArrowRight size={10} /> Requested Actions (Input)
+                                </div>
                                 {toolCalls.map((tc: any, idx: number) => (
                                     <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} />
                                 ))}

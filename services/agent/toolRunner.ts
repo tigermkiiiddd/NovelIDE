@@ -55,21 +55,18 @@ export const executeTool = async (
     }
 
     // --- Prepare Logging Data ---
-    const displayArgs = { ...args };
-    if (displayArgs.thinking) delete displayArgs.thinking; // Remove thinking to reduce noise
-    
-    // Explicitly format JSON input for the user
-    const argsJson = Object.keys(displayArgs).length > 0 
-        ? JSON.stringify(displayArgs, null, 2) 
+    // RESTORED: Show ALL arguments including thinking. User wants to see the "meta input".
+    const argsJson = Object.keys(args).length > 0 
+        ? JSON.stringify(args, null, 2) 
         : '';
     
     const thinkingLog = args.thinking ? `🤔 Mind: ${args.thinking}\n` : '';
-    // Construct the initial log message
-    const startLog = `▶️ Invoking \`${name}\`\n${argsJson ? `Input: ${argsJson}\n` : ''}`;
+    // Construct the initial log message with CLEAR separation
+    const startLog = `▶️ Invoking \`${name}\`\n${argsJson ? `📋 Input Params:\n${argsJson}\n` : ''}`;
 
     // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
     if (onUiLog && name !== 'call_search_agent') {
-        onUiLog(`${thinkingLog}${startLog}`);
+        onUiLog(`${startLog}`); // thinkingLog is now inside argsJson usually, or we can prepend it if we want distinct display
     }
 
     // --- 1. Check for Approval Requirements (Write Operations) ---
@@ -146,7 +143,7 @@ export const executeTool = async (
                 type: 'APPROVAL_REQUIRED', 
                 change, 
                 // We return the full log so far + waiting status
-                uiLog: `${thinkingLog}${startLog}⏸️ Waiting for approval for "${filePath}"...` 
+                uiLog: `${startLog}⏸️ Waiting for approval for "${filePath}"...` 
             };
 
         } catch (e: any) {
@@ -217,7 +214,7 @@ export const executeTool = async (
             }
             
             // Ensure clear separation for readability
-            onUiLog(`✅ ${name} Result:\n${displayResult}`);
+            onUiLog(`✅ Execution Result:\n${displayResult}`);
         }
 
         return { type: 'EXECUTED', result };
