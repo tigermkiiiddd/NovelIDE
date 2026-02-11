@@ -291,6 +291,38 @@ export const useAgent = (
                     timestamp: Date.now() 
                 });
 
+                // Helper for Shadow Resolution
+                const getShadowContent = (path: string): string | null => {
+                     const currentPendingChanges = useAgentStore.getState().pendingChanges;
+                     // Look for latest change with content
+                     const relevantChanges = currentPendingChanges.filter(c => c.fileName === path && c.newContent !== null);
+                     const latestChange = relevantChanges[relevantChanges.length - 1];
+                     return latestChange ? (latestChange.newContent || null) : null;
+                };
+
+                // Helper for Shadow Read
+                const shadowReadFile = (path: string, startLine?: number, endLine?: number): string => {
+                     const shadowContent = getShadowContent(path);
+                     if (shadowContent !== null) {
+                         const allLines = shadowContent.split(/\r?\n/);
+                         const totalLines = allLines.length;
+                         const start = Math.max(1, startLine || 1);
+                         const end = Math.min(totalLines, endLine || 200);
+                         const linesToRead = allLines.slice(start - 1, end);
+                         const contentWithLineNumbers = linesToRead.map((line, idx) => `${String(start + idx).padEnd(4)} | ${line}`).join('\n');
+                         return `[Shadow Read - Pending Change]\nFile: ${path}\nTotal Lines: ${totalLines}\nReading Range: ${start} - ${end}\n---\n${contentWithLineNumbers}\n---\n(Content from Pending Approval)`;
+                     }
+                     return tools.readFile(path, startLine, endLine);
+                };
+
+                // Dynamic Action Proxy
+                const dynamicActions = {
+                    ...tools,
+                    setTodos,
+                    trackFileAccess: (fname: string) => accessedFiles.current.add(fname),
+                    readFile: shadowReadFile
+                };
+
                 for (const part of toolParts) {
                     if (signal.aborted) break;
                     if (!part.functionCall) continue;
@@ -303,19 +335,18 @@ export const useAgent = (
                         aiService: aiServiceInstance,
                         onUiLog: logToUi,
                         signal, // Pass signal to sub-agents
-                        actions: {
-                            ...tools,
-                            setTodos: setTodos,
-                            trackFileAccess: (fname) => accessedFiles.current.add(fname)
-                        }
+                        getShadowContent: getShadowContent,
+                        actions: dynamicActions
                     });
 
                     let resultString = '';
 
                     if (execResult.type === 'APPROVAL_REQUIRED') {
                         addPendingChange(execResult.change);
-                        logToUi(`⏸️ 变更请求已排队: ${execResult.change.description}`);
-                        resultString = `REQUEST QUEUED (ID: ${execResult.change.id}). Waiting for user approval.`;
+                        // Make UI log less "blocking"
+                        logToUi(`📝 变更已提交审查 (自动继续): ${execResult.change.description}`);
+                        // Tell Agent it's done/queued so it moves on
+                        resultString = `Action queued (ID: ${execResult.change.id}). You may proceed with subsequent tasks assuming this change will be approved.`;
                     } else if (execResult.type === 'EXECUTED') {
                         resultString = execResult.result;
                         // Log success implicit in most tools or sub-agent logs

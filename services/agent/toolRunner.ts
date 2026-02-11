@@ -15,6 +15,8 @@ export interface ToolContext {
     onUiLog?: (msg: string) => void;
     // Add Signal
     signal?: AbortSignal;
+    // Helper to resolve content from pending changes
+    getShadowContent?: (path: string) => string | null;
     actions: {
         createFile: (path: string, content: string) => string;
         updateFile: (path: string, content: string) => string;
@@ -82,8 +84,15 @@ export const executeTool = async (
             // Normalize path arg
             const filePath = args.path || args.oldPath;
             
-            // Resolve file for diff preview
+            // Resolve file for diff preview (Physical File)
             const existingFile = findNodeByPath(files, filePath);
+            
+            // Resolve Base Content (Shadow Aware - supports optimistic stacking)
+            let baseContent = existingFile?.content || '';
+            if (context.getShadowContent) {
+                const shadow = context.getShadowContent(filePath);
+                if (shadow !== null) baseContent = shadow;
+            }
 
             // Pre-calculate Diff Metadata for UI
             if (name === 'createFile') {
@@ -92,16 +101,16 @@ export const executeTool = async (
                 newContent = args.content;
             } else if (name === 'updateFile') {
                 description = `Overwrite: ${filePath}`;
-                originalContent = existingFile?.content || '';
+                originalContent = baseContent;
                 newContent = args.content;
             } else if (name === 'patchFile') {
                 description = `Patch: ${filePath} (L${args.startLine}-${args.endLine})`;
-                originalContent = existingFile?.content || '';
-                // Simulate patch for preview
-                newContent = applyPatchInMemory(originalContent, args.startLine, args.endLine, args.newContent);
+                originalContent = baseContent;
+                // Simulate patch using the SHADOW-AWARE base content
+                newContent = applyPatchInMemory(baseContent, args.startLine, args.endLine, args.newContent);
             } else if (name === 'deleteFile') {
                 description = `Delete: ${filePath}`;
-                originalContent = existingFile?.content || '(File Content)';
+                originalContent = baseContent || '(File Content)';
                 newContent = null; 
             } else if (name === 'renameFile') {
                 description = `Rename ${args.oldPath} -> ${args.newName}`;
