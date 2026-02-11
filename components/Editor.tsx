@@ -241,7 +241,12 @@ const Editor: React.FC<EditorProps> = ({
       if (!targetFile && activePendingChange.fileName) targetFile = findNodeByPath(files, activePendingChange.fileName);
       const baseContent = targetFile ? (targetFile.content || '') : (activePendingChange.originalContent || '');
       const linesToKeep = hunk.lines.filter(l => l.type !== 'remove').map(l => l.content);
-      const newFileContent = applyPatchInMemory(baseContent, hunk.startLineOriginal === 0 ? 1 : hunk.startLineOriginal, hunk.endLineOriginal === 0 ? 0 : hunk.endLineOriginal, linesToKeep.join('\n'));
+      const newFileContent = applyPatchInMemory(
+          baseContent, 
+          hunk.startLineOriginal === 0 ? 1 : hunk.startLineOriginal, 
+          hunk.endLineOriginal === 0 ? 0 : hunk.endLineOriginal, 
+          linesToKeep // Pass array directly to avoid ambiguity with empty string join
+      );
       if (targetFile) saveFileContent(targetFile.id, newFileContent);
       else if (activePendingChange.toolName === 'createFile') createFile(activePendingChange.fileName, newFileContent);
       setContent(newFileContent); 
@@ -371,14 +376,14 @@ const Editor: React.FC<EditorProps> = ({
             {/* View Settings Toggles */}
             <button 
                 onClick={toggleWordWrap} 
-                className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
+                className={`flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
                 title={wordWrap ? "自动换行: 开启" : "自动换行: 关闭"}
             >
                 {wordWrap ? <WrapText size={14} /> : <AlignJustify size={14} />}
             </button>
             <button 
                 onClick={toggleLineNumbers} 
-                className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
+                className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
                 title="显示行号"
             >
                 <ListOrdered size={14} />

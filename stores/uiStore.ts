@@ -37,7 +37,7 @@ export const useUiStore = create<UiState>()(
       agentWidth: 384,
       isSplitView: false,
       
-      showLineNumbers: false, // 默认关闭行号（专注模式）
+      showLineNumbers: true,  // 默认开启行号（方便配合 Agent 精确修改）
       wordWrap: true,         // 默认开启换行（小说模式）
 
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),

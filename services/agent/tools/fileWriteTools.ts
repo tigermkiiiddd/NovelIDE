@@ -42,21 +42,21 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: 'Precise line-based editing tool. Use this to insert, replace, or delete lines at multiple locations in a file simultaneously without rewriting the whole file. You MUST call `readFile` first to obtain accurate line numbers. [WRITE TOOL]',
+    description: 'Advanced batch editing tool. Supports performing MULTIPLE range replacements in a SINGLE call (e.g., "Replace lines 1-20 with A, AND lines 50-60 with B"). Always prefer this over updateFile for partial edits. [WRITE TOOL]',
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: What lines are you changing and why?' },
+        thinking: { type: 'string', description: 'Internal thought process: What lines are you changing and why? Confirm ranges do not overlap.' },
         path: { type: 'string', description: 'The FULL PATH of the file to patch.' },
         edits: {
           type: 'array',
-          description: 'A list of edits to apply. They will be applied safely (bottom-up) to preserve line numbers.',
+          description: 'List of edits to apply. MUST NOT OVERLAP. The system automatically applies them bottom-up to preserve line numbers.',
           items: {
             type: 'object',
             properties: {
-              startLine: { type: 'integer', description: 'The starting line number to replace (1-based).' },
-              endLine: { type: 'integer', description: 'The ending line number to replace (1-based, inclusive). To INSERT, set endLine = startLine - 1.' },
-              newContent: { type: 'string', description: 'The new content lines to insert. If empty string, it deletes the target lines.' }
+              startLine: { type: 'integer', description: 'Start line (1-based).' },
+              endLine: { type: 'integer', description: 'End line (1-based, inclusive). To INSERT lines BEFORE startLine, set endLine = startLine - 1.' },
+              newContent: { type: 'string', description: 'New content. If empty string, the range is deleted.' }
             },
             required: ['startLine', 'endLine', 'newContent']
           }

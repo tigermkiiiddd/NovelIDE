@@ -165,14 +165,21 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
 };
 
 // Helper to simulate patch application for diff preview (moved from useAgent.ts)
-export const applyPatchInMemory = (original: string, startLine: number, endLine: number, newContent: string): string => {
+// Updated to accept string[] for newContent to unambiguously handle empty content vs blank lines
+export const applyPatchInMemory = (original: string, startLine: number, endLine: number, newContent: string | string[]): string => {
     const allLines = original.split(/\r?\n/);
     const totalLines = allLines.length;
     const safeEndLine = Math.min(Math.max(startLine, endLine), totalLines);
     
     const before = allLines.slice(0, startLine - 1);
     const after = allLines.slice(safeEndLine);
-    const newLines = newContent.split(/\r?\n/);
+    
+    let newLines: string[] = [];
+    if (Array.isArray(newContent)) {
+        newLines = newContent;
+    } else {
+        newLines = newContent ? newContent.split(/\r?\n/) : [];
+    }
 
     return [...before, ...newLines, ...after].join('\n');
 };

@@ -284,9 +284,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     for (const edit of sortedEdits) {
         const { startLine, endLine, newContent } = edit;
         const startIdx = Math.max(0, startLine - 1);
-        const endIdx = Math.max(0, endLine); // slice/splice is exclusive at end, but our line numbers are inclusive. 
-        // Logic: if startLine=5, endLine=5 (replace line 5). splice(4, 1, ...). 
-        // 5 - 5 + 1 = 1. Correct.
+        // deleteCount: number of lines to remove from startLine to endLine (inclusive)
         const deleteCount = Math.max(0, endLine - startLine + 1);
         
         const newLines = newContent ? newContent.split(/\r?\n/) : [];
