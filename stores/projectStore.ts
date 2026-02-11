@@ -34,15 +34,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadProjects: async () => {
     set({ isLoading: true });
-    try {
-      await migrateFromLocalStorage();
-      const list = await dbAPI.getAllProjects();
-      list.sort((a, b) => b.lastModified - a.lastModified);
-      set({ projects: list, isLoading: false });
-    } catch (e) {
-      console.error("Failed to load projects", e);
-      set({ isLoading: false });
-    }
+    
+    // Safety timeout: Ensure we don't spin forever if IDB hangs
+    const timeout = new Promise<void>(resolve => setTimeout(() => {
+        console.warn("Project loading timed out, forcing render.");
+        resolve();
+    }, 2000)); // 2 seconds soft timeout
+
+    const loadLogic = async () => {
+        try {
+            await migrateFromLocalStorage();
+            const list = await dbAPI.getAllProjects();
+            list.sort((a, b) => b.lastModified - a.lastModified);
+            set({ projects: list });
+        } catch (e) {
+            console.error("Failed to load projects", e);
+        }
+    };
+
+    await Promise.race([loadLogic(), timeout]);
+    set({ isLoading: false });
   },
 
   selectProject: (id) => {
