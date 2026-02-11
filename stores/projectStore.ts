@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { ProjectMeta } from '../types';
 import { dbAPI } from '../services/persistence';
 import { generateId } from '../services/fileSystem';
-import { initialFileSystem } from '../services/fileSystem';
+import { createInitialFileSystem } from '../services/fileSystem';
 
 interface ProjectState {
   projects: ProjectMeta[];
@@ -79,8 +79,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     // 2. Persist
     await dbAPI.saveProject(newProject);
-    // Init files
-    await dbAPI.saveFiles(newProject.id, initialFileSystem);
+    // Init files with FRESH IDs
+    await dbAPI.saveFiles(newProject.id, createInitialFileSystem());
   },
 
   updateProject: async (id, updates) => {

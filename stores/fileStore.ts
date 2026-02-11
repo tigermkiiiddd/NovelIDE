@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { FileNode, FileType } from '../types';
 import { dbAPI } from '../services/persistence';
-import { initialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
+import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
 import { parseFrontmatter } from '../utils/frontmatter';
 import { useProjectStore } from './projectStore';
 import { 
@@ -102,11 +102,21 @@ export const useFileStore = create<FileState>((set, get) => ({
   activeFileId: null,
 
   loadFiles: async (projectId: string) => {
-    // 1. Fetch from DB
-    let loadedFiles = await dbAPI.getFiles(projectId);
+    let loadedFiles: FileNode[] | undefined;
     
-    if (!loadedFiles) {
-      loadedFiles = JSON.parse(JSON.stringify(initialFileSystem)); // Deep copy initial
+    try {
+        // 1. Fetch from DB
+        loadedFiles = await dbAPI.getFiles(projectId);
+    } catch (e) {
+        console.error("Failed to load files from DB, falling back to initial", e);
+    }
+    
+    // 2. Fallback if empty or failed
+    if (!loadedFiles || loadedFiles.length === 0) {
+      console.warn("No files found for project, initializing default structure.");
+      loadedFiles = createInitialFileSystem(); // Use Factory Function
+      // Force save to persist this recovery
+      dbAPI.saveFiles(projectId, loadedFiles);
     }
     
     let hasChanges = false;

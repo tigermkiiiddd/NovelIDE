@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench } from 'lucide-react';
 import { ChatMessage } from '../types';
@@ -16,7 +17,8 @@ const ToolLogMessage: React.FC<{
     rawParts?: any[]; 
     isLast: boolean;
     isLoading: boolean;
-}> = ({ text, rawParts, isLast, isLoading }) => {
+    isDebugMode?: boolean;
+}> = ({ text, rawParts, isLast, isLoading, isDebugMode }) => {
     // 自动展开逻辑：如果是最后一条消息且正在加载，或者刚刚加载完成，默认展开
     const [isExpanded, setIsExpanded] = useState(isLast && isLoading);
 
@@ -41,6 +43,9 @@ const ToolLogMessage: React.FC<{
     const headerTitle = (isLast && isLoading) 
         ? lastLine 
         : (toolNames ? `System Output: ${toolNames}` : 'System Output');
+
+    // Extract tool responses for display
+    const toolResponses = rawParts?.filter((p: any) => p.functionResponse).map((p: any) => p.functionResponse);
 
     return (
         <div className="w-full max-w-[95%] sm:max-w-[85%] my-2">
@@ -72,6 +77,16 @@ const ToolLogMessage: React.FC<{
                         {/* 这里显示完整的日志历史，不仅仅是最后一行 */}
                         {text || <span className="text-gray-600 italic">Waiting for output...</span>}
                     </div>
+
+                    {/* Add Raw Data View */}
+                    {isDebugMode && toolResponses && toolResponses.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-800">
+                             <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">Detailed Tool Outputs (Debug)</div>
+                             {toolResponses.map((tr: any, idx: number) => (
+                                 <JsonView key={idx} data={tr.response} label={`RAW: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
+                             ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -187,6 +202,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             rawParts={msg.rawParts} 
                             isLast={isLast}
                             isLoading={isLoading}
+                            isDebugMode={isDebugMode}
                         />
                     </div>
                 );
