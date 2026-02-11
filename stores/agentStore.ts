@@ -178,12 +178,27 @@ export const useAgentStore = create<AgentState>()(
     }),
     {
       name: 'novel-genie-agent-storage',
-      storage: createJSONStorage(() => localStorage), // IDB is better, but keep simple for refactor first
+      storage: createJSONStorage(() => localStorage), 
       partialize: (state) => ({ 
           sessions: state.sessions, 
           currentSessionId: state.currentSessionId,
           aiConfig: state.aiConfig
-      }), 
+      }),
+      merge: (persistedState: any, currentState) => {
+        // Deep merge config to ensure new fields (like openAIBackends) are added to old persisted state
+        const mergedConfig = {
+            ...DEFAULT_AI_CONFIG,
+            ...persistedState.aiConfig,
+            // Ensure backends array exists even if persisted state didn't have it
+            openAIBackends: persistedState.aiConfig?.openAIBackends || DEFAULT_AI_CONFIG.openAIBackends,
+            activeOpenAIBackendId: persistedState.aiConfig?.activeOpenAIBackendId || DEFAULT_AI_CONFIG.activeOpenAIBackendId
+        };
+        return {
+            ...currentState,
+            ...persistedState,
+            aiConfig: mergedConfig
+        };
+      }
     }
   )
 );

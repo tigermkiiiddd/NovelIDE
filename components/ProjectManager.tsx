@@ -5,6 +5,7 @@ import { useAgentStore } from '../stores/agentStore';
 import { AIService } from '../services/geminiService';
 import { exportProject, importProject } from '../services/projectService';
 import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X } from 'lucide-react';
+import AISettingsForm from './AISettingsForm';
 
 interface ProjectManagerProps {
   onSelectProject: (id: string) => void;
@@ -20,8 +21,10 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   
   // AI Config for Polishing
   const aiConfig = useAgentStore(state => state.aiConfig);
+  const setAiConfig = useAgentStore(state => state.setAiConfig);
 
   const [isCreating, setIsCreating] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // Form State
   const [name, setName] = useState('');
@@ -113,7 +116,9 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   // Open Modal logic
   const handleOpenPolishModal = () => {
       if (!hasApiKey) {
-          alert("请先进入任意项目 -> 设置 -> 配置 AI API Key 后才能使用此功能。\n(如果您是首次使用，请先创建一个空项目进入设置)");
+          if (confirm("未检测到 API Key。AI 润色功能需要配置 API Key 才能使用。\n是否现在打开设置进行配置？")) {
+              setIsSettingsOpen(true);
+          }
           return;
       }
       setShowPolishModal(true);
@@ -206,6 +211,13 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
             <p className="text-gray-500 mt-2">选择一个项目开始创作，或创建一个新的世界。</p>
           </div>
           <div className="flex gap-3">
+             <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors border border-gray-700"
+                title="全局 AI 设置"
+             >
+                <Settings size={20} />
+             </button>
              <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -391,6 +403,33 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
         </div>
         
       </div>
+
+      {/* AI Settings Modal */}
+      {isSettingsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl relative">
+                <button 
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+                >
+                    <X size={24} />
+                </button>
+                <div className="p-6 overflow-y-auto custom-scrollbar">
+                    <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-100">
+                        <Settings className="text-blue-400" />
+                        全局 AI 配置
+                    </h2>
+                    <AISettingsForm 
+                        config={aiConfig} 
+                        onSave={(newConfig) => {
+                            setAiConfig(newConfig);
+                            setIsSettingsOpen(false);
+                        }} 
+                    />
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* AI Instruction Modal */}
       {showPolishModal && (

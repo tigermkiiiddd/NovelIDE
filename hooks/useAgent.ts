@@ -185,9 +185,12 @@ export const useAgent = (
 
     setLoading(true);
 
+    // 【Anti-Loop】初始化错误追踪器 (Map<ErrorMessage, Count>)
+    const errorTracker = new Map<string, number>();
+
     try {
         let loopCount = 0;
-        const MAX_LOOPS = 10; // Restricted to 5 to prevent infinite loops
+        const MAX_LOOPS = 10; // Restricted to 10 to prevent infinite loops
         let keepGoing = true;
 
         while (keepGoing && loopCount < MAX_LOOPS) {
@@ -355,6 +358,36 @@ export const useAgent = (
                         // EXPLICIT ERROR FORMATTING
                         resultString = `[SYSTEM ERROR]: ${execResult.message}`;
                         logToUi(`❌ [${name}] Error: ${execResult.message}`);
+                    }
+
+                    // --- 【Anti-Loop】重复错误检测机制 ---
+                    const isError = execResult.type === 'ERROR' || resultString.startsWith('Error:') || resultString.startsWith('[SYSTEM ERROR]:');
+                    
+                    if (isError) {
+                        const errorKey = resultString.trim(); // 使用错误内容作为Key
+                        const currentCount = (errorTracker.get(errorKey) || 0) + 1;
+                        errorTracker.set(errorKey, currentCount);
+
+                        // 阈值：如果同一个错误出现了 2 次以上 (失败 -> 重试 -> 又失败)
+                        if (currentCount >= 2) {
+                            const originalError = resultString;
+                            // 强制篡改返回给 Agent 的结果，变成一段指令
+                            resultString = `
+[SYSTEM INTERVENTION - ANTI-LOOP / 系统防死循环介入]
+⚠️ 检测到您已连续 ${currentCount} 次触发相同的错误 (Command: ${name})。
+⛔️ 系统已屏蔽本次原始报错，防止您进入死循环。
+
+请严格执行以下指令：
+1. **立刻停止** 尝试再次执行该工具。
+2. **不要** 试图换个参数继续试错（这通常是无效的）。
+3. **向用户报告错误**：请用自然语言告诉用户发生了什么错误，并简要解释原因。
+4. **结束当前任务**。
+
+原始错误信息摘要: ${originalError.slice(0, 200)}...
+`.trim();
+                            // 在 UI 上也提示一下
+                            logToUi(`🚫 [Anti-Loop] 检测到重复错误 (${currentCount}次)，已强制打断 Agent 重试。`);
+                        }
                     }
 
                     // Store the ID from the CALL so the response matches

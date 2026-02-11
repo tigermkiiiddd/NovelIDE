@@ -1,5 +1,4 @@
 
-
 export enum FileType {
   FILE = 'FILE',
   FOLDER = 'FOLDER'
@@ -85,20 +84,56 @@ export enum AIProvider {
   OPENAI = 'openai'
 }
 
+export interface OpenAIBackend {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  modelName: string;
+}
+
 export interface AIConfig {
   provider: AIProvider;
-  apiKey: string;
+  apiKey: string; // Active API Key (Root level for service compatibility)
   // OpenAI Specifics (Also used for compatible APIs like DeepSeek)
-  baseUrl?: string; 
-  modelName: string;
+  baseUrl?: string; // Active Base URL
+  modelName: string; // Active Model Name
   maxOutputTokens?: number; // 控制单次回复的最大长度
   safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE
+  
+  // Multi-Provider Support
+  openAIBackends?: OpenAIBackend[];
+  activeOpenAIBackendId?: string;
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
   provider: AIProvider.GOOGLE,
-  apiKey: '', // Start empty, let user fill or pull from env if configured in code (though here strictly UI driven)
-  modelName: 'gemini-3-flash-preview',
+  apiKey: '', 
+  modelName: 'gemini-2.0-flash',
   maxOutputTokens: 8192,
-  safetySetting: 'BLOCK_NONE'
+  safetySetting: 'BLOCK_NONE',
+  openAIBackends: [
+      { 
+          id: 'deepseek', 
+          name: 'DeepSeek', 
+          baseUrl: 'https://api.deepseek.com', 
+          apiKey: '', 
+          modelName: 'deepseek-chat' 
+      },
+      { 
+          id: 'moonshot', 
+          name: 'Moonshot (Kimi)', 
+          baseUrl: 'https://api.moonshot.cn/v1', 
+          apiKey: '', 
+          modelName: 'moonshot-v1-8k' 
+      },
+      { 
+          id: 'openai-official', 
+          name: 'OpenAI Official', 
+          baseUrl: 'https://api.openai.com/v1', 
+          apiKey: '', 
+          modelName: 'gpt-4o' 
+      }
+  ],
+  activeOpenAIBackendId: 'deepseek'
 };
