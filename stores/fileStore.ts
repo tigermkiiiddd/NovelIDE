@@ -316,11 +316,11 @@ export const useFileStore = create<FileState>((set, get) => ({
       const totalLines = allLines.length;
       const start = Math.max(1, startLine);
 
-      // Smart Default: If endLine is NOT provided, default to reading the next 199 lines (200 total).
+      // Smart Default: If endLine is NOT provided, default to reading the next 299 lines (300 total).
       // This fixes the bug where defaulting to '200' caused reading range error when startLine > 200.
       let effectiveEnd = endLine;
       if (effectiveEnd === undefined) {
-          effectiveEnd = start + 199;
+          effectiveEnd = start + 299;
       }
 
       const end = Math.min(totalLines, effectiveEnd);

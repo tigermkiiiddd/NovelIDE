@@ -4,11 +4,12 @@ import { AIConfig, AIProvider } from "../types";
 import { ToolDefinition } from "./agent/types";
 
 // --- Constants ---
-const GEMINI_SAFETY_SETTINGS = [
-    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+// Helper to generate settings based on config threshold
+const getSafetySettings = (threshold: string = 'BLOCK_NONE') => [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold }
 ];
 
 export class AIService {
@@ -150,15 +151,29 @@ export class AIService {
     }
 
     try {
-      // 2. Determine if we need to inject safety settings (Google Specific)
+      // 2. Prepare Request Options (with Gemini Safety Settings Injection)
+      const modelName = this.config.modelName || 'gemini-2.0-flash';
+      const isGemini = modelName.toLowerCase().includes('gemini');
+
+      const requestPayload: any = {
+        model: modelName,
+        messages: openAIMessages,
+        tools: tools.length > 0 ? tools : undefined,
+        tool_choice: tools.length > 0 ? 'auto' : undefined,
+        max_tokens: this.config.maxOutputTokens,
+      };
+
+      // Support Safety Settings for Gemini models (even in OpenAI compatible mode)
+      // This allows 'safetySetting' to work for OneAPI/NewAPI/Google-OpenAI-Compatible-Endpoint
+      if (isGemini) {
+        const threshold = this.config.safetySetting || 'BLOCK_NONE';
+        const settings = getSafetySettings(threshold);
+        // Inject as top-level property 'safetySettings' (Standard for Google REST & Proxies)
+        requestPayload.safetySettings = settings;
+      }
+
       const completion: any = await this.withRetry(() => 
-          this.client!.chat.completions.create({
-            model: this.config.modelName || 'gemini-2.0-flash',
-            messages: openAIMessages,
-            tools: tools.length > 0 ? tools : undefined,
-            tool_choice: tools.length > 0 ? 'auto' : undefined,
-            max_tokens: this.config.maxOutputTokens,
-          }, { signal })
+          this.client!.chat.completions.create(requestPayload, { signal })
       );
 
       if (!completion.choices || completion.choices.length === 0) {

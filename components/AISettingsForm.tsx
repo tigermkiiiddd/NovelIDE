@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AIConfig, AIProvider, OpenAIBackend } from '../types';
-import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle } from 'lucide-react';
 import { generateId } from '../services/fileSystem';
 
 interface AISettingsFormProps {
@@ -20,12 +20,14 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
   }
 
   const activeBackend = tempConfig.openAIBackends?.find(b => b.id === tempConfig.activeOpenAIBackendId);
+  
+  // Update: Always show safety settings for Google or OpenAI (to support Gemini via OpenAI)
+  const showSafetySettings = true; 
 
   // Sync the active backend's data to the form fields when activeId changes
   useEffect(() => {
     if (tempConfig.provider === AIProvider.OPENAI && activeBackend) {
         // We generally rely on the activeBackend object for rendering inputs.
-        // No explicit sync needed here because inputs bind directly to activeBackend in the render.
     }
   }, [tempConfig.activeOpenAIBackendId, tempConfig.provider]);
 
@@ -147,32 +149,17 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                         </div>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Box size={16}/> Model Name
-                            </label>
-                            <input 
-                                type="text"
-                                value={tempConfig.modelName}
-                                onChange={e => setTempConfig({...tempConfig, modelName: e.target.value})}
-                                placeholder="gemini-2.0-flash"
-                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Shield size={16}/> Safety Setting
-                            </label>
-                            <select
-                                value={tempConfig.safetySetting || 'BLOCK_NONE'}
-                                onChange={e => setTempConfig({...tempConfig, safetySetting: e.target.value})}
-                                className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none text-sm appearance-none"
-                            >
-                                <option value="BLOCK_NONE">Creative / Uncensored</option>
-                                <option value="BLOCK_ONLY_HIGH">Standard</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                            <Box size={16}/> Model Name
+                        </label>
+                        <input 
+                            type="text"
+                            value={tempConfig.modelName}
+                            onChange={e => setTempConfig({...tempConfig, modelName: e.target.value})}
+                            placeholder="gemini-2.0-flash"
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                        />
                     </div>
                 </div>
             )}
@@ -272,23 +259,50 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                    <Box size={16}/> Model Name
-                                </label>
-                                <input 
-                                    type="text"
-                                    value={activeBackend.modelName}
-                                    onChange={e => updateActiveBackend({ modelName: e.target.value })}
-                                    placeholder="gpt-4o"
-                                    className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-green-500 focus:outline-none font-mono text-sm"
-                                />
-                            </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                                <Box size={16}/> Model Name
+                            </label>
+                            <input 
+                                type="text"
+                                value={activeBackend.modelName}
+                                onChange={e => updateActiveBackend({ modelName: e.target.value })}
+                                placeholder="gpt-4o"
+                                className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-green-500 focus:outline-none font-mono text-sm"
+                            />
                         </div>
                     </div>
                 </div>
             )}
+            
+            {/* Safety Settings (Always Visible now, but with note for OpenAI) */}
+            <div className="animate-in fade-in">
+                <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                    <Shield size={16}/> 
+                    Safety Setting
+                    {tempConfig.provider === AIProvider.OPENAI && (
+                        <span className="text-[10px] text-yellow-500 bg-yellow-900/30 px-2 py-0.5 rounded border border-yellow-800 ml-auto flex items-center gap-1">
+                            <AlertTriangle size={10} /> Gemini Only
+                        </span>
+                    )}
+                </label>
+                <div className="p-3 bg-gray-800/50 border border-gray-700 rounded-lg">
+                    <select
+                        value={tempConfig.safetySetting || 'BLOCK_NONE'}
+                        onChange={e => setTempConfig({...tempConfig, safetySetting: e.target.value})}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none text-sm appearance-none"
+                    >
+                        <option value="BLOCK_NONE">Creative / Uncensored (BLOCK_NONE)</option>
+                        <option value="BLOCK_ONLY_HIGH">Standard (BLOCK_ONLY_HIGH)</option>
+                        <option value="BLOCK_MEDIUM_AND_ABOVE">Strict (BLOCK_MEDIUM_AND_ABOVE)</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-2">
+                        {tempConfig.provider === AIProvider.OPENAI 
+                            ? "仅当通过 OpenAI 协议连接到 Gemini 模型时生效。其他模型（如 GPT-4）会自动忽略此参数。" 
+                            : "控制模型对敏感内容的过滤阈值。"}
+                    </p>
+                </div>
+            </div>
 
             {/* Max Output Tokens (Shared) */}
             <div>
