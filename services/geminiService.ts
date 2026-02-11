@@ -1,31 +1,18 @@
-
-
-import { GoogleGenAI, FunctionDeclaration } from "@google/genai";
 import OpenAI from "openai";
 import { AIConfig, AIProvider } from "../types";
+import { ToolDefinition } from "./agent/types";
 
-// --- Helper: Convert Google Tool Definition to OpenAI JSON Schema ---
-function mapToolsToOpenAI(googleTools: FunctionDeclaration[]): any[] {
-  return googleTools.map(tool => ({
-    type: 'function',
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: {
-        type: 'object',
-        properties: tool.parameters?.properties || {},
-        required: tool.parameters?.required || []
-      }
-    }
-  }));
-}
-
-// --- Service ---
+// --- Constants ---
+const GEMINI_SAFETY_SETTINGS = [
+    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+];
 
 export class AIService {
   private config: AIConfig;
-  private googleClient: GoogleGenAI | null = null;
-  private openaiClient: OpenAI | null = null;
+  private client: OpenAI | null = null;
 
   constructor(config: AIConfig) {
     this.config = config;
@@ -38,21 +25,21 @@ export class AIService {
   }
 
   private initClient() {
-    const apiKey = this.config.apiKey || process.env.API_KEY || ''; 
-    
-    if (this.config.provider === AIProvider.GOOGLE) {
-      if (apiKey) {
-        this.googleClient = new GoogleGenAI({ apiKey });
-      }
-    } else {
-      if (apiKey) {
-        this.openaiClient = new OpenAI({
-          apiKey: apiKey,
-          baseURL: this.config.baseUrl || 'https://api.openai.com/v1',
-          dangerouslyAllowBrowser: true 
-        });
-      }
+    const apiKey = this.config.apiKey || process.env.API_KEY || '';
+    if (!apiKey) return;
+
+    let baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
+
+    // If Provider is Google, force Google's OpenAI-compatible endpoint if not manually overridden
+    if (this.config.provider === AIProvider.GOOGLE && !this.config.baseUrl) {
+      baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
     }
+
+    this.client = new OpenAI({
+      apiKey: apiKey,
+      baseURL: baseURL,
+      dangerouslyAllowBrowser: true
+    });
   }
 
   /**
@@ -74,15 +61,11 @@ export class AIService {
         
         lastError = error;
         
-        // Identify Retryable Errors:
-        // 1. Google 429/Resource Exhausted
-        // 2. OpenAI 429
-        // 3. 5xx Server Errors
+        // Identify Retryable Errors: 429 (Rate Limit) or 5xx (Server)
         const isRateLimit = 
             error?.status === 429 || 
             error?.code === 429 || 
-            (error?.message && error.message.includes('429')) ||
-            (error?.message && error.message.includes('RESOURCE_EXHAUSTED'));
+            (error?.message && error.message.includes('429'));
 
         const isServerError = error?.status >= 500 || error?.code >= 500;
 
@@ -91,7 +74,6 @@ export class AIService {
           await new Promise(resolve => setTimeout(resolve, initialDelay));
           initialDelay *= 2; // Exponential backoff
         } else {
-          // If it's a client error (e.g., 400 Bad Request), throw immediately
           throw error;
         }
       }
@@ -105,137 +87,132 @@ export class AIService {
     history: any[], 
     message: string, 
     systemInstruction: string,
-    tools: FunctionDeclaration[],
+    tools: ToolDefinition[],
     signal?: AbortSignal
   ): Promise<any> {
     
-    if (signal?.aborted) {
-        throw new DOMException('Aborted', 'AbortError');
-    }
+    if (!this.client) throw new Error("API Key not configured.");
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
-    // --- Google GenAI Path ---
-    if (this.config.provider === AIProvider.GOOGLE) {
-      if (!this.googleClient) throw new Error("Google API Key not configured.");
-      
-      try {
-        const response = await this.withRetry(() => 
-          this.googleClient!.models.generateContent({
-            model: this.config.modelName || 'gemini-3-flash-preview',
-            contents: [
-                ...history,
-                { role: 'user', parts: [{ text: message }] }
-            ],
-            config: {
-              systemInstruction: systemInstruction,
-              tools: [{ functionDeclarations: tools }],
-              maxOutputTokens: this.config.maxOutputTokens,
-            }
-          })
-        );
-        
-        // Manual check after await since SDK might not support signal directly yet
-        if (signal?.aborted) {
-             throw new DOMException('Aborted', 'AbortError');
-        }
+    // 1. Prepare Messages for OpenAI
+    const openAIMessages: any[] = [
+      { role: 'system', content: systemInstruction }
+    ];
 
-        return response;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') throw error;
-        console.error("Gemini API Error:", error);
-        throw error;
-      }
-    }
-
-    // --- OpenAI Compatible Path ---
-    else {
-      if (!this.openaiClient) throw new Error("OpenAI API Key not configured.");
-
-      // 1. Convert History (Google -> OpenAI)
-      const openAIMessages: any[] = [
-        { role: 'system', content: systemInstruction }
-      ];
-
-      for (const msg of history) {
-        const role = msg.role === 'model' ? 'assistant' : msg.role;
-        
-        if (msg.parts && msg.parts[0]?.functionResponse) {
-             const textParts = msg.parts.map((p: any) => 
-                p.text || (p.functionResponse ? `[Tool Result for ${p.functionResponse.name}]: ${JSON.stringify(p.functionResponse.response)}` : '')
-             ).join('\n');
-             openAIMessages.push({ role: 'user', content: textParts });
-        } 
-        else if (msg.parts && msg.parts[0]?.functionCall) {
-            const textContent = msg.parts.map((p: any) => 
-                p.text || (p.functionCall ? `[Assistant requested tool: ${p.functionCall.name}]` : '')
-            ).join('\n');
-            openAIMessages.push({ role: 'assistant', content: textContent });
-        }
-        else {
-            const content = msg.parts.map((p: any) => p.text).join('');
-            openAIMessages.push({ role, content });
-        }
-      }
-
-      openAIMessages.push({ role: 'user', content: message });
-
-      try {
-        const completion: any = await this.withRetry(() => 
-            this.openaiClient!.chat.completions.create({
-              model: this.config.modelName || 'gpt-4o',
-              messages: openAIMessages,
-              tools: mapToolsToOpenAI(tools),
-              tool_choice: 'auto',
-              max_tokens: this.config.maxOutputTokens,
-            }, { signal })
-        );
-
-        // SAFEGUARD: Check if choices exist
-        if (!completion.choices || completion.choices.length === 0) {
-            console.error("OpenAI Empty Response:", completion);
-            throw new Error("OpenAI API returned an empty response (no choices).");
-        }
-
-        const choice = completion.choices[0];
-        const msg = choice.message;
-
-        const parts: any[] = [];
-
-        if (msg.content) {
-          parts.push({ text: msg.content });
-        }
-
-        if (msg.tool_calls) {
-          msg.tool_calls.forEach((tc: any) => {
-            if (tc.type === 'function') {
-                parts.push({
-                  functionCall: {
-                    name: tc.function.name,
-                    args: JSON.parse(tc.function.arguments) 
+    // Convert internal history format (Google-ish) to OpenAI format
+    for (const msg of history) {
+      // Handle User Messages
+      if (msg.role === 'user') {
+          // If it's a Tool Response (Function Output) simulating a User message
+          if (msg.parts && msg.parts[0]?.functionResponse) {
+              msg.parts.forEach((p: any) => {
+                  if (p.functionResponse) {
+                      openAIMessages.push({
+                          role: 'tool',
+                          tool_call_id: p.functionResponse.id,
+                          content: JSON.stringify(p.functionResponse.response)
+                      });
                   }
-                });
-            }
-          });
-        }
-
-        return {
-          candidates: [
-            {
-              content: {
-                parts: parts
-              }
-            }
-          ]
-        };
-
-      } catch (error) {
-         if (error instanceof DOMException && error.name === 'AbortError') throw error;
-         // OpenAI throws a specific error structure, but also supports standard AbortError name
-         // @ts-ignore
-         if (error?.name === 'AbortError') throw error;
-         
-         console.error("OpenAI API Error:", error);
-         throw error;
+              });
+          } else {
+              // Standard User Text
+              const textContent = msg.parts ? msg.parts.map((p: any) => p.text).join('') : (msg.text || '');
+              openAIMessages.push({ role: 'user', content: textContent });
+          }
       }
+      // Handle Model/Assistant Messages
+      else if (msg.role === 'model' || msg.role === 'assistant') {
+          // If it has Tool Calls
+          const toolCalls = msg.parts?.filter((p: any) => p.functionCall).map((p: any) => ({
+             id: p.functionCall.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+             type: 'function',
+             function: {
+                 name: p.functionCall.name,
+                 arguments: JSON.stringify(p.functionCall.args)
+             }
+          }));
+
+          const textContent = msg.parts?.find((p: any) => p.text)?.text || '';
+
+          const assistantMsg: any = { role: 'assistant' };
+          if (textContent) assistantMsg.content = textContent;
+          if (toolCalls && toolCalls.length > 0) assistantMsg.tool_calls = toolCalls;
+
+          openAIMessages.push(assistantMsg);
+      }
+    }
+
+    // Add current message if exists (usually empty string in agent loop)
+    if (message) {
+        openAIMessages.push({ role: 'user', content: message });
+    }
+
+    try {
+      // 2. Determine if we need to inject safety settings (Google Specific)
+      // Check if provider is Google OR if the model name suggests Gemini
+      const isGemini = this.config.provider === AIProvider.GOOGLE || (this.config.modelName || '').toLowerCase().includes('gemini');
+
+      const completion: any = await this.withRetry(() => 
+          this.client!.chat.completions.create({
+            model: this.config.modelName || 'gemini-2.0-flash',
+            messages: openAIMessages,
+            tools: tools.length > 0 ? tools : undefined,
+            tool_choice: tools.length > 0 ? 'auto' : undefined,
+            max_tokens: this.config.maxOutputTokens,
+            // Inject safety settings via extra_body for OpenAI-compatible Gemini endpoints
+            ...(isGemini ? { 
+                extra_body: { 
+                    safetySettings: GEMINI_SAFETY_SETTINGS 
+                } 
+            } : {})
+          }, { signal })
+      );
+
+      if (!completion.choices || completion.choices.length === 0) {
+          throw new Error("OpenAI API returned an empty response.");
+      }
+
+      const choice = completion.choices[0];
+      const msg = choice.message;
+
+      // 3. Convert OpenAI Response back to Internal Format (parts based)
+      const parts: any[] = [];
+
+      if (msg.content) {
+        parts.push({ text: msg.content });
+      }
+
+      if (msg.tool_calls) {
+        msg.tool_calls.forEach((tc: any) => {
+          if (tc.type === 'function') {
+              parts.push({
+                functionCall: {
+                  id: tc.id,
+                  name: tc.function.name,
+                  args: JSON.parse(tc.function.arguments) 
+                }
+              });
+          }
+        });
+      }
+
+      return {
+        candidates: [
+          {
+            content: {
+              parts: parts
+            }
+          }
+        ]
+      };
+
+    } catch (error) {
+       if (error instanceof DOMException && error.name === 'AbortError') throw error;
+       // @ts-ignore
+       if (error?.name === 'AbortError') throw error;
+       
+       console.error("OpenAI/Gemini API Error:", error);
+       throw error;
     }
   }
 }

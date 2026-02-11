@@ -1,4 +1,3 @@
-
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { ChatMessage, FileNode, ProjectMeta, PendingChange, AIProvider } from '../types';
 import { AIService } from '../services/geminiService';

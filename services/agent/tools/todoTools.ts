@@ -1,45 +1,46 @@
-
-import { Type, FunctionDeclaration } from "@google/genai";
 import { TodoItem } from "../../../types";
-import { TodoOperationResult } from "../types";
+import { TodoOperationResult, ToolDefinition } from "../types";
 
-export const manageTodosTool: FunctionDeclaration = {
-  name: 'manageTodos',
-  description: 'Manage the session-based TODO list using BATCH operations. You MUST use this tool to plan and track your work. Single-item operations are forbidden; use arrays for everything. [MEMORY TOOL]',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      thinking: { type: Type.STRING, description: 'Internal thought process: Explain the plan update strategy.' },
-      action: { 
-        type: Type.STRING, 
-        enum: ['add', 'complete', 'remove', 'update', 'list'], 
-        description: 'Action: "add" new tasks, "complete" tasks by ID, "remove" tasks by ID, "update" task details, or "list" all.' 
-      },
-      tasks: { 
-        type: Type.ARRAY, 
-        items: { type: Type.STRING },
-        description: 'Array of task content strings. Required for action="add".' 
-      },
-      todoIds: { 
-        type: Type.ARRAY, 
-        items: { type: Type.STRING },
-        description: 'Array of todo IDs. Required for action="complete" or "remove".'
-      },
-      updates: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            id: { type: Type.STRING },
-            task: { type: Type.STRING, description: 'New task content' },
-            status: { type: Type.STRING, enum: ['pending', 'done'] }
-          },
-          required: ['id']
+export const manageTodosTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'manageTodos',
+    description: 'Manage the session-based TODO list using BATCH operations. You MUST use this tool to plan and track your work. Single-item operations are forbidden; use arrays for everything. [MEMORY TOOL]',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: 'Internal thought process: Explain the plan update strategy.' },
+        action: { 
+          type: 'string', 
+          enum: ['add', 'complete', 'remove', 'update', 'list'], 
+          description: 'Action: "add" new tasks, "complete" tasks by ID, "remove" tasks by ID, "update" task details, or "list" all.' 
         },
-        description: 'Array of update objects. Required for action="update".'
-      }
-    },
-    required: ['thinking', 'action']
+        tasks: { 
+          type: 'array', 
+          items: { type: 'string' },
+          description: 'Array of task content strings. Required for action="add".' 
+        },
+        todoIds: { 
+          type: 'array', 
+          items: { type: 'string' },
+          description: 'Array of todo IDs. Required for action="complete" or "remove".'
+        },
+        updates: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              task: { type: 'string', description: 'New task content' },
+              status: { type: 'string', enum: ['pending', 'done'] }
+            },
+            required: ['id']
+          },
+          description: 'Array of update objects. Required for action="update".'
+        }
+      },
+      required: ['thinking', 'action']
+    }
   }
 };
 

@@ -92,11 +92,13 @@ export interface AIConfig {
   baseUrl?: string; 
   modelName: string;
   maxOutputTokens?: number; // 控制单次回复的最大长度
+  safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
   provider: AIProvider.GOOGLE,
   apiKey: '', // Start empty, let user fill or pull from env if configured in code (though here strictly UI driven)
   modelName: 'gemini-3-flash-preview',
-  maxOutputTokens: 8192
+  maxOutputTokens: 8192,
+  safetySetting: 'BLOCK_NONE'
 };

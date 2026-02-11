@@ -1,7 +1,6 @@
 import { AIService } from '../geminiService';
 import { FileNode } from '../../types';
-import { FunctionDeclaration, Type } from "@google/genai";
-import { generateId } from '../fileSystem';
+import { ToolDefinition } from '../agent/types';
 import { 
   listFilesTool, 
   readFileTool, 
@@ -9,29 +8,32 @@ import {
 } from '../agent/tools/fileReadTools';
 
 // --- Sub-Agent 专用工具：提交报告 ---
-const submitReportTool: FunctionDeclaration = {
-  name: 'submit_report',
-  description: '当且仅当你收集了足够的信息，或者确认无法找到更多信息时，调用此工具结束任务。此工具会将你的调查结果转换成一份详细的 Markdown 格式报告提交给主 Agent。[TERMINAL TOOL]',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      thinking: { type: Type.STRING, description: 'Final reflection: Are you confident in your findings? Is anything missing?' },
-      summary: { type: Type.STRING, description: '对搜索结果的浓缩简介 (Executive Summary)。必须超过30个中文字符，详细概括关键发现，不能只有一句话。' },
-      findings: { 
-        type: Type.ARRAY, 
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            path: { type: Type.STRING, description: '相关文件的完整路径' },
-            relevance: { type: Type.STRING, description: '该文件为何相关？详细说明其在剧情或设定中的作用。' },
-            content_snippet: { type: Type.STRING, description: '提取的核心信息摘要或原文引用（保留关键细节）。' }
-          }
+const submitReportTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'submit_report',
+    description: '当且仅当你收集了足够的信息，或者确认无法找到更多信息时，调用此工具结束任务。此工具会将你的调查结果转换成一份详细的 Markdown 格式报告提交给主 Agent。[TERMINAL TOOL]',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: 'Final reflection: Are you confident in your findings? Is anything missing?' },
+        summary: { type: 'string', description: '对搜索结果的浓缩简介 (Executive Summary)。必须超过30个中文字符，详细概括关键发现，不能只有一句话。' },
+        findings: { 
+          type: 'array', 
+          items: {
+            type: 'object',
+            properties: {
+              path: { type: 'string', description: '相关文件的完整路径' },
+              relevance: { type: 'string', description: '该文件为何相关？详细说明其在剧情或设定中的作用。' },
+              content_snippet: { type: 'string', description: '提取的核心信息摘要或原文引用（保留关键细节）。' }
+            }
+          },
+          description: '详细的发现列表，每一个发现都应包含具体的文件路径和证据。' 
         },
-        description: '详细的发现列表，每一个发现都应包含具体的文件路径和证据。' 
+        reasoning: { type: 'string', description: '你的综合分析与判断理由：将碎片化的线索串联起来，解释为什么这些信息满足了主 Agent 的需求。' }
       },
-      reasoning: { type: Type.STRING, description: '你的综合分析与判断理由：将碎片化的线索串联起来，解释为什么这些信息满足了主 Agent 的需求。' }
-    },
-    required: ['thinking', 'summary', 'findings', 'reasoning']
+      required: ['thinking', 'summary', 'findings', 'reasoning']
+    }
   }
 };
 
@@ -183,7 +185,7 @@ ${args.reasoning}
                     const displayArgs = { ...args };
                     delete displayArgs.thinking;
                     const argsLog = Object.keys(displayArgs).length > 0 
-                        ? ` ${JSON.stringify(displayArgs, null, 2)}` 
+                        ? `\n${JSON.stringify(displayArgs, null, 2)}` 
                         : '';
                     onLog(`🛠️ [Sub-Agent] 执行工具: ${name}${argsLog}`);
                 }

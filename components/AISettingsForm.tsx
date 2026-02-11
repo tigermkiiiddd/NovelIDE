@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { AIConfig, AIProvider } from '../types';
-import { Cpu, Key, Globe, Box, Save, Hash } from 'lucide-react';
+import { Cpu, Key, Globe, Box, Save, Hash, Shield } from 'lucide-react';
 
 interface AISettingsFormProps {
   config: AIConfig;
@@ -133,6 +132,26 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                     />
                 </div>
             </div>
+
+            {/* Safety Settings */}
+            <div>
+                 <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                    <Shield size={16}/> Content Safety (Gemini)
+                 </label>
+                 <select
+                    value={tempConfig.safetySetting || 'BLOCK_NONE'}
+                    onChange={e => setTempConfig({...tempConfig, safetySetting: e.target.value})}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none text-sm appearance-none"
+                 >
+                    <option value="BLOCK_NONE">Creative / Uncensored (Recommended for Novels)</option>
+                    <option value="BLOCK_ONLY_HIGH">Standard (Block High Probability Only)</option>
+                    <option value="BLOCK_MEDIUM_AND_ABOVE">Strict (Block Medium & High)</option>
+                 </select>
+                 <p className="text-xs text-gray-600 mt-1">
+                    注意：此设置仅对 Gemini 模型（或支持 safetySettings 参数的兼容接口）生效。小说创作建议选择 "Creative"。
+                </p>
+            </div>
+
             <p className="text-xs text-gray-600 -mt-2">
                 Tip: 较小的 Max Tokens 会截断回答，较大的值允许更长的创作内容。推荐值: 8192。
             </p>
