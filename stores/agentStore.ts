@@ -1,6 +1,5 @@
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import { ChatSession, ChatMessage, TodoItem, PendingChange, AIConfig, DEFAULT_AI_CONFIG } from '../types';
 import { generateId } from '../services/fileSystem';
 import { dbAPI } from '../services/persistence';
@@ -9,8 +8,9 @@ interface AgentState {
   // Config
   aiConfig: AIConfig;
   setAiConfig: (config: AIConfig) => void;
+  loadAIConfig: () => Promise<void>;
 
-  // Sessions (Now specific to the ACTIVE project to save memory/storage)
+  // Sessions (Specific to the ACTIVE project)
   sessions: ChatSession[];
   currentSessionId: string | null;
   
@@ -23,7 +23,7 @@ interface AgentState {
   setReviewingChangeId: (id: string | null) => void;
   
   // Actions
-  loadProjectSessions: (projectId: string) => Promise<void>; // New Action
+  loadProjectSessions: (projectId: string) => Promise<void>; 
   createSession: (projectId: string, initialTitle?: string) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
@@ -51,11 +51,27 @@ const syncSessionsToDB = (projectId: string, sessions: ChatSession[]) => {
     dbAPI.saveSessions(`novel-chat-sessions-${projectId}`, sessions);
 };
 
-export const useAgentStore = create<AgentState>()(
-  persist(
-    (set, get) => ({
+export const useAgentStore = create<AgentState>((set, get) => ({
       aiConfig: DEFAULT_AI_CONFIG,
-      setAiConfig: (config) => set({ aiConfig: config }),
+      
+      setAiConfig: (config) => {
+          set({ aiConfig: config });
+          dbAPI.saveAIConfig(config);
+      },
+
+      loadAIConfig: async () => {
+          const config = await dbAPI.getAIConfig();
+          if (config) {
+              // Merge with default to ensure new fields exists (e.g. if loading old config structure)
+              const mergedConfig = {
+                  ...DEFAULT_AI_CONFIG,
+                  ...config,
+                  openAIBackends: config.openAIBackends || DEFAULT_AI_CONFIG.openAIBackends,
+                  activeOpenAIBackendId: config.activeOpenAIBackendId || DEFAULT_AI_CONFIG.activeOpenAIBackendId
+              };
+              set({ aiConfig: mergedConfig });
+          }
+      },
 
       sessions: [],
       currentSessionId: null,
@@ -202,31 +218,4 @@ export const useAgentStore = create<AgentState>()(
       })),
 
       clearPendingChanges: () => set({ pendingChanges: [], reviewingChangeId: null })
-    }),
-    {
-      name: 'novel-genie-agent-storage',
-      storage: createJSONStorage(() => localStorage), 
-      // CRITICAL FIX: Only persist configuration to LocalStorage.
-      // Sessions are now managed manually via IDB to avoid QuotaExceededError.
-      partialize: (state) => ({ 
-          aiConfig: state.aiConfig
-      }),
-      merge: (persistedState: any, currentState) => {
-        const mergedConfig = {
-            ...DEFAULT_AI_CONFIG,
-            ...persistedState.aiConfig,
-            openAIBackends: persistedState.aiConfig?.openAIBackends || DEFAULT_AI_CONFIG.openAIBackends,
-            activeOpenAIBackendId: persistedState.aiConfig?.activeOpenAIBackendId || DEFAULT_AI_CONFIG.activeOpenAIBackendId
-        };
-        return {
-            ...currentState,
-            ...persistedState,
-            aiConfig: mergedConfig,
-            // Ensure sessions are empty on merge, they will be loaded by loadProjectSessions
-            sessions: [],
-            currentSessionId: null
-        };
-      }
-    }
-  )
-);
+}));
