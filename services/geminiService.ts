@@ -110,7 +110,7 @@ export class AIService {
                   if (p.functionResponse) {
                       openAIMessages.push({
                           role: 'tool',
-                          tool_call_id: p.functionResponse.id,
+                          tool_call_id: p.functionResponse.id || 'call_unknown_fallback', // Safety fallback
                           content: JSON.stringify(p.functionResponse.response)
                       });
                   }
@@ -125,7 +125,8 @@ export class AIService {
       else if (msg.role === 'model' || msg.role === 'assistant') {
           // If it has Tool Calls
           const toolCalls = msg.parts?.filter((p: any) => p.functionCall).map((p: any) => ({
-             id: p.functionCall.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+             // IMPORTANT: Use existing ID if present to ensure history consistency
+             id: p.functionCall.id || `call_${Math.random().toString(36).substr(2, 9)}`, 
              type: 'function',
              function: {
                  name: p.functionCall.name,
@@ -150,9 +151,6 @@ export class AIService {
 
     try {
       // 2. Determine if we need to inject safety settings (Google Specific)
-      // Check if provider is Google OR if the model name suggests Gemini
-      const isGemini = this.config.provider === AIProvider.GOOGLE || (this.config.modelName || '').toLowerCase().includes('gemini');
-
       const completion: any = await this.withRetry(() => 
           this.client!.chat.completions.create({
             model: this.config.modelName || 'gemini-2.0-flash',
@@ -160,8 +158,6 @@ export class AIService {
             tools: tools.length > 0 ? tools : undefined,
             tool_choice: tools.length > 0 ? 'auto' : undefined,
             max_tokens: this.config.maxOutputTokens,
-            // NOT Injecting safety settings via extra_body for now as it conflicts with some OpenAI proxies
-            // and standard Gemini OpenAI endpoint handles defaults reasonably.
           }, { signal })
       );
 
@@ -182,9 +178,13 @@ export class AIService {
       if (msg.tool_calls) {
         msg.tool_calls.forEach((tc: any) => {
           if (tc.type === 'function') {
+              // CRITICAL: Generate and PERSIST the ID here if the API didn't return one (rare but possible with some proxies)
+              // This ensures the next turn (Tool Response) uses the exact same ID.
+              const callId = tc.id || `call_${Math.random().toString(36).substr(2, 9)}`;
+              
               parts.push({
                 functionCall: {
-                  id: tc.id,
+                  id: callId,
                   name: tc.function.name,
                   args: JSON.parse(tc.function.arguments) 
                 }
