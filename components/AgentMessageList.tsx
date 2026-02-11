@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench, ArrowRight } from 'lucide-react';
+import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench, ArrowRight, Brain } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface AgentMessageListProps {
@@ -29,20 +29,15 @@ const ToolLogMessage: React.FC<{
         }
     }, [isLast, isLoading]);
 
-    // 提取最后一行日志用于标题栏显示实时状态
-    const lines = text ? text.split('\n').filter(l => l.trim()) : [];
-    const lastLine = lines.length > 0 ? lines[lines.length - 1] : 'Initializing...';
-    
     // 提取工具名称（用于完成后的静态标题）
     const toolNames = rawParts
         ?.filter((p: any) => p.functionResponse)
         .map((p: any) => p.functionResponse.name)
         .join(', ');
-
-    // 动态标题：正在运行时显示最后一行日志，完成后显示工具名
-    const headerTitle = (isLast && isLoading) 
-        ? lastLine 
-        : (toolNames ? `System Output: ${toolNames}` : 'System Output');
+    
+    // Status Logic
+    const isRunning = isLast && isLoading;
+    const titleText = isRunning ? 'System Executing...' : (toolNames ? `System Output: ${toolNames}` : 'System Logs');
 
     // Extract tool responses for display
     const toolResponses = rawParts?.filter((p: any) => p.functionResponse).map((p: any) => p.functionResponse);
@@ -52,7 +47,7 @@ const ToolLogMessage: React.FC<{
             <button 
                 onClick={() => setIsExpanded(!isExpanded)}
                 className={`flex items-center gap-2 w-full border rounded-lg px-3 py-2 text-xs font-mono transition-colors text-left ${
-                    (isLast && isLoading)
+                    isRunning
                         ? 'bg-blue-900/20 border-blue-500/30 text-blue-300' 
                         : 'bg-gray-800/80 border-gray-700/50 text-gray-400 hover:bg-gray-800'
                 }`}
@@ -60,22 +55,21 @@ const ToolLogMessage: React.FC<{
                 {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 
                 {/* 状态图标：加载中显示转圈，完成后显示终端图标 */}
-                {(isLast && isLoading) ? (
+                {isRunning ? (
                     <Loader2 size={12} className="shrink-0 animate-spin text-blue-400"/>
                 ) : (
                     <Terminal size={12} className="shrink-0"/>
                 )}
                 
                 <span className="truncate flex-1 font-mono opacity-90">
-                    {headerTitle}
+                    {titleText}
                 </span>
             </button>
             
             {isExpanded && (
                 <div className="mt-1 bg-gray-950 border border-gray-800 rounded-lg p-3 text-gray-300 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
                     <div className="whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {/* 这里显示完整的日志历史，不仅仅是最后一行 */}
-                        {text || <span className="text-gray-600 italic">Waiting for output...</span>}
+                        {text || <span className="text-gray-600 italic">Initializing execution environment...</span>}
                     </div>
 
                     {/* Add Raw Data View */}
@@ -94,23 +88,41 @@ const ToolLogMessage: React.FC<{
 };
 
 // --- Tool Call Block (Input Visualization) ---
-const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) => (
-    <div className="mt-2 text-xs font-mono bg-gray-900/80 rounded-lg border border-gray-700/50 overflow-hidden shadow-sm">
-        <div className="px-3 py-1.5 bg-gray-800/50 border-b border-gray-700/50 text-blue-300 font-semibold flex items-center justify-between">
-            <div className="flex items-center gap-2">
-                <Wrench size={12} className="text-blue-400"/>
-                <span>Request: {name}</span>
+// This renders the "Thinking" and "Arguments" that the Model sent.
+const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) => {
+    const { thinking, ...restArgs } = args;
+    
+    return (
+        <div className="mt-3 text-xs font-mono bg-gray-950/40 rounded-lg border border-gray-700/50 overflow-hidden shadow-sm">
+            {/* Header */}
+            <div className="px-3 py-1.5 bg-gray-800/30 border-b border-gray-700/50 text-blue-300 font-semibold flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Wrench size={12} className="text-blue-400"/>
+                    <span>Call: {name}</span>
+                </div>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wide">Input</span>
             </div>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Input</span>
+            
+            {/* Thinking Section */}
+            {thinking && (
+                <div className="p-3 bg-blue-900/10 border-b border-gray-800/50 text-blue-100 italic">
+                    <div className="flex items-start gap-2">
+                        <Brain size={12} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />
+                        <span className="opacity-90">{thinking}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* Arguments Section */}
+            <div className="p-3 text-gray-400 whitespace-pre-wrap overflow-x-auto select-text">
+                 {Object.keys(restArgs).length > 0 
+                    ? JSON.stringify(restArgs, null, 2)
+                    : <span className="text-gray-600 italic">(No additional arguments)</span>
+                 }
+            </div>
         </div>
-        <div className="p-3 text-gray-300 whitespace-pre-wrap overflow-x-auto select-text">
-             {Object.keys(args).length > 0 
-                ? JSON.stringify(args, null, 2)
-                : <span className="text-gray-500 italic">(No arguments)</span>
-             }
-        </div>
-    </div>
-);
+    );
+};
 
 const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; color?: string; defaultOpen?: boolean }> = ({ data, label, icon, color = "text-gray-400", defaultOpen = false }) => {
     if (!data) return null;
@@ -146,7 +158,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
     if (!editingId) {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages.length, isLoading, editingId]); // Only scroll on length change, not re-renders
+  }, [messages.length, isLoading, editingId]); 
 
   const startEdit = (msg: ChatMessage) => {
       setEditingId(msg.id);
@@ -188,9 +200,10 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
         
         {messages.map((msg, index) => {
             // Extract Raw Tool Calls (From Model)
+            // msg.rawParts is populated by useAgentEngine
             const toolCalls = msg.rawParts?.filter((p: any) => p.functionCall).map((p: any) => p.functionCall);
             
-            // Extract Raw Tool Responses (From System/Function)
+            // Extract Raw Tool Responses (From System/Function) - For Debug View mostly
             const toolResponses = msg.rawParts?.filter((p: any) => p.functionResponse).map((p: any) => p.functionResponse);
 
             const isUser = msg.role === 'user';
@@ -251,13 +264,15 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     }`}
                     >
                         {/* Message Text */}
-                        <div className="whitespace-pre-wrap select-text cursor-text leading-relaxed">{msg.text}</div>
+                        {msg.text && (
+                            <div className="whitespace-pre-wrap select-text cursor-text leading-relaxed">{msg.text}</div>
+                        )}
 
-                        {/* TOOL CALL VISUALIZATION (Input) - Always visible in Model message */}
+                        {/* TOOL CALL VISUALIZATION (Input) - Always visible in Model message if present */}
                         {isModel && toolCalls && toolCalls.length > 0 && (
-                            <div className="mt-3 pt-2 border-t border-white/10 space-y-2">
+                            <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
                                 <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1 flex items-center gap-1">
-                                    <ArrowRight size={10} /> Requested Actions (Input)
+                                    <ArrowRight size={10} /> Planned Actions
                                 </div>
                                 {toolCalls.map((tc: any, idx: number) => (
                                     <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} />
@@ -282,18 +297,13 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                             color="text-purple-300" 
                                         />
                                         <JsonView 
-                                            data={msg.metadata.debugPayload.contents} 
-                                            label="RAW: FULL HISTORY ARRAY (Sent to API)" 
+                                            data={msg.metadata.debugPayload} 
+                                            label="RAW: FULL API HISTORY" 
                                             icon={<FileJson size={12}/>} 
                                             color="text-orange-300" 
                                         />
                                     </>
                                 )}
-
-                                {/* Fallback/Auxiliary Data */}
-                                {!msg.metadata?.debugPayload && toolResponses && toolResponses.length > 0 && toolResponses.map((tr: any, idx: number) => (
-                                    <JsonView key={`tr-${idx}`} data={tr.response} label={`RESULT: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
-                                ))}
                             </div>
                         )}
                     </div>
@@ -336,6 +346,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                     </div>
+                    <div className="text-xs text-gray-500 mt-2 font-mono">Agent Thinking...</div>
                 </div>
             </div>
         )}

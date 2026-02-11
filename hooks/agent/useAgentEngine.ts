@@ -79,7 +79,7 @@ export const useAgentEngine = ({
                 });
 
                 // 4.2 调用 LLM
-                if (loopCount === 1) console.log("🤖 [System Prompt]:", fullSystemInstruction);
+                // if (loopCount === 1) console.log("🤖 [System Prompt]:", fullSystemInstruction);
 
                 const response = await aiServiceInstance.sendMessage(
                     apiHistory, 
@@ -100,37 +100,49 @@ export const useAgentEngine = ({
                 // 4.3 处理文本响应
                 const textPart = parts.find((p: any) => p.text);
                 const toolParts = parts.filter((p: any) => p.functionCall);
-                const debugPayload = { systemInstruction: fullSystemInstruction, contents: apiHistory };
+                
+                // Construct Debug Payload for UI
+                const debugPayload = { 
+                    systemInstruction: fullSystemInstruction, 
+                    apiHistoryPreview: apiHistory.slice(-3), // Only show last 3 for perf, full history in raw
+                    totalHistoryLength: apiHistory.length
+                };
 
-                if (textPart && textPart.text) {
+                // CRITICAL: Always add a MODEL message if there's any content (text OR tool calls).
+                // This allows the UI to render the "Input" (Arguments) block.
+                if (textPart || toolParts.length > 0) {
+                    const displayText = textPart ? textPart.text : ''; // Don't fake "Action:..." text, let UI handle empty text
                     addMessage({ 
-                        id: generateId(), role: 'model', text: textPart.text, 
-                        rawParts: parts, timestamp: Date.now(), metadata: { debugPayload } 
-                    });
-                } else if (toolParts.length > 0) {
-                    // 纯工具调用，无文本，添加一个占位符以保持对话连贯性
-                    const toolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
-                    addMessage({ 
-                        id: generateId(), role: 'model', text: `🛠️ Action: ${toolNames}`, 
-                        rawParts: parts, timestamp: Date.now(), metadata: { debugPayload } 
+                        id: generateId(), 
+                        role: 'model', 
+                        text: displayText, 
+                        rawParts: parts, // Store RAW parts so UI can render Tool Input Args
+                        timestamp: Date.now(), 
+                        metadata: { debugPayload } 
                     });
                 }
 
                 // 4.4 处理工具调用
                 if (toolParts.length > 0) {
-                    const functionResponses = [];
+                    const functionResponses: any[] = [];
                     
-                    // 创建 UI 上的工具执行状态消息
+                    // 创建 UI 上的工具执行状态消息 (System Role)
                     const toolMsgId = generateId();
                     let streamedLog = '';
+                    
+                    // Real-time logger callback
                     const logToUi = (text: string) => {
                         streamedLog += (streamedLog ? '\n' : '') + text;
+                        // Force update the UI message content immediately
                         editMessageContent(toolMsgId, streamedLog);
                     };
 
                     addMessage({ 
-                        id: toolMsgId, role: 'system', text: '⏳ Agent 正在执行工具...', 
-                        isToolOutput: true, timestamp: Date.now() 
+                        id: toolMsgId, 
+                        role: 'system', 
+                        text: '⏳ Initializing Tool Execution...', 
+                        isToolOutput: true, 
+                        timestamp: Date.now() 
                     });
 
                     // 依次执行工具
@@ -139,6 +151,7 @@ export const useAgentEngine = ({
                         if (!part.functionCall) continue;
                         const { name, args, id } = part.functionCall;
 
+                        // Execute
                         const resultString = await runTool(name, args, toolMsgId, signal, logToUi);
 
                         functionResponses.push({ 
@@ -149,11 +162,12 @@ export const useAgentEngine = ({
                     if (signal.aborted) break;
 
                     // 更新 UI 消息状态为完成，并附带 rawParts 以便下一轮 API 调用使用
+                    // IMPORTANT: We must store the functionResponses in rawParts so the NEXT turn includes them in history
                     useAgentStore.getState().updateCurrentSession(session => ({
                         ...session,
                         messages: session.messages.map(m => m.id === toolMsgId ? { 
                             ...m, 
-                            text: streamedLog.trim() || '✅ 执行完成', 
+                            text: streamedLog.trim() || '✅ Execution Complete', 
                             rawParts: functionResponses 
                         } : m),
                         lastModified: Date.now()

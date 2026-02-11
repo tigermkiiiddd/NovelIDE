@@ -55,18 +55,27 @@ export const executeTool = async (
     }
 
     // --- Prepare Logging Data ---
-    // RESTORED: Show ALL arguments including thinking. User wants to see the "meta input".
-    const argsJson = Object.keys(args).length > 0 
-        ? JSON.stringify(args, null, 2) 
-        : '';
+    // Extract Thinking specifically for better visibility
+    const { thinking, ...restArgs } = args;
     
-    const thinkingLog = args.thinking ? `🤔 Mind: ${args.thinking}\n` : '';
-    // Construct the initial log message with CLEAR separation
-    const startLog = `▶️ Invoking \`${name}\`\n${argsJson ? `📋 Input Params:\n${argsJson}\n` : ''}`;
+    // Construct Log Elements
+    const logTimestamp = new Date().toLocaleTimeString();
+    let startLog = `[${logTimestamp}] ▶️ **Invoking**: \`${name}\`\n`;
+    
+    if (thinking) {
+        startLog += `🧠 **Thinking**: ${thinking}\n`;
+    }
+    
+    if (Object.keys(restArgs).length > 0) {
+        const argsJson = JSON.stringify(restArgs, null, 2);
+        // Truncate overly long args for the UI log (but keep them in raw metadata)
+        const displayArgs = argsJson.length > 500 ? argsJson.substring(0, 500) + '... (truncated)' : argsJson;
+        startLog += `📋 **Params**: \n${displayArgs}\n`;
+    }
 
     // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
     if (onUiLog && name !== 'call_search_agent') {
-        onUiLog(`${startLog}`); // thinkingLog is now inside argsJson usually, or we can prepend it if we want distinct display
+        onUiLog(`${startLog}`); 
     }
 
     // --- 1. Check for Approval Requirements (Write Operations) ---
@@ -105,7 +114,6 @@ export const executeTool = async (
                 description = `Patch: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
                 // Simulate patch using the SHADOW-AWARE base content
-                // Need to replicate the store logic here for preview
                 let allLines = baseContent.split(/\r?\n/);
                 const sortedEdits = [...args.edits].sort((a: any, b: any) => b.startLine - a.startLine);
                 for (const edit of sortedEdits) {
@@ -143,7 +151,7 @@ export const executeTool = async (
                 type: 'APPROVAL_REQUIRED', 
                 change, 
                 // We return the full log so far + waiting status
-                uiLog: `${startLog}⏸️ Waiting for approval for "${filePath}"...` 
+                uiLog: `${startLog}⏸️ **Status**: Waiting for approval for "${filePath}"...` 
             };
 
         } catch (e: any) {
@@ -168,8 +176,8 @@ export const executeTool = async (
             
             // Log thinking and request for sub-agent call (Sub Agent handles its own detailed logging)
             if(onUiLog) {
-                 const reqDesc = args.request_description ? `📋 任务目标: ${args.request_description}\n` : '';
-                 onUiLog(`${thinkingLog}${reqDesc}`);
+                 const reqDesc = args.request_description ? `📋 **Task**: ${args.request_description}\n` : '';
+                 onUiLog(`${startLog}${reqDesc}`);
             }
 
             result = await runSearchSubAgent(
@@ -205,7 +213,7 @@ export const executeTool = async (
         // Log Completion (Append to the start log)
         if (onUiLog && name !== 'call_search_agent') {
             // Truncate output for UI performance if it's too massive (the full result is still returned to the Agent)
-            const MAX_UI_LENGTH = 2000;
+            const MAX_UI_LENGTH = 1000;
             let displayResult = result;
             if (!result) displayResult = "(No output or empty result)";
             
@@ -214,7 +222,7 @@ export const executeTool = async (
             }
             
             // Ensure clear separation for readability
-            onUiLog(`✅ Execution Result:\n${displayResult}`);
+            onUiLog(`✅ **Result**:\n${displayResult}`);
         }
 
         return { type: 'EXECUTED', result };
