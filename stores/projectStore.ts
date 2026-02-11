@@ -1,7 +1,7 @@
 
 import { create } from 'zustand';
 import { ProjectMeta } from '../types';
-import { dbAPI, migrateFromLocalStorage } from '../services/persistence';
+import { dbAPI } from '../services/persistence';
 import { generateId } from '../services/fileSystem';
 import { initialFileSystem } from '../services/fileSystem';
 
@@ -43,7 +43,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     const loadLogic = async () => {
         try {
-            await migrateFromLocalStorage();
+            // Removed migrateFromLocalStorage() call to prevent freezing
             const list = await dbAPI.getAllProjects();
             list.sort((a, b) => b.lastModified - a.lastModified);
             set({ projects: list });
