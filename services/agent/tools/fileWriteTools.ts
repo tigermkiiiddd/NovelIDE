@@ -1,3 +1,4 @@
+
 import { ToolDefinition } from '../types';
 
 export const createFileTool: ToolDefinition = {
@@ -21,13 +22,16 @@ export const updateFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'updateFile',
-    description: 'Overwrite the ENTIRE content of an existing file. WARNING: You MUST call `readFile` on this file immediately before using this tool to ensure you have the latest version. [WRITE TOOL]',
+    description: 'Overwrite the ENTIRE content of an existing file. [CRITICAL]: You must provide the COMPLETE file content. Do not omit any parts. If you only want to change specific sections, use `patchFile` instead. [WRITE TOOL]',
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: 'Internal thought process: Why are you overwriting this file? Have you read the original content?' },
         path: { type: 'string', description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
-        content: { type: 'string', description: 'The new FULL content.' }
+        content: { 
+          type: 'string', 
+          description: 'The ABSOLUTE FULL content of the file. PROHIBITED: Do not use placeholders like "// ... rest of code", "<!-- unchanged -->" or "...". You MUST output every single line of the file, even if unchanged. If you do not provide the full content, the user will lose data.' 
+        }
       },
       required: ['thinking', 'path', 'content']
     }
@@ -38,17 +42,27 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: 'Replace specific lines in a file. Use this for partial updates. You MUST call `readFile` first to get correct line numbers. [WRITE TOOL]',
+    description: 'Precise line-based editing tool. Use this to insert, replace, or delete lines at multiple locations in a file simultaneously without rewriting the whole file. You MUST call `readFile` first to obtain accurate line numbers. [WRITE TOOL]',
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: What specific lines are you changing and why?' },
+        thinking: { type: 'string', description: 'Internal thought process: What lines are you changing and why?' },
         path: { type: 'string', description: 'The FULL PATH of the file to patch.' },
-        startLine: { type: 'integer', description: 'The starting line number to replace (1-based).' },
-        endLine: { type: 'integer', description: 'The ending line number to replace (1-based, inclusive).' },
-        newContent: { type: 'string', description: 'The new content to insert at these lines.' }
+        edits: {
+          type: 'array',
+          description: 'A list of edits to apply. They will be applied safely (bottom-up) to preserve line numbers.',
+          items: {
+            type: 'object',
+            properties: {
+              startLine: { type: 'integer', description: 'The starting line number to replace (1-based).' },
+              endLine: { type: 'integer', description: 'The ending line number to replace (1-based, inclusive). To INSERT, set endLine = startLine - 1.' },
+              newContent: { type: 'string', description: 'The new content lines to insert. If empty string, it deletes the target lines.' }
+            },
+            required: ['startLine', 'endLine', 'newContent']
+          }
+        }
       },
-      required: ['thinking', 'path', 'startLine', 'endLine', 'newContent']
+      required: ['thinking', 'path', 'edits']
     }
   }
 };

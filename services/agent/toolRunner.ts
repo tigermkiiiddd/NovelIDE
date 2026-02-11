@@ -5,6 +5,7 @@ import { processManageTodos } from './tools/todoTools';
 import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
+import { BatchEdit } from '../../stores/fileStore';
 
 // Define the interface for the raw tools provided by useAgent/App
 export interface ToolContext {
@@ -20,7 +21,7 @@ export interface ToolContext {
     actions: {
         createFile: (path: string, content: string) => string;
         updateFile: (path: string, content: string) => string;
-        patchFile: (path: string, startLine: number, endLine: number, newContent: string) => string;
+        patchFile: (path: string, edits: BatchEdit[]) => string;
         readFile: (path: string, startLine?: number, endLine?: number) => string;
         searchFiles: (query: string) => string;
         listFiles: () => string;
@@ -104,10 +105,22 @@ export const executeTool = async (
                 originalContent = baseContent;
                 newContent = args.content;
             } else if (name === 'patchFile') {
-                description = `Patch: ${filePath} (L${args.startLine}-${args.endLine})`;
+                description = `Patch: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
                 // Simulate patch using the SHADOW-AWARE base content
-                newContent = applyPatchInMemory(baseContent, args.startLine, args.endLine, args.newContent);
+                // Need to replicate the store logic here for preview
+                let allLines = baseContent.split(/\r?\n/);
+                const sortedEdits = [...args.edits].sort((a: any, b: any) => b.startLine - a.startLine);
+                for (const edit of sortedEdits) {
+                    const { startLine, endLine, newContent } = edit;
+                    const startIdx = Math.max(0, startLine - 1);
+                    const deleteCount = Math.max(0, endLine - startLine + 1);
+                    const newLines = newContent ? newContent.split(/\r?\n/) : [];
+                    if (startIdx <= allLines.length) {
+                        allLines.splice(startIdx, deleteCount, ...newLines);
+                    }
+                }
+                newContent = allLines.join('\n');
             } else if (name === 'deleteFile') {
                 description = `Delete: ${filePath}`;
                 originalContent = baseContent || '(File Content)';
@@ -220,7 +233,7 @@ export const executeApprovedChange = (change: PendingChange, actions: ToolContex
         switch (change.toolName) {
             case 'createFile': return actions.createFile(change.args.path, change.args.content);
             case 'updateFile': return actions.updateFile(change.args.path, change.args.content);
-            case 'patchFile': return actions.patchFile(change.args.path, change.args.startLine, change.args.endLine, change.args.newContent);
+            case 'patchFile': return actions.patchFile(change.args.path, change.args.edits);
             case 'deleteFile': return actions.deleteFile(change.args.path);
             case 'renameFile': return actions.renameFile(change.args.oldPath, change.args.newName);
             default: return 'Error: Unknown tool for approval';

@@ -65,6 +65,12 @@ const PROTECTED_FILES: Record<string, Record<string, string>> = {
   }
 };
 
+export interface BatchEdit {
+  startLine: number;
+  endLine: number;
+  newContent: string;
+}
+
 interface FileState {
   files: FileNode[];
   activeFileId: string | null;
@@ -79,7 +85,7 @@ interface FileState {
   createFolderById: (parentId: string, name: string) => void;
   updateFile: (path: string, content: string) => string;
   saveFileContent: (id: string, content: string) => void;
-  patchFile: (path: string, startLine: number, endLine: number, newContent: string) => string;
+  patchFile: (path: string, edits: BatchEdit[]) => string; // Updated Signature
   readFile: (path: string, startLine?: number, endLine?: number) => string;
   searchFiles: (query: string) => string;
   deleteFile: (pathOrId: string) => string;
@@ -265,26 +271,40 @@ export const useFileStore = create<FileState>((set, get) => ({
     _saveToDB();
   },
 
-  patchFile: (path, startLine, endLine, newContent) => {
+  patchFile: (path, edits) => {
     const { files, _saveToDB } = get();
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File not found.`;
     
     const allLines = (file.content || '').split(/\r?\n/);
-    const totalLines = allLines.length;
-    const safeEndLine = Math.min(Math.max(startLine, endLine), totalLines);
     
-    const before = allLines.slice(0, startLine - 1);
-    const after = allLines.slice(safeEndLine);
-    const newLines = newContent.split(/\r?\n/);
-    const finalContent = [...before, ...newLines, ...after].join('\n');
+    // Sort edits descending by startLine to ensure index stability
+    const sortedEdits = [...edits].sort((a, b) => b.startLine - a.startLine);
+    
+    for (const edit of sortedEdits) {
+        const { startLine, endLine, newContent } = edit;
+        const startIdx = Math.max(0, startLine - 1);
+        const endIdx = Math.max(0, endLine); // slice/splice is exclusive at end, but our line numbers are inclusive. 
+        // Logic: if startLine=5, endLine=5 (replace line 5). splice(4, 1, ...). 
+        // 5 - 5 + 1 = 1. Correct.
+        const deleteCount = Math.max(0, endLine - startLine + 1);
+        
+        const newLines = newContent ? newContent.split(/\r?\n/) : [];
+        
+        // Ensure bounds
+        if (startIdx <= allLines.length) {
+             allLines.splice(startIdx, deleteCount, ...newLines);
+        }
+    }
+    
+    const finalContent = allLines.join('\n');
     
     const metadata = parseFrontmatter(finalContent);
     set(state => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content: finalContent, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
-    return `Successfully patched "${path}".`;
+    return `Successfully applied ${edits.length} patches to "${path}".`;
   },
 
   readFile: (path, startLine = 1, endLine = 200) => {

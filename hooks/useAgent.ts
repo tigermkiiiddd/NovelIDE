@@ -7,6 +7,7 @@ import { constructSystemPrompt } from '../services/agent/tools/promptBuilder';
 import { allTools } from '../services/agent/tools/index';
 import { useAgentStore } from '../stores/agentStore';
 import { executeTool, executeApprovedChange } from '../services/agent/toolRunner';
+import { BatchEdit } from '../stores/fileStore';
 
 // Singleton Service Instance
 let aiServiceInstance: AIService | null = null;
@@ -14,7 +15,7 @@ let aiServiceInstance: AIService | null = null;
 interface AgentToolsImplementation {
   createFile: (path: string, content: string) => string;
   updateFile: (path: string, content: string) => string;
-  patchFile: (path: string, startLine: number, endLine: number, newContent: string) => string;
+  patchFile: (path: string, edits: BatchEdit[]) => string;
   readFile: (path: string, startLine?: number, endLine?: number) => string;
   searchFiles: (query: string) => string;
   listFiles: () => string;

@@ -1,3 +1,4 @@
+
 import { useFileStore } from '../../../stores/fileStore';
 import { FileType, FileNode } from '../../../types';
 import { ToolDefinition } from '../types';
@@ -21,7 +22,7 @@ export const readFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'readFile',
-    description: 'Read the content of a specific file. Returns content with line numbers. Default reads first 200 lines. [READ TOOL]',
+    description: 'Read the content of a specific file. [IMPORTANT]: The output format is "LineNum | Content". Use these line numbers for the `patchFile` tool. Default reads first 200 lines. [READ TOOL]',
     parameters: {
       type: 'object',
       properties: {
