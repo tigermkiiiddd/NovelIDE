@@ -1,4 +1,3 @@
-
 import { FileNode, TodoItem, PendingChange, FileType } from '../../types';
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
@@ -51,8 +50,23 @@ export const executeTool = async (
         throw new Error("Tool execution aborted by user.");
     }
 
-    // Extract Thinking for Logging
-    const thinkingLog = args.thinking ? `🤔 ${args.thinking}\n` : '';
+    // --- Prepare Logging Data ---
+    const displayArgs = { ...args };
+    if (displayArgs.thinking) delete displayArgs.thinking; // Remove thinking to reduce noise
+    
+    // Explicitly format JSON input for the user
+    const argsJson = Object.keys(displayArgs).length > 0 
+        ? JSON.stringify(displayArgs, null, 2) 
+        : '';
+    
+    const thinkingLog = args.thinking ? `🤔 Mind: ${args.thinking}\n` : '';
+    // Construct the initial log message
+    const startLog = `▶️ Invoking \`${name}\`\n${argsJson ? `Input: ${argsJson}\n` : ''}`;
+
+    // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
+    if (onUiLog && name !== 'call_search_agent') {
+        onUiLog(`${thinkingLog}${startLog}`);
+    }
 
     // --- 1. Check for Approval Requirements (Write Operations) ---
     const requiresApproval = ['createFile', 'updateFile', 'patchFile', 'deleteFile', 'renameFile'];
@@ -108,7 +122,8 @@ export const executeTool = async (
             return { 
                 type: 'APPROVAL_REQUIRED', 
                 change, 
-                uiLog: `${thinkingLog}[${name}] ⏸️ Waiting for approval for "${filePath}"...` 
+                // We return the full log so far + waiting status
+                uiLog: `${thinkingLog}${startLog}⏸️ Waiting for approval for "${filePath}"...` 
             };
 
         } catch (e: any) {
@@ -131,8 +146,11 @@ export const executeTool = async (
         else if (name === 'call_search_agent') {
             if (!aiService) return { type: 'ERROR', message: 'AI Service not available for Sub-Agent' };
             
-            // Log thinking for sub-agent call
-            if(onUiLog && args.thinking) onUiLog(`🤔 Main Agent 思考: ${args.thinking}`);
+            // Log thinking and request for sub-agent call (Sub Agent handles its own detailed logging)
+            if(onUiLog) {
+                 const reqDesc = args.request_description ? `📋 任务目标: ${args.request_description}\n` : '';
+                 onUiLog(`${thinkingLog}${reqDesc}`);
+            }
 
             result = await runSearchSubAgent(
                 aiService,
@@ -164,10 +182,9 @@ export const executeTool = async (
             }
         }
         
-        // Log Thinking success
-        if (onUiLog && args.thinking && name !== 'call_search_agent') {
-            // We already logged for search agent in the block above
-            onUiLog(`${thinkingLog}✅ Executed ${name}`);
+        // Log Completion (Append to the start log)
+        if (onUiLog && name !== 'call_search_agent') {
+            onUiLog(`✅ ${name} Completed.`);
         }
 
         return { type: 'EXECUTED', result };

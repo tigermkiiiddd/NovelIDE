@@ -186,7 +186,7 @@ export const useAgent = (
 
     try {
         let loopCount = 0;
-        const MAX_LOOPS = 10; 
+        const MAX_LOOPS = 10; // Restricted to 5 to prevent infinite loops
         let keepGoing = true;
 
         while (keepGoing && loopCount < MAX_LOOPS) {
@@ -313,8 +313,9 @@ export const useAgent = (
                         resultString = execResult.result;
                         // Log success implicit in most tools or sub-agent logs
                     } else {
-                        resultString = execResult.message;
-                        logToUi(`❌ [${name}] Error: ${resultString}`);
+                        // EXPLICIT ERROR FORMATTING
+                        resultString = `[SYSTEM ERROR]: ${execResult.message}`;
+                        logToUi(`❌ [${name}] Error: ${execResult.message}`);
                     }
 
                     functionResponses.push({ functionResponse: { name, id, response: { result: resultString } } });
@@ -337,6 +338,17 @@ export const useAgent = (
                 keepGoing = false; // No tools called, done.
             }
         }
+        
+        // --- Loop Limit Safety Valve ---
+        if (keepGoing && loopCount >= MAX_LOOPS && !signal.aborted) {
+            addMessage({ 
+                id: generateId(), 
+                role: 'system', 
+                text: '⚠️ 【系统保护】任务自动终止：已达到最大工具调用轮数限制 (Max Loops)。\n\n这通常是因为 Agent 陷入了重复尝试或死循环。建议：\n1. 请检查您的指令是否过于模糊。\n2. 尝试手动分步执行任务。', 
+                timestamp: Date.now() 
+            });
+        }
+
     } catch (error: any) {
         if (error.name === 'AbortError') {
              addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now() });

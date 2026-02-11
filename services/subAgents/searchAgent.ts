@@ -1,4 +1,3 @@
-
 import { AIService } from '../geminiService';
 import { FileNode } from '../../types';
 import { FunctionDeclaration, Type } from "@google/genai";
@@ -180,7 +179,14 @@ ${args.reasoning}
             // Execute Read Tools
             let result = '';
             try {
-                if(onLog) onLog(`🛠️ [Sub-Agent] 执行工具: ${name}`);
+                if(onLog) {
+                    const displayArgs = { ...args };
+                    delete displayArgs.thinking;
+                    const argsLog = Object.keys(displayArgs).length > 0 
+                        ? ` ${JSON.stringify(displayArgs, null, 2)}` 
+                        : '';
+                    onLog(`🛠️ [Sub-Agent] 执行工具: ${name}${argsLog}`);
+                }
                 
                 switch (name) {
                     case 'listFiles':

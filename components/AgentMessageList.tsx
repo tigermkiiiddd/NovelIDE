@@ -1,6 +1,5 @@
-
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2 } from 'lucide-react';
+import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench } from 'lucide-react';
 import { ChatMessage } from '../types';
 
 interface AgentMessageListProps {
@@ -41,7 +40,7 @@ const ToolLogMessage: React.FC<{
     // 动态标题：正在运行时显示最后一行日志，完成后显示工具名
     const headerTitle = (isLast && isLoading) 
         ? lastLine 
-        : (toolNames ? `Executed: ${toolNames}` : 'System Output');
+        : (toolNames ? `System Output: ${toolNames}` : 'System Output');
 
     return (
         <div className="w-full max-w-[95%] sm:max-w-[85%] my-2">
@@ -78,6 +77,21 @@ const ToolLogMessage: React.FC<{
         </div>
     );
 };
+
+const ToolCallBlock = ({ name, args }: { name: string, args: any }) => (
+    <div className="mt-2 text-xs font-mono bg-black/20 rounded-lg border border-white/10 overflow-hidden shadow-sm">
+        <div className="px-3 py-1.5 bg-white/5 border-b border-white/5 text-blue-200 font-semibold flex items-center gap-2">
+            <Wrench size={12} className="text-blue-400"/>
+            Call: {name}
+        </div>
+        <div className="p-3 bg-gray-950/30 text-gray-300 whitespace-pre-wrap overflow-x-auto select-text">
+             {Object.keys(args).length > 0 
+                ? JSON.stringify(args, null, 2)
+                : <span className="text-gray-500 italic">(No arguments)</span>
+             }
+        </div>
+    </div>
+);
 
 const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; color?: string; defaultOpen?: boolean }> = ({ data, label, icon, color = "text-gray-400", defaultOpen = false }) => {
     if (!data) return null;
@@ -218,6 +232,16 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     >
                         <div className="whitespace-pre-wrap select-text cursor-text leading-relaxed">{msg.text}</div>
 
+                        {/* TOOL CALL VISUALIZATION (ALWAYS VISIBLE for Model) */}
+                        {isModel && toolCalls && toolCalls.length > 0 && (
+                            <div className="mt-3 pt-2 border-t border-white/10 space-y-2">
+                                <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Requested Actions</div>
+                                {toolCalls.map((tc: any, idx: number) => (
+                                    <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} />
+                                ))}
+                            </div>
+                        )}
+
                         {/* DEBUG INFO */}
                         {isDebugMode && (
                             <div className="mt-3 pt-2 border-t border-white/20 space-y-1">
@@ -244,9 +268,6 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                 )}
 
                                 {/* Fallback/Auxiliary Data */}
-                                {!msg.metadata?.debugPayload && toolCalls && toolCalls.length > 0 && toolCalls.map((tc: any, idx: number) => (
-                                    <JsonView key={`tc-${idx}`} data={tc.args} label={`CALL: ${tc.name}`} icon={<Terminal size={12}/>} color="text-yellow-300"/>
-                                ))}
                                 {!msg.metadata?.debugPayload && toolResponses && toolResponses.length > 0 && toolResponses.map((tr: any, idx: number) => (
                                     <JsonView key={`tr-${idx}`} data={tr.response} label={`RESULT: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
                                 ))}
