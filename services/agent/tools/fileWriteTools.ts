@@ -22,15 +22,15 @@ export const updateFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'updateFile',
-    description: 'Overwrite the ENTIRE content of an existing file. [CRITICAL]: You must provide the COMPLETE file content. Do not omit any parts. If you only want to change specific sections, use `patchFile` instead. [WRITE TOOL]',
+    description: '⚠️ DANGER: Overwrite the ENTIRE content of an existing file. [CRITICAL WARNING]: This tool REPLACES the file completely. If you provide partial content, the original content will be LOST FOREVER. STRICTLY FORBIDDEN to use placeholders like "// ... existing code", "<!-- unchanged -->" or "...". You MUST provide the FULL file content. If you only want to edit a part, use `patchFile` instead. [WRITE TOOL]',
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Why are you overwriting this file? Have you read the original content?' },
+        thinking: { type: 'string', description: 'Internal thought process: Why use updateFile instead of patchFile? Confirm you have the FULL content.' },
         path: { type: 'string', description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
         content: { 
           type: 'string', 
-          description: 'The ABSOLUTE FULL content of the file. PROHIBITED: Do not use placeholders like "// ... rest of code", "<!-- unchanged -->" or "...". You MUST output every single line of the file, even if unchanged. If you do not provide the full content, the user will lose data.' 
+          description: 'The COMPLETE, BYTE-FOR-BYTE content of the file. DO NOT OMIT ANYTHING. DO NOT USE "...". If you omit lines, they are deleted. If the file is large, prefer `patchFile`.' 
         }
       },
       required: ['thinking', 'path', 'content']
