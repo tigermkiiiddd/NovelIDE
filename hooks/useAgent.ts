@@ -1,3 +1,4 @@
+
 import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { ChatMessage, FileNode, ProjectMeta, PendingChange, AIProvider } from '../types';
 import { AIService } from '../services/geminiService';
@@ -206,7 +207,11 @@ export const useAgent = (
             // This represents the EXACT array we are sending to the LLM (rawParts or text wrapped in parts)
             const apiHistory = currentMessages.map(m => {
                 let apiRole = m.role;
-                if (m.role === 'system' && m.isToolOutput) apiRole = 'user'; 
+                // Important: If a message is a 'system' message but NOT a tool output (e.g. user approval text), map it to user.
+                // If it IS a tool output, map it to 'user' temporarily for geminiService to convert to 'tool' role using rawParts.
+                // The issue was: geminiService expects 'user' role for tool responses to process rawParts correctly.
+                if (m.role === 'system') apiRole = 'user'; 
+                
                 if (m.rawParts) return { role: apiRole, parts: m.rawParts };
                 return { role: apiRole === 'system' ? 'user' : apiRole, parts: [{ text: m.text }] };
             });
@@ -250,6 +255,9 @@ export const useAgent = (
                 };
                 addMessage(agentMsg);
             } else if (toolParts.length > 0) {
+                 // Model called tools but gave no text explanation.
+                 // We create a "Phantom" text message to visualize the action if needed, or just let the tool log handle it.
+                 // But for chat continuity, a text header is good.
                  const toolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
                  const agentMsg: ChatMessage = { 
                     id: generateId(), 
@@ -317,6 +325,7 @@ export const useAgent = (
                         logToUi(`❌ [${name}] Error: ${execResult.message}`);
                     }
 
+                    // Store the ID from the CALL so the response matches
                     functionResponses.push({ functionResponse: { name, id, response: { result: resultString } } });
                 }
 

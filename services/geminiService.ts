@@ -1,3 +1,4 @@
+
 import OpenAI from "openai";
 import { AIConfig, AIProvider } from "../types";
 import { ToolDefinition } from "./agent/types";
@@ -159,12 +160,8 @@ export class AIService {
             tools: tools.length > 0 ? tools : undefined,
             tool_choice: tools.length > 0 ? 'auto' : undefined,
             max_tokens: this.config.maxOutputTokens,
-            // Inject safety settings via extra_body for OpenAI-compatible Gemini endpoints
-            ...(isGemini ? { 
-                extra_body: { 
-                    safetySettings: GEMINI_SAFETY_SETTINGS 
-                } 
-            } : {})
+            // NOT Injecting safety settings via extra_body for now as it conflicts with some OpenAI proxies
+            // and standard Gemini OpenAI endpoint handles defaults reasonably.
           }, { signal })
       );
 
