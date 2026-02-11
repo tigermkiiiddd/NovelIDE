@@ -29,7 +29,7 @@ export const readFileTool: ToolDefinition = {
         thinking: { type: 'string', description: 'Internal thought process: Why are you reading this specific file? What information do you expect to find?' },
         path: { type: 'string', description: 'The FULL PATH of the file (e.g., "05_正文草稿/chapter1.md"). Do not use just the filename.' },
         startLine: { type: 'integer', description: 'Start line number (default 1).' },
-        endLine: { type: 'integer', description: 'End line number (default 200). Use this to read long files in chunks.' }
+        endLine: { type: 'integer', description: 'End line number. If omitted, it defaults to reading 200 lines starting from startLine. Use this to read long files in chunks.' }
       },
       required: ['thinking', 'path']
     }

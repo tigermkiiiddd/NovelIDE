@@ -19,13 +19,21 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
   
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (autoFocus && window.innerWidth > 768) {
       inputRef.current?.focus();
     }
   }, [autoFocus]);
+
+  // Auto-resize logic
+  useEffect(() => {
+    if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+        inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 200)}px`;
+    }
+  }, [input]);
 
   // --- Filter Files for Mention ---
   const filteredFiles = useMemo(() => {
@@ -41,7 +49,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
           .slice(10);
   }, [showMentionList, mentionQuery, files]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     const selectionStart = e.target.selectionStart || 0;
     setInput(val);
@@ -82,7 +90,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
       }, 0);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (showMentionList && filteredFiles.length > 0) {
           if (e.key === 'ArrowUp') {
               e.preventDefault();
@@ -106,7 +114,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
           }
       }
 
-      if (e.key === 'Enter' && !e.shiftKey && !showMentionList) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !showMentionList) {
           e.preventDefault();
           handleSubmit();
       }
@@ -118,6 +126,10 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
     onSendMessage(input);
     setInput('');
     setShowMentionList(false);
+    // Reset height
+    if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+    }
   };
 
   return (
@@ -153,15 +165,15 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
             </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-        <input
+        <form onSubmit={handleSubmit} className="flex items-end space-x-2">
+        <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={isLoading ? "正在生成中..." : "输入 @ 引用文件..."}
-            className="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-full px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm disabled:opacity-70"
+            placeholder={isLoading ? "正在生成中..." : "输入 @ 引用文件... (Ctrl+Enter 发送)"}
+            className="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm disabled:opacity-70 resize-none overflow-y-auto min-h-[40px] max-h-[200px]"
             autoComplete="off"
             disabled={isLoading}
         />
@@ -170,7 +182,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
             <button
                 type="button"
                 onClick={onStop}
-                className="p-2 bg-red-600 text-white rounded-full hover:bg-red-500 transition-colors shadow-lg animate-in zoom-in-50 duration-200"
+                className="p-2 mb-0.5 bg-red-600 text-white rounded-full hover:bg-red-500 transition-colors shadow-lg animate-in zoom-in-50 duration-200"
                 title="停止生成"
             >
                 <Square size={18} fill="currentColor" />
@@ -179,7 +191,8 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
             <button
                 type="submit"
                 disabled={!input.trim()}
-                className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-2 mb-0.5 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="发送 (Ctrl+Enter)"
             >
                 <Send size={18} />
             </button>

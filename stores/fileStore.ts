@@ -307,7 +307,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     return `Successfully applied ${edits.length} patches to "${path}".`;
   },
 
-  readFile: (path, startLine = 1, endLine = 200) => {
+  readFile: (path, startLine = 1, endLine) => {
       const { files } = get();
       const file = findNodeByPath(files, path);
       if (!file) return `Error: File at "${path}" not found.`;
@@ -315,7 +315,16 @@ export const useFileStore = create<FileState>((set, get) => ({
       const allLines = (file.content || '').split(/\r?\n/);
       const totalLines = allLines.length;
       const start = Math.max(1, startLine);
-      const end = Math.min(totalLines, endLine);
+
+      // Smart Default: If endLine is NOT provided, default to reading the next 199 lines (200 total).
+      // This fixes the bug where defaulting to '200' caused reading range error when startLine > 200.
+      let effectiveEnd = endLine;
+      if (effectiveEnd === undefined) {
+          effectiveEnd = start + 199;
+      }
+
+      const end = Math.min(totalLines, effectiveEnd);
+      
       const linesToRead = allLines.slice(start - 1, end);
       const contentWithLineNumbers = linesToRead.map((line, idx) => `${String(start + idx).padEnd(4)} | ${line}`).join('\n');
       return `File: ${path}\nTotal Lines: ${totalLines}\nReading Range: ${start} - ${end}\n---\n${contentWithLineNumbers}\n---\n${end < totalLines ? '(Read limit reached)' : '(End of file)'}`;
