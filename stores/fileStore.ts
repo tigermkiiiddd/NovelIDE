@@ -85,7 +85,7 @@ interface FileState {
   createFolderById: (parentId: string, name: string) => void;
   updateFile: (path: string, content: string) => string;
   saveFileContent: (id: string, content: string) => void;
-  patchFile: (path: string, edits: BatchEdit[]) => string; // Updated Signature
+  patchFile: (path: string, edits: BatchEdit[]) => string; 
   readFile: (path: string, startLine?: number, endLine?: number) => string;
   searchFiles: (query: string) => string;
   deleteFile: (pathOrId: string) => string;
@@ -287,12 +287,15 @@ export const useFileStore = create<FileState>((set, get) => ({
         // deleteCount: number of lines to remove from startLine to endLine (inclusive)
         const deleteCount = Math.max(0, endLine - startLine + 1);
         
-        const newLines = newContent ? newContent.split(/\r?\n/) : [];
+        // FIX: Remove trailing newline from split to avoid extra empty line at end of block
+        // FIX: Handle empty string properly (as deletion)
+        const newLines = newContent ? newContent.replace(/\r?\n$/, '').split(/\r?\n/) : [];
         
-        // Ensure bounds
-        if (startIdx <= allLines.length) {
-             allLines.splice(startIdx, deleteCount, ...newLines);
-        }
+        // FIX: Allow appending to the immediate end of file (when startIdx == length)
+        // Also clamp startIdx to ensure it doesn't gap wildly (though splice handles gaps by just appending)
+        const safeStartIdx = Math.min(startIdx, allLines.length);
+
+        allLines.splice(safeStartIdx, deleteCount, ...newLines);
     }
     
     const finalContent = allLines.join('\n');

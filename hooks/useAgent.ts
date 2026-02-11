@@ -1,490 +1,135 @@
 
-import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
-import { ChatMessage, FileNode, ProjectMeta, PendingChange, AIProvider } from '../types';
-import { AIService } from '../services/geminiService';
+import { useCallback, useMemo } from 'react';
+import { ChatMessage, FileNode, ProjectMeta, AIProvider, PendingChange } from '../types';
 import { generateId } from '../services/fileSystem';
-import { constructSystemPrompt } from '../services/agent/tools/promptBuilder';
-import { allTools } from '../services/agent/tools/index';
-import { useAgentStore } from '../stores/agentStore';
-import { executeTool, executeApprovedChange } from '../services/agent/toolRunner';
-import { BatchEdit } from '../stores/fileStore';
+import { constructSystemPrompt } from '../services/resources/skills/coreProtocol';
+import { useAgentContext } from './agent/useAgentContext';
+import { useAgentTools, AgentToolsImplementation } from './agent/useAgentTools';
+import { useAgentEngine } from './agent/useAgentEngine';
+import { executeApprovedChange } from '../services/agent/toolRunner';
 
-// Singleton Service Instance
-let aiServiceInstance: AIService | null = null;
-
-interface AgentToolsImplementation {
-  createFile: (path: string, content: string) => string;
-  updateFile: (path: string, content: string) => string;
-  patchFile: (path: string, edits: BatchEdit[]) => string;
-  readFile: (path: string, startLine?: number, endLine?: number) => string;
-  searchFiles: (query: string) => string;
-  listFiles: () => string;
-  deleteFile: (path: string) => string;
-  renameFile: (oldPath: string, newName: string) => string;
-  updateProjectMeta: (updates: any) => string;
-}
-
+// Facade Hook
 export const useAgent = (
     files: FileNode[], 
     project: ProjectMeta | undefined, 
     activeFile: FileNode | null, 
     tools: AgentToolsImplementation
 ) => {
-  // --- 1. Access State from Store ---
+  // 1. 初始化上下文 (Store & AI Service)
+  const context = useAgentContext(project);
   const { 
-      aiConfig, setAiConfig,
-      sessions: allSessions, // Rename to allSessions
-      currentSessionId, createSession, switchSession, deleteSession,
-      addMessage,
-      editMessageContent,
-      deleteMessagesFrom,
-      isLoading, setLoading,
-      pendingChanges, addPendingChange, removePendingChange,
-      setTodos
-  } = useAgentStore();
+      currentSession, currentSessionId, 
+      addMessage, deleteMessagesFrom, editMessageContent,
+      pendingChanges, removePendingChange, setTodos, 
+      aiConfig, setAiConfig, 
+      isLoading,
+      handleCreateSession, switchSession, deleteSession,
+      projectSessions
+  } = context;
 
-  // --- 1.5 Filter Sessions by Project ---
-  const projectId = project?.id;
-  
-  // Only show sessions belonging to this project (or sessions with no projectId for backward compatibility if needed, though we force it now)
-  const projectSessions = useMemo(() => {
-      if (!projectId) return [];
-      return allSessions.filter(s => s.projectId === projectId);
-  }, [allSessions, projectId]);
-
-  const currentSession = projectSessions.find(s => s.id === currentSessionId);
   const todos = currentSession?.todos || [];
 
-  const accessedFiles = useRef<Set<string>>(new Set());
-  
-  // Abort Controller Ref
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // 2. 初始化工具层 (Tools & Shadow Read & Anti-Loop)
+  const toolsHook = useAgentTools({
+      files,
+      todos,
+      tools,
+      aiServiceInstance: context.aiServiceInstance,
+      addMessage,
+      editMessageContent,
+      addPendingChange: context.addPendingChange,
+      setTodos
+  });
 
-  // --- 2. Sync AI Service Config ---
-  useEffect(() => {
-      if (!aiServiceInstance) {
-          aiServiceInstance = new AIService(aiConfig);
-      } else {
-          aiServiceInstance.updateConfig(aiConfig);
-      }
-  }, [aiConfig]);
+  // 3. 初始化引擎层 (Core Loop)
+  const engine = useAgentEngine({
+      context,
+      toolsHook,
+      files,
+      project,
+      activeFile
+  });
 
-  // --- 3. Auto-Session Management (Context Aware) ---
-  useEffect(() => {
-      if (!projectId) return;
+  // --- 4. 辅助功能 (Token 估算 & 审批逻辑) ---
 
-      // Check if current active session ID is valid for this project
-      const isCurrentSessionValid = projectSessions.some(s => s.id === currentSessionId);
-
-      if (!isCurrentSessionValid) {
-          if (projectSessions.length > 0) {
-              // Switch to the most recent session for this project
-              switchSession(projectSessions[0].id);
-          } else {
-              // Create a new session for this project
-              createSession(projectId, '新会话');
-          }
-      }
-  }, [projectId, projectSessions, currentSessionId, createSession, switchSession]);
-
-  // Wrapper for Create Session to inject Project ID
-  const handleCreateSession = useCallback(() => {
-      if (projectId) {
-          createSession(projectId);
-      }
-  }, [projectId, createSession]);
-
-  // --- 3.5 Token Usage Estimation ---
   const tokenUsage = useMemo(() => {
-      // Configurable Limits
       const MAX_TOKENS_GEMINI = 1000000; 
       const MAX_TOKENS_DEFAULT = 128000;
-
       const limit = aiConfig.provider === AIProvider.GOOGLE ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
-      // 1. Calculate System Prompt Size
       const sysPrompt = constructSystemPrompt(files, project, activeFile, todos);
-      
-      // 2. Calculate Messages Size
       const msgs = currentSession?.messages || [];
       const msgsText = msgs.reduce((acc, m) => {
           let content = m.text;
-          if (m.rawParts) {
-             content += JSON.stringify(m.rawParts);
-          }
+          if (m.rawParts) content += JSON.stringify(m.rawParts);
           return acc + content;
       }, "");
 
-      const totalChars = sysPrompt.length + msgsText.length;
-
-      // Heuristic: Mixed CJK/English content. 
-      const estimatedTokens = Math.ceil(totalChars / 2);
-      
+      const estimatedTokens = Math.ceil((sysPrompt.length + msgsText.length) / 2);
       const percent = Math.min(100, (estimatedTokens / limit) * 100);
 
       return {
           used: estimatedTokens,
           limit: limit,
-          percent: parseFloat(percent.toFixed(2)) // Keep 2 decimals
+          percent: parseFloat(percent.toFixed(2))
       };
   }, [aiConfig.provider, files, project, activeFile, todos, currentSession?.messages]);
 
-
-  // --- 4. Core Execution Logic (Approval) ---
   const approveChange = useCallback((change: PendingChange) => {
-    // Construct full action context
+    // 构造包含追踪功能的 Action 集合
     const fullActions = {
         ...tools,
         setTodos,
-        trackFileAccess: (fname: string) => accessedFiles.current.add(fname)
+        trackFileAccess: (fname: string) => toolsHook.accessedFiles.current.add(fname)
     };
 
     const result = executeApprovedChange(change, fullActions);
     removePendingChange(change.id);
     
-    const confirmMsg: ChatMessage = { 
-        id: generateId(), 
-        role: 'system', 
-        text: `✅ User Approved: ${change.description}\nResult: ${result}`, 
-        timestamp: Date.now() 
-    };
-    addMessage(confirmMsg);
-  }, [tools, addMessage, removePendingChange, setTodos]);
+    addMessage({ 
+        id: generateId(), role: 'system', 
+        text: `✅ User Approved: ${change.description}\nResult: ${result}`, timestamp: Date.now() 
+    });
+  }, [tools, addMessage, removePendingChange, setTodos, toolsHook.accessedFiles]);
 
   const rejectChange = useCallback((change: PendingChange) => {
       removePendingChange(change.id);
-      const rejectMsg: ChatMessage = { 
-          id: generateId(), 
-          role: 'system', 
-          text: `❌ User Rejected: ${change.description}`, 
-          timestamp: Date.now() 
-      };
-      addMessage(rejectMsg);
+      addMessage({ 
+          id: generateId(), role: 'system', 
+          text: `❌ User Rejected: ${change.description}`, timestamp: Date.now() 
+      });
   }, [addMessage, removePendingChange]);
 
-  // --- 5. Main LLM Interaction Loop ---
-  const processTurn = useCallback(async () => {
-    if (!aiServiceInstance || !currentSessionId) return;
-
-    // Reset abort controller
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    const signal = controller.signal;
-
-    // A. Prepare Context
-    // NOTE: We get the LATEST state from store directly inside logic.
-    // We must find the specific session object from the store's global list.
-    const globalSessions = useAgentStore.getState().sessions;
-    const freshSession = globalSessions.find(s => s.id === currentSessionId);
-    const freshTodos = freshSession?.todos || [];
-    
-    const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, freshTodos);
-
-    setLoading(true);
-
-    // 【Anti-Loop】初始化错误追踪器 (Map<ErrorMessage, Count>)
-    const errorTracker = new Map<string, number>();
-
-    try {
-        let loopCount = 0;
-        const MAX_LOOPS = 10; // Restricted to 10 to prevent infinite loops
-        let keepGoing = true;
-
-        while (keepGoing && loopCount < MAX_LOOPS) {
-            if (signal.aborted) break;
-
-            loopCount++;
-            
-            // Re-fetch session messages every loop iteration
-            const currentGlobalSessions = useAgentStore.getState().sessions;
-            const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
-            const currentMessages = currentFreshSession?.messages || [];
-
-            if (loopCount === 1) {
-                 console.log("🤖 [System Prompt Generated]:", fullSystemInstruction);
-            }
-
-            // Format History for API
-            // This represents the EXACT array we are sending to the LLM (rawParts or text wrapped in parts)
-            const apiHistory = currentMessages.map(m => {
-                let apiRole = m.role;
-                // Important: If a message is a 'system' message but NOT a tool output (e.g. user approval text), map it to user.
-                // If it IS a tool output, map it to 'user' temporarily for geminiService to convert to 'tool' role using rawParts.
-                // The issue was: geminiService expects 'user' role for tool responses to process rawParts correctly.
-                if (m.role === 'system') apiRole = 'user'; 
-                
-                if (m.rawParts) return { role: apiRole, parts: m.rawParts };
-                return { role: apiRole === 'system' ? 'user' : apiRole, parts: [{ text: m.text }] };
-            });
-
-            // Capture the Payload for Debugging (Snapshot)
-            const debugPayload = {
-                systemInstruction: fullSystemInstruction,
-                contents: apiHistory
-            };
-
-            // C. Call AI
-            // Note: we pass '' as message because apiHistory already contains the latest user message
-            const response = await aiServiceInstance.sendMessage(
-                apiHistory, 
-                '', 
-                fullSystemInstruction, 
-                allTools,
-                signal
-            );
-            
-            if (signal.aborted) break;
-
-            const candidates = response.candidates;
-            if (!candidates || candidates.length === 0) throw new Error("No response from Agent");
-
-            const content = candidates[0].content;
-            const parts = content.parts;
-
-            // D. Handle Model Text Response
-            const textPart = parts.find((p: any) => p.text);
-            const toolParts = parts.filter((p: any) => p.functionCall);
-            
-            if (textPart && textPart.text) {
-                const agentMsg: ChatMessage = { 
-                    id: generateId(), 
-                    role: 'model', 
-                    text: textPart.text, 
-                    rawParts: parts, 
-                    timestamp: Date.now(),
-                    metadata: { debugPayload } // Attach raw payload snapshot
-                };
-                addMessage(agentMsg);
-            } else if (toolParts.length > 0) {
-                 // Model called tools but gave no text explanation.
-                 // We create a "Phantom" text message to visualize the action if needed, or just let the tool log handle it.
-                 // But for chat continuity, a text header is good.
-                 const toolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
-                 const agentMsg: ChatMessage = { 
-                    id: generateId(), 
-                    role: 'model', 
-                    text: `🛠️ Action: ${toolNames}`, 
-                    rawParts: parts, 
-                    timestamp: Date.now(),
-                    metadata: { debugPayload } // Attach raw payload snapshot
-                };
-                addMessage(agentMsg);
-            }
-
-            // E. Handle Tools
-            if (toolParts.length > 0) {
-                const functionResponses = [];
-                
-                // --- REAL-TIME LOGGING ---
-                // Create placeholder message
-                const toolMsgId = generateId();
-                let streamedLog = '';
-                const logToUi = (text: string) => {
-                    streamedLog += (streamedLog ? '\n' : '') + text;
-                    editMessageContent(toolMsgId, streamedLog);
-                };
-
-                addMessage({ 
-                    id: toolMsgId, 
-                    role: 'system', 
-                    text: '⏳ Agent 正在执行工具...', 
-                    isToolOutput: true, 
-                    timestamp: Date.now() 
-                });
-
-                // Helper for Shadow Resolution
-                const getShadowContent = (path: string): string | null => {
-                     const currentPendingChanges = useAgentStore.getState().pendingChanges;
-                     // Look for latest change with content
-                     const relevantChanges = currentPendingChanges.filter(c => c.fileName === path && c.newContent !== null);
-                     const latestChange = relevantChanges[relevantChanges.length - 1];
-                     return latestChange ? (latestChange.newContent || null) : null;
-                };
-
-                // Helper for Shadow Read
-                const shadowReadFile = (path: string, startLine?: number, endLine?: number): string => {
-                     const shadowContent = getShadowContent(path);
-                     if (shadowContent !== null) {
-                         const allLines = shadowContent.split(/\r?\n/);
-                         const totalLines = allLines.length;
-                         const start = Math.max(1, startLine || 1);
-                         const end = Math.min(totalLines, endLine || 200);
-                         const linesToRead = allLines.slice(start - 1, end);
-                         const contentWithLineNumbers = linesToRead.map((line, idx) => `${String(start + idx).padEnd(4)} | ${line}`).join('\n');
-                         return `[Shadow Read - Pending Change]\nFile: ${path}\nTotal Lines: ${totalLines}\nReading Range: ${start} - ${end}\n---\n${contentWithLineNumbers}\n---\n(Content from Pending Approval)`;
-                     }
-                     return tools.readFile(path, startLine, endLine);
-                };
-
-                // Dynamic Action Proxy
-                const dynamicActions = {
-                    ...tools,
-                    setTodos,
-                    trackFileAccess: (fname: string) => accessedFiles.current.add(fname),
-                    readFile: shadowReadFile
-                };
-
-                for (const part of toolParts) {
-                    if (signal.aborted) break;
-                    if (!part.functionCall) continue;
-                    const { name, args, id } = part.functionCall;
-
-                    // Execute via Runner
-                    const execResult = await executeTool(name, args, {
-                        files,
-                        todos: freshTodos,
-                        aiService: aiServiceInstance,
-                        onUiLog: logToUi,
-                        signal, // Pass signal to sub-agents
-                        getShadowContent: getShadowContent,
-                        actions: dynamicActions
-                    });
-
-                    let resultString = '';
-
-                    if (execResult.type === 'APPROVAL_REQUIRED') {
-                        addPendingChange(execResult.change);
-                        // Make UI log less "blocking"
-                        logToUi(`📝 变更已提交审查 (自动继续): ${execResult.change.description}`);
-                        // Tell Agent it's done/queued so it moves on
-                        resultString = `Action queued (ID: ${execResult.change.id}). You may proceed with subsequent tasks assuming this change will be approved.`;
-                    } else if (execResult.type === 'EXECUTED') {
-                        resultString = execResult.result;
-                        // Log success implicit in most tools or sub-agent logs
-                    } else {
-                        // EXPLICIT ERROR FORMATTING
-                        resultString = `[SYSTEM ERROR]: ${execResult.message}`;
-                        logToUi(`❌ [${name}] Error: ${execResult.message}`);
-                    }
-
-                    // --- 【Anti-Loop】重复错误检测机制 ---
-                    const isError = execResult.type === 'ERROR' || resultString.startsWith('Error:') || resultString.startsWith('[SYSTEM ERROR]:');
-                    
-                    if (isError) {
-                        const errorKey = resultString.trim(); // 使用错误内容作为Key
-                        const currentCount = (errorTracker.get(errorKey) || 0) + 1;
-                        errorTracker.set(errorKey, currentCount);
-
-                        // 阈值：如果同一个错误出现了 2 次以上 (失败 -> 重试 -> 又失败)
-                        if (currentCount >= 2) {
-                            const originalError = resultString;
-                            // 强制篡改返回给 Agent 的结果，变成一段指令
-                            resultString = `
-[SYSTEM INTERVENTION - ANTI-LOOP / 系统防死循环介入]
-⚠️ 检测到您已连续 ${currentCount} 次触发相同的错误 (Command: ${name})。
-⛔️ 系统已屏蔽本次原始报错，防止您进入死循环。
-
-请严格执行以下指令：
-1. **立刻停止** 尝试再次执行该工具。
-2. **不要** 试图换个参数继续试错（这通常是无效的）。
-3. **向用户报告错误**：请用自然语言告诉用户发生了什么错误，并简要解释原因。
-4. **结束当前任务**。
-
-原始错误信息摘要: ${originalError.slice(0, 200)}...
-`.trim();
-                            // 在 UI 上也提示一下
-                            logToUi(`🚫 [Anti-Loop] 检测到重复错误 (${currentCount}次)，已强制打断 Agent 重试。`);
-                        }
-                    }
-
-                    // Store the ID from the CALL so the response matches
-                    functionResponses.push({ functionResponse: { name, id, response: { result: resultString } } });
-                }
-
-                if (signal.aborted) break;
-
-                // Finalize Message with RawParts (Critical for Context)
-                useAgentStore.getState().updateCurrentSession(session => ({
-                    ...session,
-                    messages: session.messages.map(m => m.id === toolMsgId ? { 
-                        ...m, 
-                        text: streamedLog.trim() || '✅ 执行完成', 
-                        rawParts: functionResponses // Attach tool outputs for next turn
-                    } : m),
-                    lastModified: Date.now()
-                }));
-
-            } else {
-                keepGoing = false; // No tools called, done.
-            }
-        }
-        
-        // --- Loop Limit Safety Valve ---
-        if (keepGoing && loopCount >= MAX_LOOPS && !signal.aborted) {
-            addMessage({ 
-                id: generateId(), 
-                role: 'system', 
-                text: '⚠️ 【系统保护】任务自动终止：已达到最大工具调用轮数限制 (Max Loops)。\n\n这通常是因为 Agent 陷入了重复尝试或死循环。建议：\n1. 请检查您的指令是否过于模糊。\n2. 尝试手动分步执行任务。', 
-                timestamp: Date.now() 
-            });
-        }
-
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
-             addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now() });
-        } else {
-             console.error(error);
-             addMessage({ id: generateId(), role: 'system', text: 'Agent Error: ' + (error instanceof Error ? error.message : 'Unknown'), timestamp: Date.now() });
-        }
-    } finally {
-        setLoading(false);
-        abortControllerRef.current = null;
-    }
-  }, [currentSessionId, files, project, activeFile, tools, aiConfig, addMessage, addPendingChange, setLoading, setTodos, editMessageContent]);
-
-  // --- 6. Stop Function ---
-  const stopGeneration = useCallback(() => {
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        setLoading(false); // Force state reset immediately for UI responsiveness
-    }
-  }, [setLoading]);
-
-  // --- 7. Interaction Handlers ---
+  // --- 5. 交互处理 (UI Handlers) ---
 
   const sendMessage = useCallback(async (text: string) => {
-    // Only allow sending if we have a valid session
     if (!currentSessionId) return;
-
-    // IMPORTANT: We do NOT define metadata here anymore to avoid clutter.
-    // The "snapshot" is now taken at the moment of API call inside processTurn.
-    const userMsg: ChatMessage = { 
-        id: generateId(), 
-        role: 'user', 
-        text, 
-        timestamp: Date.now()
-    };
-    addMessage(userMsg);
-    
-    // Defer the turn processing to ensure store update is processed
-    setTimeout(() => processTurn(), 0);
-  }, [addMessage, processTurn, currentSessionId]);
+    addMessage({ id: generateId(), role: 'user', text, timestamp: Date.now() });
+    setTimeout(() => engine.processTurn(), 0);
+  }, [addMessage, engine, currentSessionId]);
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);
-      setTimeout(() => processTurn(), 0);
-  }, [deleteMessagesFrom, processTurn]);
+      setTimeout(() => engine.processTurn(), 0);
+  }, [deleteMessagesFrom, engine]);
 
   const editUserMessage = useCallback(async (messageId: string, newText: string) => {
       editMessageContent(messageId, newText);
       deleteMessagesFrom(messageId, false);
-      setTimeout(() => processTurn(), 0);
-  }, [editMessageContent, deleteMessagesFrom, processTurn]);
+      setTimeout(() => engine.processTurn(), 0);
+  }, [editMessageContent, deleteMessagesFrom, engine]);
 
   return {
     messages: currentSession?.messages || [],
     isLoading,
     sendMessage,
-    stopGeneration, // Export
+    stopGeneration: engine.stopGeneration,
     regenerateMessage, 
     editUserMessage,
     todos,
-    sessions: projectSessions, // Return filtered sessions
+    sessions: projectSessions,
     currentSessionId,
-    createNewSession: handleCreateSession, // Use wrapper
+    createNewSession: handleCreateSession,
     switchSession,
     deleteSession,
     aiConfig,
@@ -492,6 +137,6 @@ export const useAgent = (
     pendingChanges,
     approveChange,
     rejectChange,
-    tokenUsage // Export token estimation
+    tokenUsage
   };
 };

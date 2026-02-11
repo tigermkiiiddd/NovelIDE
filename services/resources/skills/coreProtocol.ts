@@ -1,4 +1,7 @@
 
+import { FileNode, ProjectMeta, FileType, TodoItem } from '../../../types';
+import { getFileTreeStructure, getNodePath } from '../../fileSystem';
+
 // 核心 Agent 协议 - 强调 IDE 功能性 (职能层)
 // 优化：彻底移除人设扮演，强化工具属性和被动响应机制
 export const DEFAULT_AGENT_SKILL = `---
@@ -8,7 +11,7 @@ tags: ["System", "Protocol"]
 ---
 
 {
-  "protocol": "IDE智能辅助协议 (v5.3 - 颗粒度增强版)",
+  "protocol": "IDE智能辅助协议 (v5.4 - 精简去重版)",
   "identity_core": {
     "role": "NovelGenie IDE 内置的智能写作辅助系统",
     "tone": "专业、理性、高效、客观。禁止进行任何形式的角色扮演 (No Roleplay)。",
@@ -20,9 +23,7 @@ tags: ["System", "Protocol"]
     "原则二：【被动响应】严禁在用户仅打招呼（如“你好”）或闲聊时自动执行文件重命名、移动或删除操作。仅在用户明确要求“整理项目”或“检查规范”时才执行维护任务。",
     "原则三：【工具节制】在对话初期，除非用户提问涉及项目具体内容，否则不要盲目调用 listFiles 或 readFile。",
     "原则四：【模板严守】创建档案/大纲时，必须读取并遵循 '99_创作规范' 中的模板。",
-    "原则五：【完整性红线】使用 \`updateFile\` 时严禁省略原文。任何 '// ...' 或 '...' 都会导致用户数据丢失。如需局部修改，必须使用 \`patchFile\`。",
-    "原则六：【闭环记录】正文完成后，主动提示用户是否需要更新世界线记录。",
-    "原则七：【总纲不省略】在生成全书总纲时，必须逐章列出（如第1章、第2章...）。**严禁合并章节**（如 '第10-20章'）。跨章节的长剧情请用 '标题(1)', '标题(2)' 区分。"
+    "原则五：【闭环记录】正文完成后，主动提示用户是否需要更新世界线记录。"
   ],
   "naming_convention_recommendations": {
     "outline": "'03_剧情大纲/卷[X]_章[X]_细纲.md'",
@@ -44,29 +45,14 @@ tags: ["System", "Protocol"]
   }
 }`;
 
-export const constructSystemPrompt = (
-    files: any[],
-    project: any,
-    activeFile: any,
-    todos: any[]
-): string => {
-    // Note: This implementation is actually inside services/agent/tools/promptBuilder.ts
-    // but the DEFAULT_AGENT_SKILL string above is imported by it.
-    // The ABSOLUTE_PHYSICS_TEXT below is usually appended in promptBuilder.ts.
-    // We update it here for reference or if this file is used to generate the prompt text directly.
-    return ""; 
-};
-
-// Supplementary Prompt Injection for promptBuilder.ts
-// Use this to verify the text matches the promptBuilder.ts update intention
 export const ABSOLUTE_PHYSICS_TEXT = `
 ==================================================
 【🚫 绝对物理规则 (ABSOLUTE PHYSICS)】
 > 这些是这个世界的底层物理法则，Agent 无法违反。
 
-1. **文字 $\\neq$ 魔法**：
+1. **文字 $\\neq$ 魔法 (No Hallucinations)**：
    - ❌ 错误行为：在对话中说 "我已经把大纲写进文件了"，但实际上没有调用工具。
-   - ✅ 正确行为：调用 \`createFile\` 或 \`updateFile\` 工具。
+   - ✅ 正确行为：任何文件操作都**必须**显式调用 \`createFile\` 或 \`updateFile\` 等工具。
 
 2. **数据完整性铁律 (Data Integrity Law)**：
    - **绝对禁止** 在 \`updateFile\` 中使用省略号（如 \`// ... rest of code\` 或 \`<!-- unchanged -->\`）。这会导致文件被截断，用户会丢失所有未包含的代码。
@@ -99,3 +85,144 @@ export const ABSOLUTE_PHYSICS_TEXT = `
        - 第12章：围攻黑木崖(3) - [具体梗概]
    - 如果用户请求生成的章节太多（如100章），请主动**分批次**生成（例如先生成前20章），而不是压缩内容。
 `;
+
+// Helper to extract summary from file nodes for Emergent Context
+const extractFolderSummary = (files: FileNode[], folderName: string): string => {
+    const folder = files.find(f => f.name.includes(folderName) && f.type === FileType.FOLDER);
+    if (!folder) return "(暂无信息)";
+
+    const children = files.filter(f => f.parentId === folder.id && f.type === FileType.FILE);
+    if (children.length === 0) return "(暂无文件)";
+
+    return children.map(f => {
+        const metaSummary = f.metadata?.summarys?.[0];
+        // If no metadata summary, take first 50 chars of content
+        const contentPreview = !metaSummary && f.content 
+            ? f.content.replace(/[#\n]/g, ' ').substring(0, 50) + "..." 
+            : "";
+        
+        return `- ${f.name.replace('.md', '')}: ${metaSummary || contentPreview || "(无摘要)"}`;
+    }).join('\n');
+};
+
+export const constructSystemPrompt = (
+    files: FileNode[],
+    project: ProjectMeta | undefined,
+    activeFile: FileNode | null,
+    todos: TodoItem[]
+): string => {
+    // --- 1. 变量组装 (Variable Assembly) ---
+    const skillFolder = files.find(f => f.name === '98_技能配置');
+    
+    // 1.1 Resolve Agent Core Protocol
+    let agentFile = skillFolder ? files.find(f => f.parentId === skillFolder.id && f.name === 'agent_core.md') : null;
+    if (!agentFile) agentFile = files.find(f => f.name === 'agent_core.md');
+    // Prefer file content if edited by user, otherwise use default
+    const agentInstruction = agentFile?.content || DEFAULT_AGENT_SKILL;
+
+    // 1.2 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
+    let emergentSkillsData = "(无额外技能)";
+    let subSkillFolder = files.find(f => f.name === 'subskill');
+    if (!subSkillFolder && skillFolder) {
+        subSkillFolder = files.find(f => f.parentId === skillFolder.id && f.name === 'subskill');
+    }
+    
+    if (subSkillFolder) {
+        const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE);
+        const validSkills = subSkillFiles.map(f => {
+            const meta = f.metadata || {};
+            if (meta.name && meta.description) {
+                // Modified: Only provide Meta info + Path. Content is NOT loaded to save tokens.
+                const path = getNodePath(f, files);
+                return `- **${meta.name}**\n  - 描述: ${meta.description}\n  - 挂载路径: \`${path}\``;
+            }
+            return null;
+        }).filter(Boolean);
+        
+        if (validSkills.length > 0) {
+            emergentSkillsData = validSkills.join('\n');
+        }
+    }
+
+    // --- 2. 上下文构建 (Context Construction) ---
+    
+    // Project Info
+    const projectInfo = project 
+        ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
+        : "无活跃项目";
+
+    // Emergent World Context (Characters & Settings)
+    // 关键点：直接注入摘要，让 Agent "涌现"出对设定的认知，无需查询
+    const charactersSummary = extractFolderSummary(files, '角色档案');
+    const worldSummary = extractFolderSummary(files, '世界观');
+    
+    // File Context (Folders Only)
+    // 优化：仅提供文件夹结构，减少 Context 占用。Agent 需通过工具查找具体文件。
+    const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
+    const fileTree = getFileTreeStructure(folderOnlyFiles);
+    
+    // Task Context
+    const pendingList = todos.filter(t => t.status === 'pending');
+    const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
+
+    // --- 3. 最终组装 (Final Assembly) ---
+    return `
+${agentInstruction}
+
+${ABSOLUTE_PHYSICS_TEXT}
+
+==================================================
+【交互策略 (Interaction Strategy)】
+1. **专业回复**: 保持专业、客观、高效的写作助手口吻。
+2. **CoT (思维链)**: 在行动前，先在 \`thinking\` 参数或回复文本中简述你的计划。
+3. **工具显式化**: 如果你使用了 \`readFile\` 读取了内容，请在回复中**明确告知用户**你读到了什么关键信息，不要默默读取。
+
+==================================================
+【上下文连贯性协议 (Continuity Protocol)】
+> 为了保证小说剧情的连续性，你必须遵守以下读取规则：
+
+1. **写细纲 (Writing Beats)**:
+   - 必须调用 \`readFile\` 读取**上一章的正文结尾**或**上一章的细纲**。
+
+2. **写正文 (Writing Draft)**:
+   - 必须调用 \`readFile\` 读取对应的**细纲文件**。
+   - 如果是续写，必须先读取**当前文件已有的内容**。
+
+==================================================
+
+【项目全域上下文 (Emergent World Context)】
+> 这些是你脑海中关于这个世界的固有知识，写作时必须保持一致。
+
+## 1. 项目概况
+${projectInfo}
+
+## 2. 角色档案摘要 (Characters)
+${charactersSummary}
+
+## 3. 世界观设定摘要 (World Settings)
+${worldSummary}
+
+==================================================
+
+【当前工作区状态 (Workspace State)】
+
+## 1. 待办事项 (Todos)
+${pendingTodos}
+
+## 2. 可用技能列表 (Available Skills - Lazy Load)
+> 下列技能处于"未激活"状态。如果你判断当前任务需要用到某个特定技能（如涩涩描写、战斗优化），**必须先调用 \`readFile\` 读取对应的挂载路径**，获取具体指令后方可执行。
+${emergentSkillsData}
+
+## 3. 文件目录结构 (File Tree - Folders Only)
+${fileTree}
+> 注意：此视图仅显示文件夹结构，文件已被隐藏以节省空间。
+> - 如需查找特定文件，请使用 \`searchFiles\` 或 \`listFiles\` 工具。
+> - 核心设定（如角色、世界观）的摘要已在上文提供，无需重复读取。
+
+==================================================
+【系统指令 (System Note)】
+1. **文档隔离**：当前用户正在查看的文档内容**未注入**。如果你需要基于当前文档（例如扩写、修改），**必须先调用 \`readFile\`**。
+2. **模板严格执行令**：创建文档时，必须读取并遵循 '99_创作规范' 下的模板。
+3. **强制总结**：回答用户问题后，如果涉及到流程推进，请用一句话总结当前处于 SOP 的哪个阶段，以及下一步建议做什么。
+`;
+};

@@ -3,17 +3,18 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { ChatSession, ChatMessage, TodoItem, PendingChange, AIConfig, DEFAULT_AI_CONFIG } from '../types';
 import { generateId } from '../services/fileSystem';
+import { dbAPI } from '../services/persistence';
 
 interface AgentState {
   // Config
   aiConfig: AIConfig;
   setAiConfig: (config: AIConfig) => void;
 
-  // Sessions (Global list, filtering happens in hooks)
+  // Sessions (Now specific to the ACTIVE project to save memory/storage)
   sessions: ChatSession[];
   currentSessionId: string | null;
   
-  // Active State (Derived from current session usually, but kept hot for UI)
+  // Active State
   isLoading: boolean;
   pendingChanges: PendingChange[];
   
@@ -22,16 +23,15 @@ interface AgentState {
   setReviewingChangeId: (id: string | null) => void;
   
   // Actions
+  loadProjectSessions: (projectId: string) => Promise<void>; // New Action
   createSession: (projectId: string, initialTitle?: string) => string;
   switchSession: (id: string) => void;
   deleteSession: (id: string) => void;
   updateCurrentSession: (updater: (session: ChatSession) => ChatSession) => void;
   
-  // Message Helpers (Shortcuts to update current session)
+  // Message Helpers
   addMessage: (message: ChatMessage) => void;
-  // 新增：修改特定消息内容
   editMessageContent: (messageId: string, newText: string) => void;
-  // 新增：删除指定消息ID之后（包含该消息或不包含）的所有消息，用于回滚上下文
   deleteMessagesFrom: (startMessageId: string, inclusive: boolean) => void;
 
   setLoading: (loading: boolean) => void;
@@ -45,6 +45,11 @@ interface AgentState {
   removePendingChange: (id: string) => void;
   clearPendingChanges: () => void;
 }
+
+// Helper to sync specific project sessions to IDB
+const syncSessionsToDB = (projectId: string, sessions: ChatSession[]) => {
+    dbAPI.saveSessions(`novel-chat-sessions-${projectId}`, sessions);
+};
 
 export const useAgentStore = create<AgentState>()(
   persist(
@@ -60,21 +65,38 @@ export const useAgentStore = create<AgentState>()(
 
       setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
 
+      loadProjectSessions: async (projectId: string) => {
+          set({ sessions: [], currentSessionId: null }); // Clear previous
+          const sessions = await dbAPI.getSessions(`novel-chat-sessions-${projectId}`);
+          if (sessions) {
+              // Sort by last modified desc
+              sessions.sort((a, b) => b.lastModified - a.lastModified);
+              set({ 
+                  sessions,
+                  currentSessionId: sessions.length > 0 ? sessions[0].id : null
+              });
+          }
+      },
+
       createSession: (projectId, initialTitle = '新会话') => {
         const newSession: ChatSession = {
           id: generateId(),
-          projectId, // Bind to project
+          projectId, 
           title: initialTitle,
           messages: [],
           todos: [],
           lastModified: Date.now()
         };
-        set(state => ({
-          sessions: [newSession, ...state.sessions],
+        
+        const newSessions = [newSession, ...get().sessions];
+        set({
+          sessions: newSessions,
           currentSessionId: newSession.id,
-          pendingChanges: [], // Clear pending changes on new session
+          pendingChanges: [],
           reviewingChangeId: null
-        }));
+        });
+        
+        syncSessionsToDB(projectId, newSessions);
         return newSession.id;
       },
 
@@ -83,39 +105,45 @@ export const useAgentStore = create<AgentState>()(
       },
 
       deleteSession: (id) => {
-        set(state => {
-          const newSessions = state.sessions.filter(s => s.id !== id);
-          let newCurrentId = state.currentSessionId;
-          
-          if (state.currentSessionId === id) {
-             // Logic here is tricky because we don't know the project context inside the store easily.
-             // The hook will handle switching to a valid session if current becomes null.
-             newCurrentId = null; 
-          }
-          
-          return { sessions: newSessions, currentSessionId: newCurrentId };
-        });
+        const { sessions, currentSessionId } = get();
+        const sessionToDelete = sessions.find(s => s.id === id);
+        if (!sessionToDelete) return;
+        
+        const projectId = sessionToDelete.projectId;
+        const newSessions = sessions.filter(s => s.id !== id);
+        
+        let newCurrentId = currentSessionId;
+        if (currentSessionId === id) {
+             newCurrentId = newSessions.length > 0 ? newSessions[0].id : null;
+        }
+        
+        set({ sessions: newSessions, currentSessionId: newCurrentId });
+        syncSessionsToDB(projectId, newSessions);
       },
 
       updateCurrentSession: (updater) => {
-        set(state => {
-           if (!state.currentSessionId) return state;
-           const sessionIndex = state.sessions.findIndex(s => s.id === state.currentSessionId);
-           if (sessionIndex === -1) return state;
+        const { currentSessionId, sessions } = get();
+        if (!currentSessionId) return;
+        
+        const sessionIndex = sessions.findIndex(s => s.id === currentSessionId);
+        if (sessionIndex === -1) return;
 
-           const updatedSessions = [...state.sessions];
-           updatedSessions[sessionIndex] = updater(updatedSessions[sessionIndex]);
-           // Sort by last modified
-           updatedSessions.sort((a, b) => b.lastModified - a.lastModified);
-           
-           return { sessions: updatedSessions };
-        });
+        const currentSession = sessions[sessionIndex];
+        const updatedSession = updater(currentSession);
+        
+        const updatedSessions = [...sessions];
+        updatedSessions[sessionIndex] = updatedSession;
+        // Sort
+        updatedSessions.sort((a, b) => b.lastModified - a.lastModified);
+        
+        set({ sessions: updatedSessions });
+        syncSessionsToDB(currentSession.projectId, updatedSessions);
       },
 
       addMessage: (message) => {
         get().updateCurrentSession(session => {
-            // Auto-update title if it's the first user message
             let title = session.title;
+            // First user message sets title
             if (session.messages.length === 0 && message.role === 'user') {
                 title = message.text.slice(0, 15) + (message.text.length > 15 ? '...' : '');
             }
@@ -170,7 +198,6 @@ export const useAgentStore = create<AgentState>()(
 
       removePendingChange: (id) => set(state => ({ 
           pendingChanges: state.pendingChanges.filter(c => c.id !== id),
-          // Clear reviewing state if the removed change was the one being viewed
           reviewingChangeId: state.reviewingChangeId === id ? null : state.reviewingChangeId
       })),
 
@@ -179,24 +206,25 @@ export const useAgentStore = create<AgentState>()(
     {
       name: 'novel-genie-agent-storage',
       storage: createJSONStorage(() => localStorage), 
+      // CRITICAL FIX: Only persist configuration to LocalStorage.
+      // Sessions are now managed manually via IDB to avoid QuotaExceededError.
       partialize: (state) => ({ 
-          sessions: state.sessions, 
-          currentSessionId: state.currentSessionId,
           aiConfig: state.aiConfig
       }),
       merge: (persistedState: any, currentState) => {
-        // Deep merge config to ensure new fields (like openAIBackends) are added to old persisted state
         const mergedConfig = {
             ...DEFAULT_AI_CONFIG,
             ...persistedState.aiConfig,
-            // Ensure backends array exists even if persisted state didn't have it
             openAIBackends: persistedState.aiConfig?.openAIBackends || DEFAULT_AI_CONFIG.openAIBackends,
             activeOpenAIBackendId: persistedState.aiConfig?.activeOpenAIBackendId || DEFAULT_AI_CONFIG.activeOpenAIBackendId
         };
         return {
             ...currentState,
             ...persistedState,
-            aiConfig: mergedConfig
+            aiConfig: mergedConfig,
+            // Ensure sessions are empty on merge, they will be loaded by loadProjectSessions
+            sessions: [],
+            currentSessionId: null
         };
       }
     }
