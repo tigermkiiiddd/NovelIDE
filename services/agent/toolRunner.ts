@@ -1,3 +1,4 @@
+
 import { FileNode, TodoItem, PendingChange, FileType } from '../../types';
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
@@ -184,7 +185,14 @@ export const executeTool = async (
         
         // Log Completion (Append to the start log)
         if (onUiLog && name !== 'call_search_agent') {
-            onUiLog(`✅ ${name} Completed.`);
+            // Truncate output for UI performance if it's too massive (the full result is still returned to the Agent)
+            const MAX_UI_LENGTH = 1500;
+            let displayResult = result;
+            if (result.length > MAX_UI_LENGTH) {
+                displayResult = result.slice(0, MAX_UI_LENGTH) + `\n\n... (Output truncated for UI view, full content loaded to Agent)`;
+            }
+            
+            onUiLog(`✅ ${name} Completed.\n${displayResult}`);
         }
 
         return { type: 'EXECUTED', result };

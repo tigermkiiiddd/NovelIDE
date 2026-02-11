@@ -78,7 +78,7 @@ const ToolLogMessage: React.FC<{
     );
 };
 
-const ToolCallBlock = ({ name, args }: { name: string, args: any }) => (
+const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) => (
     <div className="mt-2 text-xs font-mono bg-black/20 rounded-lg border border-white/10 overflow-hidden shadow-sm">
         <div className="px-3 py-1.5 bg-white/5 border-b border-white/5 text-blue-200 font-semibold flex items-center gap-2">
             <Wrench size={12} className="text-blue-400"/>
