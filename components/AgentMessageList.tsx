@@ -73,6 +73,17 @@ const ToolLogMessage: React.FC<{
                              ))}
                         </div>
                     )}
+                    
+                    {/* Render DEBUG INFO attached to this System Message (Prompt generated AFTER this tool execution) */}
+                    {isDebugMode && metadata?.debugPayload && (
+                        <div className="mt-3 pt-2 border-t border-gray-800 space-y-1">
+                            <div className="text-[10px] text-gray-300/70 font-mono mb-1 flex items-center gap-2">
+                                <Server size={10} /> NEXT TURN INPUT (PROMPT)
+                            </div>
+                            <JsonView data={metadata.debugPayload.systemInstruction} label="RAW: SYSTEM PROMPT" icon={<Cpu size={12}/>} color="text-purple-300" />
+                            <JsonView data={metadata.debugPayload} label="RAW: FULL API HISTORY" icon={<FileJson size={12}/>} color="text-orange-300" />
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -208,6 +219,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             isLoading={isLoading}
                             isDebugMode={isDebugMode}
                         />
+                        {/* Intelligent Regenerate: If previous message was a Model Plan, retry that. Else retry self. */}
                         {onRegenerate && (
                             <div className="ml-2 mb-2">
                                 <button 
@@ -280,11 +292,11 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             </div>
                         )}
 
-                        {/* DEBUG INFO */}
+                        {/* DEBUG INFO - Updated to show Input Metadata */}
                         {isDebugMode && (
                             <div className="mt-3 pt-2 border-t border-white/20 space-y-1">
                                 <div className="text-[10px] text-gray-300/70 font-mono mb-1 px-1 flex items-center gap-2">
-                                    <Server size={10} /> DEBUG MODE
+                                    <Server size={10} /> {isUser ? "INPUT PROMPT (SENT)" : "DEBUG MODE"}
                                 </div>
                                 {msg.metadata?.debugPayload && (
                                     <>
@@ -296,7 +308,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         )}
                     </div>
 
-                    {/* Action Buttons - Logic Simplified */}
+                    {/* Action Buttons */}
                     <div className={`flex items-center gap-2 mt-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ${isUser ? 'justify-end pr-1' : 'justify-start pl-1'}`}>
                         {isUser && onEditMessage && (
                             <button 

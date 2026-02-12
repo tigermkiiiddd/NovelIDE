@@ -12,7 +12,7 @@ export const useAgentContext = (project: ProjectMeta | undefined) => {
     const { 
         aiConfig, sessions, currentSessionId, isSessionsLoading,
         createSession, switchSession, loadProjectSessions,
-        setLoading 
+        setLoading, updateMessageMetadata
     } = store;
 
     const projectId = project?.id;

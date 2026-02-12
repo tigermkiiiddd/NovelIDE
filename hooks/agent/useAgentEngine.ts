@@ -24,7 +24,7 @@ export const useAgentEngine = ({
     activeFile
 }: UseAgentEngineProps) => {
     const { 
-        currentSessionId, addMessage, editMessageContent, 
+        currentSessionId, addMessage, editMessageContent, updateMessageMetadata,
         setLoading, aiServiceInstance 
     } = context;
     
@@ -50,7 +50,7 @@ export const useAgentEngine = ({
             const freshSession = globalSessions.find(s => s.id === currentSessionId);
             const freshTodos = freshSession?.todos || [];
             
-            // 3. 构建 System Prompt
+            // 3. 构建 System Prompt (LLM Input Part 1)
             const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, freshTodos);
             
             let loopCount = 0;
@@ -62,7 +62,7 @@ export const useAgentEngine = ({
                 if (signal.aborted) break;
                 loopCount++;
 
-                // 4.1 准备历史消息
+                // 4.1 准备历史消息 (LLM Input Part 2: History)
                 const currentGlobalSessions = useAgentStore.getState().sessions;
                 const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
                 const currentMessages = currentFreshSession?.messages || [];
@@ -77,7 +77,20 @@ export const useAgentEngine = ({
                     return { role: apiRole === 'system' ? 'user' : apiRole, parts: [{ text: m.text }] };
                 });
 
-                // 4.2 调用 LLM
+                // --- CRITICAL: IMMEDIATE INPUT VISUALIZATION ---
+                // Identify the trigger message for this turn (The User message or the Tool Result message)
+                // and attach the generated prompt/history metadata to it IMMEDIATELY.
+                const lastMsg = currentMessages[currentMessages.length - 1];
+                if (lastMsg) {
+                    const debugPayload = { 
+                        systemInstruction: fullSystemInstruction, 
+                        apiHistoryPreview: apiHistory, // Show FULL history as requested
+                        totalHistoryLength: apiHistory.length
+                    };
+                    updateMessageMetadata(lastMsg.id, { debugPayload });
+                }
+
+                // 4.2 调用 LLM (Network Call)
                 const response = await aiServiceInstance.sendMessage(
                     apiHistory, 
                     '', // 当前消息已在 apiHistory 中
@@ -98,15 +111,7 @@ export const useAgentEngine = ({
                 const textPart = parts.find((p: any) => p.text);
                 const toolParts = parts.filter((p: any) => p.functionCall);
                 
-                // Debug Payload
-                const debugPayload = { 
-                    systemInstruction: fullSystemInstruction, 
-                    apiHistoryPreview: apiHistory.slice(-3), 
-                    totalHistoryLength: apiHistory.length
-                };
-
                 // CRITICAL: Always add a MODEL message if there's any content (text OR tool calls).
-                // This allows the UI to render the "Input" (Arguments) block IMMEDIATELY.
                 if (textPart || toolParts.length > 0) {
                     const displayText = textPart ? textPart.text : '';
                     addMessage({ 
@@ -114,17 +119,13 @@ export const useAgentEngine = ({
                         role: 'model', 
                         text: displayText, 
                         rawParts: parts, // Store RAW parts so UI can render Tool Input Args
-                        timestamp: Date.now(), 
-                        metadata: { debugPayload } 
+                        timestamp: Date.now()
+                        // Removed debugPayload from here since it's now on the INPUT message
                     });
                 }
 
                 // 4.4 处理工具调用
                 if (toolParts.length > 0) {
-                    // UI UX: No artificial delay needed. 
-                    // React batching is broken by the `await` in sendMessage above or generally by async flow.
-                    // But to be 100% safe that the UI paints the "Plan" bubble before the "Execution" bubble appears,
-                    // we yield to the event loop once.
                     await new Promise(resolve => setTimeout(resolve, 0));
 
                     const functionResponses: any[] = [];
@@ -202,7 +203,7 @@ export const useAgentEngine = ({
         }
     }, [
         aiServiceInstance, currentSessionId, files, project, activeFile, 
-        addMessage, editMessageContent, setLoading, runTool, resetErrorTracker
+        addMessage, editMessageContent, setLoading, runTool, resetErrorTracker, updateMessageMetadata
     ]);
 
     const stopGeneration = useCallback(() => {

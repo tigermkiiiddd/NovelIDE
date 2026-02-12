@@ -33,6 +33,7 @@ interface AgentState {
   // Message Helpers
   addMessage: (message: ChatMessage) => void;
   editMessageContent: (messageId: string, newText: string) => void;
+  updateMessageMetadata: (messageId: string, metadata: any) => void; // NEW
   deleteMessagesFrom: (startMessageId: string, inclusive: boolean) => void;
 
   setLoading: (loading: boolean) => void;
@@ -182,6 +183,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         get().updateCurrentSession(session => ({
             ...session,
             messages: session.messages.map(m => m.id === messageId ? { ...m, text: newText } : m),
+            lastModified: Date.now()
+        }));
+      },
+
+      // NEW: Allow updating metadata without changing text content
+      updateMessageMetadata: (messageId, metadata) => {
+        get().updateCurrentSession(session => ({
+            ...session,
+            messages: session.messages.map(m => m.id === messageId ? { ...m, metadata: { ...m.metadata, ...metadata } } : m),
             lastModified: Date.now()
         }));
       },
