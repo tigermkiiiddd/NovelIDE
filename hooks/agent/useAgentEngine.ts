@@ -46,7 +46,6 @@ export const useAgentEngine = ({
 
         try {
             // 2. 获取最新上下文
-            // 注意：必须直接从 Store 获取最新状态，因为闭包中的 state 可能不是最新的
             const globalSessions = useAgentStore.getState().sessions;
             const freshSession = globalSessions.find(s => s.id === currentSessionId);
             const freshTodos = freshSession?.todos || [];
@@ -79,8 +78,6 @@ export const useAgentEngine = ({
                 });
 
                 // 4.2 调用 LLM
-                // if (loopCount === 1) console.log("🤖 [System Prompt]:", fullSystemInstruction);
-
                 const response = await aiServiceInstance.sendMessage(
                     apiHistory, 
                     '', // 当前消息已在 apiHistory 中
@@ -101,17 +98,17 @@ export const useAgentEngine = ({
                 const textPart = parts.find((p: any) => p.text);
                 const toolParts = parts.filter((p: any) => p.functionCall);
                 
-                // Construct Debug Payload for UI
+                // Debug Payload
                 const debugPayload = { 
                     systemInstruction: fullSystemInstruction, 
-                    apiHistoryPreview: apiHistory.slice(-3), // Only show last 3 for perf, full history in raw
+                    apiHistoryPreview: apiHistory.slice(-3), 
                     totalHistoryLength: apiHistory.length
                 };
 
                 // CRITICAL: Always add a MODEL message if there's any content (text OR tool calls).
-                // This allows the UI to render the "Input" (Arguments) block.
+                // This allows the UI to render the "Input" (Arguments) block IMMEDIATELY.
                 if (textPart || toolParts.length > 0) {
-                    const displayText = textPart ? textPart.text : ''; // Don't fake "Action:..." text, let UI handle empty text
+                    const displayText = textPart ? textPart.text : '';
                     addMessage({ 
                         id: generateId(), 
                         role: 'model', 
@@ -124,11 +121,11 @@ export const useAgentEngine = ({
 
                 // 4.4 处理工具调用
                 if (toolParts.length > 0) {
-                    // UI UX OPTIMIZATION:
-                    // Force a small delay between the "Model Planning" (Input) message and the "System Execution" (Output) message.
-                    // This breaks React's render batching and ensures the user sees the Input bubble APPEAR FIRST,
-                    // satisfying the feeling of "Sequential Operations".
-                    await new Promise(resolve => setTimeout(resolve, 50));
+                    // UI UX: No artificial delay needed. 
+                    // React batching is broken by the `await` in sendMessage above or generally by async flow.
+                    // But to be 100% safe that the UI paints the "Plan" bubble before the "Execution" bubble appears,
+                    // we yield to the event loop once.
+                    await new Promise(resolve => setTimeout(resolve, 0));
 
                     const functionResponses: any[] = [];
                     const executingToolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
@@ -140,7 +137,6 @@ export const useAgentEngine = ({
                     // Real-time logger callback
                     const logToUi = (text: string) => {
                         streamedLog += (streamedLog ? '\n' : '') + text;
-                        // Force update the UI message content immediately
                         editMessageContent(toolMsgId, streamedLog);
                     };
 
@@ -150,7 +146,6 @@ export const useAgentEngine = ({
                         text: `⏳ Starting execution: ${executingToolNames}...`, 
                         isToolOutput: true, 
                         timestamp: Date.now(),
-                        // Inject names immediately so UI can show "Executing: readFile..." instead of generic loading
                         metadata: { executingTools: executingToolNames }
                     });
 
@@ -170,8 +165,7 @@ export const useAgentEngine = ({
 
                     if (signal.aborted) break;
 
-                    // 更新 UI 消息状态为完成，并附带 rawParts 以便下一轮 API 调用使用
-                    // IMPORTANT: We must store the functionResponses in rawParts so the NEXT turn includes them in history
+                    // 更新 UI 消息状态为完成
                     useAgentStore.getState().updateCurrentSession(session => ({
                         ...session,
                         messages: session.messages.map(m => m.id === toolMsgId ? { 
