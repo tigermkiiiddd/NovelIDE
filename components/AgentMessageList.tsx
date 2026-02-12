@@ -330,7 +330,8 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             </button>
                         )}
                         
-                        {isModel && onRegenerate && (
+                        {/* Allow regeneration for Model messages OR System Error messages (which are not tool outputs) */}
+                        {((isModel || (!isUser && !msg.isToolOutput))) && onRegenerate && (
                              <button 
                                 onClick={() => onRegenerate(msg.id)}
                                 className="p-2 text-gray-400 bg-gray-800/50 rounded-full hover:text-white hover:bg-gray-700 active:scale-95 transition-all backdrop-blur-sm"
