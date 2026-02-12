@@ -13,6 +13,7 @@ interface AgentState {
   // Sessions (Specific to the ACTIVE project)
   sessions: ChatSession[];
   currentSessionId: string | null;
+  isSessionsLoading: boolean; // Added loading state for sessions
   
   // Active State
   isLoading: boolean;
@@ -75,6 +76,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       sessions: [],
       currentSessionId: null,
+      isSessionsLoading: false, // Initial state
       isLoading: false,
       pendingChanges: [],
       reviewingChangeId: null,
@@ -82,15 +84,19 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
 
       loadProjectSessions: async (projectId: string) => {
-          set({ sessions: [], currentSessionId: null }); // Clear previous
-          const sessions = await dbAPI.getSessions(`novel-chat-sessions-${projectId}`);
-          if (sessions) {
-              // Sort by last modified desc
-              sessions.sort((a, b) => b.lastModified - a.lastModified);
-              set({ 
-                  sessions,
-                  currentSessionId: sessions.length > 0 ? sessions[0].id : null
-              });
+          set({ sessions: [], currentSessionId: null, isSessionsLoading: true }); // Start loading
+          try {
+            const sessions = await dbAPI.getSessions(`novel-chat-sessions-${projectId}`);
+            if (sessions) {
+                // Sort by last modified desc
+                sessions.sort((a, b) => b.lastModified - a.lastModified);
+                set({ 
+                    sessions,
+                    currentSessionId: sessions.length > 0 ? sessions[0].id : null
+                });
+            }
+          } finally {
+            set({ isSessionsLoading: false }); // End loading
           }
       },
 

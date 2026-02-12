@@ -10,7 +10,7 @@ let aiServiceInstance: AIService | null = null;
 export const useAgentContext = (project: ProjectMeta | undefined) => {
     const store = useAgentStore();
     const { 
-        aiConfig, sessions, currentSessionId, 
+        aiConfig, sessions, currentSessionId, isSessionsLoading,
         createSession, switchSession, loadProjectSessions,
         setLoading 
     } = store;
@@ -45,22 +45,23 @@ export const useAgentContext = (project: ProjectMeta | undefined) => {
     // 自动会话同步：确保当前选中的会话有效
     useEffect(() => {
         if (!projectId) return;
-        
-        // Wait for sessions to be loaded
-        if (projectSessions.length === 0 && sessions.length > 0) return; // Might be transitioning
+        if (isSessionsLoading) return; // 等待加载完成，防止数据覆盖
 
+        const hasSessions = projectSessions.length > 0;
         const isCurrentSessionValid = projectSessions.some(s => s.id === currentSessionId);
 
-        if (!isCurrentSessionValid && projectSessions.length > 0) {
-            // Switch to the most recent session
-            switchSession(projectSessions[0].id);
-        } else if (projectSessions.length === 0 && !store.isLoading && currentSessionId === null) {
-            // Create default session if none exist
-            // Check session length 0 to avoid creating dupes during rapid hydration
-            // Removed strict create check to allow manual creation, 
-            // but ensure we don't loop create.
+        if (hasSessions) {
+            if (!isCurrentSessionValid) {
+                // Switch to the most recent session
+                switchSession(projectSessions[0].id);
+            }
+        } else {
+            // 如果加载完成且确实没有会话，则自动创建一个
+            if (currentSessionId === null) {
+                createSession(projectId);
+            }
         }
-    }, [projectId, projectSessions, currentSessionId, switchSession]);
+    }, [projectId, projectSessions, currentSessionId, isSessionsLoading, switchSession, createSession]);
 
     // 封装创建会话方法
     const handleCreateSession = useCallback(() => {
