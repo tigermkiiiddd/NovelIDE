@@ -15,10 +15,11 @@ interface AgentMessageListProps {
 const ToolLogMessage: React.FC<{ 
     text: string; 
     rawParts?: any[]; 
+    metadata?: any;
     isLast: boolean;
     isLoading: boolean;
     isDebugMode?: boolean;
-}> = ({ text, rawParts, isLast, isLoading, isDebugMode }) => {
+}> = ({ text, rawParts, metadata, isLast, isLoading, isDebugMode }) => {
     // 自动展开逻辑：如果是最后一条消息且正在加载，或者刚刚加载完成，默认展开
     const [isExpanded, setIsExpanded] = useState(isLast && isLoading);
 
@@ -30,14 +31,19 @@ const ToolLogMessage: React.FC<{
     }, [isLast, isLoading]);
 
     // 提取工具名称（用于完成后的静态标题）
-    const toolNames = rawParts
+    const finishedToolNames = rawParts
         ?.filter((p: any) => p.functionResponse)
         .map((p: any) => p.functionResponse.name)
         .join(', ');
+
+    // 优先显示完成的工具名，如果没有（正在运行），则显示 metadata 中的执行名
+    const displayToolNames = finishedToolNames || metadata?.executingTools;
     
     // Status Logic
     const isRunning = isLast && isLoading;
-    const titleText = isRunning ? 'System Executing...' : (toolNames ? `System Output: ${toolNames}` : 'System Logs');
+    const titleText = isRunning 
+        ? (displayToolNames ? `Executing: ${displayToolNames}...` : 'System Executing...') 
+        : (displayToolNames ? `System Output: ${displayToolNames}` : 'System Logs');
 
     // Extract tool responses for display
     const toolResponses = rawParts?.filter((p: any) => p.functionResponse).map((p: any) => p.functionResponse);
@@ -217,6 +223,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         <ToolLogMessage 
                             text={msg.text} 
                             rawParts={msg.rawParts} 
+                            metadata={msg.metadata}
                             isLast={isLast}
                             isLoading={isLoading}
                             isDebugMode={isDebugMode}

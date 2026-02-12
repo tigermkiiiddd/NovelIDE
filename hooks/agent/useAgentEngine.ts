@@ -124,7 +124,14 @@ export const useAgentEngine = ({
 
                 // 4.4 处理工具调用
                 if (toolParts.length > 0) {
+                    // UI UX OPTIMIZATION:
+                    // Force a small delay between the "Model Planning" (Input) message and the "System Execution" (Output) message.
+                    // This breaks React's render batching and ensures the user sees the Input bubble APPEAR FIRST,
+                    // satisfying the feeling of "Sequential Operations".
+                    await new Promise(resolve => setTimeout(resolve, 50));
+
                     const functionResponses: any[] = [];
+                    const executingToolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
                     
                     // 创建 UI 上的工具执行状态消息 (System Role)
                     const toolMsgId = generateId();
@@ -140,9 +147,11 @@ export const useAgentEngine = ({
                     addMessage({ 
                         id: toolMsgId, 
                         role: 'system', 
-                        text: '⏳ Initializing Tool Execution...', 
+                        text: `⏳ Starting execution: ${executingToolNames}...`, 
                         isToolOutput: true, 
-                        timestamp: Date.now() 
+                        timestamp: Date.now(),
+                        // Inject names immediately so UI can show "Executing: readFile..." instead of generic loading
+                        metadata: { executingTools: executingToolNames }
                     });
 
                     // 依次执行工具
