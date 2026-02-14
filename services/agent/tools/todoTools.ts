@@ -9,7 +9,7 @@ export const manageTodosTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Explain the plan update strategy.' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：说明待办事项的更新策略。' },
         action: { 
           type: 'string', 
           enum: ['add', 'complete', 'remove', 'update', 'list'], 

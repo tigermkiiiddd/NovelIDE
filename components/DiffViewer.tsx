@@ -7,7 +7,9 @@ import { PendingChange } from '../types';
 interface DiffViewerProps {
   originalContent: string;
   modifiedContent: string;
+  computedContent?: string;  // Current state after applying patches
   pendingChange: PendingChange;
+  processedHunkIds?: string[];  // IDs of hunks that have been processed
   onAcceptHunk: (hunk: DiffHunk) => void;
   onRejectHunk: (hunk: DiffHunk) => void;
   onAcceptAll: () => void;
@@ -18,37 +20,51 @@ interface DiffViewerProps {
 const DiffViewer: React.FC<DiffViewerProps> = ({
   originalContent,
   modifiedContent,
+  computedContent,
   pendingChange,
+  processedHunkIds = [],
   onAcceptHunk,
   onRejectHunk,
   onAcceptAll,
   onRejectAll,
   onDismiss
 }) => {
+  console.log('DiffViewer render', {
+    originalLength: originalContent.length,
+    modifiedLength: modifiedContent.length,
+    visibleHunksCount: 'calculating...'
+  });
+
+  // Compute diff between current state and target state
+  // Use computedContent (after patches) as base so approved hunks disappear
   const diffHunks = useMemo(() => {
-    const rawLines = computeLineDiff(originalContent, modifiedContent);
+    const baseContent = computedContent || originalContent;
+    const rawLines = computeLineDiff(baseContent, modifiedContent);
     return groupDiffIntoHunks(rawLines, 3);
-  }, [originalContent, modifiedContent]);
+  }, [computedContent, originalContent, modifiedContent]);
+
+  // Filter out processed hunks
+  const visibleHunks = useMemo(() => {
+    return diffHunks.filter(h => !processedHunkIds.includes(h.id));
+  }, [diffHunks, processedHunkIds]);
+
+  console.log('DiffViewer visibleHunks', {
+    total: diffHunks.length,
+    visible: visibleHunks.length,
+    processed: processedHunkIds.length
+  });
 
   const hasChanges = useMemo(() => diffHunks.some(h => h.type === 'change'), [diffHunks]);
 
-  // If there are no diffs AT ALL (files are identical) OR if all diffs are "unchanged" (equal) context
-  if (diffHunks.length === 0 || !hasChanges) {
+  // If there are no visible diffs (all hunks processed), show minimal state
+  // Editor will automatically exit diff mode, so just show a subtle completion indicator
+  if (visibleHunks.length === 0 || !visibleHunks.some(h => h.type === 'change')) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4 opacity-70">
-        <div className="p-4 bg-green-500/10 rounded-full text-green-500">
-             <CheckCheck size={48} />
+      <div className="flex items-center justify-center h-full text-gray-500">
+        <div className="flex items-center gap-3 text-sm opacity-50">
+          <CheckCheck size={20} />
+          <span>所有变更已处理，正在返回编辑模式...</span>
         </div>
-        <div className="text-center">
-            <p className="text-lg text-gray-300 font-medium">变更已全部处理</p>
-            <p className="text-sm">文件内容现已与目标一致。</p>
-        </div>
-        <button 
-            onClick={onDismiss || onRejectAll} 
-            className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white font-medium rounded-lg transition-colors shadow-lg shadow-green-900/20 mt-2"
-        >
-            完成并退出
-        </button>
       </div>
     );
   }
@@ -84,7 +100,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
       {/* Diff Content */}
       <div className="flex-1 overflow-auto font-mono text-xs sm:text-sm leading-6 pb-20">
         <div className="flex flex-col gap-0 p-4 max-w-5xl mx-auto">
-            {diffHunks.map((hunk) => (
+            {visibleHunks.map((hunk) => (
                 <div key={hunk.id}>
                     {hunk.type === 'change' ? (
                         <div className="border border-yellow-900/50 rounded-lg overflow-hidden bg-[#161b22] my-4 shadow-lg shadow-black/20">
@@ -95,15 +111,25 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
                                     @@ L{hunk.startLineOriginal} → L{hunk.startLineNew} @@
                                 </span>
                                 <div className="flex gap-2">
-                                    <button 
-                                        onClick={() => onRejectHunk(hunk)}
+                                    <button
+                                        onClick={(e) => {
+                                            console.log('Reject button clicked', hunk.id);
+                                            e.stopPropagation();
+                                            onRejectHunk(hunk);
+                                        }}
                                         className="px-2 py-1 text-[10px] bg-red-900/20 text-red-400 hover:bg-red-900/40 rounded border border-red-900/30 flex items-center gap-1 transition-colors"
+                                        style={{ pointerEvents: 'auto' }}
                                     >
                                         <X size={10} /> 拒绝
                                     </button>
-                                    <button 
-                                        onClick={() => onAcceptHunk(hunk)}
+                                    <button
+                                        onClick={(e) => {
+                                            console.log('Accept button clicked', hunk.id);
+                                            e.stopPropagation();
+                                            onAcceptHunk(hunk);
+                                        }}
                                         className="px-2 py-1 text-[10px] bg-green-900/20 text-green-400 hover:bg-green-900/40 rounded border border-green-900/30 flex items-center gap-1 transition-colors"
+                                        style={{ pointerEvents: 'auto' }}
                                     >
                                         <Check size={10} /> 批准
                                     </button>

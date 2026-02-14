@@ -1,19 +1,22 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useUiStore } from '../stores/uiStore';
-import { DiffHunk, applyPatchInMemory, rejectHunkInNewContent } from '../utils/diffUtils';
+import { DiffHunk, computeLineDiff, groupDiffIntoHunks } from '../utils/diffUtils';
 import { executeApprovedChange } from '../services/agent/toolRunner';
 import { FileText, Eye, Edit3, RotateCcw, RotateCw, Tag, BookOpen, Columns, PanelRightClose, ListOrdered, WrapText, AlignJustify } from 'lucide-react';
 import { getNodePath, findNodeByPath } from '../services/fileSystem';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { parseFrontmatter } from '../utils/frontmatter';
+import { applyPatchQueue, mergePendingChanges, generatePatchId, extractHunkContent, areAllHunksProcessed } from '../utils/patchQueue';
 import DiffViewer from './DiffViewer';
 import { useShallow } from 'zustand/react/shallow';
+import { PendingChange, DiffSessionState, FilePatch } from '../types';
+import { useDiffStore } from '../stores/diffStore';
 
 interface EditorProps {
   className?: string;
@@ -26,8 +29,12 @@ const Editor: React.FC<EditorProps> = ({
   const fileStore = useFileStore();
   const { files, activeFileId, saveFileContent, createFile } = fileStore;
   const activeFile = files.find(f => f.id === activeFileId);
-  
-  // 2. Agent Store (for pending changes)
+
+  // 2. Diff Store (for diff session management)
+  const diffStore = useDiffStore();
+  const { loadDiffSession, saveDiffSession: saveToStore, clearDiffSession } = diffStore;
+
+  // 3. Agent Store (for pending changes)
   const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId } = useAgentStore();
 
   // 3. UI Store (Persisted View State)
@@ -58,34 +65,237 @@ const Editor: React.FC<EditorProps> = ({
   const [internalMode, setInternalMode] = useState<'edit' | 'preview' | 'diff'>('edit');
   const [isDirty, setIsDirty] = useState(false);
   const [cursorStats, setCursorStats] = useState({ line: 1, col: 1 });
-  
+
+  // Diff session state (only used in diff mode)
+  const [diffSession, setDiffSession] = useState<DiffSessionState | null>(null);
+
+  // Flag to prevent content sync during batch operations
+  const isApplyingBatchRef = useRef(false);
+
+  // Track if we've already sent a completion message for current diff session
+  const completionMessageSentRef = useRef<string | null>(null);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
   
   // 5. Detect Pending Change for Active File OR Explicit Review
+  // Only for explicit review mode - normal diff uses mergedPendingChange
   const activePendingChange = useMemo(() => {
       if (reviewingChangeId) {
           return pendingChanges.find(c => c.id === reviewingChangeId) || null;
       }
-      if (!activeFile) return null;
-      const currentPath = getNodePath(activeFile, files);
-      return pendingChanges.find(c => c.fileName === currentPath);
-  }, [activeFile, files, pendingChanges, reviewingChangeId]);
+      // Don't auto-detect for normal diff mode - let mergedPendingChange handle it
+      return null;
+  }, [reviewingChangeId, pendingChanges]);
+
+  // 5.1 Switch to diff mode when reviewing change
+  // This should only trigger when user clicks a pendingChange in AgentChat
+  useEffect(() => {
+    if (activePendingChange && internalMode !== 'diff') {
+      console.log('[Editor] Entering diff mode for pending change', {
+        changeId: activePendingChange.id,
+        fileName: activePendingChange.fileName
+      });
+      setInternalMode('diff');
+    }
+  }, [activePendingChange, internalMode]);
+
+  // 6. Merge multiple pending changes for the same file
+  const mergedPendingChange = useMemo(() => {
+    if (!activeFile) return null;
+
+    const filePath = getNodePath(activeFile, files);
+
+    console.log('mergedPendingChange calculation:', {
+      filePath,
+      allPendingChanges: pendingChanges.map(c => ({ id: c.id, fileName: c.fileName }))
+    });
+
+    const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
+
+    console.log('mergedPendingChange filtered:', {
+      filePath,
+      matchedCount: fileChanges.length,
+      matched: fileChanges.map(c => ({ id: c.id, fileName: c.fileName }))
+    });
+
+    if (fileChanges.length === 0) return null;
+
+    // Compute the merged final content
+    const baseContent = activeFile?.content || '';
+    const finalContent = mergePendingChanges(
+      baseContent,
+      fileChanges.map(c => ({
+        toolName: c.toolName,
+        newContent: c.newContent,
+        args: c.args,
+        timestamp: c.timestamp
+      }))
+    );
+
+    return {
+      id: 'merged',
+      fileName: filePath,
+      originalContent: baseContent,
+      newContent: finalContent,
+      toolName: 'merged' as const,
+      args: {},
+      timestamp: Date.now(),
+      description: `${fileChanges.length}个待审变更`,
+      metadata: { sourceChanges: fileChanges }
+    };
+  }, [activeFile?.id, pendingChanges]);
 
   // Auto-switch to Diff Mode
+  // REMOVED: Auto-switching caused unwanted diff mode activation when switching files
+  // Diff mode should only be triggered by explicit user click on pendingChange
+  // The AgentChat component's handleReviewClick will set reviewingChangeId
+  // which is detected by a separate useEffect below
+
+  // Initialize diff session when entering diff mode
   useEffect(() => {
-      if (activePendingChange) {
-          setInternalMode('diff');
-      } else if (internalMode === 'diff') {
-          setInternalMode('edit');
+    // Exit diff mode - clean up session
+    if (internalMode !== 'diff' && diffSession) {
+      setDiffSession(null);
+      if (activeFile) {
+        clearDiffSession(activeFile.id);  // Clear IndexedDB via diffStore
       }
-  }, [activePendingChange, internalMode]); 
+      return;
+    }
+
+    // Only close session when explicitly done, not when pending changes removed
+    // Keep diff session active based on mode, not on pending changes
+    const initializeSession = async () => {
+      if (!activeFile) return;
+
+      const restoredSession = await loadDiffSession(activeFile.id);
+
+      if (internalMode === 'diff' && !diffSession) {
+        // FIX: Bug #2 - Validate restored session file name matches current file
+        const isValidSession = !restoredSession ||
+                              !restoredSession.sourceFileName ||
+                              restoredSession.sourceFileName === activeFile.name;
+
+        if (!isValidSession) {
+          // File name mismatch - clean up and create new session
+          console.warn('[Editor] Restored session file name mismatch, clearing and creating new session', {
+            restored: restoredSession?.sourceFileName,
+            current: activeFile.name
+          });
+          await saveToStore(activeFile.id, null);
+        }
+
+        // Need to create or restore session
+        const sourceContent = activeFile.content || '';
+        setDiffSession({
+          sourceSnapshot: sourceContent,
+          sourceFileName: activeFile.name,  // Track file name to prevent cross-file diffs
+          patchQueue: isValidSession && restoredSession ? restoredSession.patchQueue : []
+        });
+      }
+    };
+
+    initializeSession();
+  }, [internalMode, activeFile?.id, loadDiffSession, clearDiffSession, saveToStore]);  // Only depend on mode and file, not pending changes
+
+  // Save diff session to IndexedDB whenever it changes
+  useEffect(() => {
+    if (!activeFile) return;
+
+    const saveSession = async () => {
+      if (diffSession) {
+        await saveToStore(activeFile.id, diffSession);
+      } else {
+        await saveToStore(activeFile.id, null);  // Clear when not in diff mode
+      }
+    };
+
+    saveSession();
+  }, [diffSession, activeFile?.id, saveToStore]);
+
+  // Don't clear diff session when pending changes are removed
+  // Keep the session active until explicitly closed or all hunks processed
+  const prevPendingCountRef = useRef(0);
+
+  // Computed content: source snapshot + all applied patches
+  // FIX: Bug #7 - Add patchQueue.length to dependencies to detect changes
+  // Also track the actual diffSession object reference to detect mutations
+  const prevDiffSessionRef = useRef<DiffSessionState | null>(null);
+  const computedContent = useMemo(() => {
+    prevDiffSessionRef.current = diffSession; // Track reference for next comparison
+    if (!diffSession) return content;  // Non-diff mode, return normal content
+    return applyPatchQueue(diffSession);
+  }, [diffSession, diffSession?.patchQueue?.length]);  // Depend on diffSession and patchQueue length
+
+  // Get processed hunk IDs (hunks that have been accepted/rejected)
+  const processedHunkIds = useMemo(() => {
+    if (!diffSession) return [];
+    return diffSession.patchQueue.map(p => p.hunkId);
+  }, [diffSession]);
+
+  // Sync computed content to local state (for display)
+  useEffect(() => {
+    if (diffSession && computedContent !== content) {
+      setContent(computedContent);
+    }
+  }, [computedContent, diffSession]);
+
+  // Immediate save in diff mode (no debounce)
+  // CRITICAL: Disable auto-save in diff mode to prevent conflicts with patch application
+  useEffect(() => {
+    // FIX: Bug #3 - Only auto-save in EDIT mode, not in diff or preview mode
+    // This prevents accidental saves during diff mode state transitions
+    const shouldAutoSave = !diffSession &&
+                          internalMode === 'edit' &&
+                          activeFile &&
+                          computedContent;
+
+    if (shouldAutoSave) {
+      console.log('[Edit Mode] Auto-saving to fileStore', {
+        fileId: activeFile.id,
+        fileName: activeFile.name,
+        contentLength: computedContent.length
+      });
+      saveFileContent(activeFile.id, computedContent);
+    }
+  }, [computedContent, diffSession, activeFile?.id, internalMode]); 
 
   // Sync content from store
   const prevFileIdRef = useRef<string | null>(null);
   useEffect(() => {
       // Logic 1: File Switch
       if (activeFileId !== prevFileIdRef.current) {
+          // CRITICAL: Clear diff session when switching files
+          // This prevents comparing snapshots from different files
+          if (diffSession) {
+              console.log('[File Switch] Clearing diff session', {
+                  prevFileId: prevFileIdRef.current,
+                  newFileId: activeFileId
+              });
+              setDiffSession(null);
+          }
+
+          // FIX: Bug #1 - Clear IndexedDB diff session when switching files
+          // This prevents the new file from restoring the old file's diff session
+          if (prevFileIdRef.current) {
+              console.log('[File Switch] Cleaning up IndexedDB diff session for file:', prevFileIdRef.current);
+              clearDiffSession(prevFileIdRef.current);
+          }
+
+          // FIX: Bug #5 - Clean up pending changes for previous file
+          if (prevFileIdRef.current) {
+              const prevFile = files.find(f => f.id === prevFileIdRef.current);
+              if (prevFile) {
+                  const filePath = getNodePath(prevFile, files);
+                  const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+                  changesToRemove.forEach(c => removePendingChange(c.id));
+                  console.log('[File Switch] Cleaned up pending changes', {
+                      fileName: filePath,
+                      count: changesToRemove.length
+                  });
+              }
+          }
+
           if (activeFile) {
               resetHistory(activeFile.content || '');
           } else {
@@ -97,10 +307,12 @@ const Editor: React.FC<EditorProps> = ({
       } 
       // Logic 2: External Update (e.g. Agent Diff Apply)
       // Check if store content differs from local content.
-      // Since user typing updates store synchronously via saveFileContent, 
+      // Since user typing updates store synchronously via saveFileContent,
       // activeFile.content === content usually.
       // If they differ, it means the store was updated externally (Agent).
-      else if (activeFile && activeFile.content !== content) {
+      // Skip during batch operations to prevent overwriting just-saved content
+      // Also skip in diff mode since diff manages its own sync via computedContent
+      else if (activeFile && activeFile.content !== content && !isApplyingBatchRef.current && internalMode !== 'diff') {
           setContent(activeFile.content || '');
       }
   }, [activeFileId, activeFile, content, resetHistory, setContent]);
@@ -160,9 +372,24 @@ const Editor: React.FC<EditorProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const textarea = e.currentTarget;
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+
+      // Diff mode: Ctrl+Z undoes the last patch
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && diffSession) {
           e.preventDefault();
-          if (e.shiftKey) { if (canRedo) redo(); } 
+
+          setDiffSession(prev => {
+            if (!prev || prev.patchQueue.length === 0) return prev;
+
+            const newQueue = prev.patchQueue.slice(0, -1);  // Remove last patch
+            return { ...prev, patchQueue: newQueue };
+          });
+          return;
+      }
+
+      // Normal mode: standard undo/redo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !diffSession) {
+          e.preventDefault();
+          if (e.shiftKey) { if (canRedo) redo(); }
           else { if (canUndo) undo(); }
           return;
       }
@@ -234,36 +461,345 @@ const Editor: React.FC<EditorProps> = ({
       }
   }, [isDirty]);
 
-  // --- Approval Logic Proxies ---
+  // --- Approval Logic (Patch Queue System) ---
   const handleAcceptHunk = (hunk: DiffHunk) => {
-      if (!activePendingChange) return;
-      let targetFile = activeFile;
-      if (!targetFile && activePendingChange.fileName) targetFile = findNodeByPath(files, activePendingChange.fileName);
-      const baseContent = targetFile ? (targetFile.content || '') : (activePendingChange.originalContent || '');
-      const linesToKeep = hunk.lines.filter(l => l.type !== 'remove').map(l => l.content);
-      const newFileContent = applyPatchInMemory(
-          baseContent, 
-          hunk.startLineOriginal === 0 ? 1 : hunk.startLineOriginal, 
-          hunk.endLineOriginal === 0 ? 0 : hunk.endLineOriginal, 
-          linesToKeep // Pass array directly to avoid ambiguity with empty string join
-      );
-      if (targetFile) saveFileContent(targetFile.id, newFileContent);
-      else if (activePendingChange.toolName === 'createFile') createFile(activePendingChange.fileName, newFileContent);
-      setContent(newFileContent); 
-  };
-  const handleRejectHunk = (hunk: DiffHunk) => {
-      if (!activePendingChange) return;
-      let targetFile = activeFile;
-      if (!targetFile && activePendingChange.fileName) targetFile = findNodeByPath(files, activePendingChange.fileName);
-      const baseContent = targetFile ? (targetFile.content || '') : (activePendingChange.originalContent || '');
-      const revertedNewContent = rejectHunkInNewContent(activePendingChange.newContent || '', baseContent, hunk);
-      updatePendingChange(activePendingChange.id, { newContent: revertedNewContent });
-  };
-  const handleAcceptAll = () => { if (activePendingChange) { const actions = { createFile: fileStore.createFile, updateFile: fileStore.updateFile, patchFile: fileStore.patchFile, deleteFile: fileStore.deleteFile, renameFile: fileStore.renameFile, readFile: fileStore.readFile, searchFiles: fileStore.searchFiles, listFiles: fileStore.listFiles, updateProjectMeta: () => 'Not supported', setTodos: () => {}, trackFileAccess: () => {} }; const result = executeApprovedChange(activePendingChange, actions as any); addMessage({ id: Math.random().toString(), role: 'system', text: `✅ 变更已批准: ${activePendingChange.fileName}\n${result}`, timestamp: Date.now() }); removePendingChange(activePendingChange.id); } };
-  const handleRejectAll = () => { if (activePendingChange) { removePendingChange(activePendingChange.id); addMessage({ id: Math.random().toString(), role: 'system', text: `❌ 变更已拒绝: ${activePendingChange.fileName}`, timestamp: Date.now() }); } };
-  const handleDismiss = () => { if (activePendingChange) { removePendingChange(activePendingChange.id); addMessage({ id: Math.random().toString(), role: 'system', text: `✅ 变更已手动完成: ${activePendingChange.fileName}`, timestamp: Date.now() }); } };
+    console.log('handleAcceptHunk called', { hunkId: hunk.id, hasDiffSession: !!diffSession });
 
-  // --- Render Components ---
+    // Extract new content from hunk
+    const newContent = extractHunkContent(hunk.lines);
+
+    // Add accept patch to queue
+    const newPatch: FilePatch = {
+      id: generatePatchId(),
+      type: 'accept',
+      hunkId: hunk.id,
+      startLineOriginal: hunk.startLineOriginal,
+      endLineOriginal: hunk.endLineOriginal,
+      newContent,
+      timestamp: Date.now()
+    };
+
+    // Handle case where diffSession doesn't exist yet
+    if (!diffSession) {
+      console.warn('handleAcceptHunk: diffSession not initialized, creating temporary session');
+      const targetChange = mergedPendingChange || activePendingChange;
+      const sourceSnapshot = targetChange?.originalContent || '';
+      setDiffSession({
+        sourceSnapshot,
+        patchQueue: [newPatch]
+      });
+      return;
+    }
+
+    console.log('Adding patch to queue', { patchCount: diffSession.patchQueue.length + 1 });
+    setDiffSession(prev => prev ? {
+      ...prev,
+      patchQueue: [...prev.patchQueue, newPatch]
+    } : null);
+  };
+
+  const handleRejectHunk = (hunk: DiffHunk) => {
+    console.log('handleRejectHunk called', { hunkId: hunk.id, hasDiffSession: !!diffSession });
+
+    // Add reject patch to queue (doesn't apply changes)
+    const newPatch: FilePatch = {
+      id: generatePatchId(),
+      type: 'reject',
+      hunkId: hunk.id,
+      startLineOriginal: hunk.startLineOriginal,
+      endLineOriginal: hunk.endLineOriginal,
+      newContent: '',
+      timestamp: Date.now()
+    };
+
+    // Handle case where diffSession doesn't exist yet
+    if (!diffSession) {
+      console.warn('handleRejectHunk: diffSession not initialized, creating temporary session');
+      const targetChange = mergedPendingChange || activePendingChange;
+      const sourceSnapshot = targetChange?.originalContent || '';
+      setDiffSession({
+        sourceSnapshot,
+        patchQueue: [newPatch]
+      });
+      return;
+    }
+
+    console.log('Adding reject patch to queue', { patchCount: diffSession.patchQueue.length + 1 });
+    setDiffSession(prev => prev ? {
+      ...prev,
+      patchQueue: [...prev.patchQueue, newPatch]
+    } : null);
+  };
+  const handleAcceptAll = async () => {
+    console.log('handleAcceptAll called', {
+      hasDiffSession: !!diffSession,
+      hasActiveFile: !!activeFile,
+      activeFileName: activeFile?.name
+    });
+
+    const targetChange = mergedPendingChange || activePendingChange;
+    if (!targetChange) {
+      console.error('handleAcceptAll: No pending change to accept');
+      return;
+    }
+
+    // ===== 新增：处理 activeFile 为 undefined 的情况 =====
+    let fileToSave = activeFile;
+    let fileToSaveId = activeFileId;
+
+    if (!fileToSave && targetChange.fileName) {
+      // 检查文件是否已存在于 fileStore
+      const existingFile = findNodeByPath(files, targetChange.fileName);
+
+      if (existingFile) {
+        // 文件存在，使用它
+        console.log('[handleAcceptAll] Found existing file:', targetChange.fileName);
+        fileToSave = existingFile;
+        fileToSaveId = existingFile.id;
+      } else {
+        // 文件不存在，需要创建
+        console.log('[handleAcceptAll] Creating new file:', targetChange.fileName);
+        const createResult = createFile(targetChange.fileName, targetChange.newContent || '');
+
+        if (createResult.startsWith('Error:')) {
+          console.error('[handleAcceptAll] Failed to create file:', createResult);
+          return;
+        }
+
+        // createFile 内部已经设置了 activeFileId
+        // 由于 React 状态更新是批量的，我们需要从 store 直接获取最新值
+        const newActiveFileId = fileStore.getState().activeFileId;
+        if (newActiveFileId) {
+          fileToSaveId = newActiveFileId;
+          console.log('[handleAcceptAll] Using new activeFileId after creation:', newActiveFileId);
+        }
+      }
+    }
+    // ===== 新增结束 =====
+
+    // Use activeFile if available, otherwise rely on pendingChange metadata
+    const fileName = fileToSave?.name || targetChange.fileName.split('/').pop() || '文件';
+
+    // Initialize diffSession on-the-fly if not exists (fallback for cases where activeFile wasn't ready)
+    if (!diffSession) {
+      console.warn('handleAcceptAll: diffSession not initialized, creating temporary session');
+      const originalContent = targetChange.originalContent || '';
+      setDiffSession({
+        sourceSnapshot: originalContent,
+        patchQueue: []
+      });
+      // Don't return - continue to apply changes
+    }
+
+    // Set batch flag to prevent content sync from overwriting
+    isApplyingBatchRef.current = true;
+
+    // Generate hunks between current computed state and target
+    // This ensures all remaining changes are added to patch queue
+    const currentContent = computedContent;
+    const targetContent = targetChange.newContent || '';
+    const diffLines = computeLineDiff(currentContent, targetContent);
+    const hunks = groupDiffIntoHunks(diffLines, 3);
+
+    // Add all remaining change hunks to patch queue
+    const newPatches: FilePatch[] = [];
+    hunks.forEach(hunk => {
+      if (hunk.type === 'change') {
+        const hunkContent = extractHunkContent(hunk.lines);
+        newPatches.push({
+          id: generatePatchId(),
+          type: 'accept',
+          hunkId: hunk.id,
+          startLineOriginal: hunk.startLineOriginal,
+          endLineOriginal: hunk.endLineOriginal,
+          newContent: hunkContent,
+          timestamp: Date.now()
+        });
+      }
+    });
+
+    console.log('[handleAcceptAll] Adding patches to queue:', { count: newPatches.length });
+
+    // Update patch queue - computedContent will update automatically
+    setDiffSession(prev => prev ? {
+      ...prev,
+      patchQueue: [...prev.patchQueue, ...newPatches]
+    } : {
+      // Fallback: create new session with patches
+      sourceSnapshot: targetChange.originalContent || '',
+      patchQueue: newPatches
+    });
+
+    // 计算最终内容
+    const finalContent = applyPatchQueue({
+      sourceSnapshot: diffSession?.sourceSnapshot || targetChange.originalContent || '',
+      patchQueue: newPatches
+    });
+
+    // ===== 新增：直接保存文件内容 =====
+    if (fileToSaveId && finalContent) {
+      console.log('[handleAcceptAll] Saving file content:', {
+        fileId: fileToSaveId,
+        fileName: fileToSave?.name || targetChange.fileName,
+        contentLength: finalContent.length
+      });
+      saveFileContent(fileToSaveId, finalContent);
+    } else if (!fileToSaveId) {
+      console.warn('[handleAcceptAll] Cannot save: fileToSaveId is undefined');
+    }
+    // ===== 新增结束 =====
+
+    // Remove all pending changes for this file
+    const filePath = fileToSave ? getNodePath(fileToSave, files) : targetChange.fileName;
+    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+
+    console.log('Removing pending changes:', {
+      filePath,
+      count: changesToRemove.length,
+      changes: changesToRemove.map(c => ({ id: c.id, fileName: c.fileName }))
+    });
+
+    changesToRemove.forEach(c => removePendingChange(c.id));
+    console.log('[handleAcceptAll] Pending changes removed');
+
+    // Add system message
+    addMessage({
+      id: Math.random().toString(),
+      role: 'system',
+      text: `✅ 已应用所有待审变更到 ${fileName}`,
+      timestamp: Date.now(),
+      metadata: { logType: 'success' }
+    });
+
+    // Clear diff session after a short delay to allow file save to complete
+    setTimeout(() => {
+      setDiffSession(null);
+      isApplyingBatchRef.current = false;
+      completionMessageSentRef.current = null; // Reset for next session
+    }, 100);
+  };
+
+  const handleRejectAll = () => {
+    if (!activeFile || !diffSession) return;
+    const targetChange = mergedPendingChange || activePendingChange;
+    if (!targetChange) return;
+
+    // Set batch flag
+    isApplyingBatchRef.current = true;
+
+    // Save original content (reject all changes)
+    const originalContent = diffSession.sourceSnapshot;
+    saveFileContent(activeFile.id, originalContent);
+
+    // Remove all pending changes for this file
+    const filePath = getNodePath(activeFile, files);
+    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+    changesToRemove.forEach(c => removePendingChange(c.id));
+
+    // Add system message
+    addMessage({
+      id: Math.random().toString(),
+      role: 'system',
+      text: `❌ 已拒绝所有变更: ${targetChange.fileName}`,
+      timestamp: Date.now(),
+      metadata: { logType: 'info' }
+    });
+
+    // Clear diff session after a short delay
+    setTimeout(() => {
+      setDiffSession(null);
+      isApplyingBatchRef.current = false;
+      completionMessageSentRef.current = null; // Reset for next session
+    }, 100);
+  };
+
+  const handleDismiss = () => {
+    if (!activeFile) return;
+    const targetChange = mergedPendingChange || activePendingChange;
+    if (!targetChange) return;
+
+    // Set batch flag
+    isApplyingBatchRef.current = true;
+
+    // Save current computed content (user manually finished)
+    saveFileContent(activeFile.id, computedContent);
+
+    // Remove all pending changes
+    const filePath = getNodePath(activeFile, files);
+    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+    changesToRemove.forEach(c => removePendingChange(c.id));
+
+    // Add system message
+    addMessage({
+      id: Math.random().toString(),
+      role: 'system',
+      text: `✅ 变更已手动完成: ${targetChange.fileName}`,
+      timestamp: Date.now(),
+      metadata: { logType: 'success' }
+    });
+
+    // Clear diff session after a short delay
+    setTimeout(() => {
+      setDiffSession(null);
+      isApplyingBatchRef.current = false;
+      completionMessageSentRef.current = null; // Reset for next session
+    }, 100);
+  };
+
+  // Auto-exit diff mode when all hunks have been processed
+  useEffect(() => {
+    if (!diffSession || !activeFile) return;
+
+    const targetChange = mergedPendingChange || activePendingChange;
+    if (!targetChange) return;
+
+    // Check if all hunks have been processed
+    const allProcessed = areAllHunksProcessed(
+      diffSession.sourceSnapshot,
+      computedContent,
+      targetChange.newContent || ''
+    );
+
+    if (allProcessed && diffSession.patchQueue.length > 0) {
+      // Generate a unique key for this completion state based on patch queue
+      const completionKey = `${activeFile.id}-${diffSession.patchQueue.length}-${computedContent.length}`;
+
+      // Check if we've already sent a message for this exact state
+      if (completionMessageSentRef.current === completionKey) {
+        return; // Skip, already processed
+      }
+
+      // Mark this completion as processed
+      completionMessageSentRef.current = completionKey;
+
+      // Set batch flag to prevent content sync
+      isApplyingBatchRef.current = true;
+
+      // Apply final result and exit diff mode
+      saveFileContent(activeFile.id, computedContent);
+
+      // Remove all pending changes for this file
+      const filePath = getNodePath(activeFile, files);
+      pendingChanges
+        .filter(c => c.fileName === filePath)
+        .forEach(c => removePendingChange(c.id));
+
+      // Add system message
+      addMessage({
+        id: Math.random().toString(),
+        role: 'system',
+        text: `✅ 已应用 ${diffSession.patchQueue.length} 个变更到 ${activeFile.name}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'success' }
+      });
+
+      // CRITICAL: Immediately exit diff mode - don't show completion screen
+      // The completion screen in DiffViewer is confusing and redundant
+      setDiffSession(null);
+      isApplyingBatchRef.current = false;
+      completionMessageSentRef.current = null; // Reset for next session
+    }
+  }, [diffSession, computedContent, activeFile]);
   const renderEditor = () => (
       <div className="flex h-full w-full relative overflow-hidden">
           {/* Gutter - Only visible if line numbers enabled */}
@@ -399,11 +935,37 @@ const Editor: React.FC<EditorProps> = ({
 
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-        {internalMode === 'diff' && activePendingChange ? (
-             <DiffViewer 
-                originalContent={activeFile ? (activeFile.content || '') : (activePendingChange.originalContent || '')}
-                modifiedContent={activePendingChange.newContent || ''}
-                pendingChange={activePendingChange}
+        {internalMode === 'diff' && (mergedPendingChange || activePendingChange) ? (
+             <DiffViewer
+                originalContent={(() => {
+                    // Determine correct original content based on activeFile and pendingChange
+                    // This prevents comparing snapshots from different files
+                    const targetChange = mergedPendingChange || activePendingChange;
+
+                    if (activeFile && diffSession?.sourceSnapshot) {
+                        // Active file exists - verify snapshot is from this file
+                        if (diffSession.sourceFileName === activeFile.name) {
+                            // Snapshot matches current file - safe to use
+                            return diffSession.sourceSnapshot;
+                        } else {
+                            // Snapshot is from a different file - use current file content
+                            console.warn('[DiffViewer] Snapshot from different file, using file content', {
+                                snapshotFile: diffSession.sourceFileName,
+                                currentFile: activeFile.name
+                            });
+                            return activeFile.content || '';
+                        }
+                    } else if (activeFile) {
+                        return activeFile.content || '';
+                    } else {
+                        // No active file (new file) - use pending change's original content
+                        return targetChange?.originalContent || '';
+                    }
+                })()}
+                modifiedContent={(mergedPendingChange || activePendingChange)?.newContent || ''}
+                computedContent={computedContent}
+                pendingChange={mergedPendingChange || activePendingChange!}
+                processedHunkIds={processedHunkIds}
                 onAcceptHunk={handleAcceptHunk}
                 onRejectHunk={handleRejectHunk}
                 onAcceptAll={handleAcceptAll}

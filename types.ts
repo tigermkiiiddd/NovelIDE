@@ -29,6 +29,7 @@ export interface ChatMessage {
   rawParts?: any[]; // Stores the raw API parts (ContentPart[]) to preserve FunctionCalls/Responses in history
   metadata?: {
     systemPrompt?: string; // The specific system prompt used for this turn
+    logType?: 'error' | 'info' | 'success'; // Distinguish between error and info messages
     [key: string]: any;
   };
 }
@@ -75,6 +76,23 @@ export interface PendingChange {
   newContent: string | null;      // Null for deletions
   timestamp: number;
   description: string; // Summary for UI
+}
+
+// --- Diff Session State (for Editor's patch queue system) ---
+export interface FilePatch {
+  id: string;
+  type: 'accept' | 'reject';
+  hunkId: string;
+  startLineOriginal: number;
+  endLineOriginal: number;
+  newContent: string;
+  timestamp: number;
+}
+
+export interface DiffSessionState {
+  sourceSnapshot: string;      // Snapshot when entering diff mode (immutable baseline)
+  sourceFileName?: string;      // Track which file this snapshot belongs to
+  patchQueue: FilePatch[];       // User approval operation queue
 }
 
 // --- AI Configuration Types ---

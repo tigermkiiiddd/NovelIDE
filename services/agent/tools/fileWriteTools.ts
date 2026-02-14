@@ -9,7 +9,7 @@ export const createFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Why are you creating this file? Does it comply with the naming convention?' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么要创建这个文件？是否符合命名规范？' },
         path: { type: 'string', description: 'The FULL PATH including folder and extension (e.g., "03_剧情大纲/第一章_细纲.md"). The folder must exist.' },
         content: { type: 'string', description: 'The content of the file.' }
       },
@@ -26,7 +26,7 @@ export const updateFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Why use updateFile instead of patchFile? Confirm you have the FULL content.' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么用 updateFile 而不是 patchFile？确认你有完整内容。' },
         path: { type: 'string', description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
         content: { 
           type: 'string', 
@@ -46,7 +46,7 @@ export const patchFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: What lines are you changing and why? Confirm ranges do not overlap.' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：要修改哪些行？为什么？确认范围不重叠。' },
         path: { type: 'string', description: 'The FULL PATH of the file to patch.' },
         edits: {
           type: 'array',
@@ -75,7 +75,7 @@ export const renameFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Why is the rename necessary?' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么需要重命名？' },
         oldPath: { type: 'string', description: 'The current full path (e.g. "05_正文草稿/old.md")' },
         newName: { type: 'string', description: 'The new FILENAME only (e.g. "new.md")' }
       },
@@ -92,7 +92,7 @@ export const deleteFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: { 
-        thinking: { type: 'string', description: 'Internal thought process: Why must this file be deleted? Is it safe?' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么必须删除这个文件？安全吗？' },
         path: { type: 'string', description: 'The full path of the file or folder to delete.' } 
       },
       required: ['thinking', 'path']

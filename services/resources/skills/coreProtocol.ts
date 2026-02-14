@@ -81,11 +81,42 @@ const extractFolderSummary = (files: FileNode[], folderName: string): string => 
     return children.map(f => {
         const metaSummary = f.metadata?.summarys?.[0];
         // If no metadata summary, take first 50 chars of content
-        const contentPreview = !metaSummary && f.content 
-            ? f.content.replace(/[#\n]/g, ' ').substring(0, 50) + "..." 
+        const contentPreview = !metaSummary && f.content
+            ? f.content.replace(/[#\n]/g, ' ').substring(0, 50) + "..."
             : "";
-        
+
         return `- ${f.name.replace('.md', '')}: ${metaSummary || contentPreview || "(无摘要)"}`;
+    }).join('\n');
+};
+
+/**
+ * 提取并格式化用户输入历史
+ * @param messages - 会话消息数组
+ * @returns 格式化后的用户输入历史文本
+ */
+const extractUserInputHistory = (messages: any[] | undefined): string => {
+    if (!messages || messages.length === 0) {
+        return "(暂无用户输入历史)";
+    }
+
+    // 筛选所有用户角色消息
+    const userMessages = messages.filter(m => m.role === 'user');
+
+    if (userMessages.length === 0) {
+        return "(暂无用户输入历史)";
+    }
+
+    // 格式化为带时间戳的列表
+    return userMessages.map((msg, index) => {
+        const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        // 截断过长的消息（可选，避免 token 消耗过大）
+        const text = msg.text.length > 100
+            ? msg.text.substring(0, 100) + '...'
+            : msg.text;
+        return `${index + 1}. [${time}] ${text}`;
     }).join('\n');
 };
 
@@ -93,7 +124,8 @@ export const constructSystemPrompt = (
     files: FileNode[],
     project: ProjectMeta | undefined,
     activeFile: FileNode | null,
-    todos: TodoItem[]
+    todos: TodoItem[],
+    messages?: any[]  // 新增参数：会话消息历史
 ): string => {
     // --- 1. 变量组装 (Variable Assembly) ---
     const skillFolder = files.find(f => f.name === '98_技能配置');
@@ -149,6 +181,9 @@ export const constructSystemPrompt = (
     const pendingList = todos.filter(t => t.status === 'pending');
     const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
 
+    // User Input History (新增)
+    const userInputHistory = extractUserInputHistory(messages);
+
     // --- 3. 最终组装 (Final Assembly) ---
     return `
 ${agentInstruction}
@@ -169,6 +204,10 @@ ${worldSummary}
 ## 3. 当前工作区状态
 - **待办事项**:
 ${pendingTodos}
+
+- **用户意图历史**:
+> 下列记录显示您在本会话中的所有输入，帮助我理解您的整体意图和目标，而不是只关注当前指令。
+${userInputHistory}
 
 - **可用技能库 (Lazy Load)**:
 > 若任务需要特定专业能力（如涩涩扩写、文风去AI化），请先 \`readFile\` 读取对应路径以激活技能。

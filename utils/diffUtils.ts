@@ -1,3 +1,4 @@
+import { diffLines, Change } from 'diff';
 
 export interface DiffLine {
   type: 'equal' | 'add' | 'remove';
@@ -17,81 +18,55 @@ export interface DiffHunk {
 }
 
 /**
- * A simple line-based diff implementation.
- * Returns an array of DiffLine objects describing the changes.
+ * Compute line-based diff using jsdiff library (Myers algorithm)
+ * This is the same algorithm used by VS Code and Git.
  */
 export const computeLineDiff = (original: string, modified: string): DiffLine[] => {
-  const originalLines = original ? original.split(/\r?\n/) : [];
-  const modifiedLines = modified ? modified.split(/\r?\n/) : [];
-
-  // If one is empty, it's a full add or full remove
-  if (originalLines.length === 0 && modifiedLines.length > 0) {
-    return modifiedLines.map((line, i) => ({ type: 'add', content: line, lineNumNew: i + 1 }));
-  }
-  if (modifiedLines.length === 0 && originalLines.length > 0) {
-    return originalLines.map((line, i) => ({ type: 'remove', content: line, lineNumOriginal: i + 1 }));
-  }
-
-  // Use a simple LCS (Longest Common Subsequence) based approach or a simplified greedy match
   const diff: DiffLine[] = [];
-  let i = 0; // cursor for original
-  let j = 0; // cursor for modified
 
-  while (i < originalLines.length || j < modifiedLines.length) {
-    // 1. Equal
-    if (i < originalLines.length && j < modifiedLines.length && originalLines[i] === modifiedLines[j]) {
-      diff.push({ 
-        type: 'equal', 
-        content: originalLines[i], 
-        lineNumOriginal: i + 1, 
-        lineNumNew: j + 1 
-      });
-      i++;
-      j++;
-    } 
-    // 2. Different
-    else {
-      // Look ahead to find synchronization point
-      let foundSync = false;
-      const lookAheadLimit = 50; // Performance safeguard
+  // Handle empty content edge cases
+  const originalContent = original ?? '';
+  const modifiedContent = modified ?? '';
 
-      // Check if modified has an inserted block
-      for (let k = 1; k < lookAheadLimit; k++) {
-        if (j + k < modifiedLines.length && originalLines[i] === modifiedLines[j + k]) {
-          // Found match ahead in modified -> means lines were inserted
-          for (let m = 0; m < k; m++) {
-            diff.push({ type: 'add', content: modifiedLines[j + m], lineNumNew: j + m + 1 });
-          }
-          j += k;
-          foundSync = true;
-          break;
-        }
+  // Use jsdiff's diffLines (implements Myers algorithm)
+  const changes: Change[] = diffLines(originalContent, modifiedContent);
+
+  let origLineNum = 1;
+  let newLineNum = 1;
+
+  for (const change of changes) {
+    const lines = change.value.split(/\r?\n/).filter((_, idx, arr) =>
+      // Filter out empty last element from split
+      idx < arr.length - 1 || arr[idx] !== ''
+    );
+
+    if (change.added) {
+      // Added lines
+      for (const line of lines) {
+        diff.push({
+          type: 'add',
+          content: line,
+          lineNumNew: newLineNum++
+        });
       }
-
-      if (!foundSync) {
-        // Check if original has a deleted block
-        for (let k = 1; k < lookAheadLimit; k++) {
-          if (i + k < originalLines.length && originalLines[i + k] === modifiedLines[j]) {
-             // Found match ahead in original -> means lines were removed
-             for (let m = 0; m < k; m++) {
-               diff.push({ type: 'remove', content: originalLines[i + m], lineNumOriginal: i + m + 1 });
-             }
-             i += k;
-             foundSync = true;
-             break;
-          }
-        }
+    } else if (change.removed) {
+      // Removed lines
+      for (const line of lines) {
+        diff.push({
+          type: 'remove',
+          content: line,
+          lineNumOriginal: origLineNum++
+        });
       }
-
-      if (!foundSync) {
-        if (i < originalLines.length) {
-          diff.push({ type: 'remove', content: originalLines[i], lineNumOriginal: i + 1 });
-          i++;
-        }
-        if (j < modifiedLines.length) {
-           diff.push({ type: 'add', content: modifiedLines[j], lineNumNew: j + 1 });
-           j++;
-        }
+    } else {
+      // Unchanged lines
+      for (const line of lines) {
+        diff.push({
+          type: 'equal',
+          content: line,
+          lineNumOriginal: origLineNum++,
+          lineNumNew: newLineNum++
+        });
       }
     }
   }
@@ -137,8 +112,19 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
         const firstNew = currentHunkLines.find(l => l.lineNumNew !== undefined);
         const lastNew = [...currentHunkLines].reverse().find(l => l.lineNumNew !== undefined);
 
+        // Generate stable ID based on content hash
+        const contentForId = currentHunkLines
+            .map(l => `${l.type === 'add' ? '+' : l.type === 'remove' ? '-' : ' '}${l.content}`)
+            .join('|');
+        let hash = 0;
+        for (let i = 0; i < contentForId.length; i++) {
+            hash = ((hash << 5) - hash) + contentForId.charCodeAt(i);
+            hash |= 0;
+        }
+        const stableId = `hunk_${Math.abs(hash).toString(36)}`;
+
         hunks.push({
-            id: Math.random().toString(36).substring(7),
+            id: stableId,
             lines: [...currentHunkLines],
             startLineOriginal: firstOriginal?.lineNumOriginal || 0,
             endLineOriginal: lastOriginal?.lineNumOriginal || 0,

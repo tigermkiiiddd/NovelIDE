@@ -2,24 +2,23 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench, ArrowRight, Brain, AlertOctagon } from 'lucide-react';
 import { ChatMessage } from '../types';
+import APIInputView from './APIInputView';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
   isLoading: boolean;
-  isDebugMode?: boolean;
   onRegenerate?: (id: string) => void;
   onEditMessage?: (id: string, newText: string) => void;
 }
 
 // --- Internal Component: Collapsible Tool Log (Output) ---
-const ToolLogMessage: React.FC<{ 
-    text: string; 
-    rawParts?: any[]; 
+const ToolLogMessage: React.FC<{
+    text: string;
+    rawParts?: any[];
     metadata?: any;
     isLast: boolean;
     isLoading: boolean;
-    isDebugMode?: boolean;
-}> = ({ text, rawParts, metadata, isLast, isLoading, isDebugMode }) => {
+}> = ({ text, rawParts, metadata, isLast, isLoading }) => {
     const [isExpanded, setIsExpanded] = useState(isLast && isLoading);
 
     useEffect(() => {
@@ -35,19 +34,19 @@ const ToolLogMessage: React.FC<{
 
     const displayToolNames = finishedToolNames || metadata?.executingTools;
     const isRunning = isLast && isLoading;
-    const titleText = isRunning 
-        ? (displayToolNames ? `Executing: ${displayToolNames}...` : 'System Executing...') 
-        : (displayToolNames ? `System Output: ${displayToolNames}` : 'System Logs');
+    const titleText = isRunning
+        ? (displayToolNames ? `工具执行中: ${displayToolNames}...` : '系统执行中...')
+        : (displayToolNames ? `工具执行结果: ${displayToolNames}` : '系统日志');
 
     const toolResponses = rawParts?.filter((p: any) => p.functionResponse).map((p: any) => p.functionResponse);
 
     return (
         <div className="w-full max-w-[95%] sm:max-w-[85%] my-2">
-            <button 
+            <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className={`flex items-center gap-2 w-full border rounded-lg px-3 py-2 text-xs font-mono transition-colors text-left ${
                     isRunning
-                        ? 'bg-blue-900/20 border-blue-500/30 text-blue-300' 
+                        ? 'bg-blue-900/20 border-blue-500/30 text-blue-300'
                         : 'bg-gray-800/80 border-gray-700/50 text-gray-400 hover:bg-gray-800'
                 }`}
             >
@@ -59,30 +58,28 @@ const ToolLogMessage: React.FC<{
                 )}
                 <span className="truncate flex-1 font-mono opacity-90">{titleText}</span>
             </button>
-            
+
             {isExpanded && (
                 <div className="mt-1 bg-gray-950 border border-gray-800 rounded-lg p-3 text-gray-300 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
                     <div className="whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {text || <span className="text-gray-600 italic">Initializing execution environment...</span>}
+                        {text || <span className="text-gray-600 italic">初始化执行环境...</span>}
                     </div>
-                    {isDebugMode && toolResponses && toolResponses.length > 0 && (
+                    {toolResponses && toolResponses.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-800">
-                             <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">Detailed Tool Outputs (Debug)</div>
+                             <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">详细工具输出</div>
                              {toolResponses.map((tr: any, idx: number) => (
-                                 <JsonView key={idx} data={tr.response} label={`RAW: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
+                                 <JsonView key={idx} data={tr.response} label={`原始输出: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
                              ))}
                         </div>
                     )}
-                    
-                    {/* Render DEBUG INFO attached to this System Message (Prompt generated AFTER this tool execution) */}
-                    {isDebugMode && metadata?.debugPayload && (
-                        <div className="mt-3 pt-2 border-t border-gray-800 space-y-1">
-                            <div className="text-[10px] text-gray-300/70 font-mono mb-1 flex items-center gap-2">
-                                <Server size={10} /> NEXT TURN INPUT (PROMPT)
-                            </div>
-                            <JsonView data={metadata.debugPayload.systemInstruction} label="RAW: SYSTEM PROMPT" icon={<Cpu size={12}/>} color="text-purple-300" />
-                            <JsonView data={metadata.debugPayload} label="RAW: FULL API HISTORY" icon={<FileJson size={12}/>} color="text-orange-300" />
-                        </div>
+
+                    {/* Render API Input for next turn (Prompt generated AFTER this tool execution) */}
+                    {metadata?.debugPayload && (
+                        <APIInputView
+                            systemInstruction={metadata.debugPayload.systemInstruction}
+                            apiHistory={metadata.debugPayload.apiHistoryPreview}
+                            label="下一轮 AI 调用输入"
+                        />
                     )}
                 </div>
             )}
@@ -93,33 +90,36 @@ const ToolLogMessage: React.FC<{
 // --- Tool Call Block (Input Visualization) ---
 const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) => {
     const { thinking, ...restArgs } = args;
-    
+
     return (
         <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
             {/* Header */}
             <div className="px-3 py-2 bg-gray-800 border-b border-gray-700 text-blue-300 font-semibold flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Wrench size={12} className="text-blue-400"/>
-                    <span>Agent Plan: {name}</span>
+                    <span>Agent 计划调用: {name}</span>
                 </div>
-                <span className="text-[10px] text-gray-500 uppercase tracking-wide">INPUT</span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wide">输入参数</span>
             </div>
-            
+
             {/* Thinking Section */}
             {thinking && (
                 <div className="p-3 bg-blue-900/10 border-b border-gray-800 text-gray-300 italic leading-relaxed">
                     <div className="flex items-start gap-2">
                         <Brain size={12} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />
-                        <span className="opacity-90">{thinking}</span>
+                        <div className="flex-1">
+                            <div className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide mb-1">思考</div>
+                            <span className="opacity-90">{thinking}</span>
+                        </div>
                     </div>
                 </div>
             )}
 
             {/* Arguments Section */}
             <div className="p-3 text-gray-400 whitespace-pre-wrap overflow-x-auto select-text">
-                 {Object.keys(restArgs).length > 0 
+                 {Object.keys(restArgs).length > 0
                     ? JSON.stringify(restArgs, null, 2)
-                    : <span className="text-gray-600 italic">(No additional arguments)</span>
+                    : <span className="text-gray-600 italic">(无额外参数)</span>
                  }
             </div>
         </div>
@@ -144,10 +144,9 @@ const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; co
     );
 };
 
-const AgentMessageList: React.FC<AgentMessageListProps> = ({ 
-    messages, 
-    isLoading, 
-    isDebugMode = false,
+const AgentMessageList: React.FC<AgentMessageListProps> = ({
+    messages,
+    isLoading,
     onRegenerate,
     onEditMessage
 }) => {
@@ -211,13 +210,12 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             if (msg.isToolOutput) {
                 return (
                     <div key={msg.id} className="flex flex-col items-start w-full animate-in fade-in duration-300">
-                        <ToolLogMessage 
-                            text={msg.text} 
-                            rawParts={msg.rawParts} 
+                        <ToolLogMessage
+                            text={msg.text}
+                            rawParts={msg.rawParts}
                             metadata={msg.metadata}
                             isLast={isLast}
                             isLoading={isLoading}
-                            isDebugMode={isDebugMode}
                         />
                         {/* Intelligent Regenerate: If previous message was a Model Plan, retry that. Else retry self. */}
                         {onRegenerate && (
@@ -262,19 +260,41 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     key={msg.id}
                     className={`group flex flex-col ${isUser ? 'items-end' : 'items-start'} relative`}
                 >
+                    {/* Loop Count Display for Model Messages */}
+                    {isModel && msg.metadata?.loopCount && (
+                        <div className="text-[10px] text-gray-500 mb-1 px-1 font-mono">
+                            轮次 {msg.metadata.loopCount}
+                        </div>
+                    )}
+
                     <div
                     className={`max-w-[95%] sm:max-w-[85%] rounded-2xl px-4 py-3 text-[15px] sm:text-sm shadow-sm relative break-words ${
                         isUser
                         ? 'bg-blue-600 text-white rounded-tr-none'
                         : isSystem
-                        ? 'bg-red-900/20 text-red-200 border border-red-800/50 rounded-lg' // Error/System style
+                        ? msg.metadata?.logType === 'error'
+                            ? 'bg-red-900/20 text-red-200 border border-red-800/50 rounded-lg' // Error style
+                            : msg.metadata?.logType === 'success'
+                            ? 'bg-green-900/20 text-green-200 border border-green-800/50 rounded-lg' // Success style
+                            : 'bg-blue-900/20 text-blue-200 border border-blue-800/50 rounded-lg' // Info style
                         : 'bg-gray-700 text-gray-100 rounded-tl-none'
                     }`}
                     >
-                        {/* Error Icon for System Messages */}
+                        {/* Message Label for System Messages */}
                         {isSystem && !msg.isToolOutput && (
-                             <div className="flex items-center gap-2 mb-1 text-red-400 font-bold text-xs uppercase tracking-wide">
-                                 <AlertOctagon size={12} /> System Message / Error
+                             <div className={`flex items-center gap-2 mb-1 font-bold text-xs uppercase tracking-wide ${
+                                 msg.metadata?.logType === 'error'
+                                 ? 'text-red-400'
+                                 : msg.metadata?.logType === 'success'
+                                 ? 'text-green-400'
+                                 : 'text-blue-400'
+                             }`}>
+                                 {msg.metadata?.logType === 'error' && <AlertOctagon size={12} />}
+                                 {msg.metadata?.logType === 'error'
+                                  ? 'System Error'
+                                  : msg.metadata?.logType === 'success'
+                                  ? 'Success'
+                                  : 'System Log'}
                              </div>
                         )}
 
@@ -291,27 +311,21 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                 ))}
                             </div>
                         )}
-
-                        {/* DEBUG INFO - Updated to show Input Metadata */}
-                        {isDebugMode && (
-                            <div className="mt-3 pt-2 border-t border-white/20 space-y-1">
-                                <div className="text-[10px] text-gray-300/70 font-mono mb-1 px-1 flex items-center gap-2">
-                                    <Server size={10} /> {isUser ? "INPUT PROMPT (SENT)" : "DEBUG MODE"}
-                                </div>
-                                {msg.metadata?.debugPayload && (
-                                    <>
-                                        <JsonView data={msg.metadata.debugPayload.systemInstruction} label="RAW: SYSTEM PROMPT" icon={<Cpu size={12}/>} color="text-purple-300" />
-                                        <JsonView data={msg.metadata.debugPayload} label="RAW: FULL API HISTORY" icon={<FileJson size={12}/>} color="text-orange-300" />
-                                    </>
-                                )}
-                            </div>
-                        )}
                     </div>
+
+                    {/* API Input Display - Always shown for messages with debugPayload */}
+                    {msg.metadata?.debugPayload && (
+                        <APIInputView
+                            systemInstruction={msg.metadata.debugPayload.systemInstruction}
+                            apiHistory={msg.metadata.debugPayload.apiHistoryPreview}
+                            label={isUser ? "发送给 AI 的完整输入" : "API 调用输入"}
+                        />
+                    )}
 
                     {/* Action Buttons */}
                     <div className={`flex items-center gap-2 mt-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity ${isUser ? 'justify-end pr-1' : 'justify-start pl-1'}`}>
                         {isUser && onEditMessage && (
-                            <button 
+                            <button
                                 onClick={() => startEdit(msg)}
                                 className="p-2 text-gray-400 bg-gray-800/50 rounded-full hover:text-white hover:bg-gray-700 active:scale-95 transition-all backdrop-blur-sm"
                                 title="编辑并重新生成"
@@ -319,10 +333,10 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                 <Edit2 size={14} />
                             </button>
                         )}
-                        
+
                         {/* Regenerate allowed for: Model responses OR System Error messages */}
                         {(isModel || isSystem) && onRegenerate && (
-                             <button 
+                             <button
                                 onClick={() => onRegenerate(msg.id)}
                                 className="p-2 text-gray-400 bg-gray-800/50 rounded-full hover:text-white hover:bg-gray-700 active:scale-95 transition-all backdrop-blur-sm"
                                 title="重新生成此回复"
@@ -343,7 +357,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-2 font-mono">Agent Thinking...</div>
+                    <div className="text-xs text-gray-500 mt-2 font-mono">Agent 思考中...</div>
                 </div>
             </div>
         )}

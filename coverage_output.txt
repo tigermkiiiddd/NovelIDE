@@ -1,0 +1,875 @@
+
+> novelgenie-ide@0.0.0 test:coverage
+> jest --coverage
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 98_技能配置
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: agent_core.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: 99_创作规范
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 指南_文风规范.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_项目档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_角色档案.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_全书总纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_章节细纲.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_世界线记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 模板_伏笔记录.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing folder: subskill
+
+      at log (stores/fileStore.ts:169:21)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_涩涩扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_世界观构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_大纲构建.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_角色设计.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_正文扩写.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_编辑审核.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.log
+    [Auto-Restore] Created missing file: 技能_去AI化文风.md
+
+      at log (stores/fileStore.ts:188:21)
+          at Array.forEach (<anonymous>)
+
+  console.warn
+    No files found for project, initializing default structure.
+
+    [0m [90m 30 |[39m       [36mreturn[39m[33m;[39m
+     [90m 31 |[39m     }
+    [31m[1m>[22m[39m[90m 32 |[39m     originalWarn[33m.[39mcall(console[33m,[39m [33m...[39margs)[33m;[39m
+     [90m    |[39m                  [31m[1m^[22m[39m
+     [90m 33 |[39m   }[33m;[39m
+     [90m 34 |[39m })[33m;[39m
+     [90m 35 |[39m[0m
+
+      at console.warn (src/test/setup.ts:32:18)
+      at warn (stores/fileStore.ts:117:15)
+      at Object.<anonymous> (__tests__/unit/stores/fileStore.test.ts:285:7)
+
+  console.error
+    Failed to load files from DB, falling back to initial Error: DB Error
+        at Object.<anonymous> (C:\Users\shinobi\Documents\NovelIDE\__tests__\unit\stores\fileStore.test.ts:295:44)
+        at Promise.finally.completed (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:1557:28)
+        at new Promise (<anonymous>)
+        at callAsyncCircusFn (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:1497:10)
+        at _callCircusTest (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:1007:40)
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at _runTest (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:947:3)
+        at C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:849:7
+        at _runTestsForDescribeBlock (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:862:11)
+        at _runTestsForDescribeBlock (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:857:11)
+        at _runTestsForDescribeBlock (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:857:11)
+        at run (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:761:3)
+        at runAndTransformResultsToJestFormat (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\jestAdapterInit.js:1918:21)
+        at jestAdapter (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-circus\build\runner.js:101:19)
+        at runTestInternal (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-runner\build\testWorker.js:275:16)
+        at runTest (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-runner\build\testWorker.js:343:7)
+        at Object.worker (C:\Users\shinobi\Documents\NovelIDE\node_modules\jest-runner\build\testWorker.js:497:12)
+
+    [0m [90m 20 |[39m       [36mreturn[39m[33m;[39m
+     [90m 21 |[39m     }
+    [31m[1m>[22m[39m[90m 22 |[39m     originalError[33m.[39mcall(console[33m,[39m [33m...[39margs)[33m;[39m
+     [90m    |[39m                   [31m[1m^[22m[39m
+     [90m 23 |[39m   }[33m;[39m
+     [90m 24 |[39m
+     [90m 25 |[39m   console[33m.[39mwarn [33m=[39m ([33m...[39margs) [33m=>[39m {[0m
+
+      at console.error (src/test/setup.ts:22:19)
+      at error (stores/fileStore.ts:112:17)
+      at Object.<anonymous> (__tests__/unit/stores/fileStore.test.ts:298:7)
+
+  console.warn
+    No files found for project, initializing default structure.
+
+    [0m [90m 30 |[39m       [36mreturn[39m[33m;[39m
+     [90m 31 |[39m     }
+    [31m[1m>[22m[39m[90m 32 |[39m     originalWarn[33m.[39mcall(console[33m,[39m [33m...[39margs)[33m;[39m
+     [90m    |[39m                  [31m[1m^[22m[39m
+     [90m 33 |[39m   }[33m;[39m
+     [90m 34 |[39m })[33m;[39m
+     [90m 35 |[39m[0m
+
+      at console.warn (src/test/setup.ts:32:18)
+      at warn (stores/fileStore.ts:117:15)
+      at Object.<anonymous> (__tests__/unit/stores/fileStore.test.ts:298:7)
+
+------------------------------------|---------|----------|---------|---------|----------------------
+File                                | % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s    
+------------------------------------|---------|----------|---------|---------|----------------------
+All files                           |   11.75 |     5.72 |   10.04 |   11.37 |                      
+ NovelIDE                           |   23.33 |       50 |   18.18 |   26.92 |                      
+  App.tsx                           |       0 |        0 |       0 |       0 | 9-28                 
+  index.tsx                         |       0 |        0 |     100 |       0 | 5-11                 
+  types.ts                          |     100 |      100 |     100 |     100 |                      
+  vite.config.ts                    |       0 |      100 |       0 |       0 | 6-7                  
+ NovelIDE/components                |       0 |        0 |       0 |       0 |                      
+  AISettingsForm.tsx                |       0 |        0 |       0 |       0 | 12-315               
+  APIInputView.tsx                  |       0 |        0 |       0 |       0 | 10-34                
+  AgentChat.tsx                     |       0 |        0 |       0 |       0 | 44-260               
+  AgentInput.tsx                    |       0 |        0 |       0 |       0 | 15-149               
+  AgentMessageList.tsx              |       0 |        0 |       0 |       0 | 21-340               
+  AgentTodoList.tsx                 |       0 |        0 |       0 |       0 | 10-36                
+  DiffViewer.tsx                    |       0 |        0 |       0 |       0 | 20-170               
+  Editor.tsx                        |       0 |        0 |       0 |       0 | 25-958               
+  FileExplorer.tsx                  |       0 |        0 |       0 |       0 | 18-263               
+  MainLayout.tsx                    |       0 |        0 |       0 |       0 | 20-305               
+  ProjectManager.tsx                |       0 |        0 |       0 |       0 | 14-467               
+  ProjectOverview.tsx               |       0 |        0 |       0 |       0 | 20-169               
+  ProjectStatistics.tsx             |       0 |      100 |       0 |       0 | 12-15                
+  Sidebar.tsx                       |       0 |        0 |       0 |       0 | 19-91                
+  StatusBar.tsx                     |       0 |        0 |       0 |       0 | 15-24                
+ NovelIDE/hooks                     |       0 |        0 |       0 |       0 |                      
+  useAgent.ts                       |       0 |        0 |       0 |       0 | 12-122               
+  useProjectStats.ts                |       0 |        0 |       0 |       0 | 5-47                 
+  useUndoRedo.ts                    |       0 |        0 |       0 |       0 | 20-102               
+ NovelIDE/hooks/agent               |       0 |        0 |       0 |       0 |                      
+  useAgentContext.ts                |       0 |        0 |       0 |       0 | 8-103                
+  useAgentEngine.ts                 |       0 |        0 |       0 |       0 | 19-223               
+  useAgentTools.ts                  |       0 |        0 |       0 |       0 | 34-150               
+ NovelIDE/services                  |   22.91 |    11.56 |   24.19 |   19.64 |                      
+  fileSystem.ts                     |   85.52 |    51.28 |   83.33 |   87.03 | 46,53-54,92-95       
+  geminiService.ts                  |       0 |        0 |       0 |       0 | 8-227                
+  persistence.ts                    |    4.68 |        0 |       0 |    3.96 | 48-75,83-301         
+  projectService.ts                 |       0 |        0 |       0 |       0 | 13-91                
+  templates.ts                      |     100 |      100 |     100 |     100 |                      
+ NovelIDE/services/agent            |       0 |        0 |       0 |       0 |                      
+  toolRunner.ts                     |       0 |        0 |       0 |       0 | 45-250               
+ NovelIDE/services/agent/tools      |       0 |        0 |       0 |       0 |                      
+  fileReadTools.ts                  |       0 |      100 |     100 |       0 | 6-39                 
+  fileWriteTools.ts                 |       0 |      100 |     100 |       0 | 4-87                 
+  index.ts                          |       0 |      100 |     100 |       0 | 10                   
+  projectTools.ts                   |       0 |      100 |     100 |       0 | 3                    
+  subAgentTools.ts                  |       0 |      100 |     100 |       0 | 3                    
+  todoTools.ts                      |       0 |        0 |       0 |       0 | 4-127                
+ NovelIDE/services/resources        |     100 |      100 |     100 |     100 |                      
+  agentSkill.ts                     |     100 |      100 |     100 |     100 |                      
+  projectTemplates.ts               |     100 |      100 |     100 |     100 |                      
+  writingGuides.ts                  |     100 |      100 |     100 |     100 |                      
+ NovelIDE/services/resources/skills |   20.27 |        0 |       0 |   24.13 |                      
+  characterDesigner.ts              |     100 |      100 |     100 |     100 |                      
+  coreProtocol.ts                   |   11.94 |        0 |       0 |   13.72 | 75-88,98-119,131-188 
+  draftExpander.ts                  |     100 |      100 |     100 |     100 |                      
+  editorReview.ts                   |     100 |      100 |     100 |     100 |                      
+  eroticArchitect.ts                |     100 |      100 |     100 |     100 |                      
+  humanizerStyle.ts                 |     100 |      100 |     100 |     100 |                      
+  outlineArchitect.ts               |     100 |      100 |     100 |     100 |                      
+  worldBuilder.ts                   |     100 |      100 |     100 |     100 |                      
+ NovelIDE/services/subAgents        |       0 |        0 |       0 |       0 |                      
+  searchAgent.ts                    |       0 |        0 |       0 |       0 | 11-227               
+ NovelIDE/stores                    |    48.8 |    42.94 |   33.85 |   50.95 |                      
+  agentStore.ts                     |       0 |        0 |       0 |       0 | 8-297                
+  fileStore.ts                      |   96.33 |    84.81 |   93.47 |   98.15 | 129-130,237          
+  projectStore.ts                   |       0 |        0 |       0 |       0 | 25-119               
+  uiStore.ts                        |       0 |        0 |       0 |       0 | 32-86                
+ NovelIDE/utils                     |    6.07 |      5.5 |    2.94 |    5.72 |                      
+  diffUtils.ts                      |       0 |        0 |       0 |       0 | 24-213               
+  exportUtils.ts                    |       0 |        0 |       0 |       0 | 8-120                
+  frontmatter.ts                    |   56.52 |       60 |      50 |      55 | 20-21,32-42          
+  patchQueue.ts                     |       0 |        0 |       0 |       0 | 19-122               
+------------------------------------|---------|----------|---------|---------|----------------------

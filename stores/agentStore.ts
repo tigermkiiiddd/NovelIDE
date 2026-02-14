@@ -1,8 +1,18 @@
 
 import { create } from 'zustand';
-import { ChatSession, ChatMessage, TodoItem, PendingChange, AIConfig, DEFAULT_AI_CONFIG } from '../types';
-import { generateId } from '../services/fileSystem';
-import { dbAPI } from '../services/persistence';
+
+// 简单的 debounce 工具函数
+const debounce = <T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): ((...args: Parameters<T>) => void) => {
+  let timeout: NodeJS.Timeout | null = null;
+
+  return (...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+};
 
 interface AgentState {
   // Config
@@ -50,7 +60,16 @@ interface AgentState {
 
 // Helper to sync specific project sessions to IDB
 const syncSessionsToDB = (projectId: string, sessions: ChatSession[]) => {
+    console.log('[syncSessionsToDB] 保存会话到 IndexedDB, projectId:', projectId, '会话数量:', sessions.length);
     dbAPI.saveSessions(`novel-chat-sessions-${projectId}`, sessions);
+};
+
+// 创建防抖版本（1秒防抖）
+const debouncedSyncSessionsToDB = debounce(syncSessionsToDB, 1000);
+
+// 全局加载标记，用于防止竞态条件
+export const sessionLoadingState = {
+    isLoading: false
 };
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -85,63 +104,102 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
 
       loadProjectSessions: async (projectId: string) => {
-          set({ sessions: [], currentSessionId: null, isSessionsLoading: true }); // Start loading
+          // 设置全局加载标记
+          sessionLoadingState.isLoading = true;
+          console.log('[loadProjectSessions] 开始加载会话, projectId:', projectId, '当前 isSessionsLoading:', get().isSessionsLoading);
+          set({ isSessionsLoading: true });
+
           try {
             const sessions = await dbAPI.getSessions(`novel-chat-sessions-${projectId}`);
-            if (sessions) {
-                // Sort by last modified desc
+            console.log('[loadProjectSessions] 从 IndexedDB 读取到的会话:', sessions);
+
+            if (sessions && sessions.length > 0) {
+                // 只在有数据时才更新
                 sessions.sort((a, b) => b.lastModified - a.lastModified);
-                set({ 
+
+                // 恢复上次保存的会话ID
+                const savedSessionId = await dbAPI.getCurrentSessionId(projectId);
+                console.log('[loadProjectSessions] 保存的会话ID:', savedSessionId);
+                const sessionId = savedSessionId && sessions.find(s => s.id === savedSessionId)
+                    ? savedSessionId
+                    : sessions[0].id;
+
+                console.log('[loadProjectSessions] 设置会话, sessionId:', sessionId, '会话数量:', sessions.length, '消息数量:', sessions[0]?.messages?.length || 0);
+                set({
                     sessions,
-                    currentSessionId: sessions.length > 0 ? sessions[0].id : null
+                    currentSessionId: sessionId
                 });
+            } else {
+                console.log('[loadProjectSessions] 没有找到会话数据');
+                // 没有数据时，保持 sessions 不变或设置为空数组
+                set({ sessions: [], currentSessionId: null });
             }
+          } catch (error) {
+            console.error('[loadProjectSessions] 加载会话失败:', error);
+            // 加载失败时，保留现有状态或设置为空
+            set({ sessions: [], currentSessionId: null });
           } finally {
+            console.log('[loadProjectSessions] 加载完成, isSessionsLoading = false');
+            sessionLoadingState.isLoading = false; // 重置全局标记
             set({ isSessionsLoading: false }); // End loading
           }
       },
 
       createSession: (projectId, initialTitle = '新会话') => {
+        const currentSessions = get().sessions || [];
         const newSession: ChatSession = {
           id: generateId(),
-          projectId, 
+          projectId,
           title: initialTitle,
           messages: [],
           todos: [],
           lastModified: Date.now()
         };
-        
-        const newSessions = [newSession, ...get().sessions];
+
+        const newSessions = [newSession, ...currentSessions];
         set({
           sessions: newSessions,
           currentSessionId: newSession.id,
           pendingChanges: [],
           reviewingChangeId: null
         });
-        
+
         syncSessionsToDB(projectId, newSessions);
+        // Persist current session ID
+        dbAPI.saveCurrentSessionId(projectId, newSession.id);
         return newSession.id;
       },
 
       switchSession: (id) => {
-        set({ currentSessionId: id, pendingChanges: [], reviewingChangeId: null });
+        const { currentSessionId } = get();
+        // Find the project ID from the current session
+        const sessions = get().sessions;
+        const session = sessions.find(s => s.id === id);
+        if (session) {
+          set({ currentSessionId: id, pendingChanges: [], reviewingChangeId: null });
+          // Persist current session ID
+          dbAPI.saveCurrentSessionId(session.projectId, id);
+        }
       },
 
       deleteSession: (id) => {
         const { sessions, currentSessionId } = get();
         const sessionToDelete = sessions.find(s => s.id === id);
         if (!sessionToDelete) return;
-        
+
         const projectId = sessionToDelete.projectId;
         const newSessions = sessions.filter(s => s.id !== id);
-        
+
         let newCurrentId = currentSessionId;
         if (currentSessionId === id) {
              newCurrentId = newSessions.length > 0 ? newSessions[0].id : null;
         }
-        
+
         set({ sessions: newSessions, currentSessionId: newCurrentId });
         syncSessionsToDB(projectId, newSessions);
+
+        // Update or clear saved session ID
+        dbAPI.saveCurrentSessionId(projectId, newCurrentId);
       },
 
       updateCurrentSession: (updater) => {

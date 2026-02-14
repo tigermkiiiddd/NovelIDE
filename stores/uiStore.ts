@@ -1,6 +1,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { dbAPI } from '../services/persistence';
 
 interface UiState {
   isSidebarOpen: boolean;
@@ -18,7 +19,7 @@ interface UiState {
   setSidebarWidth: (width: number) => void;
   setAgentWidth: (width: number) => void;
   setSplitView: (isSplit: boolean) => void;
-  
+
   // Toggle Actions
   toggleSidebar: () => void;
   toggleChat: () => void;
@@ -26,6 +27,32 @@ interface UiState {
   toggleLineNumbers: () => void;
   toggleWordWrap: () => void;
 }
+
+// Custom IndexedDB storage adapter for Zustand persist
+const indexedDBStorage = {
+  getItem: async (name: string) => {
+    const settings = await dbAPI.getUiSettings();
+    // Zustand expects the stored string value directly
+    return settings ? JSON.stringify(settings) : null;
+  },
+  setItem: async (name: string, value: string) => {
+    // Zustand passes JSON string, parse it before saving
+    const parsed = JSON.parse(value) as UiState;
+    await dbAPI.saveUiSettings({
+      isSidebarOpen: parsed.isSidebarOpen ?? true,
+      isChatOpen: parsed.isChatOpen ?? true,
+      sidebarWidth: parsed.sidebarWidth ?? 256,
+      agentWidth: parsed.agentWidth ?? 384,
+      isSplitView: parsed.isSplitView ?? false,
+      showLineNumbers: parsed.showLineNumbers ?? true,
+      wordWrap: parsed.wordWrap ?? true
+    });
+  },
+  removeItem: async (name: string) => {
+    // Actually delete the stored settings
+    await dbAPI.deleteUiSettings();
+  }
+};
 
 // 创建持久化 Store
 export const useUiStore = create<UiState>()(
@@ -36,7 +63,7 @@ export const useUiStore = create<UiState>()(
       sidebarWidth: 256,
       agentWidth: 384,
       isSplitView: false,
-      
+
       showLineNumbers: true,  // 默认开启行号（方便配合 Agent 精确修改）
       wordWrap: true,         // 默认开启换行（小说模式）
 
@@ -45,7 +72,7 @@ export const useUiStore = create<UiState>()(
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
       setAgentWidth: (width) => set({ agentWidth: width }),
       setSplitView: (isSplit) => set({ isSplitView: isSplit }),
-      
+
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
       toggleChat: () => set((state) => ({ isChatOpen: !state.isChatOpen })),
       toggleSplitView: () => set((state) => ({ isSplitView: !state.isSplitView })),
@@ -53,10 +80,10 @@ export const useUiStore = create<UiState>()(
       toggleWordWrap: () => set((state) => ({ wordWrap: !state.wordWrap })),
     }),
     {
-      name: 'novel-genie-ui-storage', // LocalStorage Key
-      storage: createJSONStorage(() => localStorage),
+      name: 'novel-genie-ui-storage', // Storage Key (for compatibility)
+      storage: indexedDBStorage,
       // 选择性持久化
-      partialize: (state) => ({ 
+      partialize: (state) => ({
         isSidebarOpen: state.isSidebarOpen,
         isChatOpen: state.isChatOpen,
         sidebarWidth: state.sidebarWidth,

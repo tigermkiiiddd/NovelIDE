@@ -16,7 +16,7 @@ const submitReportTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Final reflection: Are you confident in your findings? Is anything missing?' },
+        thinking: { type: 'string', description: '【必须使用中文】最终反思：你对结果有信心吗？有遗漏吗？' },
         summary: { type: 'string', description: '对搜索结果的浓缩简介 (Executive Summary)。必须超过30个中文字符，详细概括关键发现，不能只有一句话。' },
         findings: { 
           type: 'array', 

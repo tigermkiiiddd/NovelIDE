@@ -14,7 +14,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 interface MainLayoutProps {
     projectId: string;
-    onBack: () => void;
+    onBack: () => void | Promise<void>;
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {

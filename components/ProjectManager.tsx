@@ -8,7 +8,7 @@ import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload
 import AISettingsForm from './AISettingsForm';
 
 interface ProjectManagerProps {
-  onSelectProject: (id: string) => void;
+  onSelectProject: (id: string) => void | Promise<void>;
 }
 
 const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {

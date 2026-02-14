@@ -8,7 +8,7 @@ export const updateProjectMetaTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Summary of changes being applied.' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：正在应用的更改摘要。' },
         name: { type: 'string', description: 'New project name (Book Title).' },
         description: { type: 'string', description: 'Project description or core hook.' },
         genre: { type: 'string', description: 'Genre (e.g. Fantasy, Sci-Fi).' },

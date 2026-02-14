@@ -9,15 +9,15 @@ interface ProjectState {
   projects: ProjectMeta[];
   currentProjectId: string | null;
   isLoading: boolean;
-  
+
   // Actions
   loadProjects: () => Promise<void>;
-  selectProject: (id: string | null) => void;
+  selectProject: (id: string | null) => Promise<void>; // Changed to async
   createProject: (name: string, description: string, genre: string, wordsPerChapter: number, targetChapters: number) => Promise<void>;
   updateProject: (id: string, updates: Partial<ProjectMeta>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   refreshProjects: () => Promise<void>;
-  
+
   // Computed helpers
   getCurrentProject: () => ProjectMeta | undefined;
 }
@@ -34,30 +34,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   loadProjects: async () => {
     set({ isLoading: true });
-    
-    // Safety timeout: Ensure we don't spin forever if IDB hangs
-    const timeout = new Promise<void>(resolve => setTimeout(() => {
-        console.warn("Project loading timed out, forcing render.");
-        resolve();
-    }, 2000)); // 2 seconds soft timeout
 
-    const loadLogic = async () => {
-        try {
-            // Removed migrateFromLocalStorage() call to prevent freezing
-            const list = await dbAPI.getAllProjects();
-            list.sort((a, b) => b.lastModified - a.lastModified);
-            set({ projects: list });
-        } catch (e) {
-            console.error("Failed to load projects", e);
+    try {
+        // Load projects
+        const list = await dbAPI.getAllProjects();
+        list.sort((a, b) => b.lastModified - a.lastModified);
+        set({ projects: list });
+
+        // Restore last active project
+        const savedProjectId = await dbAPI.getCurrentProjectId();
+        if (savedProjectId) {
+            set({ currentProjectId: savedProjectId });
         }
-    };
-
-    await Promise.race([loadLogic(), timeout]);
-    set({ isLoading: false });
+    } catch (e) {
+        console.error("Failed to load projects", e);
+    } finally {
+        set({ isLoading: false });
+    }
   },
 
-  selectProject: (id) => {
+  selectProject: async (id) => {
     set({ currentProjectId: id });
+    // Persist to IndexedDB
+    await dbAPI.saveCurrentProjectId(id);
   },
 
   createProject: async (name, description, genre, wordsPerChapter, targetChapters) => {
@@ -99,13 +98,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   deleteProject: async (id) => {
     const { currentProjectId } = get();
-    
+
     set(state => ({
       projects: state.projects.filter(p => p.id !== id),
       currentProjectId: currentProjectId === id ? null : currentProjectId
     }));
 
     await dbAPI.deleteProject(id);
+
+    // If deleting current project, clear saved ID
+    if (currentProjectId === id) {
+      await dbAPI.saveCurrentProjectId(null);
+    }
   },
 
   refreshProjects: async () => {

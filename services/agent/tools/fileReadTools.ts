@@ -11,7 +11,7 @@ export const listFilesTool: ToolDefinition = {
     parameters: { 
       type: 'object', 
       properties: {
-          thinking: { type: 'string', description: 'Internal thought process: Why do you need to list files now? What are you looking for?' }
+          thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么现在需要列出文件？你在寻找什么？' }
       },
       required: ['thinking']
     }
@@ -26,7 +26,7 @@ export const readFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Why are you reading this specific file? What information do you expect to find?' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么要读取这个文件？你期望获取什么信息？' },
         path: { type: 'string', description: 'The FULL PATH of the file (e.g., "05_正文草稿/chapter1.md"). Do not use just the filename.' },
         startLine: { type: 'integer', description: 'Start line number (default 1).' },
         endLine: { type: 'integer', description: 'End line number. If omitted, it defaults to reading 300 lines starting from startLine. Use this to read long files in chunks.' }
@@ -44,7 +44,7 @@ export const searchFilesTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: 'Internal thought process: Why are you searching? What keywords did you choose and why?' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么要搜索？选择了哪些关键词？为什么？' },
         query: { type: 'string', description: 'The search keyword (e.g., "李逍遥", "细纲").' }
       },
       required: ['thinking', 'query']

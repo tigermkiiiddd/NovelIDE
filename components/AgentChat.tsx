@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Bug, Cpu, Download } from 'lucide-react';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
@@ -63,8 +63,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   tokenUsage
 }) => {
   const [showHistory, setShowHistory] = useState(false);
-  const [isDebugMode, setIsDebugMode] = useState(false);
-  
+
   // Use file store to navigate
   const setActiveFileId = useFileStore(state => state.setActiveFileId);
   // Use agent store to set reviewing change
@@ -169,13 +168,6 @@ const AgentChat: React.FC<AgentChatProps> = ({
                     <Download size={18} />
                 </button>
             )}
-            <button 
-                onClick={() => setIsDebugMode(!isDebugMode)} 
-                className={`p-2 rounded-lg transition-colors ${isDebugMode ? 'bg-purple-900/50 text-purple-400' : 'hover:bg-gray-800 text-gray-500'}`}
-                title="开发者调试模式"
-            >
-                <Bug size={18} />
-            </button>
             <button 
                 onClick={() => setShowHistory(!showHistory)} 
                 className={`p-2 rounded-lg transition-colors ${showHistory ? 'bg-blue-600 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
@@ -284,10 +276,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
             )}
 
             <AgentTodoList todos={todos} />
-            <AgentMessageList 
-                messages={messages} 
-                isLoading={isLoading} 
-                isDebugMode={isDebugMode}
+            <AgentMessageList
+                messages={messages}
+                isLoading={isLoading}
                 onRegenerate={onRegenerate}
                 onEditMessage={onEditMessage}
             />

@@ -1,5 +1,5 @@
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useMemo } from 'react';
 import { ChatMessage, FileNode, ProjectMeta, TodoItem } from '../../types';
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
@@ -51,7 +51,13 @@ export const useAgentEngine = ({
             const freshTodos = freshSession?.todos || [];
             
             // 3. 构建 System Prompt (LLM Input Part 1)
-            const fullSystemInstruction = constructSystemPrompt(files, project, activeFile, freshTodos);
+            const fullSystemInstruction = constructSystemPrompt(
+                files,
+                project,
+                activeFile,
+                freshTodos,
+                freshSession?.messages  // 传递会话消息历史
+            );
             
             let loopCount = 0;
             const MAX_LOOPS = 10;
@@ -114,12 +120,13 @@ export const useAgentEngine = ({
                 // CRITICAL: Always add a MODEL message if there's any content (text OR tool calls).
                 if (textPart || toolParts.length > 0) {
                     const displayText = textPart ? textPart.text : '';
-                    addMessage({ 
-                        id: generateId(), 
-                        role: 'model', 
-                        text: displayText, 
+                    addMessage({
+                        id: generateId(),
+                        role: 'model',
+                        text: displayText,
                         rawParts: parts, // Store RAW parts so UI can render Tool Input Args
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        metadata: { loopCount: loopCount } // Add loop count to metadata
                         // Removed debugPayload from here since it's now on the INPUT message
                     });
                 }

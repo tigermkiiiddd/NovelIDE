@@ -17,14 +17,22 @@ export default function App() {
     loadAIConfig();
   }, [loadProjects, loadAIConfig]);
 
+  const handleSelectProject = async (id: string | null) => {
+    await selectProject(id);
+  };
+
+  const handleBack = async () => {
+    await selectProject(null);
+  };
+
   return (
     <>
       {!currentProjectId ? (
-        <ProjectManager onSelectProject={selectProject} />
+        <ProjectManager onSelectProject={handleSelectProject} />
       ) : (
-        <MainLayout 
-             projectId={currentProjectId} 
-             onBack={() => selectProject(null)} 
+        <MainLayout
+             projectId={currentProjectId}
+             onBack={handleBack}
         />
       )}
     </>

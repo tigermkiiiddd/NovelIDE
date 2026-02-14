@@ -4,66 +4,10 @@ import { FileNode, FileType } from '../types';
 import { dbAPI } from '../services/persistence';
 import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
 import { parseFrontmatter } from '../utils/frontmatter';
-import { useProjectStore } from './projectStore';
-import { 
-  DEFAULT_AGENT_SKILL,
-  STYLE_GUIDE_TEMPLATE,
-  PROJECT_PROFILE_TEMPLATE,
-  CHARACTER_CARD_TEMPLATE,
-  OUTLINE_MASTER_TEMPLATE,
-  OUTLINE_CHAPTER_TEMPLATE,
-  SKILL_EROTIC_WRITER,
-  SKILL_WORLD_BUILDER,
-  SKILL_OUTLINE_ARCHITECT,
-  SKILL_CHARACTER_DESIGNER,
-  SKILL_DRAFT_EXPANDER,
-  SKILL_EDITOR_REVIEW,
-  SKILL_HUMANIZER_STYLE
-} from '../services/templates';
+import { FileService } from '../domains/file/fileService';
 
-const TEMPLATE_WORLD_TIMELINE = `---
-summarys: ["此文件为标准的世界线记录模板，提供了表格格式以供复制使用，旨在规范化记录剧情事件与状态变更。"]
-tags: ["模板"]
----
-# 世界线记录
-
-| 章节 | 事件 | 状态变更 | 伏笔 |
-|---|---|---|---|
-`;
-
-const TEMPLATE_CLUES = `---
-summarys: ["此文件为标准的伏笔追踪模板，采用了任务列表的格式，方便作者在创作过程中随时添加和勾选已回收的伏笔。"]
-tags: ["模板"]
----
-# 伏笔记录
-
-- [ ] [章节名] 伏笔内容 (未回收)
-`;
-
-// Define Protected Content Structure (The "Source of Truth" for system integrity)
-const PROTECTED_FILES: Record<string, Record<string, string>> = {
-  '98_技能配置': {
-    'agent_core.md': DEFAULT_AGENT_SKILL
-  },
-  '99_创作规范': {
-    '指南_文风规范.md': STYLE_GUIDE_TEMPLATE,
-    '模板_项目档案.md': PROJECT_PROFILE_TEMPLATE,
-    '模板_角色档案.md': CHARACTER_CARD_TEMPLATE,
-    '模板_全书总纲.md': OUTLINE_MASTER_TEMPLATE,
-    '模板_章节细纲.md': OUTLINE_CHAPTER_TEMPLATE,
-    '模板_世界线记录.md': TEMPLATE_WORLD_TIMELINE,
-    '模板_伏笔记录.md': TEMPLATE_CLUES
-  },
-  'subskill': {
-      '技能_涩涩扩写.md': SKILL_EROTIC_WRITER,
-      '技能_世界观构建.md': SKILL_WORLD_BUILDER,
-      '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
-      '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
-      '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
-      '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
-      '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE
-  }
-};
+// Create FileService instance for domain logic
+const fileService = new FileService(generateId);
 
 export interface BatchEdit {
   startLine: number;
@@ -74,24 +18,25 @@ export interface BatchEdit {
 interface FileState {
   files: FileNode[];
   activeFileId: string | null;
-  
+  currentProjectId: string | null; // Track current project to avoid coupling
+
   // Actions
   loadFiles: (projectId: string) => Promise<void>;
   setActiveFileId: (id: string | null) => void;
-  
+
   // CRUD (Path-based)
   createFile: (path: string, content: string) => string;
   createFileById: (parentId: string, name: string) => void;
   createFolderById: (parentId: string, name: string) => void;
   updateFile: (path: string, content: string) => string;
   saveFileContent: (id: string, content: string) => void;
-  patchFile: (path: string, edits: BatchEdit[]) => string; 
+  patchFile: (path: string, edits: BatchEdit[]) => string;
   readFile: (path: string, startLine?: number, endLine?: number) => string;
   searchFiles: (query: string) => string;
   deleteFile: (pathOrId: string) => string;
   renameFile: (oldPath: string, newPath: string) => string;
   listFiles: () => string;
-  
+
   // Internal Helper
   _saveToDB: () => void;
   _restoreSystemFiles: () => void;
@@ -100,17 +45,18 @@ interface FileState {
 export const useFileStore = create<FileState>((set, get) => ({
   files: [],
   activeFileId: null,
+  currentProjectId: null,
 
   loadFiles: async (projectId: string) => {
     let loadedFiles: FileNode[] | undefined;
-    
+
     try {
         // 1. Fetch from DB
         loadedFiles = await dbAPI.getFiles(projectId);
     } catch (e) {
         console.error("Failed to load files from DB, falling back to initial", e);
     }
-    
+
     // 2. Fallback if empty or failed
     if (!loadedFiles || loadedFiles.length === 0) {
       console.warn("No files found for project, initializing default structure.");
@@ -118,7 +64,7 @@ export const useFileStore = create<FileState>((set, get) => ({
       // Force save to persist this recovery
       dbAPI.saveFiles(projectId, loadedFiles);
     }
-    
+
     let hasChanges = false;
 
     // --- MIGRATION & FIXES ---
@@ -140,82 +86,35 @@ export const useFileStore = create<FileState>((set, get) => ({
         }
         return f;
     });
-    
+
     if (hasChanges) {
        dbAPI.saveFiles(projectId, loadedFiles);
     }
 
-    set({ files: loadedFiles });
-    
+    // Set currentProjectId to avoid coupling with projectStore
+    set({ files: loadedFiles, currentProjectId: projectId });
+
     // Check and restore missing system files
     get()._restoreSystemFiles();
   },
 
   _restoreSystemFiles: () => {
     const { files, _saveToDB } = get();
-    // Clone to avoid mutating state directly in loops before set
-    const updatedFiles = [...files];
-    let hasChanges = false;
 
-    // Helper to ensure folder existence
-    const ensureFolder = (name: string, parentId: string) => {
-        let folder = updatedFiles.find(f => f.name === name && f.parentId === parentId && f.type === FileType.FOLDER);
-        if (!folder) {
-            folder = { id: generateId(), parentId, name, type: FileType.FOLDER, lastModified: Date.now() };
-            updatedFiles.push(folder);
-            hasChanges = true;
-            console.log(`[Auto-Restore] Created missing folder: ${name}`);
-        }
-        return folder;
-    };
+    // Delegate to FileService for domain logic
+    const updatedFiles = fileService.restoreSystemFiles(files);
 
-    // Helper to ensure file existence (and restore content if missing)
-    const ensureFile = (name: string, parentId: string, defaultContent: string) => {
-        const file = updatedFiles.find(f => f.name === name && f.parentId === parentId && f.type === FileType.FILE);
-        if (!file) {
-             updatedFiles.push({ 
-                id: generateId(), 
-                parentId, 
-                name, 
-                type: FileType.FILE, 
-                content: defaultContent, 
-                metadata: parseFrontmatter(defaultContent),
-                lastModified: Date.now() 
-            });
-            hasChanges = true;
-            console.log(`[Auto-Restore] Created missing file: ${name}`);
-        }
-    };
-
-    // 1. Ensure 98_技能配置 & Files
-    const skillFolder = ensureFolder('98_技能配置', 'root');
-    Object.entries(PROTECTED_FILES['98_技能配置']).forEach(([fName, fContent]) => {
-        ensureFile(fName, skillFolder.id, fContent);
-    });
-
-    // 2. Ensure 99_创作规范 & Files
-    const rulesFolder = ensureFolder('99_创作规范', 'root');
-    Object.entries(PROTECTED_FILES['99_创作规范']).forEach(([fName, fContent]) => {
-        ensureFile(fName, rulesFolder.id, fContent);
-    });
-
-    // 3. Ensure subskill & Files
-    const subskillFolder = ensureFolder('subskill', skillFolder.id);
-    Object.entries(PROTECTED_FILES['subskill']).forEach(([fName, fContent]) => {
-        ensureFile(fName, subskillFolder.id, fContent);
-    });
-
-    if (hasChanges) {
-        set({ files: updatedFiles });
-        _saveToDB();
+    // Check if any changes were made
+    if (updatedFiles.length !== files.length) {
+      set({ files: updatedFiles });
+      _saveToDB();
     }
   },
 
   setActiveFileId: (id) => set({ activeFileId: id }),
 
   _saveToDB: () => {
-      const { files } = get();
-      const currentProjectId = useProjectStore.getState().currentProjectId;
+      const { files, currentProjectId } = get();
       if (currentProjectId) {
           dbAPI.saveFiles(currentProjectId, files);
       }
@@ -357,14 +256,19 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB, activeFileId, setActiveFileId, _restoreSystemFiles } = get();
     let targetNode = files.find(f => f.id === pathOrId) || findNodeByPath(files, pathOrId);
     if (!targetNode) return `Error: File not found`;
-    
+
+    // Check delete permission using FileService
+    if (!fileService.canDeleteFile(targetNode)) {
+      return `Error: Cannot delete protected system file "${targetNode.name}"`;
+    }
+
     const idsToDelete = new Set<string>();
     const collectIds = (id: string) => {
         idsToDelete.add(id);
         files.filter(f => f.parentId === id).forEach(child => collectIds(child.id));
     };
     collectIds(targetNode.id);
-    
+
     let newFiles = files.filter(f => !idsToDelete.has(f.id));
     set({ files: newFiles });
     if (activeFileId === targetNode.id) setActiveFileId(null);
@@ -380,7 +284,12 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB, _restoreSystemFiles } = get();
     const file = findNodeByPath(files, oldPath);
     if (!file) return `Error: File not found.`;
-    
+
+    // Check rename permission using FileService
+    if (!fileService.canRenameFile(file)) {
+      return `Error: Cannot rename protected system file "${file.name}"`;
+    }
+
     set(state => ({
         files: state.files.map(f => f.id === file.id ? { ...f, name: newName } : f)
     }));

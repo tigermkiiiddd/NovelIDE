@@ -57,20 +57,20 @@ export const executeTool = async (
     // --- Prepare Logging Data ---
     // Extract Thinking specifically for better visibility
     const { thinking, ...restArgs } = args;
-    
+
     // Construct Log Elements
     const logTimestamp = new Date().toLocaleTimeString();
-    let startLog = `[${logTimestamp}] ▶️ **Invoking**: \`${name}\`\n`;
-    
+    let startLog = `[${logTimestamp}] ▶️ **调用工具**: \`${name}\`\n`;
+
     if (thinking) {
-        startLog += `🧠 **Thinking**: ${thinking}\n`;
+        startLog += `🧠 **思考**: ${thinking}\n`;
     }
-    
+
     if (Object.keys(restArgs).length > 0) {
         const argsJson = JSON.stringify(restArgs, null, 2);
         // Truncate overly long args for the UI log (but keep them in raw metadata)
         const displayArgs = argsJson.length > 500 ? argsJson.substring(0, 500) + '... (truncated)' : argsJson;
-        startLog += `📋 **Params**: \n${displayArgs}\n`;
+        startLog += `📋 **参数**: \n${displayArgs}\n`;
     }
 
     // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
@@ -137,21 +137,21 @@ export const executeTool = async (
             }
 
             const change: PendingChange = { 
-                id: changeId, 
-                toolName: name, 
-                args, 
+                id: changeId,
+                toolName: name,
+                args,
                 fileName: filePath, // Used for display
-                originalContent, 
-                newContent, 
-                timestamp: Date.now(), 
-                description: `${description}\n${args.thinking ? `Thinking: ${args.thinking}` : ''}`
+                originalContent,
+                newContent,
+                timestamp: Date.now(),
+                description: `${description}\n${args.thinking ? `思考: ${args.thinking}` : ''}`
             };
-            
-            return { 
-                type: 'APPROVAL_REQUIRED', 
-                change, 
+
+            return {
+                type: 'APPROVAL_REQUIRED',
+                change,
                 // We return the full log so far + waiting status
-                uiLog: `${startLog}⏸️ **Status**: Waiting for approval for "${filePath}"...` 
+                uiLog: `${startLog}⏸️ **状态**: 等待审批 "${filePath}"...`
             };
 
         } catch (e: any) {
@@ -176,7 +176,7 @@ export const executeTool = async (
             
             // Log thinking and request for sub-agent call (Sub Agent handles its own detailed logging)
             if(onUiLog) {
-                 const reqDesc = args.request_description ? `📋 **Task**: ${args.request_description}\n` : '';
+                 const reqDesc = args.request_description ? `📋 **任务**: ${args.request_description}\n` : '';
                  onUiLog(`${startLog}${reqDesc}`);
             }
 
