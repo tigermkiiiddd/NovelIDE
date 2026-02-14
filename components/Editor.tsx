@@ -8,7 +8,6 @@ import { useAgentStore } from '../stores/agentStore';
 import { useUiStore } from '../stores/uiStore';
 import { DiffHunk, computeLineDiff, groupDiffIntoHunks } from '../utils/diffUtils';
 import { executeApprovedChange } from '../services/agent/toolRunner';
-import { FileText, Eye, Edit3, RotateCcw, RotateCw, Tag, BookOpen, Columns, PanelRightClose, ListOrdered, WrapText, AlignJustify } from 'lucide-react';
 import { getNodePath, findNodeByPath } from '../services/fileSystem';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { parseFrontmatter } from '../utils/frontmatter';
@@ -17,6 +16,7 @@ import DiffViewer from './DiffViewer';
 import { useShallow } from 'zustand/react/shallow';
 import { PendingChange, DiffSessionState, FilePatch } from '../types';
 import { useDiffStore } from '../stores/diffStore';
+import { EditorToolbar, EditorGutter, EmptyState } from './editor';
 
 interface EditorProps {
   className?: string;
