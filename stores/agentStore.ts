@@ -1,5 +1,6 @@
 
 import { create } from 'zustand';
+import { DEFAULT_AI_CONFIG } from '../types';
 
 // 简单的 debounce 工具函数
 const debounce = <T extends (...args: any[]) => any>(
