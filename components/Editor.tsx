@@ -1094,17 +1094,17 @@ const Editor: React.FC<EditorProps> = ({
                 <Search size={14} />
             </button>
 
-            {/* View Settings Toggles */}
+            {/* View Settings Toggles - Desktop Only */}
             <button
                 onClick={toggleWordWrap}
-                className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+                className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 title={wordWrap ? "自动换行: 开启" : "自动换行: 关闭"}
             >
                 {wordWrap ? <WrapText size={14} /> : <AlignJustify size={14} />}
             </button>
             <button
                 onClick={toggleLineNumbers}
-                className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
+                className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 title="显示行号"
             >
                 <ListOrdered size={14} />
@@ -1114,7 +1114,8 @@ const Editor: React.FC<EditorProps> = ({
             <button onClick={redo} disabled={!canRedo} className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 ${canRedo ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-700 cursor-not-allowed'}`} title="Redo (Ctrl+Shift+Z)"><RotateCw size={14} /></button>
             <button onClick={() => handleSetMode('edit')} className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all ${internalMode === 'edit' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title="Edit Mode"><Edit3 size={14} /></button>
             <button onClick={() => handleSetMode('preview')} className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all ${internalMode === 'preview' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title="Preview Mode"><Eye size={14} /></button>
-            <button onClick={handleToggleSplit} className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-0.5 sm:ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}><Columns size={14} className="sm:rotate-0 rotate-90" /></button>
+            {/* Split View - Desktop Only */}
+            <button onClick={handleToggleSplit} className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}><Columns size={14} /></button>
         </div>
       </div>
 
@@ -1233,24 +1234,20 @@ const Editor: React.FC<EditorProps> = ({
                 onDismiss={handleDismiss}
              />
         ) : (
-            <div className={`h-full relative ${isSplitView && isMobile ? 'flex flex-col' : 'flex'}`}>
-                {(internalMode === 'edit' || isSplitView) && (
+            <div className={`h-full relative ${isSplitView && !isMobile ? 'flex' : 'flex'}`}>
+                {(internalMode === 'edit' || (isSplitView && !isMobile)) && (
                     <div className={`${
-                      isSplitView
-                        ? isMobile
-                          ? 'h-1/2 border-b border-gray-800 w-full'
-                          : 'w-1/2 border-r border-gray-800 h-full'
+                      isSplitView && !isMobile
+                        ? 'w-1/2 border-r border-gray-800 h-full'
                         : 'w-full h-full'
                     } transition-all`}>
                         {renderEditor()}
                     </div>
                 )}
-                {(internalMode === 'preview' || isSplitView) && (
+                {(internalMode === 'preview' || (isSplitView && !isMobile)) && (
                     <div className={`${
-                      isSplitView
-                        ? isMobile
-                          ? 'h-1/2 w-full'
-                          : 'w-1/2 h-full'
+                      isSplitView && !isMobile
+                        ? 'w-1/2 h-full'
                         : 'w-full h-full'
                     } transition-all`}>
                         {renderPreview()}
