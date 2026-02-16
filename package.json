@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:cf": "npm install --no-save --force @rollup/rollup-linux-x64-gnu && vite build",
     "preview": "vite preview",
     "test": "jest",
     "test:watch": "jest --watch",
