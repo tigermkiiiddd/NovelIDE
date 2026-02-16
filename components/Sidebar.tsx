@@ -1,7 +1,8 @@
 
-import React from 'react';
-import { Menu, ArrowLeft, Settings } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Menu, ArrowLeft, Settings, Search } from 'lucide-react';
 import FileExplorer from './FileExplorer';
+import FileSearch from './FileSearch';
 import { useFileStore } from '../stores/fileStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getNodePath } from '../services/fileSystem';
@@ -16,7 +17,7 @@ interface SidebarProps {
   isMobile: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
+const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   onBackToProjects,
@@ -25,6 +26,20 @@ const Sidebar: React.FC<SidebarProps> = ({
   width = 256, // 默认宽度
   isMobile
 }) => {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Global keyboard shortcut for search (Ctrl+Shift+F)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        setIsSearchOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   // Use shallow selection to prevent Sidebar rerender when file CONTENT changes
   const { files, activeFileId, setActiveFileId, deleteFile, createFileById, createFolderById, renameFile } = useFileStore(
     useShallow(state => ({
@@ -70,9 +85,22 @@ const Sidebar: React.FC<SidebarProps> = ({
             <span className="font-bold text-lg">NovelGenie</span>
             <button onClick={onClose}><Menu size={20}/></button>
         </div>
-        
-        {/* Project Navigation */}
+
+        {/* Search Button */}
         <div className="px-4 pt-4 pb-2">
+          <button
+            onClick={() => setIsSearchOpen(true)}
+            className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-400 bg-gray-800/50 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
+            title="搜索文件 (Ctrl+Shift+F)"
+          >
+            <Search size={16} />
+            <span>搜索文件...</span>
+            <span className="ml-auto text-xs text-gray-600">Ctrl+Shift+F</span>
+          </button>
+        </div>
+
+        {/* Project Navigation */}
+        <div className="px-4 pb-2">
             <button 
                 onClick={onBackToProjects}
                 className="flex items-center space-x-2 text-sm text-gray-400 hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-gray-800"
@@ -100,7 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer Settings */}
         <div className="p-4 border-t border-gray-800">
-            <button 
+            <button
                 onClick={onOpenSettings}
                 className="flex items-center space-x-2 w-full p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
             >
@@ -109,6 +137,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             </button>
         </div>
       </aside>
+
+      {/* File Search Modal */}
+      <FileSearch
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onFileSelect={(id) => {
+          setActiveFileId(id);
+          if (isMobile) onClose();
+        }}
+      />
     </>
   );
 };
