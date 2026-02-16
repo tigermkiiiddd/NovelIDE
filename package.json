@@ -3,11 +3,6 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "overrides": {
-    "rollup": {
-      "@rollup/rollup-linux-x64-gnu": "^4.28.0"
-    }
-  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -32,6 +27,7 @@
   },
   "devDependencies": {
     "@jest/globals": "^30.2.0",
+    "@rollup/rollup-linux-x64-gnu": "^4.28.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
