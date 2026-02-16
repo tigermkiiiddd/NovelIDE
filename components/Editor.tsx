@@ -32,7 +32,9 @@ import {
   Search,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Tag,
+  BookOpen
 } from 'lucide-react';
 
 interface EditorProps {
