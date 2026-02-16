@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import ProjectOverview from './ProjectOverview';
 import StatusBar from './StatusBar';
 import { useAgent } from '../hooks/useAgent';
+import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
@@ -140,6 +141,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []); // Empty dependency array ensures this only runs on mount/unmount
 
+  // Swipe Gesture Support (Mobile Only)
+  useSwipeGesture({
+    onSwipeRight: () => {
+      if (isMobile && !isSidebarOpen) {
+        setSidebarOpen(true);
+      }
+    },
+    onSwipeLeft: () => {
+      if (isMobile && !isChatOpen) {
+        setChatOpen(true);
+      }
+    },
+    enabled: isMobile
+  });
+
   // --- Resizing Logic ---
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -157,7 +173,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       }
     };
 
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isResizing) return;
+      e.preventDefault();
+
+      const touch = e.touches[0];
+      if (isResizing === 'sidebar') {
+         // Sidebar: Min 180px, Max 600px
+         const newWidth = Math.max(180, Math.min(touch.clientX, 600));
+         setSidebarWidth(newWidth);
+      } else if (isResizing === 'agent') {
+         // Agent: Min 250px, Max 800px
+         const newWidth = Math.max(250, Math.min(window.innerWidth - touch.clientX, 800));
+         setAgentWidth(newWidth);
+      }
+    };
+
     const handleMouseUp = () => {
+        setIsResizing(null);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    };
+
+    const handleTouchEnd = () => {
         setIsResizing(null);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
@@ -166,6 +204,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     if (isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
     }
@@ -173,6 +213,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
   }, [isResizing, setSidebarWidth, setAgentWidth]);
 
@@ -195,9 +237,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
       {/* Sidebar Resizer (Desktop Only) */}
       {isSidebarOpen && !isMobile && (
-          <div 
-             className="w-1 hover:w-1.5 h-full bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-all z-40 shrink-0"
+          <div
+             className="w-1 hover:w-1.5 h-full bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-all z-40 shrink-0 touch-none"
              onMouseDown={() => setIsResizing('sidebar')}
+             onTouchStart={() => setIsResizing('sidebar')}
           />
       )}
 
@@ -268,9 +311,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
       {/* Agent Chat Resizer (Desktop Only) */}
       {isChatOpen && !isMobile && (
-          <div 
-             className="w-1 hover:w-1.5 h-full bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-all z-40 shrink-0"
+          <div
+             className="w-1 hover:w-1.5 h-full bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-all z-40 shrink-0 touch-none"
              onMouseDown={() => setIsResizing('agent')}
+             onTouchStart={() => setIsResizing('agent')}
           />
       )}
 

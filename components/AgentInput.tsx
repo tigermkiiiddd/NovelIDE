@@ -18,7 +18,9 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursorPos, setCursorPos] = useState(0);
-  
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -26,6 +28,36 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
       inputRef.current?.focus();
     }
   }, [autoFocus]);
+
+  // Detect mobile and keyboard height using visualViewport
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+
+    // Monitor visualViewport for keyboard detection
+    const handleViewportResize = () => {
+      if (window.visualViewport) {
+        const viewportHeight = window.visualViewport.height;
+        const windowHeight = window.innerHeight;
+        const keyboardHeight = Math.max(0, windowHeight - viewportHeight);
+        setKeyboardHeight(keyboardHeight);
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+      window.visualViewport.addEventListener('scroll', handleViewportResize);
+    }
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportResize);
+        window.visualViewport.removeEventListener('scroll', handleViewportResize);
+      }
+    };
+  }, []);
 
   // Auto-resize logic
   useEffect(() => {
@@ -133,36 +165,85 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   };
 
   return (
-    <div className="p-3 bg-gray-800 border-t border-gray-700 shrink-0 safe-area-bottom relative">
-        {/* Mention Autocomplete List */}
+    <div
+      className="p-3 bg-gray-800 border-t border-gray-700 shrink-0 safe-area-bottom relative"
+      style={isMobile && keyboardHeight > 0 ? { paddingBottom: `calc(0.75rem + env(safe-area-inset-bottom, 0px))` } : {}}
+    >
+        {/* Mention Autocomplete List - Desktop: popup above, Mobile: bottom modal */}
         {showMentionList && filteredFiles.length > 0 && (
-            <div className="absolute bottom-full left-4 right-4 mb-2 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl overflow-hidden z-50 max-h-60 flex flex-col">
-                <div className="p-2 bg-gray-850 text-xs text-gray-500 border-b border-gray-700 font-medium">
-                    选择文件引用 (使用 ↑↓ Enter)
+            <>
+              {/* Mobile: Full-width bottom modal */}
+              {isMobile ? (
+                <div
+                  className="fixed inset-x-0 bg-gray-800 border-t border-gray-700 z-50 flex flex-col rounded-t-xl shadow-2xl"
+                  style={{
+                    bottom: `${keyboardHeight}px`,
+                    maxHeight: '40vh'
+                  }}
+                >
+                    <div className="p-3 bg-gray-850 text-xs text-gray-500 border-b border-gray-700 font-medium flex items-center justify-between rounded-t-xl">
+                        <span>选择文件引用</span>
+                        <button
+                          onClick={() => setShowMentionList(false)}
+                          className="text-gray-400 hover:text-white"
+                        >
+                          关闭
+                        </button>
+                    </div>
+                    <ul className="overflow-y-auto p-2">
+                        {filteredFiles.map((file, index) => {
+                            const fullPath = getNodePath(file, files);
+                            return (
+                                <li
+                                    key={file.id}
+                                    onClick={() => insertMention(file)}
+                                    className={`px-3 py-3 text-sm cursor-pointer flex items-center justify-between rounded-lg ${
+                                        index === mentionIndex ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2 truncate">
+                                        {file.type === FileType.FOLDER ? <Folder size={14} className="text-yellow-500" /> : <FileText size={14} className="text-blue-400" />}
+                                        <span className="truncate font-medium">{file.name}</span>
+                                    </div>
+                                    <span className={`text-xs ml-4 truncate max-w-[40%] ${index === mentionIndex ? 'text-blue-200' : 'text-gray-500'}`}>
+                                        {fullPath}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 </div>
-                <ul className="overflow-y-auto">
-                    {filteredFiles.map((file, index) => {
-                        const fullPath = getNodePath(file, files);
-                        return (
-                            <li 
-                                key={file.id}
-                                onClick={() => insertMention(file)}
-                                className={`px-3 py-2 text-sm cursor-pointer flex items-center justify-between group ${
-                                    index === mentionIndex ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2 truncate">
-                                    {file.type === FileType.FOLDER ? <Folder size={14} className="text-yellow-500" /> : <FileText size={14} className="text-blue-400 group-hover:text-blue-300" />}
-                                    <span className="truncate font-medium">{file.name}</span>
-                                </div>
-                                <span className={`text-xs ml-4 truncate max-w-[40%] ${index === mentionIndex ? 'text-blue-200' : 'text-gray-500'}`}>
-                                    {fullPath}
-                                </span>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </div>
+              ) : (
+                /* Desktop: popup above input */
+                <div className="absolute bottom-full left-4 right-4 mb-2 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl overflow-hidden z-50 max-h-60 flex flex-col">
+                    <div className="p-2 bg-gray-850 text-xs text-gray-500 border-b border-gray-700 font-medium">
+                        选择文件引用 (使用 ↑↓ Enter)
+                    </div>
+                    <ul className="overflow-y-auto">
+                        {filteredFiles.map((file, index) => {
+                            const fullPath = getNodePath(file, files);
+                            return (
+                                <li
+                                    key={file.id}
+                                    onClick={() => insertMention(file)}
+                                    className={`px-3 py-2 text-sm cursor-pointer flex items-center justify-between group ${
+                                        index === mentionIndex ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2 truncate">
+                                        {file.type === FileType.FOLDER ? <Folder size={14} className="text-yellow-500" /> : <FileText size={14} className="text-blue-400 group-hover:text-blue-300" />}
+                                        <span className="truncate font-medium">{file.name}</span>
+                                    </div>
+                                    <span className={`text-xs ml-4 truncate max-w-[40%] ${index === mentionIndex ? 'text-blue-200' : 'text-gray-500'}`}>
+                                        {fullPath}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+              )}
+            </>
         )}
 
         <form onSubmit={handleSubmit} className="flex items-end space-x-2">

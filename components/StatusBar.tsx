@@ -12,27 +12,27 @@ interface StatusBarProps {
   isAgentThinking?: boolean;
 }
 
-const StatusBar: React.FC<StatusBarProps> = ({ 
-  project, 
-  files, 
-  activeFile, 
+const StatusBar: React.FC<StatusBarProps> = ({
+  project,
+  files,
+  activeFile,
   onOpenSettings,
   isAgentThinking
 }) => {
   const stats = useProjectStats(project, files);
 
   return (
-    <div className="h-7 bg-[#161b22] border-t border-gray-800 flex items-center justify-between px-3 text-[11px] select-none text-gray-400 font-mono shrink-0 safe-area-bottom">
-      
+    <div className="h-7 bg-[#161b22] border-t border-gray-800 flex items-center justify-between px-2 sm:px-3 text-[10px] sm:text-[11px] select-none text-gray-400 font-mono shrink-0 safe-area-bottom">
+
       {/* Left: File Context */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5 hover:text-white transition-colors cursor-default">
-          <GitBranch size={10} className="text-blue-500" />
-          <span className="truncate max-w-[100px] sm:max-w-[200px]">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        <div className="flex items-center gap-1 hover:text-white transition-colors cursor-default">
+          <GitBranch size={10} className="text-blue-500 shrink-0" />
+          <span className="truncate max-w-[80px] sm:max-w-[200px]">
              {project.name}
           </span>
         </div>
-        
+
         {activeFile && (
             <div className="hidden sm:flex items-center gap-1.5 text-gray-500">
                 <span>•</span>
@@ -45,47 +45,60 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
       {/* Center / Agent Status (Mobile & Desktop) */}
       {isAgentThinking && (
-          <div className="flex items-center gap-2 text-blue-400 animate-pulse">
+          <div className="flex items-center gap-1 sm:gap-2 text-blue-400 animate-pulse shrink-0">
               <div className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-              <span>Agent Writing...</span>
+              <span className="hidden sm:inline">Agent Writing...</span>
+              <span className="sm:hidden">Writing...</span>
           </div>
       )}
 
       {/* Right: Project Stats */}
-      <div className="flex items-center">
-         <div 
+      <div className="flex items-center shrink-0">
+         <div
             onClick={onOpenSettings}
-            className="flex items-center gap-4 cursor-pointer hover:bg-gray-800 h-7 px-2 transition-colors rounded"
+            className="flex items-center gap-2 sm:gap-4 cursor-pointer hover:bg-gray-800 h-7 px-1.5 sm:px-2 transition-colors rounded"
             title="点击查看详细项目概览"
          >
-             <div className="flex items-center gap-1.5 hover:text-white">
-                <FileText size={12} />
-                <span>{stats.wordCount.toLocaleString()} 字</span>
+             {/* Word Count - Always visible */}
+             <div className="flex items-center gap-1 hover:text-white">
+                <FileText size={12} className="shrink-0" />
+                <span>{stats.wordCount.toLocaleString()}</span>
+                <span className="hidden sm:inline">字</span>
              </div>
 
-             <div className="hidden sm:flex items-center gap-1.5 hover:text-white">
-                <Target size={12} />
-                <span>{stats.chapterCount}/{project.targetChapters} 章</span>
+             {/* Chapter Progress - Desktop: full text, Mobile: simplified */}
+             <div className="flex items-center gap-1 hover:text-white">
+                <Target size={12} className="shrink-0 hidden sm:block" />
+                <span className="sm:hidden text-[10px]">{stats.chapterCount}/{project.targetChapters}</span>
+                <span className="hidden sm:inline">{stats.chapterCount}/{project.targetChapters} 章</span>
              </div>
-             
-             <div className="hidden sm:flex items-center gap-1.5 hover:text-white">
-                <CheckCircle size={12} className={stats.clueRate === 100 ? 'text-green-500' : ''}/>
-                <span>伏笔 {stats.clueRate}%</span>
+
+             {/* Clue Rate - Desktop: text, Mobile: icon color only */}
+             <div className="flex items-center gap-1 hover:text-white">
+                <CheckCircle
+                  size={12}
+                  className={`shrink-0 ${
+                    stats.clueRate === 100 ? 'text-green-500' :
+                    stats.clueRate >= 50 ? 'text-yellow-500' : 'text-gray-500'
+                  }`}
+                  title={`伏笔率: ${stats.clueRate}%`}
+                />
+                <span className="hidden sm:inline">伏笔 {stats.clueRate}%</span>
              </div>
-             
-             {/* Simple Progress Bar */}
+
+             {/* Simple Progress Bar - Desktop only */}
              <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden hidden md:block">
-                 <div 
-                    className="h-full bg-blue-600" 
-                    style={{ width: `${stats.progressRate}%` }} 
+                 <div
+                    className="h-full bg-blue-600"
+                    style={{ width: `${stats.progressRate}%` }}
                  />
              </div>
 
-             <Settings size={12} className="text-gray-500 hover:text-white ml-2" />
+             <Settings size={12} className="text-gray-500 hover:text-white ml-1 sm:ml-2 shrink-0" />
          </div>
 
-         <div className="ml-2 pl-2 border-l border-gray-700 flex items-center gap-2">
-            <div className="flex items-center gap-1 text-yellow-500">
+         <div className="ml-1 sm:ml-2 pl-1 sm:pl-2 border-l border-gray-700 flex items-center gap-1 sm:gap-2">
+            <div className="flex items-center gap-0.5 sm:gap-1 text-yellow-500">
                 <AlertCircle size={10} />
                 <span>0</span>
             </div>
