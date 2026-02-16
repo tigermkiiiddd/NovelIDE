@@ -12,11 +12,28 @@ import { getNodePath, findNodeByPath } from '../services/fileSystem';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { parseFrontmatter } from '../utils/frontmatter';
 import { applyPatchQueue, mergePendingChanges, generatePatchId, extractHunkContent, areAllHunksProcessed } from '../utils/patchQueue';
+import { findSearchResults, getLineAndColFromIndex, getIndexFromLineAndCol } from '../utils/searchUtils';
 import DiffViewer from './DiffViewer';
 import { useShallow } from 'zustand/react/shallow';
 import { PendingChange, DiffSessionState, FilePatch } from '../types';
 import { useDiffStore } from '../stores/diffStore';
 import { EditorToolbar, EditorGutter, EmptyState } from './editor';
+import {
+  FileText,
+  Edit3,
+  Eye,
+  Columns,
+  WrapText,
+  AlignJustify,
+  ListOrdered,
+  RotateCcw,
+  RotateCw,
+  PanelRightClose,
+  Search,
+  X,
+  ChevronUp,
+  ChevronDown
+} from 'lucide-react';
 
 interface EditorProps {
   className?: string;
@@ -65,6 +82,13 @@ const Editor: React.FC<EditorProps> = ({
   const [internalMode, setInternalMode] = useState<'edit' | 'preview' | 'diff'>('edit');
   const [isDirty, setIsDirty] = useState(false);
   const [cursorStats, setCursorStats] = useState({ line: 1, col: 1 });
+
+  // Search state
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [searchResults, setSearchResults] = useState<Array<{ index: number; length: number }>>([]);
 
   // Diff session state (only used in diff mode)
   const [diffSession, setDiffSession] = useState<DiffSessionState | null>(null);
@@ -452,6 +476,81 @@ const Editor: React.FC<EditorProps> = ({
   const handleSetMode = (mode: 'edit' | 'preview') => {
       setInternalMode(mode);
       if (isSplitView) toggleSplitView();
+  };
+
+  // Search handlers
+  const handleToggleSearch = () => {
+      setSearchOpen(!searchOpen);
+      if (!searchOpen) {
+          // Opening search - focus on existing search or reset
+          if (searchTerm) {
+              // Keep existing search
+          } else {
+              setCurrentMatchIndex(0);
+              setSearchResults([]);
+          }
+      }
+  };
+
+  const handleSearchChange = (term: string) => {
+      setSearchTerm(term);
+      if (term) {
+          const results = findSearchResults(content, term, searchCaseSensitive);
+          setSearchResults(results);
+          setCurrentMatchIndex(results.length > 0 ? 0 : -1);
+      } else {
+          setSearchResults([]);
+          setCurrentMatchIndex(-1);
+      }
+  };
+
+  const handleSearchNext = () => {
+      if (searchResults.length === 0) return;
+      const nextIndex = (currentMatchIndex + 1) % searchResults.length;
+      setCurrentMatchIndex(nextIndex);
+      jumpToMatch(nextIndex);
+  };
+
+  const handleSearchPrev = () => {
+      if (searchResults.length === 0) return;
+      const prevIndex = (currentMatchIndex - 1 + searchResults.length) % searchResults.length;
+      setCurrentMatchIndex(prevIndex);
+      jumpToMatch(prevIndex);
+  };
+
+  const handleToggleCaseSensitive = () => {
+      setSearchCaseSensitive(!searchCaseSensitive);
+      if (searchTerm) {
+          const results = findSearchResults(content, searchTerm, !searchCaseSensitive);
+          setSearchResults(results);
+          setCurrentMatchIndex(results.length > 0 ? 0 : -1);
+      }
+  };
+
+  const jumpToMatch = (index: number) => {
+      if (index < 0 || index >= searchResults.length) return;
+      const match = searchResults[index];
+      const { line, col } = getLineAndColFromIndex(content, match.index);
+
+      // Calculate cursor position in textarea
+      const lines = content.split('\n');
+      let charCount = 0;
+      for (let i = 0; i < line - 1; i++) {
+          charCount += lines[i].length + 1;
+      }
+      charCount += col - 1;
+
+      // Focus textarea and set cursor position
+      const textarea = textareaRef.current;
+      if (textarea) {
+          textarea.focus();
+          textarea.setSelectionRange(charCount + match.length, charCount + match.length);
+
+          // Calculate scroll position
+          const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
+          const scrollPosition = (line - 1) * lineHeight;
+          textarea.scrollTop = Math.max(0, scrollPosition - textarea.clientHeight / 2);
+      }
   };
 
   useEffect(() => {
@@ -885,7 +984,7 @@ const Editor: React.FC<EditorProps> = ({
 
   return (
     <div className={`flex flex-col h-full bg-[#0d1117] ${className}`}>
-      
+
       {/* EDITOR TOOLBAR */}
       <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 transition-colors ${
           internalMode === 'diff' ? 'hidden' : 'bg-[#161b22] border-gray-800'
@@ -909,17 +1008,28 @@ const Editor: React.FC<EditorProps> = ({
 
         {/* Toolbar Actions */}
         <div className="flex items-center gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50">
+            {/* Search Button */}
+            <button
+                onClick={handleToggleSearch}
+                className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${
+                    searchOpen ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+                title="搜索 (Ctrl+F)"
+            >
+                <Search size={14} />
+            </button>
+
             {/* View Settings Toggles */}
-            <button 
-                onClick={toggleWordWrap} 
-                className={`flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
+            <button
+                onClick={toggleWordWrap}
+                className={`flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 title={wordWrap ? "自动换行: 开启" : "自动换行: 关闭"}
             >
                 {wordWrap ? <WrapText size={14} /> : <AlignJustify size={14} />}
             </button>
-            <button 
-                onClick={toggleLineNumbers} 
-                className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`} 
+            <button
+                onClick={toggleLineNumbers}
+                className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 title="显示行号"
             >
                 <ListOrdered size={14} />
@@ -932,6 +1042,81 @@ const Editor: React.FC<EditorProps> = ({
             <button onClick={handleToggleSplit} className={`hidden md:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}>{isSplitView ? <PanelRightClose size={14} /> : <Columns size={14} />}</button>
         </div>
       </div>
+
+      {/* SEARCH PANEL */}
+      {searchOpen && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-gray-900 border-b border-gray-700 animate-in slide-in-from-top-2">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="搜索..."
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+              autoFocus
+              onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                      e.shiftKey ? handleSearchPrev() : handleSearchNext();
+                  } else if (e.key === 'Escape') {
+                      setSearchOpen(false);
+                  }
+              }}
+            />
+            {searchTerm && (
+              <button
+                onClick={() => handleSearchChange('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleSearchPrev}
+              disabled={!searchTerm || searchResults.length === 0}
+              className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="上一个 (Shift+Enter)"
+            >
+              <ChevronUp size={16} />
+            </button>
+            <button
+              onClick={handleSearchNext}
+              disabled={!searchTerm || searchResults.length === 0}
+              className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="下一个 (Enter)"
+            >
+              <ChevronDown size={16} />
+            </button>
+
+            {searchResults.length > 0 && (
+              <span className="text-xs text-gray-400 min-w-[60px] text-center">
+                {currentMatchIndex + 1} / {searchResults.length}
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={handleToggleCaseSensitive}
+            className={`px-2 py-1.5 text-xs rounded border transition-colors ${
+              searchCaseSensitive
+                ? 'bg-blue-600 border-blue-500 text-white'
+                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
+            }`}
+            title="区分大小写"
+          >
+            Aa
+          </button>
+
+          <button
+            onClick={handleToggleSearch}
+            className="p-1.5 text-gray-500 hover:text-white"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
