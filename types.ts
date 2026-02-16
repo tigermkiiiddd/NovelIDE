@@ -135,7 +135,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
           name: 'Google Gemini',
           baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
           apiKey: '',
-          modelName: 'gemini-2.5-flash-preview-05-20'
+          modelName: 'gemini-3-flash-preview'
       },
       {
           id: 'deepseek',
