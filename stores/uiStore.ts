@@ -14,6 +14,9 @@ interface UiState {
   showLineNumbers: boolean;
   wordWrap: boolean;
 
+  // Debug Mode
+  isDebugMode: boolean;
+
   setSidebarOpen: (open: boolean) => void;
   setChatOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
@@ -26,6 +29,7 @@ interface UiState {
   toggleSplitView: () => void;
   toggleLineNumbers: () => void;
   toggleWordWrap: () => void;
+  toggleDebugMode: () => void;
 }
 
 // Custom IndexedDB storage adapter for Zustand persist
@@ -45,7 +49,8 @@ const indexedDBStorage = {
       agentWidth: parsed.agentWidth ?? 384,
       isSplitView: parsed.isSplitView ?? false,
       showLineNumbers: parsed.showLineNumbers ?? true,
-      wordWrap: parsed.wordWrap ?? true
+      wordWrap: parsed.wordWrap ?? true,
+      isDebugMode: parsed.isDebugMode ?? false
     });
   },
   removeItem: async (name: string) => {
@@ -67,6 +72,8 @@ export const useUiStore = create<UiState>()(
       showLineNumbers: true,  // 默认开启行号（方便配合 Agent 精确修改）
       wordWrap: true,         // 默认开启换行（小说模式）
 
+      isDebugMode: false,     // 默认关闭调试模式
+
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),
       setChatOpen: (open) => set({ isChatOpen: open }),
       setSidebarWidth: (width) => set({ sidebarWidth: width }),
@@ -78,6 +85,7 @@ export const useUiStore = create<UiState>()(
       toggleSplitView: () => set((state) => ({ isSplitView: !state.isSplitView })),
       toggleLineNumbers: () => set((state) => ({ showLineNumbers: !state.showLineNumbers })),
       toggleWordWrap: () => set((state) => ({ wordWrap: !state.wordWrap })),
+      toggleDebugMode: () => set((state) => ({ isDebugMode: !state.isDebugMode })),
     }),
     {
       name: 'novel-genie-ui-storage', // Storage Key (for compatibility)
@@ -90,7 +98,8 @@ export const useUiStore = create<UiState>()(
         agentWidth: state.agentWidth,
         isSplitView: state.isSplitView,
         showLineNumbers: state.showLineNumbers,
-        wordWrap: state.wordWrap
+        wordWrap: state.wordWrap,
+        isDebugMode: state.isDebugMode
       }),
     }
   )

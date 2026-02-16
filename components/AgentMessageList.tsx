@@ -3,6 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench, ArrowRight, Brain, AlertOctagon } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
+import { useUiStore } from '../stores/uiStore';
+import { useFileStore } from '../stores/fileStore';
+import { generateToolSummary } from '../utils/toolSummaryUtils';
+import { findNodeByPath } from '../services/fileSystem';
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
@@ -18,7 +22,8 @@ const ToolLogMessage: React.FC<{
     metadata?: any;
     isLast: boolean;
     isLoading: boolean;
-}> = ({ text, rawParts, metadata, isLast, isLoading }) => {
+    isDebugMode: boolean;
+}> = ({ text, rawParts, metadata, isLast, isLoading, isDebugMode }) => {
     const [isExpanded, setIsExpanded] = useState(isLast && isLoading);
 
     useEffect(() => {
@@ -34,9 +39,31 @@ const ToolLogMessage: React.FC<{
 
     const displayToolNames = finishedToolNames || metadata?.executingTools;
     const isRunning = isLast && isLoading;
-    const titleText = isRunning
-        ? (displayToolNames ? `工具执行中: ${displayToolNames}...` : '系统执行中...')
-        : (displayToolNames ? `工具执行结果: ${displayToolNames}` : '系统日志');
+
+    // 生成简洁的操作摘要（普通模式）
+    const toolSummary = displayToolNames
+        ? generateToolSummary(displayToolNames.split(',')[0], {})
+        : null;
+
+    // 普通模式：简化标题
+    const titleText = isDebugMode
+        ? (isRunning
+            ? (displayToolNames ? `工具执行中: ${displayToolNames}...` : '系统执行中...')
+            : (displayToolNames ? `工具执行结果: ${displayToolNames}` : '系统日志'))
+        : (isRunning
+            ? '执行中...'
+            : (toolSummary ? toolSummary.summary : '执行完成'));
+
+    // 从 text 中提取 thinking 内容（普通模式只显示 thinking）
+    const extractThinking = (logText: string): string | null => {
+        const match = logText.match(/🧠 \*\*思考\*\*: ([^\n]+)/);
+        return match ? match[1] : null;
+    };
+
+    // 简化显示内容（普通模式只显示结果行）
+    const displayText = isDebugMode
+        ? text
+        : (text.split('\n').find(line => line.includes('✅') || line.includes('❌')) || '');
 
     const toolResponses = rawParts?.filter((p: any) => p.functionResponse).map((p: any) => p.functionResponse);
 
@@ -62,9 +89,10 @@ const ToolLogMessage: React.FC<{
             {isExpanded && (
                 <div className="mt-1 bg-gray-950 border border-gray-800 rounded-lg p-3 text-gray-300 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
                     <div className="whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {text || <span className="text-gray-600 italic">初始化执行环境...</span>}
+                        {displayText || <span className="text-gray-600 italic">初始化执行环境...</span>}
                     </div>
-                    {toolResponses && toolResponses.length > 0 && (
+                    {/* 详细工具输出 - 仅 Debug 模式显示 */}
+                    {isDebugMode && toolResponses && toolResponses.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-800">
                              <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">详细工具输出</div>
                              {toolResponses.map((tr: any, idx: number) => (
@@ -73,8 +101,8 @@ const ToolLogMessage: React.FC<{
                         </div>
                     )}
 
-                    {/* Render API Input for next turn (Prompt generated AFTER this tool execution) */}
-                    {metadata?.debugPayload && (
+                    {/* Debug Payload - 仅 Debug 模式显示 */}
+                    {isDebugMode && metadata?.debugPayload && (
                         <APIInputView
                             systemInstruction={metadata.debugPayload.systemInstruction}
                             apiHistory={metadata.debugPayload.apiHistoryPreview}
@@ -88,18 +116,76 @@ const ToolLogMessage: React.FC<{
 };
 
 // --- Tool Call Block (Input Visualization) ---
-const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) => {
-    const { thinking, ...restArgs } = args;
+const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }> = ({ name, args, isDebugMode }) => {
+    const { thinking, ...restArgs } = args || {};
+    const summary = generateToolSummary(name, args);
+    const files = useFileStore(state => state.files);
+    const setActiveFileId = useFileStore(state => state.setActiveFileId);
 
+    // 提取文件路径并查找节点
+    const filePath = restArgs.path || restArgs.oldPath;
+    const fileNode = filePath ? findNodeByPath(files, filePath) : null;
+    const canOpenFile = !!fileNode;
+
+    const handleOpenFile = () => {
+        if (fileNode) {
+            setActiveFileId(fileNode.id);
+        }
+    };
+
+    // 普通模式：只显示摘要 + thinking
+    if (!isDebugMode) {
+        return (
+            <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
+                {/* 摘要行 - 如果有文件则可点击 */}
+                <div
+                    className={`px-3 py-2 bg-gray-800 border-b border-gray-700 text-blue-300 flex items-center gap-2 ${
+                        canOpenFile ? 'cursor-pointer active:bg-gray-600 transition-colors border-l-2 border-l-blue-400' : ''
+                    }`}
+                    onClick={canOpenFile ? handleOpenFile : undefined}
+                >
+                    <Wrench size={12} className="text-blue-400 shrink-0"/>
+                    <span className="font-medium truncate flex-1">{summary.summary}</span>
+                    {canOpenFile && (
+                        <span className="text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded shrink-0">
+                            打开
+                        </span>
+                    )}
+                </div>
+
+                {/* Thinking Section - 始终显示 */}
+                {thinking && (
+                    <div className="p-2 bg-blue-900/10 text-gray-300 italic text-xs leading-relaxed">
+                        <div className="flex items-start gap-2">
+                            <Brain size={12} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />
+                            <span className="opacity-90">{thinking}</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Debug 模式：显示完整信息
     return (
         <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden shadow-sm animate-in fade-in slide-in-from-left-2 duration-300">
-            {/* Header */}
-            <div className="px-3 py-2 bg-gray-800 border-b border-gray-700 text-blue-300 font-semibold flex items-center justify-between">
+            {/* Header with Debug Badge - 如果有文件则可点击 */}
+            <div
+                className={`px-3 py-2 bg-gray-800 border-b border-gray-700 text-blue-300 font-semibold flex items-center justify-between ${
+                    canOpenFile ? 'cursor-pointer active:bg-gray-600 transition-colors border-l-2 border-l-blue-400' : ''
+                }`}
+                onClick={canOpenFile ? handleOpenFile : undefined}
+            >
                 <div className="flex items-center gap-2">
                     <Wrench size={12} className="text-blue-400"/>
                     <span>Agent 计划调用: {name}</span>
+                    {canOpenFile && (
+                        <span className="text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">
+                            打开
+                        </span>
+                    )}
                 </div>
-                <span className="text-[10px] text-gray-500 uppercase tracking-wide">输入参数</span>
+                <span className="text-[10px] text-orange-400 uppercase tracking-wide">DEBUG</span>
             </div>
 
             {/* Thinking Section */}
@@ -115,7 +201,7 @@ const ToolCallBlock: React.FC<{ name: string, args: any }> = ({ name, args }) =>
                 </div>
             )}
 
-            {/* Arguments Section */}
+            {/* Arguments Section - 仅 Debug 模式显示 */}
             <div className="p-3 text-gray-400 whitespace-pre-wrap overflow-x-auto select-text">
                  {Object.keys(restArgs).length > 0
                     ? JSON.stringify(restArgs, null, 2)
@@ -153,6 +239,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const isDebugMode = useUiStore(state => state.isDebugMode);
 
   useEffect(() => {
     if (!editingId) {
@@ -206,8 +293,12 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             const isLast = index === messages.length - 1;
             const prevMsg = index > 0 ? messages[index-1] : null;
 
-            // 1. Tool Outputs (System Message - Collapsible Log)
+            // 1. Tool Outputs (System Message - Collapsible Log) - 仅 Debug 模式显示
             if (msg.isToolOutput) {
+                // 普通模式下隐藏 ToolLogMessage
+                if (!isDebugMode) {
+                    return null;
+                }
                 return (
                     <div key={msg.id} className="flex flex-col items-start w-full animate-in fade-in duration-300">
                         <ToolLogMessage
@@ -216,11 +307,12 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             metadata={msg.metadata}
                             isLast={isLast}
                             isLoading={isLoading}
+                            isDebugMode={isDebugMode}
                         />
                         {/* Intelligent Regenerate: If previous message was a Model Plan, retry that. Else retry self. */}
                         {onRegenerate && (
                             <div className="ml-2 mb-2">
-                                <button 
+                                <button
                                     onClick={() => onRegenerate(prevMsg?.role === 'model' ? prevMsg.id : msg.id)}
                                     className="p-1.5 text-xs text-gray-500 hover:text-red-400 flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
                                     title="重新生成计划 (Retry Action)"
@@ -307,14 +399,14 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         {isModel && toolCalls && toolCalls.length > 0 && (
                             <div className="mt-3 space-y-2">
                                 {toolCalls.map((tc: any, idx: number) => (
-                                    <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} />
+                                    <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} isDebugMode={isDebugMode} />
                                 ))}
                             </div>
                         )}
                     </div>
 
-                    {/* API Input Display - Always shown for messages with debugPayload */}
-                    {msg.metadata?.debugPayload && (
+                    {/* API Input Display - 仅 Debug 模式显示 */}
+                    {isDebugMode && msg.metadata?.debugPayload && (
                         <APIInputView
                             systemInstruction={msg.metadata.debugPayload.systemInstruction}
                             apiHistory={msg.metadata.debugPayload.apiHistoryPreview}

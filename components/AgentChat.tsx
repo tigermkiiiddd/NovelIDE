@@ -1,12 +1,13 @@
 
 import React, { useState } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download } from 'lucide-react';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
 import AgentTodoList from './AgentTodoList';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore'; // Import AgentStore
+import { useUiStore } from '../stores/uiStore';
 import { findNodeByPath } from '../services/fileSystem';
 import { useAgent } from '../hooks/useAgent'; // Note: AgentChat receives hooks props, but we need types
 import { downloadChatSession } from '../utils/exportUtils';
@@ -68,6 +69,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const setActiveFileId = useFileStore(state => state.setActiveFileId);
   // Use agent store to set reviewing change
   const setReviewingChangeId = useAgentStore(state => state.setReviewingChangeId);
+  // Debug mode
+  const isDebugMode = useUiStore(state => state.isDebugMode);
+  const toggleDebugMode = useUiStore(state => state.toggleDebugMode);
 
   if (!isOpen) return null;
 
@@ -159,8 +163,20 @@ const AgentChat: React.FC<AgentChatProps> = ({
         )}
 
         <div className="flex items-center gap-2">
+            {/* Debug Mode Toggle */}
+            <button
+                onClick={toggleDebugMode}
+                className={`p-2 rounded-lg transition-colors ${
+                    isDebugMode
+                        ? 'bg-orange-600/20 text-orange-400'
+                        : 'hover:bg-gray-800 text-gray-500 hover:text-white'
+                }`}
+                title={isDebugMode ? "关闭调试模式" : "开启调试模式"}
+            >
+                <Bug size={18} />
+            </button>
             {!showHistory && (
-                <button 
+                <button
                     onClick={handleExportCurrentSession}
                     className="p-2 rounded-lg transition-colors hover:bg-gray-800 text-gray-500 hover:text-white"
                     title="导出当前会话 (Markdown)"

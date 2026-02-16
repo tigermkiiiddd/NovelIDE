@@ -10,6 +10,7 @@ interface UiSettings {
   isSplitView: boolean;
   showLineNumbers: boolean;
   wordWrap: boolean;
+  isDebugMode: boolean;
 }
 
 interface NovelGenieDB extends DBSchema {
