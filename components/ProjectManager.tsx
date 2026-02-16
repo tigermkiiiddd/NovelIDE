@@ -201,21 +201,21 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-950 text-gray-100 p-6 overflow-hidden">
-      <div className="max-w-4xl mx-auto w-full flex flex-col h-full">
+    <div className="flex flex-col min-h-screen bg-gray-950 text-gray-100 p-6">
+      <div className="max-w-4xl mx-auto w-full flex flex-col">
         
         <header className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
-              NovelGenie Projects
-            </h1>
-            <div className="flex items-center gap-3 mt-2">
-              <p className="text-gray-500">选择一个项目开始创作，或创建一个新的世界。</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
+                NovelGenie Projects
+              </h1>
               <span className="text-xs text-gray-600 bg-gray-900 px-2 py-1 rounded border border-gray-800 flex items-center gap-1">
                 <Info size={12} />
                 v{getDisplayVersion()}
               </span>
             </div>
+            <p className="text-gray-500 mt-2">选择一个项目开始创作，或创建一个新的世界。</p>
           </div>
           <div className="flex gap-3">
              <button
