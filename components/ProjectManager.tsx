@@ -204,7 +204,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
     <div className="flex flex-col min-h-screen bg-gray-950 text-gray-100 p-6">
       <div className="max-w-4xl mx-auto w-full flex flex-col">
         
-        <header className="flex justify-between items-center mb-8">
+        <header className="flex flex-col items-start gap-4 mb-8 md:flex-row md:justify-between md:items-center">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
