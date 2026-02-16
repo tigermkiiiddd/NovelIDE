@@ -1,6 +1,8 @@
 
 import { create } from 'zustand';
 import { DEFAULT_AI_CONFIG } from '../types';
+import { dbAPI } from '../services/persistence';
+import { generateId } from '../services/fileSystem';
 
 // 简单的 debounce 工具函数
 const debounce = <T extends (...args: any[]) => any>(
