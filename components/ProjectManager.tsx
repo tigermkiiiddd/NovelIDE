@@ -4,7 +4,8 @@ import { useProjectStore } from '../stores/projectStore';
 import { useAgentStore } from '../stores/agentStore';
 import { AIService } from '../services/geminiService';
 import { exportProject, importProject } from '../services/projectService';
-import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X } from 'lucide-react';
+import { getDisplayVersion } from '../utils/version';
+import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
 
 interface ProjectManagerProps {
@@ -208,7 +209,13 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
             <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
               NovelGenie Projects
             </h1>
-            <p className="text-gray-500 mt-2">选择一个项目开始创作，或创建一个新的世界。</p>
+            <div className="flex items-center gap-3 mt-2">
+              <p className="text-gray-500">选择一个项目开始创作，或创建一个新的世界。</p>
+              <span className="text-xs text-gray-600 bg-gray-900 px-2 py-1 rounded border border-gray-800 flex items-center gap-1">
+                <Info size={12} />
+                v{getDisplayVersion()}
+              </span>
+            </div>
           </div>
           <div className="flex gap-3">
              <button
