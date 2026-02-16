@@ -1,6 +1,6 @@
 
 import { useCallback, useMemo } from 'react';
-import { ChatMessage, FileNode, ProjectMeta, AIProvider, PendingChange } from '../types';
+import { ChatMessage, FileNode, ProjectMeta, PendingChange } from '../types';
 import { generateId } from '../services/fileSystem';
 import { constructSystemPrompt } from '../services/resources/skills/coreProtocol';
 import { useAgentContext } from './agent/useAgentContext';
@@ -53,9 +53,12 @@ export const useAgent = (
   // --- 4. 辅助功能 (Token 估算 & 审批逻辑) ---
 
   const tokenUsage = useMemo(() => {
-      const MAX_TOKENS_GEMINI = 1000000; 
+      const MAX_TOKENS_GEMINI = 1000000;
       const MAX_TOKENS_DEFAULT = 128000;
-      const limit = aiConfig.provider === AIProvider.GOOGLE ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
+      // Check if using Gemini via OpenAI-compatible endpoint
+      const isGemini = aiConfig.modelName?.toLowerCase().includes('gemini') ||
+                       aiConfig.baseUrl?.includes('generativelanguage.googleapis.com');
+      const limit = isGemini ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
       const sysPrompt = constructSystemPrompt(files, project, activeFile, todos);
       const msgs = currentSession?.messages || [];
@@ -73,7 +76,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.provider, files, project, activeFile, todos, currentSession?.messages]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, activeFile, todos, currentSession?.messages]);
 
   const approveChange = useCallback((change: PendingChange) => {
     // 构造包含追踪功能的 Action 集合

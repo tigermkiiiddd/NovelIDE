@@ -1,6 +1,6 @@
 
 import OpenAI from "openai";
-import { AIConfig, AIProvider } from "../types";
+import { AIConfig } from "../types";
 import { ToolDefinition } from "./agent/types";
 
 // --- Constants ---
@@ -30,12 +30,7 @@ export class AIService {
     const apiKey = this.config.apiKey || process.env.API_KEY || '';
     if (!apiKey) return;
 
-    let baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
-
-    // If Provider is Google, force Google's OpenAI-compatible endpoint if not manually overridden
-    if (this.config.provider === AIProvider.GOOGLE && !this.config.baseUrl) {
-      baseURL = 'https://generativelanguage.googleapis.com/v1beta/openai/';
-    }
+    const baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
 
     this.client = new OpenAI({
       apiKey: apiKey,

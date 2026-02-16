@@ -98,7 +98,6 @@ export interface DiffSessionState {
 // --- AI Configuration Types ---
 
 export enum AIProvider {
-  GOOGLE = 'google',
   OPENAI = 'openai'
 }
 
@@ -117,41 +116,48 @@ export interface AIConfig {
   baseUrl?: string; // Active Base URL
   modelName: string; // Active Model Name
   maxOutputTokens?: number; // 控制单次回复的最大长度
-  safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE
-  
+  safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE (Gemini only)
+
   // Multi-Provider Support
   openAIBackends?: OpenAIBackend[];
   activeOpenAIBackendId?: string;
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
-  provider: AIProvider.GOOGLE,
-  apiKey: '', 
-  modelName: 'gemini-2.0-flash',
+  provider: AIProvider.OPENAI,
+  apiKey: '',
+  modelName: 'deepseek-chat',
   maxOutputTokens: 8192,
   safetySetting: 'BLOCK_NONE',
   openAIBackends: [
-      { 
-          id: 'deepseek', 
-          name: 'DeepSeek', 
-          baseUrl: 'https://api.deepseek.com', 
-          apiKey: '', 
-          modelName: 'deepseek-chat' 
+      {
+          id: 'gemini',
+          name: 'Google Gemini',
+          baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+          apiKey: '',
+          modelName: 'gemini-2.5-flash-preview-05-20'
       },
-      { 
-          id: 'moonshot', 
-          name: 'Moonshot (Kimi)', 
-          baseUrl: 'https://api.moonshot.cn/v1', 
-          apiKey: '', 
-          modelName: 'moonshot-v1-8k' 
+      {
+          id: 'deepseek',
+          name: 'DeepSeek',
+          baseUrl: 'https://api.deepseek.com',
+          apiKey: '',
+          modelName: 'deepseek-chat'
       },
-      { 
-          id: 'openai-official', 
-          name: 'OpenAI Official', 
-          baseUrl: 'https://api.openai.com/v1', 
-          apiKey: '', 
-          modelName: 'gpt-4o' 
+      {
+          id: 'moonshot',
+          name: 'Moonshot (Kimi)',
+          baseUrl: 'https://api.moonshot.cn/v1',
+          apiKey: '',
+          modelName: 'moonshot-v1-8k'
+      },
+      {
+          id: 'openai-official',
+          name: 'OpenAI Official',
+          baseUrl: 'https://api.openai.com/v1',
+          apiKey: '',
+          modelName: 'gpt-4o'
       }
   ],
-  activeOpenAIBackendId: 'deepseek'
+  activeOpenAIBackendId: 'gemini'
 };
