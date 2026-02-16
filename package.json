@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "overrides": {
+    "rollup": {
+      "@rollup/rollup-linux-x64-gnu": "^4.28.0"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
