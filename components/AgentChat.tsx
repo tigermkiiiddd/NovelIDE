@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug } from 'lucide-react';
-import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange } from '../types';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList } from 'lucide-react';
+import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
 import AgentTodoList from './AgentTodoList';
@@ -21,7 +21,7 @@ interface AgentChatProps {
   onRegenerate?: (id: string) => void;
   onEditMessage?: (id: string, newText: string) => void;
   onStop?: () => void;
-  
+
   isLoading: boolean;
   isOpen: boolean;
   onClose: () => void;
@@ -36,20 +36,25 @@ interface AgentChatProps {
   files: FileNode[];
   // Approval Props
   pendingChanges?: PendingChange[];
-  width?: number; 
+  width?: number;
   isMobile: boolean;
   // Token Usage
   tokenUsage?: { used: number; limit: number; percent: number };
+  // Plan Mode Props
+  planMode?: boolean;
+  onTogglePlanMode?: () => void;
+  currentPlanNote?: PlanNote | null;
+  onOpenPlanViewer?: () => void;
 }
 
-const AgentChat: React.FC<AgentChatProps> = ({ 
-  messages, 
-  onSendMessage, 
+const AgentChat: React.FC<AgentChatProps> = ({
+  messages,
+  onSendMessage,
   onRegenerate,
   onEditMessage,
   onStop,
-  isLoading, 
-  isOpen, 
+  isLoading,
+  isOpen,
   onClose,
   todos,
   sessions,
@@ -61,7 +66,11 @@ const AgentChat: React.FC<AgentChatProps> = ({
   pendingChanges = [],
   width = 384,
   isMobile,
-  tokenUsage
+  tokenUsage,
+  planMode = false,
+  onTogglePlanMode,
+  currentPlanNote,
+  onOpenPlanViewer
 }) => {
   const [showHistory, setShowHistory] = useState(false);
 
@@ -163,6 +172,30 @@ const AgentChat: React.FC<AgentChatProps> = ({
         )}
 
         <div className="flex items-center gap-2">
+            {/* Plan Mode Toggle */}
+            {onTogglePlanMode && (
+              <button
+                  onClick={onTogglePlanMode}
+                  className={`p-2 rounded-lg transition-colors ${
+                      planMode
+                          ? 'bg-purple-600/20 text-purple-400'
+                          : 'hover:bg-gray-800 text-gray-500 hover:text-white'
+                  }`}
+                  title={planMode ? "关闭 Plan 模式" : "开启 Plan 模式"}
+              >
+                  <ClipboardList size={18} />
+              </button>
+            )}
+            {/* View Current Plan */}
+            {planMode && currentPlanNote && onOpenPlanViewer && (
+              <button
+                  onClick={onOpenPlanViewer}
+                  className="p-2 rounded-lg transition-colors bg-purple-600/20 text-purple-400 hover:bg-purple-600/30"
+                  title="查看 Plan 笔记本"
+              >
+                  <MessageSquare size={18} />
+              </button>
+            )}
             {/* Debug Mode Toggle */}
             <button
                 onClick={toggleDebugMode}
@@ -289,6 +322,34 @@ const AgentChat: React.FC<AgentChatProps> = ({
                         </button>
                     ))}
                 </div>
+            )}
+
+            {/* Plan Mode Indicator */}
+            {planMode && (
+              <div className="bg-purple-900/20 border-b border-purple-800/50 px-4 py-2 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-purple-300 text-sm">
+                    <ClipboardList size={16} className="text-purple-400" />
+                    <span>Plan 模式已启用</span>
+                    {currentPlanNote && (
+                      <span className="text-purple-500 text-xs">
+                        - {currentPlanNote.title}
+                      </span>
+                    )}
+                  </div>
+                  {currentPlanNote && onOpenPlanViewer && (
+                    <button
+                      onClick={onOpenPlanViewer}
+                      className="text-xs text-purple-400 hover:text-purple-300 underline"
+                    >
+                      查看笔记本
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-purple-500 mt-1">
+                  AI 正在规划中，等待审批后才会执行文件操作
+                </p>
+              </div>
             )}
 
             <AgentTodoList todos={todos} />

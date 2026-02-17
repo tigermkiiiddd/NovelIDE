@@ -1,17 +1,20 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Editor from './Editor';
 import AgentChat from './AgentChat';
 import Sidebar from './Sidebar';
 import ProjectOverview from './ProjectOverview';
 import StatusBar from './StatusBar';
+import PlanNoteViewer from './PlanNoteViewer';
 import { useAgent } from '../hooks/useAgent';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
+import { usePlanStore } from '../stores/planStore';
 import { useShallow } from 'zustand/react/shallow';
+import { generateId } from '../services/fileSystem';
 
 interface MainLayoutProps {
     projectId: string;
@@ -106,21 +109,44 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const activeFile = files.find(f => f.id === activeFileId) || null;
 
   // Initialize Agent Hook (No longer manages UI open state)
-  const { 
-    messages, isLoading, 
-    sendMessage, 
+  const {
+    messages, isLoading,
+    sendMessage,
     stopGeneration,
     regenerateMessage,
     editUserMessage,
-    todos, sessions, currentSessionId, 
+    todos, sessions, currentSessionId,
     createNewSession, switchSession, deleteSession,
     aiConfig, updateAiConfig, pendingChanges,
-    tokenUsage
-  } = useAgent(files, currentProject, activeFile, { 
-      ...fileSystemActions, 
-      deleteFile, 
-      updateProjectMeta: handleAgentUpdateProject 
+    tokenUsage,
+    // Plan Mode
+    planMode,
+    togglePlanMode,
+    planNotes,
+    currentPlanNote,
+    submitPlanForReview,
+    approvePlanNote,
+    rejectPlanNote
+  } = useAgent(files, currentProject, activeFile, {
+      ...fileSystemActions,
+      deleteFile,
+      updateProjectMeta: handleAgentUpdateProject
   });
+
+  // Plan Viewer State
+  const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
+
+  // Plan Store Actions
+  const planStore = usePlanStore();
+  const addAnnotation = planStore.addAnnotation;
+  const updateAnnotation = planStore.updateAnnotation;
+  const deleteAnnotation = planStore.deleteAnnotation;
+
+  // Send feedback to AI handler
+  const handleSendFeedbackToAI = useCallback((feedback: string) => {
+    // Add a system message to trigger AI response
+    sendMessage(`[Plan审批反馈] ${feedback}`);
+  }, [sendMessage]);
 
   // Responsive Layout Handler
   useEffect(() => {
@@ -286,7 +312,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
         {/* Editor Container */}
         <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-          <Editor className="w-full h-full" />
+          {isPlanViewerOpen ? (
+            <PlanNoteViewer
+              planNote={currentPlanNote || null}
+              isOpen={isPlanViewerOpen}
+              onClose={() => setIsPlanViewerOpen(false)}
+              onAddAnnotation={addAnnotation}
+              onUpdateAnnotation={updateAnnotation}
+              onDeleteAnnotation={deleteAnnotation}
+              onApprove={(planId) => {
+                approvePlanNote(planId);
+                // Close plan mode after approval
+                togglePlanMode();
+              }}
+              onReject={rejectPlanNote}
+              onSendFeedback={handleSendFeedbackToAI}
+            />
+          ) : (
+            <Editor className="w-full h-full" />
+          )}
         </div>
 
         {/* Status Bar */}
@@ -319,8 +363,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       )}
 
       {/* Agent Panel */}
-      <AgentChat 
-        messages={messages} 
+      <AgentChat
+        messages={messages}
         onSendMessage={sendMessage}
         onRegenerate={regenerateMessage}
         onEditMessage={editUserMessage}
@@ -334,14 +378,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         onCreateSession={createNewSession}
         onSwitchSession={switchSession}
         onDeleteSession={deleteSession}
-        files={files} 
+        files={files}
         pendingChanges={pendingChanges}
         width={agentWidth}
         isMobile={isMobile}
         tokenUsage={tokenUsage}
+        // Plan Mode Props
+        planMode={planMode}
+        onTogglePlanMode={togglePlanMode}
+        currentPlanNote={currentPlanNote}
+        onOpenPlanViewer={() => setIsPlanViewerOpen(true)}
       />
 
-      <ProjectOverview 
+      <ProjectOverview
         project={currentProject}
         files={files}
         isOpen={isProjectOverviewOpen}

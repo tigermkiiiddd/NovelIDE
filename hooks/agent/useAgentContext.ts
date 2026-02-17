@@ -1,6 +1,7 @@
 
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAgentStore, sessionLoadingState } from '../../stores/agentStore';
+import { usePlanStore } from '../../stores/planStore';
 import { AIService } from '../../services/geminiService';
 import { ProjectMeta, AIProvider } from '../../types';
 
@@ -46,6 +47,8 @@ export const useAgentContext = (project: ProjectMeta | undefined) => {
             loadingProjectIdRef.current = projectId;
             // 调用加载函数（loadProjectSessions 内部会设置 sessionLoadingState）
             useAgentStore.getState().loadProjectSessions(projectId);
+            // 同时加载 Plan 笔记
+            usePlanStore.getState().loadPlanNotes(projectId);
         }
     }, [projectId]); // Only depend on projectId
 

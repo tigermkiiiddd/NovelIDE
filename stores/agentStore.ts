@@ -53,7 +53,10 @@ interface AgentState {
   
   // Todo Helpers
   setTodos: (todos: TodoItem[]) => void;
-  
+
+  // Plan Mode Helpers
+  setPlanModeEnabled: (enabled: boolean) => void;
+
   // Approval Workflow
   addPendingChange: (change: PendingChange) => void;
   updatePendingChange: (id: string, updates: Partial<PendingChange>) => void;
@@ -279,6 +282,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           get().updateCurrentSession(session => ({
               ...session,
               todos,
+              lastModified: Date.now()
+          }));
+      },
+
+      setPlanModeEnabled: (enabled) => {
+          get().updateCurrentSession(session => ({
+              ...session,
+              planModeEnabled: enabled,
               lastModified: Date.now()
           }));
       },

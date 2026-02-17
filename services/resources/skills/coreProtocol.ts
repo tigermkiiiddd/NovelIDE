@@ -11,6 +11,38 @@
 import { FileNode, ProjectMeta, FileType, TodoItem } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 
+// Plan 模式专用协议
+export const PLAN_MODE_PROTOCOL = `
+{
+  "plan_mode": {
+    "enabled": true,
+    "purpose": "在执行复杂创作任务前，先与用户讨论方案，获得批准后再执行",
+    "workflow": [
+      "1. 接到任务后，先用 manageTodos 创建任务清单",
+      "2. 使用 managePlanNote 记录详细的思考过程和方案",
+      "3. Plan 笔记本应包含：目标分析、方案对比、风险评估、建议方案",
+      "4. 告知用户 Plan 笔记本已准备好，等待用户查看和审批",
+      "5. 用户批准后，系统会自动关闭 Plan 模式，方可执行文件操作"
+    ],
+    "restrictions": [
+      "Plan 模式下禁止直接调用 createFile/updateFile/patchFile",
+      "必须先通过 managePlanNote 记录方案并获得用户批准",
+      "所有想法都必须通过 Plan 笔记本与用户共享"
+    ],
+    "plan_notebook_guidelines": {
+      "title": "简洁明了的标题，如 '第一章写作计划'",
+      "structure": [
+        "- 📋 **任务目标**: 明确要完成什么",
+        "- 🎯 **核心策略**: 采用什么方法",
+        "- 📝 **具体步骤**: 分步执行计划",
+        "- ⚠️ **风险提示**: 可能的问题和备选方案",
+        "- ✅ **预期结果**: 完成后的预期产出"
+      ]
+    }
+  }
+}
+`;
+
 // 核心 Agent 协议 - 强调 IDE 功能性 (职能层)
 export const DEFAULT_AGENT_SKILL = `---
 name: "NovelGenie-Core"
@@ -144,7 +176,8 @@ export const constructSystemPrompt = (
     project: ProjectMeta | undefined,
     activeFile: FileNode | null,
     todos: TodoItem[],
-    messages?: any[]  // 新增参数：会话消息历史
+    messages?: any[],  // 会话消息历史
+    planMode?: boolean  // Plan 模式开关
 ): string => {
     // --- 1. 变量组装 (Variable Assembly) ---
     const skillFolder = files.find(f => f.name === '98_技能配置');
@@ -204,8 +237,22 @@ export const constructSystemPrompt = (
     const userInputHistory = extractUserInputHistory(messages);
 
     // --- 3. 最终组装 (Final Assembly) ---
+    // 如果是 Plan 模式，注入 Plan 模式协议
+    const planModeSection = planMode ? `
+==================================================
+【Plan 模式已激活】
+${PLAN_MODE_PROTOCOL}
+
+> ⚠️ 你现在处于 Plan 模式。在此模式下：
+> - 你只能使用读取工具和 manageTodos/managePlanNote
+> - 所有创作想法必须通过 managePlanNote 记录到 Plan 笔记本
+> - 等待用户审批后才能执行写文件操作
+> - 专注思考和规划，不要急于执行
+` : '';
+
     return `
 ${agentInstruction}
+${planModeSection}
 
 ==================================================
 【动态上下文 (Dynamic Context)】

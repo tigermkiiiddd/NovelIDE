@@ -101,6 +101,9 @@ const Editor: React.FC<EditorProps> = ({
   // Track if we've already sent a completion message for current diff session
   const completionMessageSentRef = useRef<string | null>(null);
 
+  // FIX: Track which file computedContent belongs to (prevents stale content being saved to wrong file)
+  const computedContentFileIdRef = useRef<string | null>(null);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
   const highlightRef = useRef<HTMLDivElement>(null);
@@ -241,6 +244,16 @@ const Editor: React.FC<EditorProps> = ({
 
     const saveSession = async () => {
       if (diffSession) {
+        // FIX: Bug #1 - Validate diffSession belongs to current file before saving
+        const sessionFileMatches = !diffSession.sourceFileName ||
+                                    diffSession.sourceFileName === activeFile.name;
+        if (!sessionFileMatches) {
+          console.warn('[Editor] Skipping save - session file mismatch', {
+            sessionFile: diffSession.sourceFileName,
+            activeFile: activeFile.name
+          });
+          return;
+        }
         await saveToStore(activeFile.id, diffSession);
       } else {
         await saveToStore(activeFile.id, null);  // Clear when not in diff mode
@@ -260,9 +273,24 @@ const Editor: React.FC<EditorProps> = ({
   const prevDiffSessionRef = useRef<DiffSessionState | null>(null);
   const computedContent = useMemo(() => {
     prevDiffSessionRef.current = diffSession; // Track reference for next comparison
-    if (!diffSession) return content;  // Non-diff mode, return normal content
+
+    if (!diffSession) {
+      // FIX: Bug #2 - Validate computedContent belongs to current file
+      if (computedContentFileIdRef.current &&
+          computedContentFileIdRef.current !== activeFileId) {
+        console.warn('[computedContent] Skipping stale content - file mismatch', {
+          contentFileId: computedContentFileIdRef.current,
+          activeFileId
+        });
+        return '';  // Return empty to prevent stale content from being saved
+      }
+      return content;  // Non-diff mode, return normal content
+    }
+
+    // FIX: Track which file this computed content belongs to
+    computedContentFileIdRef.current = activeFileId;
     return applyPatchQueue(diffSession);
-  }, [diffSession, diffSession?.patchQueue?.length]);  // Depend on diffSession and patchQueue length
+  }, [diffSession, diffSession?.patchQueue?.length, activeFileId, content]);  // FIX: Added activeFileId and content dependencies
 
   // Get processed hunk IDs (hunks that have been accepted/rejected)
   const processedHunkIds = useMemo(() => {
@@ -282,10 +310,12 @@ const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
     // FIX: Bug #3 - Only auto-save in EDIT mode, not in diff or preview mode
     // This prevents accidental saves during diff mode state transitions
+    // FIX: Bug #3b - Also verify computedContent belongs to current file
     const shouldAutoSave = !diffSession &&
                           internalMode === 'edit' &&
                           activeFile &&
-                          computedContent;
+                          computedContent &&
+                          computedContentFileIdRef.current === activeFile.id;
 
     if (shouldAutoSave) {
       console.log('[Edit Mode] Auto-saving to fileStore', {
@@ -302,6 +332,10 @@ const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
       // Logic 1: File Switch
       if (activeFileId !== prevFileIdRef.current) {
+          // FIX: Bug #4 - Clear computedContent file tracking when switching files
+          // This prevents stale computed content from being saved to the new file
+          computedContentFileIdRef.current = null;
+
           // CRITICAL: Clear diff session when switching files
           // This prevents comparing snapshots from different files
           if (diffSession) {
@@ -341,7 +375,7 @@ const Editor: React.FC<EditorProps> = ({
           prevFileIdRef.current = activeFileId;
           // Reset cursor stats on file change
           setCursorStats({ line: 1, col: 1 });
-      } 
+      }
       // Logic 2: External Update (e.g. Agent Diff Apply)
       // Check if store content differs from local content.
       // Since user typing updates store synchronously via saveFileContent,
@@ -352,7 +386,7 @@ const Editor: React.FC<EditorProps> = ({
       else if (activeFile && activeFile.content !== content && !isApplyingBatchRef.current && internalMode !== 'diff') {
           setContent(activeFile.content || '');
       }
-  }, [activeFileId, activeFile, content, resetHistory, setContent]);
+  }, [activeFileId, activeFile, content, resetHistory, setContent, diffSession, clearDiffSession, pendingChanges, removePendingChange, files, internalMode]);
 
   // --- Preview Logic ---
   const { previewMetadata, previewBody } = useMemo(() => {
@@ -748,10 +782,11 @@ const Editor: React.FC<EditorProps> = ({
     });
 
     // 计算最终内容
-    const finalContent = applyPatchQueue({
-      sourceSnapshot: diffSession?.sourceSnapshot || targetChange.originalContent || '',
-      patchQueue: newPatches
-    });
+    // 注意：直接使用 targetContent，因为它已经包含了所有变更的最终结果
+    // newPatches 只是为了更新 patchQueue（用于 UI 状态追踪）
+    // 之前已接受的 hunks 已经在 computedContent 中，而 newPatches 是从 computedContent 到 targetContent 的差异
+    // 所以最终内容应该就是 targetContent
+    const finalContent = targetChange.newContent || '';
 
     // ===== 新增：直接保存文件内容 =====
     if (fileToSaveId && finalContent) {

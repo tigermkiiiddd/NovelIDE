@@ -21,7 +21,7 @@ interface DiffState {
 
   // Actions
   getDiffSession: (fileId: string) => DiffSessionState | null;
-  loadDiffSession: (fileId: string) => Promise<DiffSessionState | null>;
+  loadDiffSession: (fileId: string, expectedFileName?: string) => Promise<DiffSessionState | null>;
   saveDiffSession: (fileId: string, session: DiffSessionState | null) => Promise<void>;
   clearDiffSession: (fileId: string) => Promise<void>;
 }
@@ -34,16 +34,42 @@ export const useDiffStore = create<DiffState>((set, get) => ({
     return diffSessions[fileId] || null;
   },
 
-  loadDiffSession: async (fileId: string) => {
+  loadDiffSession: async (fileId: string, expectedFileName?: string) => {
     // 先从内存状态获取
     const { diffSessions } = get();
     if (diffSessions[fileId] !== undefined) {
-      return diffSessions[fileId];
+      const cachedSession = diffSessions[fileId];
+
+      // FIX: Bug #6 - Validate cached session matches expected file
+      if (cachedSession && expectedFileName && cachedSession.sourceFileName) {
+        if (cachedSession.sourceFileName !== expectedFileName) {
+          console.warn('[diffStore] Cached session file mismatch, clearing', {
+            cachedFile: cachedSession.sourceFileName,
+            expectedFile: expectedFileName
+          });
+          await get().saveDiffSession(fileId, null);
+          return null;
+        }
+      }
+      return cachedSession;
     }
 
     // 从IndexedDB加载
     try {
       const session = await dbAPI.getDiffSession(fileId);
+
+      // FIX: Bug #6 - Validate loaded session matches expected file
+      if (session && expectedFileName && session.sourceFileName) {
+        if (session.sourceFileName !== expectedFileName) {
+          console.warn('[diffStore] Loaded session file mismatch, discarding', {
+            loadedFile: session.sourceFileName,
+            expectedFile: expectedFileName
+          });
+          await get().saveDiffSession(fileId, null);
+          return null;
+        }
+      }
+
       set((state) => ({
         diffSessions: {
           ...state.diffSessions,

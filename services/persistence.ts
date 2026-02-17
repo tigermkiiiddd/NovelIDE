@@ -1,6 +1,6 @@
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState } from '../types';
+import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote } from '../types';
 
 interface UiSettings {
   isSidebarOpen: boolean;
@@ -38,10 +38,14 @@ interface NovelGenieDB extends DBSchema {
     key: string; // 'global'
     value: UiSettings;
   };
+  planNotes: {
+    key: string; // storageKey (e.g. novel-plan-notes-{projectId})
+    value: PlanNote[];
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -69,6 +73,11 @@ export const initDB = () => {
         }
         if (!db.objectStoreNames.contains('uiSettings')) {
           db.createObjectStore('uiSettings');
+        }
+
+        // Version 5: Add planNotes store
+        if (!db.objectStoreNames.contains('planNotes')) {
+          db.createObjectStore('planNotes');
         }
       },
     });
@@ -300,6 +309,37 @@ export const dbAPI = {
       await db.delete('uiSettings', 'global');
     } catch (error) {
       console.error('删除 UI 设置失败:', error);
+    }
+  },
+
+  // --- Plan Notes ---
+  getPlanNotes: async (storageKey: string): Promise<PlanNote[] | undefined> => {
+    try {
+      console.log('[dbAPI.getPlanNotes] 开始读取, storageKey:', storageKey);
+      const db = await initDB();
+      const result = await db.get('planNotes', storageKey);
+      console.log('[dbAPI.getPlanNotes] 读取结果:', result ? `找到 ${result.length} 个笔记` : '无数据');
+      return result;
+    } catch (error) {
+      console.error('[dbAPI.getPlanNotes] 读取 Plan 笔记失败:', storageKey, error);
+      return undefined;
+    }
+  },
+
+  savePlanNotes: async (storageKey: string, planNotes: PlanNote[]) => {
+    console.log('[dbAPI.savePlanNotes] 开始保存, storageKey:', storageKey, '笔记数量:', planNotes.length);
+    const db = await initDB();
+    await db.put('planNotes', planNotes, storageKey);
+    console.log('[dbAPI.savePlanNotes] 保存完成');
+  },
+
+  deletePlanNotes: async (projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('planNotes', `novel-plan-notes-${projectId}`);
+      console.log('[Persistence] Deleted plan notes for project:', projectId);
+    } catch (error) {
+      console.error('删除 Plan 笔记失败:', error);
     }
   }
 };

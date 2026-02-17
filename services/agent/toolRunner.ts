@@ -1,7 +1,8 @@
 
-import { FileNode, TodoItem, PendingChange, FileType } from '../../types';
+import { FileNode, TodoItem, PendingChange, FileType, PlanNote } from '../../types';
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
+import { processManagePlanNote } from './tools/planTools';
 import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
@@ -11,8 +12,13 @@ import { BatchEdit } from '../../stores/fileStore';
 export interface ToolContext {
     files: FileNode[];
     todos: TodoItem[];
+    // Plan Mode
+    planMode?: boolean;
+    currentPlanNote?: PlanNote | null;
+    sessionId?: string;
+    projectId?: string;
     // Inject AI Service for Sub-Agents
-    aiService?: AIService; 
+    aiService?: AIService;
     onUiLog?: (msg: string) => void;
     // Add Signal
     signal?: AbortSignal;
@@ -30,6 +36,12 @@ export interface ToolContext {
         updateProjectMeta: (updates: any) => string;
         setTodos: (todos: TodoItem[]) => void;
         trackFileAccess: (path: string) => void;
+        // Plan Note Actions
+        createPlanNote?: (sessionId: string, projectId: string, title?: string) => PlanNote;
+        updatePlanNote?: (planId: string, updates: Partial<PlanNote>) => void;
+        addLine?: (planId: string, text: string) => any;
+        updateLine?: (planId: string, lineId: string, text: string) => void;
+        replaceAllLines?: (planId: string, lines: string[]) => void;
     }
 }
 
@@ -169,6 +181,37 @@ export const executeTool = async (
             if (op.newTodos) {
                 actions.setTodos(op.newTodos); // State update
             }
+        }
+        // --- PLAN NOTE TOOL ---
+        else if (name === 'managePlanNote') {
+            // 检查是否在 Plan 模式
+            if (!context.planMode) {
+                return { type: 'ERROR', message: 'managePlanNote 只能在 Plan 模式下使用。请让用户开启 Plan 模式后再试。' };
+            }
+
+            // 检查必要的 actions
+            if (!actions.createPlanNote || !actions.updatePlanNote || !actions.addLine ||
+                !actions.updateLine || !actions.replaceAllLines) {
+                return { type: 'ERROR', message: 'Plan Note actions not available' };
+            }
+
+            const op = processManagePlanNote(
+                context.currentPlanNote || null,
+                args.action,
+                args.thinking,
+                actions.createPlanNote,
+                actions.updatePlanNote,
+                actions.addLine,
+                actions.updateLine,
+                actions.replaceAllLines,
+                context.sessionId || '',
+                context.projectId || '',
+                args.title,
+                args.lines,
+                args.lineIds,
+                args.newContent
+            );
+            result = op.result;
         } 
         // --- SUB AGENT ENTRY POINT ---
         else if (name === 'call_search_agent') {

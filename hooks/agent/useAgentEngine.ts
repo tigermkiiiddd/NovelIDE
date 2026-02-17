@@ -1,10 +1,11 @@
 
 import { useRef, useCallback, useMemo } from 'react';
-import { ChatMessage, FileNode, ProjectMeta, TodoItem } from '../../types';
+import { ChatMessage, FileNode, ProjectMeta, TodoItem, PlanNote } from '../../types';
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
-import { allTools } from '../../services/agent/tools/index';
+import { allTools, getToolsForMode } from '../../services/agent/tools/index';
 import { useAgentStore } from '../../stores/agentStore';
+import { usePlanStore } from '../../stores/planStore';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
 
@@ -14,6 +15,9 @@ interface UseAgentEngineProps {
     files: FileNode[];
     project: ProjectMeta | undefined;
     activeFile: FileNode | null;
+    // Plan Mode
+    planMode?: boolean;
+    currentPlanNote?: PlanNote | null;
 }
 
 export const useAgentEngine = ({
@@ -21,13 +25,15 @@ export const useAgentEngine = ({
     toolsHook,
     files,
     project,
-    activeFile
+    activeFile,
+    planMode = false,
+    currentPlanNote = null
 }: UseAgentEngineProps) => {
-    const { 
+    const {
         currentSessionId, addMessage, editMessageContent, updateMessageMetadata,
-        setLoading, aiServiceInstance 
+        setLoading, aiServiceInstance
     } = context;
-    
+
     const { runTool, resetErrorTracker } = toolsHook;
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -56,9 +62,13 @@ export const useAgentEngine = ({
                 project,
                 activeFile,
                 freshTodos,
-                freshSession?.messages  // 传递会话消息历史
+                freshSession?.messages,  // 传递会话消息历史
+                planMode  // 传递 Plan 模式状态
             );
-            
+
+            // 根据模式选择工具
+            const toolsForMode = getToolsForMode(planMode);
+
             let loopCount = 0;
             const MAX_LOOPS = 10;
             let keepGoing = true;
@@ -98,10 +108,10 @@ export const useAgentEngine = ({
 
                 // 4.2 调用 LLM (Network Call)
                 const response = await aiServiceInstance.sendMessage(
-                    apiHistory, 
+                    apiHistory,
                     '', // 当前消息已在 apiHistory 中
-                    fullSystemInstruction, 
-                    allTools,
+                    fullSystemInstruction,
+                    toolsForMode,  // 使用根据模式选择的工具
                     signal
                 );
 
@@ -209,8 +219,9 @@ export const useAgentEngine = ({
             abortControllerRef.current = null;
         }
     }, [
-        aiServiceInstance, currentSessionId, files, project, activeFile, 
-        addMessage, editMessageContent, setLoading, runTool, resetErrorTracker, updateMessageMetadata
+        aiServiceInstance, currentSessionId, files, project, activeFile,
+        addMessage, editMessageContent, setLoading, runTool, resetErrorTracker, updateMessageMetadata,
+        planMode, currentPlanNote
     ]);
 
     const stopGeneration = useCallback(() => {

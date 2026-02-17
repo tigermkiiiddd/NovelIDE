@@ -7,27 +7,35 @@ import { useAgentContext } from './agent/useAgentContext';
 import { useAgentTools, AgentToolsImplementation } from './agent/useAgentTools';
 import { useAgentEngine } from './agent/useAgentEngine';
 import { executeApprovedChange } from '../services/agent/toolRunner';
+import { usePlanStore } from '../stores/planStore';
 
 // Facade Hook
 export const useAgent = (
-    files: FileNode[], 
-    project: ProjectMeta | undefined, 
-    activeFile: FileNode | null, 
+    files: FileNode[],
+    project: ProjectMeta | undefined,
+    activeFile: FileNode | null,
     tools: AgentToolsImplementation
 ) => {
   // 1. 初始化上下文 (Store & AI Service)
   const context = useAgentContext(project);
-  const { 
-      currentSession, currentSessionId, 
+  const {
+      currentSession, currentSessionId,
       addMessage, deleteMessagesFrom, editMessageContent,
-      pendingChanges, removePendingChange, setTodos, 
-      aiConfig, setAiConfig, 
+      pendingChanges, removePendingChange, setTodos,
+      aiConfig, setAiConfig,
       isLoading,
       handleCreateSession, switchSession, deleteSession,
       projectSessions
   } = context;
 
   const todos = currentSession?.todos || [];
+
+  // Plan Mode State - 使用 useMemo 根据当前会话动态计算 currentPlanNote
+  const planMode = usePlanStore(state => state.planMode.isEnabled);
+  const planNotes = usePlanStore(state => state.planNotes);
+  const currentPlanNote = useMemo(() => {
+    return planNotes.find(n => n.sessionId === currentSessionId) || null;
+  }, [planNotes, currentSessionId]);
 
   // 2. 初始化工具层 (Tools & Shadow Read & Anti-Loop)
   const toolsHook = useAgentTools({
@@ -38,7 +46,12 @@ export const useAgent = (
       addMessage,
       editMessageContent,
       addPendingChange: context.addPendingChange,
-      setTodos
+      setTodos,
+      // Plan Mode
+      planMode,
+      currentPlanNote,
+      sessionId: currentSessionId || undefined,
+      projectId: project?.id
   });
 
   // 3. 初始化引擎层 (Core Loop)
@@ -47,7 +60,10 @@ export const useAgent = (
       toolsHook,
       files,
       project,
-      activeFile
+      activeFile,
+      // Plan Mode
+      planMode,
+      currentPlanNote
   });
 
   // --- 4. 辅助功能 (Token 估算 & 审批逻辑) ---
@@ -127,7 +143,7 @@ export const useAgent = (
     isLoading,
     sendMessage,
     stopGeneration: engine.stopGeneration,
-    regenerateMessage, 
+    regenerateMessage,
     editUserMessage,
     todos,
     sessions: projectSessions,
@@ -140,6 +156,15 @@ export const useAgent = (
     pendingChanges,
     approveChange,
     rejectChange,
-    tokenUsage
+    tokenUsage,
+    // Plan Mode
+    planMode,
+    togglePlanMode: usePlanStore.getState().togglePlanMode,
+    setPlanModeEnabled: usePlanStore.getState().setPlanModeEnabled,
+    planNotes,
+    currentPlanNote,
+    submitPlanForReview: usePlanStore.getState().submitForReview,
+    approvePlanNote: usePlanStore.getState().approvePlan,
+    rejectPlanNote: usePlanStore.getState().rejectPlan
   };
 };

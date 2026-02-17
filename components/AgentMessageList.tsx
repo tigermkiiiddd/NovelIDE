@@ -293,11 +293,34 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             const isLast = index === messages.length - 1;
             const prevMsg = index > 0 ? messages[index-1] : null;
 
-            // 1. Tool Outputs (System Message - Collapsible Log) - 仅 Debug 模式显示
+            // 1. Tool Outputs (System Message - Collapsible Log)
             if (msg.isToolOutput) {
-                // 普通模式下隐藏 ToolLogMessage
+                // 普通模式下：显示错误提示框（如果包含错误）
                 if (!isDebugMode) {
-                    return null;
+                    const hasError = msg.text?.includes('❌') || msg.text?.includes('[SYSTEM ERROR]');
+                    if (!hasError) {
+                        return null;  // 非错误信息才隐藏
+                    }
+                    // 显示简化的错误提示框
+                    return (
+                        <div key={msg.id} className="mx-4 my-2 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-sm animate-in fade-in duration-300">
+                            <div className="flex items-center gap-2 text-red-400 font-medium mb-1">
+                                <AlertOctagon size={14} />
+                                <span>工具执行失败</span>
+                            </div>
+                            <div className="text-red-300 text-xs font-mono whitespace-pre-wrap">{msg.text}</div>
+                            {/* Intelligent Regenerate: If previous message was a Model Plan, retry that. Else retry self. */}
+                            {onRegenerate && (
+                                <button
+                                    onClick={() => onRegenerate(prevMsg?.role === 'model' ? prevMsg.id : msg.id)}
+                                    className="mt-2 p-1.5 text-xs text-red-400 hover:text-white flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
+                                    title="重试"
+                                >
+                                    <RefreshCw size={12} /> <span>重试</span>
+                                </button>
+                            )}
+                        </div>
+                    );
                 }
                 return (
                     <div key={msg.id} className="flex flex-col items-start w-full animate-in fade-in duration-300">

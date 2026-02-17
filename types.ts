@@ -64,6 +64,38 @@ export interface ChatSession {
   messages: ChatMessage[];
   todos: TodoItem[]; // 每个会话有独立的任务状态
   lastModified: number;
+  planModeEnabled?: boolean; // 会话级 Plan 模式开关
+}
+
+// --- Plan Notebook Types ---
+
+// Plan笔记本单行内容
+export interface PlanNoteLine {
+  id: string;
+  text: string;
+  order: number;
+}
+
+// 用户注释（挂在某一行上）
+export interface PlanNoteAnnotation {
+  id: string;
+  lineId: string;
+  content: string;
+  createdAt: number;
+  modifiedAt: number;
+}
+
+// Plan笔记本
+export interface PlanNote {
+  id: string;
+  sessionId: string;          // 关联到 ChatSession
+  projectId: string;
+  title: string;
+  lines: PlanNoteLine[];
+  annotations: PlanNoteAnnotation[];
+  status: 'draft' | 'reviewing' | 'approved' | 'rejected';
+  createdAt: number;
+  updatedAt: number;
 }
 
 // --- Pending Changes for Approval ---

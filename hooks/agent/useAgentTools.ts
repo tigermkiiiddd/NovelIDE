@@ -1,8 +1,9 @@
 
 import { useRef, useCallback } from 'react';
 import { useAgentStore } from '../../stores/agentStore';
+import { usePlanStore } from '../../stores/planStore';
 import { executeTool, ToolExecutionResult } from '../../services/agent/toolRunner';
-import { FileNode, TodoItem, PendingChange, ChatMessage } from '../../types';
+import { FileNode, TodoItem, PendingChange, ChatMessage, PlanNote } from '../../types';
 import { AIService } from '../../services/geminiService';
 import { generateId } from '../../services/fileSystem';
 import { BatchEdit } from '../../stores/fileStore';
@@ -29,6 +30,11 @@ interface UseAgentToolsProps {
     editMessageContent: (id: string, text: string) => void;
     addPendingChange: (change: PendingChange) => void;
     setTodos: (todos: TodoItem[]) => void;
+    // Plan Mode
+    planMode?: boolean;
+    currentPlanNote?: PlanNote | null;
+    sessionId?: string;
+    projectId?: string;
 }
 
 export const useAgentTools = ({
@@ -39,9 +45,13 @@ export const useAgentTools = ({
     addMessage,
     editMessageContent,
     addPendingChange,
-    setTodos
+    setTodos,
+    planMode = false,
+    currentPlanNote = null,
+    sessionId,
+    projectId
 }: UseAgentToolsProps) => {
-    
+
     // --- 状态追踪 ---
     const accessedFiles = useRef<Set<string>>(new Set());
     const errorTracker = useRef<Map<string, number>>(new Map());
@@ -71,19 +81,28 @@ export const useAgentTools = ({
 
     // --- 核心逻辑：执行工具 ---
     const runTool = useCallback(async (
-        name: string, 
-        args: any, 
-        toolMsgId: string, 
+        name: string,
+        args: any,
+        toolMsgId: string,
         signal: AbortSignal,
         logToUi: (text: string) => void
     ): Promise<string> => {
-        
+
+        // 获取 planStore actions
+        const planStore = usePlanStore.getState();
+
         // 动态构建包含 Shadow Read 的工具集
         const dynamicActions = {
             ...tools,
             setTodos,
             trackFileAccess: (fname: string) => accessedFiles.current.add(fname),
-            readFile: shadowReadFile
+            readFile: shadowReadFile,
+            // Plan Note Actions
+            createPlanNote: planStore.createPlanNote,
+            updatePlanNote: planStore.updatePlanNote,
+            addLine: planStore.addLine,
+            updateLine: planStore.updateLine,
+            replaceAllLines: planStore.replaceAllLines
         };
 
         // 执行工具
@@ -94,7 +113,12 @@ export const useAgentTools = ({
             onUiLog: logToUi,
             signal,
             getShadowContent,
-            actions: dynamicActions
+            actions: dynamicActions,
+            // Plan Mode
+            planMode,
+            currentPlanNote,
+            sessionId,
+            projectId
         });
 
         let resultString = '';
@@ -140,7 +164,7 @@ export const useAgentTools = ({
         }
 
         return resultString;
-    }, [files, todos, tools, aiServiceInstance, setTodos, shadowReadFile, addPendingChange, getShadowContent]);
+    }, [files, todos, tools, aiServiceInstance, setTodos, shadowReadFile, addPendingChange, getShadowContent, planMode, currentPlanNote, sessionId, projectId]);
 
     // 重置错误追踪器（通常在每轮对话开始时调用）
     const resetErrorTracker = useCallback(() => {
