@@ -664,8 +664,9 @@ const Editor: React.FC<EditorProps> = ({
     let fileToSaveId = activeFileId;
 
     if (!fileToSave && targetChange.fileName) {
-      // 检查文件是否已存在于 fileStore
-      const existingFile = findNodeByPath(files, targetChange.fileName);
+      // 检查文件是否已存在于 fileStore - 使用 getState() 获取最新的 files
+      const currentFiles = fileStore.getState().files;
+      const existingFile = findNodeByPath(currentFiles, targetChange.fileName);
 
       if (existingFile) {
         // 文件存在，使用它
@@ -765,8 +766,9 @@ const Editor: React.FC<EditorProps> = ({
     }
     // ===== 新增结束 =====
 
-    // Remove all pending changes for this file
-    const filePath = fileToSave ? getNodePath(fileToSave, files) : targetChange.fileName;
+    // Remove all pending changes for this file - 使用 getState() 获取最新的 files
+    const currentFilesForPath = fileStore.getState().files;
+    const filePath = fileToSave ? getNodePath(fileToSave, currentFilesForPath) : targetChange.fileName;
     const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
 
     console.log('Removing pending changes:', {
