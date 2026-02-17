@@ -685,7 +685,7 @@ const Editor: React.FC<EditorProps> = ({
 
         // createFile 内部已经设置了 activeFileId
         // 由于 React 状态更新是批量的，我们需要从 store 直接获取最新值
-        const newActiveFileId = fileStore.getState().activeFileId;
+        const newActiveFileId = useFileStore.getState().activeFileId;
         if (newActiveFileId) {
           fileToSaveId = newActiveFileId;
           console.log('[handleAcceptAll] Using new activeFileId after creation:', newActiveFileId);
