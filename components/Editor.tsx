@@ -789,9 +789,10 @@ const Editor: React.FC<EditorProps> = ({
       metadata: { logType: 'success' }
     });
 
-    // Clear diff session after a short delay to allow file save to complete
+    // Clear diff session and exit diff mode after a short delay to allow file save to complete
     setTimeout(() => {
       setDiffSession(null);
+      setInternalMode('edit');  // 退出 diff 模式
       isApplyingBatchRef.current = false;
       completionMessageSentRef.current = null; // Reset for next session
     }, 100);
@@ -823,9 +824,10 @@ const Editor: React.FC<EditorProps> = ({
       metadata: { logType: 'info' }
     });
 
-    // Clear diff session after a short delay
+    // Clear diff session and exit diff mode after a short delay
     setTimeout(() => {
       setDiffSession(null);
+      setInternalMode('edit');  // 退出 diff 模式
       isApplyingBatchRef.current = false;
       completionMessageSentRef.current = null; // Reset for next session
     }, 100);
