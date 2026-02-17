@@ -327,6 +327,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
               }}
               onReject={rejectPlanNote}
               onSendFeedback={handleSendFeedbackToAI}
+              isMobile={isMobile}
+              onOpenChat={() => setChatOpen(true)}
             />
           ) : (
             <Editor className="w-full h-full" />
@@ -387,7 +389,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         planMode={planMode}
         onTogglePlanMode={togglePlanMode}
         currentPlanNote={currentPlanNote}
-        onOpenPlanViewer={() => setIsPlanViewerOpen(true)}
+        onOpenPlanViewer={() => {
+        setIsPlanViewerOpen(true);
+        if (isMobile) setChatOpen(false);
+      }}
       />
 
       <ProjectOverview

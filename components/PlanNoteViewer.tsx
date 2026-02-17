@@ -30,6 +30,9 @@ interface PlanNoteViewerProps {
   onReject: (planId: string) => void;
   // Send feedback to AI
   onSendFeedback: (feedback: string) => void;
+  // Mobile navigation
+  isMobile?: boolean;
+  onOpenChat?: () => void;
 }
 
 const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
@@ -41,7 +44,9 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
   onDeleteAnnotation,
   onApprove,
   onReject,
-  onSendFeedback
+  onSendFeedback,
+  isMobile,
+  onOpenChat
 }) => {
   const [annotatingLineId, setAnnotatingLineId] = useState<string | null>(null);
   const [annotationText, setAnnotationText] = useState('');
@@ -101,6 +106,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
     // 同时发送系统消息触发 AI 继续执行
     onSendFeedback('[Plan已批准] 用户已批准当前Plan，Agent可以开始执行。');
     onClose();
+    if (isMobile && onOpenChat) onOpenChat();
   };
 
   // 返工：直接打开反馈输入框
@@ -116,6 +122,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
       setFeedbackText('');
       setShowFeedbackInput(false);
       onClose();
+      if (isMobile && onOpenChat) onOpenChat();
     }
   };
 
