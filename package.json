@@ -29,7 +29,6 @@
     "react-markdown": "^10.1.0",
     "remark-breaks": "4.0.0",
     "remark-gfm": "4.0.0",
-    "vconsole": "^3.15.1",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
@@ -45,6 +44,7 @@
     "jest-environment-jsdom": "^30.2.0",
     "ts-jest": "^29.4.6",
     "typescript": "~5.8.2",
+    "vconsole": "^3.15.1",
     "vite": "^6.2.0"
   }
 }
