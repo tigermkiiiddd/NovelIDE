@@ -13,6 +13,38 @@
  */
 
 import { FileNode, FileType } from '../../types';
+import {
+  DEFAULT_AGENT_SKILL,
+  STYLE_GUIDE_TEMPLATE,
+  PROJECT_PROFILE_TEMPLATE,
+  CHARACTER_CARD_TEMPLATE,
+  OUTLINE_MASTER_TEMPLATE,
+  OUTLINE_CHAPTER_TEMPLATE,
+  SKILL_WORLD_BUILDER,
+  SKILL_OUTLINE_ARCHITECT,
+  SKILL_CHARACTER_DESIGNER,
+  SKILL_DRAFT_EXPANDER,
+  SKILL_EDITOR_REVIEW,
+  SKILL_HUMANIZER_STYLE,
+  SKILL_EROTIC_WRITER
+} from '../../services/templates';
+
+// 内联模板（用于世界线记录和伏笔记录）
+const withMeta = (content: string, summary: string, tags: string[] = []) => {
+  return `---\nsummarys: ["${summary}"]\ntags: ${JSON.stringify(tags)}\n---\n${content}`;
+};
+
+const TIMELINE_TEMPLATE = withMeta(
+  '# 世界线记录\n\n| 章节 | 事件 | 状态变更 | 伏笔 |\n|---|---|---|---|\n',
+  '此文件为标准的世界线记录模板，提供了表格格式以供复制使用，旨在规范化记录剧情事件与状态变更。',
+  ['模板']
+);
+
+const FORESHADOW_TEMPLATE = withMeta(
+  '# 伏笔记录\n\n- [ ] [章节名] 伏笔内容 (未回收)\n',
+  '此文件为标准的伏笔追踪模板，采用了任务列表的格式，方便作者在创作过程中随时添加和勾选已回收的伏笔。',
+  ['模板']
+);
 
 // 系统文件定义（从fileStore迁移）
 const PROTECTED_FOLDERS = ['98_技能配置', '99_创作规范', 'subskill'];
@@ -66,6 +98,7 @@ export class FileService {
 
   /**
    * 系统文件恢复 - 确保系统文件和文件夹存在
+   * 使用与 fileSystem.ts 初始化时相同的模板常量
    */
   restoreSystemFiles(files: FileNode[]): FileNode[] {
     const updatedFiles = [...files];
@@ -119,23 +152,32 @@ export class FileService {
     // 1. 确保 98_技能配置 文件夹
     const skillFolder = ensureFolder('98_技能配置', 'root');
 
-    // 2. 确保 agent_core.md 文件
-    ensureFile('agent_core.md', skillFolder.id, this.getDefaultAgentSkillContent());
+    // 2. 确保 agent_core.md 文件（使用 DEFAULT_AGENT_SKILL 常量）
+    ensureFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL);
 
     // 3. 确保 99_创作规范 文件夹
     const rulesFolder = ensureFolder('99_创作规范', 'root');
 
-    // 4. 确保规则文件
-    ensureFile('指南_文风规范.md', rulesFolder.id, 'Style guide content');
-    ensureFile('模板_项目档案.md', rulesFolder.id, 'Project profile template');
-    ensureFile('模板_角色档案.md', rulesFolder.id, 'Character card template');
+    // 4. 确保创作规范文件（使用正确的模板常量）
+    ensureFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE);
+    ensureFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE);
+    ensureFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE);
+    ensureFile('模板_全书总纲.md', rulesFolder.id, OUTLINE_MASTER_TEMPLATE);
+    ensureFile('模板_章节细纲.md', rulesFolder.id, OUTLINE_CHAPTER_TEMPLATE);
+    ensureFile('模板_世界线记录.md', rulesFolder.id, TIMELINE_TEMPLATE);
+    ensureFile('模板_伏笔记录.md', rulesFolder.id, FORESHADOW_TEMPLATE);
 
     // 5. 确保 subskill 子文件夹
     const subskillFolder = ensureFolder('subskill', skillFolder.id);
 
-    // 6. 确保subskill文件
-    ensureFile('技能_世界观.md', subskillFolder.id, 'World builder skill');
-    ensureFile('技能_大纲构建.md', subskillFolder.id, 'Outline architect skill');
+    // 6. 确保 subskill 文件（使用正确的文件名和模板常量）
+    ensureFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER);
+    ensureFile('技能_大纲构建.md', subskillFolder.id, SKILL_OUTLINE_ARCHITECT);
+    ensureFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER);
+    ensureFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER);
+    ensureFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW);
+    ensureFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE);
+    ensureFile('技能_涩涩扩写.md', subskillFolder.id, SKILL_EROTIC_WRITER);
 
     return updatedFiles;
   }
@@ -243,14 +285,5 @@ export class FileService {
     }
 
     return '/' + parts.join('/');
-  }
-
-  /**
-   * 私有方法：获取默认agent核心技能内容
-   */
-  private getDefaultAgentSkillContent(): string {
-    return `# Default Agent Skill
-
-DEFAULT_AGENT_SKILL configuration...`;
   }
 }

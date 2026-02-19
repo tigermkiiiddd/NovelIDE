@@ -155,13 +155,14 @@ describe('FileService - 文件系统域逻辑', () => {
 
       const updatedFiles = fileService.restoreSystemFiles(existingFiles);
 
-      // 应该创建 agent_core.md 文件
+      // 应该创建 agent_core.md 文件，使用真实的协议模板
       const agentFile = updatedFiles.find(
         f => f.name === 'agent_core.md' && f.parentId === 'folder-1'
       );
       expect(agentFile).toBeDefined();
       expect(agentFile?.type).toBe(FileType.FILE);
-      expect(agentFile?.content).toContain('DEFAULT_AGENT_SKILL');
+      expect(agentFile?.content).toContain('NovelGenie-Core');
+      expect(agentFile?.content).toContain('IDE智能辅助协议');
     });
 
     it('应该保留现有的系统文件', () => {
