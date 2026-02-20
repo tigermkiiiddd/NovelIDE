@@ -63,18 +63,27 @@ export class FileService {
 
   /**
    * 系统文件保护 - 判断文件是否可删除
+   * 注意：99_创作规范 目录下的文件允许删除（可重置内容）
    */
-  canDeleteFile(file: FileNode | null): boolean {
+  canDeleteFile(file: FileNode | null, allFiles?: FileNode[]): boolean {
     if (!file) return false;
 
-    // 检查是否是受保护的文件夹
+    // 检查是否是受保护的文件夹（99_创作规范 允许删除其中的文件，但文件夹本身不可删除）
     if (file.type === FileType.FOLDER && PROTECTED_FOLDERS.includes(file.name)) {
       return false;
     }
 
     // 检查是否是受保护的文件
     if (file.type === FileType.FILE) {
-      // 检查文件名前缀
+      // 获取文件的完整路径
+      const filePath = allFiles ? this.getNodePath(file, allFiles) : '';
+
+      // 99_创作规范 目录下的文件允许删除（用户可重置内容）
+      if (filePath.startsWith('/99_创作规范/')) {
+        return true;
+      }
+
+      // 检查文件名前缀（保护 98_技能配置 和 subskill 下的文件）
       if (PROTECTED_FILE_PREFIXES.some(prefix => file.name.startsWith(prefix))) {
         return false;
       }
@@ -91,9 +100,9 @@ export class FileService {
   /**
    * 文件重命名权限 - 判断文件是否可重命名
    */
-  canRenameFile(file: FileNode | null): boolean {
+  canRenameFile(file: FileNode | null, allFiles?: FileNode[]): boolean {
     // 复用删除权限逻辑
-    return this.canDeleteFile(file);
+    return this.canDeleteFile(file, allFiles);
   }
 
   /**

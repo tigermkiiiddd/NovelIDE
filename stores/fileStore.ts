@@ -258,7 +258,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     if (!targetNode) return `Error: File not found`;
 
     // Check delete permission using FileService
-    if (!fileService.canDeleteFile(targetNode)) {
+    if (!fileService.canDeleteFile(targetNode, files)) {
       return `Error: Cannot delete protected system file "${targetNode.name}"`;
     }
 
@@ -286,7 +286,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     if (!file) return `Error: File not found.`;
 
     // Check rename permission using FileService
-    if (!fileService.canRenameFile(file)) {
+    if (!fileService.canRenameFile(file, files)) {
       return `Error: Cannot rename protected system file "${file.name}"`;
     }
 

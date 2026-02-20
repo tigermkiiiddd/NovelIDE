@@ -75,35 +75,59 @@ describe('FileService - 文件系统域逻辑', () => {
     });
 
     it('应该识别受保护的子文件', () => {
-      const protectedFile = {
-        id: 'file-1',
-        parentId: 'skill-folder',
-        name: '技能_世界观.md',
-        type: FileType.FILE,
-        content: 'Skill content',
-        lastModified: Date.now()
-      };
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'subskill-folder', parentId: 'skill-folder', name: 'subskill', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'file-1', parentId: 'subskill-folder', name: '技能_世界观.md', type: FileType.FILE, content: 'Skill content', lastModified: Date.now() }
+      ];
+      const protectedFile = allFiles[3];
 
-      const canDelete = fileService.canDeleteFile(protectedFile);
+      const canDelete = fileService.canDeleteFile(protectedFile, allFiles);
 
       expect(canDelete).toBe(false);
+    });
+
+    it('应该允许删除99_创作规范目录下的文件', () => {
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'rules-folder', parentId: 'root', name: '99_创作规范', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'file-1', parentId: 'rules-folder', name: '指南_文风规范.md', type: FileType.FILE, content: 'Style guide', lastModified: Date.now() }
+      ];
+      const guideFile = allFiles[2];
+
+      const canDelete = fileService.canDeleteFile(guideFile, allFiles);
+
+      expect(canDelete).toBe(true);
     });
   });
 
   describe('文件重命名权限', () => {
-    it('应该阻止重命名系统保护文件', () => {
-      const protectedFile = {
-        id: 'file-1',
-        parentId: 'rules-folder',
-        name: '指南_文风规范.md',
-        type: FileType.FILE,
-        content: 'Style guide',
-        lastModified: Date.now()
-      };
+    it('应该阻止重命名98_技能配置目录下的保护文件', () => {
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'subskill-folder', parentId: 'skill-folder', name: 'subskill', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'file-1', parentId: 'subskill-folder', name: '技能_世界观.md', type: FileType.FILE, content: 'Skill content', lastModified: Date.now() }
+      ];
+      const protectedFile = allFiles[3];
 
-      const canRename = fileService.canRenameFile(protectedFile);
+      const canRename = fileService.canRenameFile(protectedFile, allFiles);
 
       expect(canRename).toBe(false);
+    });
+
+    it('应该允许重命名99_创作规范目录下的文件', () => {
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'rules-folder', parentId: 'root', name: '99_创作规范', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'file-1', parentId: 'rules-folder', name: '指南_文风规范.md', type: FileType.FILE, content: 'Style guide', lastModified: Date.now() }
+      ];
+      const guideFile = allFiles[2];
+
+      const canRename = fileService.canRenameFile(guideFile, allFiles);
+
+      expect(canRename).toBe(true);
     });
 
     it('应该允许重命名用户文件', () => {
