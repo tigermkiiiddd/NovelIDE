@@ -13,6 +13,12 @@ npm run test:watch   # Watch mode
 npm run test:coverage # Coverage report
 ```
 
+### Running a Single Test
+```bash
+npm test -- path/to/test.file.test.ts
+npm test -- --testNamePattern="test name"
+```
+
 ## Architecture Overview
 
 ### Project Structure
@@ -36,8 +42,11 @@ npm run test:coverage # Coverage report
 - `agentStore` - AI chat sessions and messages
 - `uiStore` - UI state (panels, modals)
 - `diffStore` - Diff viewing state
+- `planStore` - Plan mode notebook data (lines, annotations, review status)
 
 Stores use `createPersistingStore.ts` for IndexedDB persistence with debounced saves (default 1s).
+
+**Important**: When accessing store state from outside React components (e.g., in tool execution), use `useStoreName.getState()` to get the latest state, not the stale closure value.
 
 ### Agent System Layers (`hooks/agent/`)
 The agent system uses a layered architecture:
@@ -50,6 +59,21 @@ The agent system uses a layered architecture:
 - `projectTools.ts` - Project management
 - `todoTools.ts` - Task tracking
 - `subAgentTools.ts` - Sub-agent orchestration
+- `planTools.ts` - Plan notebook management (Plan mode only)
+
+### Tool Execution Flow (`services/agent/toolRunner.ts`)
+1. **Write operations** (create/update/patch/delete/rename) return `APPROVAL_REQUIRED` with diff preview
+2. **Read operations** execute immediately and return `EXECUTED`
+3. **Sub-agents** (e.g., `call_search_agent`) run autonomous search tasks
+4. The UI displays approval dialogs for write operations before executing `executeApprovedChange()`
+
+### Agent Engine Loop (`hooks/agent/useAgentEngine.ts`)
+The ReAct loop:
+1. Build system prompt via `constructSystemPrompt()` (includes project context, todos, skills)
+2. Call LLM with tool definitions
+3. If tool calls returned → execute tools → feed results back → repeat
+4. If no tool calls → end conversation turn
+5. Maximum 10 tool loops per turn (protection against infinite loops)
 
 ### File Domain (`domains/file/`)
 `fileService.ts` contains:
@@ -59,6 +83,12 @@ The agent system uses a layered architecture:
 - Protected prefixes: `技能_`, `指南_`, `模板_`
 
 ## Key Patterns
+
+### System Prompt Construction (`services/resources/skills/coreProtocol.ts`)
+- `DEFAULT_AGENT_SKILL` - Core protocol defining agent behavior, prime directives, and workflow SOP
+- `PLAN_MODE_PROTOCOL` - Additional rules when Plan mode is active (restricts write operations)
+- `constructSystemPrompt()` - Assembles: agent protocol + plan mode + project context + todos + file tree
+- Lazy-loads sub-skills: only paths are injected; agent must `readFile` to activate
 
 ### Persisting Store Pattern
 ```typescript
@@ -93,6 +123,13 @@ Test utilities: `src/test/utils/testHelpers.ts`
 
 ## Configuration Files
 
-- `vite.config.ts` - Vite config with `@` alias
+- `vite.config.ts` - Vite config with `@` alias mapping to project root
 - `tsconfig.json` - TypeScript config
 - `jest.config.cjs` - Jest config with jsdom environment
+
+## File Organization
+
+The project uses a flat structure at root level (not inside `src/`):
+- `components/`, `stores/`, `hooks/`, `services/`, `domains/`, `utils/`, `types/` are at project root
+- Only test infrastructure is in `src/test/`
+- Entry points: `index.tsx`, `App.tsx` at root

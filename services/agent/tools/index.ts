@@ -42,8 +42,8 @@ export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
     // Plan 模式：只有读取工具 + todo + planNote
     return [...readTools, manageTodosTool, managePlanNoteTool];
   }
-  // 普通模式：所有工具
-  return [...allTools, managePlanNoteTool];
+  // 普通模式：所有工具（不包含 planNote）
+  return allTools;
 };
 
 export * from './fileReadTools';
