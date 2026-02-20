@@ -17,17 +17,12 @@ export const PLAN_MODE_PROTOCOL = `
   "plan_mode": {
     "enabled": true,
     "purpose": "在执行复杂创作任务前，先与用户讨论方案，获得批准后再执行",
+    "available_tools": ["listFiles", "readFile", "managePlanNote", "callSearchAgent"],
     "workflow": [
-      "1. 接到任务后，先用 manageTodos 创建任务清单",
-      "2. 使用 managePlanNote 记录详细的思考过程和方案",
-      "3. Plan 笔记本应包含：目标分析、方案对比、风险评估、建议方案",
-      "4. 告知用户 Plan 笔记本已准备好，等待用户查看和审批",
-      "5. 用户批准后，系统会自动关闭 Plan 模式，方可执行文件操作"
-    ],
-    "restrictions": [
-      "Plan 模式下禁止直接调用 createFile/updateFile/patchFile",
-      "必须先通过 managePlanNote 记录方案并获得用户批准",
-      "所有想法都必须通过 Plan 笔记本与用户共享"
+      "1. 使用 managePlanNote 记录详细的思考过程和方案",
+      "2. Plan 笔记本应包含：目标分析、方案对比、风险评估、建议方案",
+      "3. 告知用户 Plan 笔记本已准备好，等待用户查看和审批",
+      "4. 用户批准后，系统会自动关闭 Plan 模式并执行方案"
     ],
     "plan_notebook_guidelines": {
       "title": "简洁明了的标题，如 '第一章写作计划'",
@@ -254,11 +249,8 @@ export const constructSystemPrompt = (
 【Plan 模式已激活】
 ${PLAN_MODE_PROTOCOL}
 
-> ⚠️ 你现在处于 Plan 模式。在此模式下：
-> - 你只能使用读取工具和 manageTodos/managePlanNote
-> - 所有创作想法必须通过 managePlanNote 记录到 Plan 笔记本
-> - 等待用户审批后才能执行写文件操作
-> - 专注思考和规划，不要急于执行
+> 当前处于 **Plan 模式**，可用工具: listFiles, readFile, managePlanNote, callSearchAgent
+> 请专注于思考和规划，使用 managePlanNote 记录方案。用户批准后系统会自动切换到执行模式。
 ` : '';
 
   return `
@@ -294,6 +286,7 @@ ${fileTree}
 ==================================================
 【系统当前状态检查】
 - 当前激活文件: ${activeFile ? getNodePath(activeFile, files) : '(无)'}
+- 当前模式: ${planMode ? '**Plan 模式** - 规划中' : '普通模式'}
 - 请基于上述上下文，等待用户指令。若用户指令模糊，请根据 SOP 引导用户。
 `;
 };
