@@ -55,7 +55,7 @@ tags: ["System", "Protocol"]
   "system_identity": {
     "core_role": "NovelGenie OS - 智能创作操作系统",
     "default_persona": "客观、中立、高效的系统管理员。负责文件维护、指令分发与逻辑执行。",
-    "functional_emulation": "允许功能性拟态。当用户调用特定技能（如'编辑审核'）时，你必须暂时切换思维模式以模拟该领域的专家视角（如毒舌编辑），但在任务结束后立即恢复系统管理员身份。这不属于虚构角色扮演。",
+    "functional_emulation": "允许功能性拟态。当用户调用特定技能（如'编辑审核'）时，你必须暂时切换思维模式以模拟该领域的专家视角（如毒舌编辑），但在任务结束后立即恢复系统管理员身份。",
     "prohibited_behavior": "严禁模仿虚构小说人物的语气（如严禁模仿孙悟空说话），严禁在无用户指令下产生幻觉情感。"
   },
   "prime_directives": [
@@ -75,18 +75,26 @@ tags: ["System", "Protocol"]
   },
   "workflow_SOP": {
     "phase_1_inception": "用户提出新设定 -> 检查是否冲突 -> 更新 '02_角色档案' 或 '01_世界观'。",
-    "phase_2_outline": "用户请求写正文 -> **强制检查** '03_剧情大纲' 是否存在对应细纲 -> (若无) 拒绝并生成细纲 -> (若有) 进入 Phase 3。",
-    "phase_3_execution": "读取细纲 -> **读取 '99_创作规范/指南_文风规范.md'** -> 调用 'createFile/updateFile' 生成正文到 '05_正文草稿'。",
+    "phase_2_outline": "用户请求写细纲 -> **强制检查**出场角色的档案是否存在('02_角色档案') -> **强制检查**涉及的世界观是否存在('01_世界观') -> (若缺失) 提示用户先补充设定 -> (若齐全) 生成细纲到 '03_剧情大纲'。",
+    "phase_3_execution": "用户请求写正文 -> **强制检查** '03_剧情大纲' 是否存在对应细纲 -> **强制检查**出场角色档案和世界观设定 -> **读取 '99_创作规范/指南_文风规范.md'** -> 调用 'createFile/updateFile' 生成正文到 '05_正文草稿'。",
     "phase_4_archive": "正文完成 -> 提议更新 '世界线记录' -> 标记相关 TODO 为完成。"
   },
   "absolute_physics": [
     {
+      "name": "设定先行原则 (Settings First)",
+      "rules": [
+        "撰写细纲或正文前，**必须先检查**相关角色和世界观设定是否存在。",
+        "**错误**：直接写涉及某角色的剧情，但该角色档案不存在。",
+        "**正确**：先用 searchFiles 检查 '02_角色档案' 和 '01_世界观'，确认设定齐全后再动笔。",
+        "若设定缺失，必须提示用户先补充，不能凭空臆造角色或世界观细节。"
+      ]
+    },
+    {
       "name": "Todo 驱动闭环 (Todo-Driven Loop)",
       "rules": [
         "所有复杂任务（超过3个步骤）必须先通过 'setTodos' 工具创建任务清单。",
-        "每个子任务完成后，**必须**立即更新对应的 Todo 状态为 'done'。",
         "**错误**：完成任务后不标记 Todo，导致用户无法追踪进度。",
-        "**正确**：完成每个步骤后明确告知"已标记 [ID:xxx] 为完成"，然后继续下一步。"
+        "**正确**：每个子任务完成后，**必须**立即更新对应的 Todo 状态为 'done'，然后继续下一步。"
       ]
     },
     {
@@ -143,21 +151,21 @@ tags: ["System", "Protocol"]
 
 // Helper to extract summary from file nodes for Emergent Context
 const extractFolderSummary = (files: FileNode[], folderName: string): string => {
-    const folder = files.find(f => f.name.includes(folderName) && f.type === FileType.FOLDER);
-    if (!folder) return "(暂无信息)";
+  const folder = files.find(f => f.name.includes(folderName) && f.type === FileType.FOLDER);
+  if (!folder) return "(暂无信息)";
 
-    const children = files.filter(f => f.parentId === folder.id && f.type === FileType.FILE);
-    if (children.length === 0) return "(暂无文件)";
+  const children = files.filter(f => f.parentId === folder.id && f.type === FileType.FILE);
+  if (children.length === 0) return "(暂无文件)";
 
-    return children.map(f => {
-        const metaSummary = f.metadata?.summarys?.[0];
-        // If no metadata summary, take first 50 chars of content
-        const contentPreview = !metaSummary && f.content
-            ? f.content.replace(/[#\n]/g, ' ').substring(0, 50) + "..."
-            : "";
+  return children.map(f => {
+    const metaSummary = f.metadata?.summarys?.[0];
+    // If no metadata summary, take first 50 chars of content
+    const contentPreview = !metaSummary && f.content
+      ? f.content.replace(/[#\n]/g, ' ').substring(0, 50) + "..."
+      : "";
 
-        return `- ${f.name.replace('.md', '')}: ${metaSummary || contentPreview || "(无摘要)"}`;
-    }).join('\n');
+    return `- ${f.name.replace('.md', '')}: ${metaSummary || contentPreview || "(无摘要)"}`;
+  }).join('\n');
 };
 
 /**
@@ -166,99 +174,99 @@ const extractFolderSummary = (files: FileNode[], folderName: string): string => 
  * @returns 格式化后的用户输入历史文本
  */
 const extractUserInputHistory = (messages: any[] | undefined): string => {
-    if (!messages || messages.length === 0) {
-        return "(暂无用户输入历史)";
-    }
+  if (!messages || messages.length === 0) {
+    return "(暂无用户输入历史)";
+  }
 
-    // 筛选所有用户角色消息
-    const userMessages = messages.filter(m => m.role === 'user');
+  // 筛选所有用户角色消息
+  const userMessages = messages.filter(m => m.role === 'user');
 
-    if (userMessages.length === 0) {
-        return "(暂无用户输入历史)";
-    }
+  if (userMessages.length === 0) {
+    return "(暂无用户输入历史)";
+  }
 
-    // 格式化为带时间戳的列表
-    return userMessages.map((msg, index) => {
-        const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-        // 截断过长的消息（可选，避免 token 消耗过大）
-        const text = msg.text.length > 100
-            ? msg.text.substring(0, 100) + '...'
-            : msg.text;
-        return `${index + 1}. [${time}] ${text}`;
-    }).join('\n');
+  // 格式化为带时间戳的列表
+  return userMessages.map((msg, index) => {
+    const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    // 截断过长的消息（可选，避免 token 消耗过大）
+    const text = msg.text.length > 100
+      ? msg.text.substring(0, 100) + '...'
+      : msg.text;
+    return `${index + 1}. [${time}] ${text}`;
+  }).join('\n');
 };
 
 export const constructSystemPrompt = (
-    files: FileNode[],
-    project: ProjectMeta | undefined,
-    activeFile: FileNode | null,
-    todos: TodoItem[],
-    messages?: any[],  // 会话消息历史
-    planMode?: boolean  // Plan 模式开关
+  files: FileNode[],
+  project: ProjectMeta | undefined,
+  activeFile: FileNode | null,
+  todos: TodoItem[],
+  messages?: any[],  // 会话消息历史
+  planMode?: boolean  // Plan 模式开关
 ): string => {
-    // --- 1. 变量组装 (Variable Assembly) ---
-    const skillFolder = files.find(f => f.name === '98_技能配置');
-    
-    // 1.1 Resolve Agent Core Protocol
-    // Agent 必须从虚拟文件读取，文件应该始终存在（由 fileService.restoreSystemFiles 保证）
-    let agentFile = skillFolder ? files.find(f => f.parentId === skillFolder.id && f.name === 'agent_core.md') : null;
-    if (!agentFile) agentFile = files.find(f => f.name === 'agent_core.md');
-    const agentInstruction = agentFile?.content;
+  // --- 1. 变量组装 (Variable Assembly) ---
+  const skillFolder = files.find(f => f.name === '98_技能配置');
 
-    // 1.2 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
-    let emergentSkillsData = "(无额外技能)";
-    let subSkillFolder = files.find(f => f.name === 'subskill');
-    if (!subSkillFolder && skillFolder) {
-        subSkillFolder = files.find(f => f.parentId === skillFolder.id && f.name === 'subskill');
+  // 1.1 Resolve Agent Core Protocol
+  // Agent 必须从虚拟文件读取，文件应该始终存在（由 fileService.restoreSystemFiles 保证）
+  let agentFile = skillFolder ? files.find(f => f.parentId === skillFolder.id && f.name === 'agent_core.md') : null;
+  if (!agentFile) agentFile = files.find(f => f.name === 'agent_core.md');
+  const agentInstruction = agentFile?.content;
+
+  // 1.2 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
+  let emergentSkillsData = "(无额外技能)";
+  let subSkillFolder = files.find(f => f.name === 'subskill');
+  if (!subSkillFolder && skillFolder) {
+    subSkillFolder = files.find(f => f.parentId === skillFolder.id && f.name === 'subskill');
+  }
+
+  if (subSkillFolder) {
+    const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE);
+    const validSkills = subSkillFiles.map(f => {
+      const meta = f.metadata || {};
+      if (meta.name && meta.description) {
+        // Modified: Only provide Meta info + Path. Content is NOT loaded to save tokens.
+        const path = getNodePath(f, files);
+        return `- **${meta.name}**\n  - 描述: ${meta.description}\n  - 挂载路径: \`${path}\``;
+      }
+      return null;
+    }).filter(Boolean);
+
+    if (validSkills.length > 0) {
+      emergentSkillsData = validSkills.join('\n');
     }
-    
-    if (subSkillFolder) {
-        const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE);
-        const validSkills = subSkillFiles.map(f => {
-            const meta = f.metadata || {};
-            if (meta.name && meta.description) {
-                // Modified: Only provide Meta info + Path. Content is NOT loaded to save tokens.
-                const path = getNodePath(f, files);
-                return `- **${meta.name}**\n  - 描述: ${meta.description}\n  - 挂载路径: \`${path}\``;
-            }
-            return null;
-        }).filter(Boolean);
-        
-        if (validSkills.length > 0) {
-            emergentSkillsData = validSkills.join('\n');
-        }
-    }
+  }
 
-    // --- 2. 上下文构建 (Context Construction) ---
-    
-    // Project Info
-    const projectInfo = project 
-        ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
-        : "无活跃项目";
+  // --- 2. 上下文构建 (Context Construction) ---
 
-    // Emergent World Context (Characters & Settings)
-    // 关键点：直接注入摘要，让 Agent "涌现"出对设定的认知，无需查询
-    const charactersSummary = extractFolderSummary(files, '角色档案');
-    const worldSummary = extractFolderSummary(files, '世界观');
-    
-    // File Context (Folders Only)
-    // 优化：仅提供文件夹结构，减少 Context 占用。Agent 需通过工具查找具体文件。
-    const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
-    const fileTree = getFileTreeStructure(folderOnlyFiles);
-    
-    // Task Context
-    const pendingList = todos.filter(t => t.status === 'pending');
-    const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
+  // Project Info
+  const projectInfo = project
+    ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
+    : "无活跃项目";
 
-    // User Input History (新增)
-    const userInputHistory = extractUserInputHistory(messages);
+  // Emergent World Context (Characters & Settings)
+  // 关键点：直接注入摘要，让 Agent "涌现"出对设定的认知，无需查询
+  const charactersSummary = extractFolderSummary(files, '角色档案');
+  const worldSummary = extractFolderSummary(files, '世界观');
 
-    // --- 3. 最终组装 (Final Assembly) ---
-    // 如果是 Plan 模式，注入 Plan 模式协议
-    const planModeSection = planMode ? `
+  // File Context (Folders Only)
+  // 优化：仅提供文件夹结构，减少 Context 占用。Agent 需通过工具查找具体文件。
+  const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
+  const fileTree = getFileTreeStructure(folderOnlyFiles);
+
+  // Task Context
+  const pendingList = todos.filter(t => t.status === 'pending');
+  const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
+
+  // User Input History (新增)
+  const userInputHistory = extractUserInputHistory(messages);
+
+  // --- 3. 最终组装 (Final Assembly) ---
+  // 如果是 Plan 模式，注入 Plan 模式协议
+  const planModeSection = planMode ? `
 ==================================================
 【Plan 模式已激活】
 ${PLAN_MODE_PROTOCOL}
@@ -270,7 +278,7 @@ ${PLAN_MODE_PROTOCOL}
 > - 专注思考和规划，不要急于执行
 ` : '';
 
-    return `
+  return `
 ${agentInstruction}
 ${planModeSection}
 
