@@ -5,6 +5,7 @@ import { dbAPI } from '../services/persistence';
 import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
 import { parseFrontmatter } from '../utils/frontmatter';
 import { FileService } from '../domains/file/fileService';
+import { formatWordCount } from '../utils/wordCount';
 
 // Create FileService instance for domain logic
 const fileService = new FileService(generateId);
@@ -127,7 +128,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     const parts = path.split('/');
     const fileName = parts.pop()!;
     const folderPath = parts.join('/');
-    
+
     let parentId = 'root';
     if (folderPath) {
         const parentFolder = findNodeByPath(files, folderPath);
@@ -139,7 +140,8 @@ export const useFileStore = create<FileState>((set, get) => ({
     const newFile: FileNode = { id: generateId(), parentId, name: fileName, type: FileType.FILE, content, metadata, lastModified: Date.now() };
     set(state => ({ files: [...state.files, newFile], activeFileId: newFile.id }));
     _saveToDB();
-    return `Created file at: "${path}"`;
+    const wordInfo = formatWordCount(content);
+    return `Created file at: "${path}" (${wordInfo})`;
   },
 
   createFileById: (parentId, name) => {
@@ -161,13 +163,14 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB } = get();
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File at "${path}" not found.`;
-    
+
     const metadata = parseFrontmatter(content);
     set(state => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
-    return `Updated content of "${path}"`;
+    const wordInfo = formatWordCount(content);
+    return `Updated content of "${path}" (${wordInfo})`;
   },
   
   saveFileContent: (id, content) => {
@@ -184,44 +187,45 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB } = get();
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File not found.`;
-    
+
     const allLines = (file.content || '').split(/\r?\n/);
-    
+
     // Sort edits descending by startLine to ensure index stability
     const sortedEdits = [...edits].sort((a, b) => b.startLine - a.startLine);
-    
+
     for (const edit of sortedEdits) {
         const { startLine, endLine, newContent } = edit;
         const startIdx = Math.max(0, startLine - 1);
         // deleteCount: number of lines to remove from startLine to endLine (inclusive)
         const deleteCount = Math.max(0, endLine - startLine + 1);
-        
+
         // FIX: Remove trailing newline from split to avoid extra empty line at end of block
         // FIX: Handle empty string properly (as deletion)
         const newLines = newContent ? newContent.replace(/\r?\n$/, '').split(/\r?\n/) : [];
-        
+
         // FIX: Allow appending to the immediate end of file (when startIdx == length)
         // Also clamp startIdx to ensure it doesn't gap wildly (though splice handles gaps by just appending)
         const safeStartIdx = Math.min(startIdx, allLines.length);
 
         allLines.splice(safeStartIdx, deleteCount, ...newLines);
     }
-    
+
     const finalContent = allLines.join('\n');
-    
+
     const metadata = parseFrontmatter(finalContent);
     set(state => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content: finalContent, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
-    return `Successfully applied ${edits.length} patches to "${path}".`;
+    const wordInfo = formatWordCount(finalContent);
+    return `Successfully applied ${edits.length} patches to "${path}" (${wordInfo})`;
   },
 
   readFile: (path, startLine = 1, endLine) => {
       const { files } = get();
       const file = findNodeByPath(files, path);
       if (!file) return `Error: File at "${path}" not found.`;
-      
+
       const allLines = (file.content || '').split(/\r?\n/);
       const totalLines = allLines.length;
       const start = Math.max(1, startLine);
@@ -234,10 +238,11 @@ export const useFileStore = create<FileState>((set, get) => ({
       }
 
       const end = Math.min(totalLines, effectiveEnd);
-      
+
       const linesToRead = allLines.slice(start - 1, end);
       const contentWithLineNumbers = linesToRead.map((line, idx) => `${String(start + idx).padEnd(4)} | ${line}`).join('\n');
-      return `File: ${path}\nTotal Lines: ${totalLines}\nReading Range: ${start} - ${end}\n---\n${contentWithLineNumbers}\n---\n${end < totalLines ? '(Read limit reached)' : '(End of file)'}`;
+      const wordInfo = formatWordCount(file.content || '');
+      return `File: ${path}\nWord Count: ${wordInfo}\nTotal Lines: ${totalLines}\nReading Range: ${start} - ${end}\n---\n${contentWithLineNumbers}\n---\n${end < totalLines ? '(Read limit reached)' : '(End of file)'}`;
   },
 
   searchFiles: (query) => {

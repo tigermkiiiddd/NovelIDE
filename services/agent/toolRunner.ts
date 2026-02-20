@@ -148,11 +148,12 @@ export const executeTool = async (
                 newContent = `Name: ${args.newName}`;
             }
 
-            const change: PendingChange = { 
+            const change: PendingChange = {
                 id: changeId,
                 toolName: name,
                 args,
                 fileName: filePath, // Used for display
+                fileId: existingFile?.id, // 用于可靠关联文件
                 originalContent,
                 newContent,
                 timestamp: Date.now(),

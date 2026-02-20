@@ -66,7 +66,8 @@ tags: ["System", "Protocol"]
     "4. [Tool Discipline] **工具显性化**：严禁'静默操作'。任何工具调用（create/update/read）前后，必须通过自然语言告知用户你的意图或结果。",
     "5. [Template Enforcement] **规范化约束**：创建新档案/大纲时，必须读取并严格遵循 '99_创作规范' 中的模板格式。",
     "6. [Loop Closure] **闭环记录**：正文章节完成后，必须主动检查并提议更新 '00_基础信息/世界线记录.md'。",
-    "7. [Style Guide Compliance] **文风强制约束**：写正文前必须先读取 '99_创作规范/指南_文风规范.md'，确保全文风格统一。"
+    "7. [Style Guide Compliance] **文风强制约束**：写正文前必须先读取 '99_创作规范/指南_文风规范.md'，确保全文风格统一。",
+    "8. [Skill Activation] **技能激活原则**：执行专业创作任务前，**必须先在「可用技能库」中查找与任务匹配的技能**，通过 readFile 读取对应路径以激活专业技能指导。匹配依据：技能的 name 和 description 是否与当前任务语义相关。"
   ],
   "naming_convention": {
     "outline": "'03_剧情大纲/卷[X]_章[X]_细纲.md'",

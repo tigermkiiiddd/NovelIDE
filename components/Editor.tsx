@@ -54,7 +54,7 @@ const Editor: React.FC<EditorProps> = ({
   const { loadDiffSession, saveDiffSession: saveToStore, clearDiffSession } = diffStore;
 
   // 3. Agent Store (for pending changes)
-  const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId } = useAgentStore();
+  const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId, setReviewingChangeId } = useAgentStore();
 
   // 3. UI Store (Persisted View State)
   const { 
@@ -353,18 +353,30 @@ const Editor: React.FC<EditorProps> = ({
               clearDiffSession(prevFileIdRef.current);
           }
 
-          // FIX: Bug #5 - Clean up pending changes for previous file
-          if (prevFileIdRef.current) {
-              const prevFile = files.find(f => f.id === prevFileIdRef.current);
-              if (prevFile) {
-                  const filePath = getNodePath(prevFile, files);
-                  const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
-                  changesToRemove.forEach(c => removePendingChange(c.id));
-                  console.log('[File Switch] Cleaned up pending changes', {
-                      fileName: filePath,
-                      count: changesToRemove.length
-                  });
+          // FIX: 独立化审查状态 - 切换文件时只清理 reviewingChangeId，不删除 pendingChanges
+          // 使用 fileId 进行更可靠的比较
+          if (prevFileIdRef.current && reviewingChangeId) {
+              const reviewingChange = pendingChanges.find(c => c.id === reviewingChangeId);
+              if (reviewingChange) {
+                  // 优先使用 fileId 比较，如果没有 fileId 则 fallback 到路径比较
+                  const belongsToPrevFile = reviewingChange.fileId
+                      ? reviewingChange.fileId === prevFileIdRef.current
+                      : (() => {
+                          const prevFile = files.find(f => f.id === prevFileIdRef.current);
+                          return prevFile && reviewingChange.fileName === getNodePath(prevFile, files);
+                      })();
+
+                  if (belongsToPrevFile) {
+                      console.log('[File Switch] Exiting review mode - switched away from reviewed file');
+                      setReviewingChangeId(null);
+                  }
               }
+          }
+
+          // 退出 diff 模式（用户需要主动点击审查新文件）
+          if (internalMode === 'diff') {
+              console.log('[File Switch] Exiting diff mode due to file switch');
+              setInternalMode('edit');
           }
 
           if (activeFile) {
@@ -386,7 +398,7 @@ const Editor: React.FC<EditorProps> = ({
       else if (activeFile && activeFile.content !== content && !isApplyingBatchRef.current && internalMode !== 'diff') {
           setContent(activeFile.content || '');
       }
-  }, [activeFileId, activeFile, content, resetHistory, setContent, diffSession, clearDiffSession, pendingChanges, removePendingChange, files, internalMode]);
+  }, [activeFileId, activeFile, content, resetHistory, setContent, diffSession, clearDiffSession, pendingChanges, reviewingChangeId, setReviewingChangeId, files, internalMode]);
 
   // --- Preview Logic ---
   const { previewMetadata, previewBody } = useMemo(() => {

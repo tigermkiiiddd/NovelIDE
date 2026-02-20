@@ -1,6 +1,6 @@
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote } from '../types';
+import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange } from '../types';
 
 interface UiSettings {
   isSidebarOpen: boolean;
@@ -42,10 +42,14 @@ interface NovelGenieDB extends DBSchema {
     key: string; // storageKey (e.g. novel-plan-notes-{projectId})
     value: PlanNote[];
   };
+  pendingChanges: {
+    key: string; // 'session-pending-{sessionId}'
+    value: PendingChange[];
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -78,6 +82,11 @@ export const initDB = () => {
         // Version 5: Add planNotes store
         if (!db.objectStoreNames.contains('planNotes')) {
           db.createObjectStore('planNotes');
+        }
+
+        // Version 6: Add pendingChanges store
+        if (!db.objectStoreNames.contains('pendingChanges')) {
+          db.createObjectStore('pendingChanges');
         }
       },
     });
@@ -340,6 +349,41 @@ export const dbAPI = {
       console.log('[Persistence] Deleted plan notes for project:', projectId);
     } catch (error) {
       console.error('删除 Plan 笔记失败:', error);
+    }
+  },
+
+  // --- Pending Changes ---
+  getPendingChanges: async (sessionId: string): Promise<PendingChange[] | undefined> => {
+    try {
+      console.log('[dbAPI.getPendingChanges] 开始读取, sessionId:', sessionId);
+      const db = await initDB();
+      const result = await db.get('pendingChanges', `session-pending-${sessionId}`);
+      console.log('[dbAPI.getPendingChanges] 读取结果:', result ? `找到 ${result.length} 个待审变更` : '无数据');
+      return result;
+    } catch (error) {
+      console.error('[dbAPI.getPendingChanges] 读取待审变更失败:', sessionId, error);
+      return undefined;
+    }
+  },
+
+  savePendingChanges: async (sessionId: string, changes: PendingChange[]) => {
+    console.log('[dbAPI.savePendingChanges] 开始保存, sessionId:', sessionId, '变更数量:', changes.length);
+    const db = await initDB();
+    if (changes.length > 0) {
+      await db.put('pendingChanges', changes, `session-pending-${sessionId}`);
+    } else {
+      await db.delete('pendingChanges', `session-pending-${sessionId}`);
+    }
+    console.log('[dbAPI.savePendingChanges] 保存完成');
+  },
+
+  deletePendingChanges: async (sessionId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('pendingChanges', `session-pending-${sessionId}`);
+      console.log('[Persistence] Deleted pending changes for session:', sessionId);
+    } catch (error) {
+      console.error('删除待审变更失败:', error);
     }
   }
 };

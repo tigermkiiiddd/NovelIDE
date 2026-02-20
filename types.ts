@@ -104,6 +104,7 @@ export interface PendingChange {
   toolName: string;
   args: any;
   fileName: string;
+  fileId?: string;  // 用于可靠关联文件的唯一ID
   originalContent: string | null; // Null for new files
   newContent: string | null;      // Null for deletions
   timestamp: number;

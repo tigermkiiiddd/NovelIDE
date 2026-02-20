@@ -87,16 +87,20 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const pendingApprovalsCount = pendingChanges.length;
 
   const handleReviewClick = (change: PendingChange) => {
-      const node = findNodeByPath(files, change.fileName);
-      if (node) {
-          // If file exists, open it and set review mode
-          setActiveFileId(node.id);
+      // 优先使用 fileId，fallback 到路径查找
+      if (change.fileId) {
+          setActiveFileId(change.fileId);
       } else {
-          // If file doesn't exist (New File), clear active file but still trigger review
-          setActiveFileId(null);
+          const node = findNodeByPath(files, change.fileName);
+          if (node) {
+              setActiveFileId(node.id);
+          } else {
+              // If file doesn't exist (New File), clear active file but still trigger review
+              setActiveFileId(null);
+          }
       }
-      
-      // Explicitly set the change ID being reviewed. 
+
+      // Explicitly set the change ID being reviewed.
       // The Editor will detect this and show DiffViewer even if activeFile is null.
       setReviewingChangeId(change.id);
 

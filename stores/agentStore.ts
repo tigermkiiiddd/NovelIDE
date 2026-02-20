@@ -37,9 +37,9 @@ interface AgentState {
   setReviewingChangeId: (id: string | null) => void;
   
   // Actions
-  loadProjectSessions: (projectId: string) => Promise<void>; 
+  loadProjectSessions: (projectId: string) => Promise<void>;
   createSession: (projectId: string, initialTitle?: string) => string;
-  switchSession: (id: string) => void;
+  switchSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => void;
   updateCurrentSession: (updater: (session: ChatSession) => ChatSession) => void;
   
@@ -72,6 +72,15 @@ const syncSessionsToDB = (projectId: string, sessions: ChatSession[]) => {
 
 // 创建防抖版本（1秒防抖）
 const debouncedSyncSessionsToDB = debounce(syncSessionsToDB, 1000);
+
+// Helper to sync pending changes to IDB
+const syncPendingChangesToDB = (sessionId: string, changes: PendingChange[]) => {
+    console.log('[syncPendingChangesToDB] 保存待审变更到 IndexedDB, sessionId:', sessionId, '变更数量:', changes.length);
+    dbAPI.savePendingChanges(sessionId, changes);
+};
+
+// 创建防抖版本（500ms防抖）
+const debouncedSyncPendingChangesToDB = debounce(syncPendingChangesToDB, 500);
 
 // 全局加载标记，用于防止竞态条件
 export const sessionLoadingState = {
@@ -131,9 +140,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                     : sessions[0].id;
 
                 console.log('[loadProjectSessions] 设置会话, sessionId:', sessionId, '会话数量:', sessions.length, '消息数量:', sessions[0]?.messages?.length || 0);
+
+                // 恢复当前会话的 pendingChanges
+                const savedPendingChanges = await dbAPI.getPendingChanges(sessionId);
+                console.log('[loadProjectSessions] 恢复待审变更:', savedPendingChanges?.length || 0);
+
                 set({
                     sessions,
-                    currentSessionId: sessionId
+                    currentSessionId: sessionId,
+                    pendingChanges: savedPendingChanges || []
                 });
             } else {
                 console.log('[loadProjectSessions] 没有找到会话数据');
@@ -176,13 +191,21 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         return newSession.id;
       },
 
-      switchSession: (id) => {
+      switchSession: async (id) => {
         const { currentSessionId } = get();
         // Find the project ID from the current session
         const sessions = get().sessions;
         const session = sessions.find(s => s.id === id);
         if (session) {
-          set({ currentSessionId: id, pendingChanges: [], reviewingChangeId: null });
+          // 加载新会话的 pendingChanges
+          const savedPendingChanges = await dbAPI.getPendingChanges(id);
+          console.log('[switchSession] 加载待审变更:', savedPendingChanges?.length || 0);
+
+          set({
+            currentSessionId: id,
+            pendingChanges: savedPendingChanges || [],
+            reviewingChangeId: null
+          });
           // Persist current session ID
           dbAPI.saveCurrentSessionId(session.projectId, id);
         }
@@ -294,16 +317,45 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }));
       },
 
-      addPendingChange: (change) => set(state => ({ pendingChanges: [...state.pendingChanges, change] })),
+      addPendingChange: (change) => {
+        const { currentSessionId, pendingChanges } = get();
+        const newPendingChanges = [...pendingChanges, change];
+        set({ pendingChanges: newPendingChanges });
+        // 持久化到 IndexedDB
+        if (currentSessionId) {
+          debouncedSyncPendingChangesToDB(currentSessionId, newPendingChanges);
+        }
+      },
       
-      updatePendingChange: (id, updates) => set(state => ({
-          pendingChanges: state.pendingChanges.map(c => c.id === id ? { ...c, ...updates } : c)
-      })),
+      updatePendingChange: (id, updates) => {
+        const { currentSessionId, pendingChanges } = get();
+        const newPendingChanges = pendingChanges.map(c => c.id === id ? { ...c, ...updates } : c);
+        set({ pendingChanges: newPendingChanges });
+        // 持久化到 IndexedDB
+        if (currentSessionId) {
+          debouncedSyncPendingChangesToDB(currentSessionId, newPendingChanges);
+        }
+      },
 
-      removePendingChange: (id) => set(state => ({ 
-          pendingChanges: state.pendingChanges.filter(c => c.id !== id),
-          reviewingChangeId: state.reviewingChangeId === id ? null : state.reviewingChangeId
-      })),
+      removePendingChange: (id) => {
+        const { currentSessionId, pendingChanges, reviewingChangeId } = get();
+        const newPendingChanges = pendingChanges.filter(c => c.id !== id);
+        set({
+          pendingChanges: newPendingChanges,
+          reviewingChangeId: reviewingChangeId === id ? null : reviewingChangeId
+        });
+        // 持久化到 IndexedDB
+        if (currentSessionId) {
+          debouncedSyncPendingChangesToDB(currentSessionId, newPendingChanges);
+        }
+      },
 
-      clearPendingChanges: () => set({ pendingChanges: [], reviewingChangeId: null })
+      clearPendingChanges: () => {
+        const { currentSessionId } = get();
+        set({ pendingChanges: [], reviewingChangeId: null });
+        // 清除 IndexedDB 中的数据
+        if (currentSessionId) {
+          dbAPI.deletePendingChanges(currentSessionId);
+        }
+      }
 }));

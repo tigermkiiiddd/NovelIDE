@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Cpu, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, FileJson, Server, Loader2, Wrench, ArrowRight, Brain, AlertOctagon } from 'lucide-react';
+import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
 import { useUiStore } from '../stores/uiStore';
@@ -102,11 +102,10 @@ const ToolLogMessage: React.FC<{
                     )}
 
                     {/* Debug Payload - 仅 Debug 模式显示 */}
-                    {isDebugMode && metadata?.debugPayload && (
+                    {isDebugMode && metadata?.apiMetadata && (
                         <APIInputView
-                            systemInstruction={metadata.debugPayload.systemInstruction}
-                            apiHistory={metadata.debugPayload.apiHistoryPreview}
-                            label="下一轮 AI 调用输入"
+                            apiMetadata={metadata.apiMetadata}
+                            label="API 调用详情"
                         />
                     )}
                 </div>
@@ -428,12 +427,11 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         )}
                     </div>
 
-                    {/* API Input Display - 仅 Debug 模式显示 */}
-                    {isDebugMode && msg.metadata?.debugPayload && (
+                    {/* API Metadata Display - 仅 Debug 模式显示 */}
+                    {isDebugMode && msg.metadata?.apiMetadata && (
                         <APIInputView
-                            systemInstruction={msg.metadata.debugPayload.systemInstruction}
-                            apiHistory={msg.metadata.debugPayload.apiHistoryPreview}
-                            label={isUser ? "发送给 AI 的完整输入" : "API 调用输入"}
+                            apiMetadata={msg.metadata.apiMetadata}
+                            label="API 调用详情"
                         />
                     )}
 

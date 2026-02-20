@@ -149,6 +149,7 @@ export class AIService {
       // 2. Prepare Request Options (with Gemini Safety Settings Injection)
       const modelName = this.config.modelName || 'gemini-2.0-flash';
       const isGemini = modelName.toLowerCase().includes('gemini');
+      const baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
 
       const requestPayload: any = {
         model: modelName,
@@ -167,12 +168,60 @@ export class AIService {
         requestPayload.safetySettings = settings;
       }
 
-      const completion: any = await this.withRetry(() => 
+      // Build request metadata for debug display
+      const requestStartTime = Date.now();
+      const requestMetadata = {
+        endpoint: `${baseURL}/chat/completions`,
+        model: modelName,
+        max_tokens: this.config.maxOutputTokens,
+        messageCount: openAIMessages.length,
+        hasTools: tools.length > 0,
+        toolCount: tools.length,
+        safetySettings: requestPayload.safetySettings,
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log('[AI Request]', JSON.stringify(requestMetadata, null, 2));
+
+      const completion: any = await this.withRetry(() =>
           this.client!.chat.completions.create(requestPayload, { signal })
       );
 
+      const requestEndTime = Date.now();
+      const duration = requestEndTime - requestStartTime;
+
+      // Build response metadata for debug display
+      const responseMetadata = {
+        requestId: completion.id,
+        model: completion.model,
+        usage: completion.usage,
+        finishReason: completion.choices?.[0]?.finish_reason,
+        safetyRatings: completion.choices?.[0]?.safetyRatings,
+        promptFeedback: completion.promptFeedback,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+      };
+
+      console.log('[AI Response]', JSON.stringify(responseMetadata, null, 2));
+
       if (!completion.choices || completion.choices.length === 0) {
-          throw new Error("OpenAI API returned an empty response.");
+          // Include raw response metadata for debugging, especially safety-related fields
+          const metaInfo = {
+              id: completion.id,
+              model: completion.model,
+              usage: completion.usage,
+              object: completion.object,
+              hasError: !!completion.error,
+              error: completion.error,
+              // Safety-related fields (Gemini specific)
+              promptFeedback: completion.promptFeedback,
+              safetyRatings: completion.safetyRatings,
+              // Structure info
+              keys: Object.keys(completion || {}),
+              choicesType: typeof completion.choices,
+              choicesValue: completion.choices,
+          };
+          throw new Error(`OpenAI API returned an empty response. Meta: ${JSON.stringify(metaInfo, null, 2)}`);
       }
 
       const choice = completion.choices[0];
@@ -210,7 +259,12 @@ export class AIService {
               parts: parts
             }
           }
-        ]
+        ],
+        // Attach metadata for debug display
+        _metadata: {
+          request: requestMetadata,
+          response: responseMetadata,
+        }
       };
 
     } catch (error) {

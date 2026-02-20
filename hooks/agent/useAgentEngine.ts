@@ -115,6 +115,9 @@ export const useAgentEngine = ({
                     signal
                 );
 
+                // Extract API metadata for debug display
+                const apiMetadata = response._metadata;
+
                 if (signal.aborted) break;
 
                 const candidates = response.candidates;
@@ -136,7 +139,10 @@ export const useAgentEngine = ({
                         text: displayText,
                         rawParts: parts, // Store RAW parts so UI can render Tool Input Args
                         timestamp: Date.now(),
-                        metadata: { loopCount: loopCount } // Add loop count to metadata
+                        metadata: {
+                            loopCount: loopCount,
+                            apiMetadata: apiMetadata, // Attach API metadata for debug display
+                        }
                         // Removed debugPayload from here since it's now on the INPUT message
                     });
                 }
