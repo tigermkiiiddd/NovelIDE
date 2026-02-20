@@ -25,11 +25,13 @@ const writeTools: ToolDefinition[] = [
 
 // 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
 // 但不再包含在 allTools 数组中。这迫使主 Agent 使用 Sub-Agent。
+// managePlanNoteTool 普通模式也能访问（只读 list 操作）
 export const allTools: ToolDefinition[] = [
   ...readTools,
   ...writeTools,
   manageTodosTool,
-  callSearchAgentTool
+  callSearchAgentTool,
+  managePlanNoteTool
 ];
 
 /**
@@ -39,8 +41,8 @@ export const allTools: ToolDefinition[] = [
  */
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
   if (planMode) {
-    // Plan 模式：只有读取工具 + todo + planNote
-    return [...readTools, manageTodosTool, managePlanNoteTool];
+    // Plan 模式：读取工具 + planNote + searchAgent
+    return [...readTools, managePlanNoteTool, callSearchAgentTool];
   }
   // 普通模式：所有工具（不包含 planNote）
   return allTools;

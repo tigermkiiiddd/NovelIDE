@@ -10,7 +10,7 @@ export const managePlanNoteTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'managePlanNote',
-    description: `[PLAN MODE ONLY] 记录和更新 Plan 笔记。仅在 Plan 模式下可用。用于记录中途思考、计划分解、方案讨论等。这是一个交互式工具，让用户可以查看和批注你的思考过程。`,
+    description: `管理 Plan 笔记本。list 操作可随时查看历史计划；create/append/update/replace 仅在 Plan 模式下可用。用于记录中途思考、计划分解、方案讨论等。`,
     parameters: {
       type: 'object',
       properties: {
@@ -64,6 +64,7 @@ export const processManagePlanNote = (
   currentPlanNote: PlanNote | null,
   action: string,
   thinking: string,
+  planMode: boolean,
   createPlanNote: (sessionId: string, projectId: string, title?: string) => PlanNote,
   updatePlanNote: (planId: string, updates: Partial<PlanNote>) => void,
   addLine: (planId: string, text: string) => PlanNoteLine | null,
@@ -76,6 +77,14 @@ export const processManagePlanNote = (
   lineIds?: string[],
   newContent?: string[]
 ): PlanNoteOperationResult => {
+
+  // 写操作检查：普通模式下禁止写入
+  const writeActions = ['create', 'append', 'update', 'replace'];
+  if (!planMode && writeActions.includes(action)) {
+    return {
+      result: '普通模式下只能查看 Plan 笔记本（使用 list 操作）。如需编辑，请开启 Plan 模式。'
+    };
+  }
 
   let result = '';
   let planNote: PlanNote | null = currentPlanNote;

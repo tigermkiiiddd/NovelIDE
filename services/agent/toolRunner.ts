@@ -185,10 +185,7 @@ export const executeTool = async (
         }
         // --- PLAN NOTE TOOL ---
         else if (name === 'managePlanNote') {
-            // 检查是否在 Plan 模式
-            if (!context.planMode) {
-                return { type: 'ERROR', message: 'managePlanNote 只能在 Plan 模式下使用。请让用户开启 Plan 模式后再试。' };
-            }
+            // planMode 检查移到 processManagePlanNote 内部，允许普通模式只读访问
 
             // 检查必要的 actions
             if (!actions.createPlanNote || !actions.updatePlanNote || !actions.addLine ||
@@ -200,6 +197,7 @@ export const executeTool = async (
                 context.currentPlanNote || null,
                 args.action,
                 args.thinking,
+                context.planMode || false,
                 actions.createPlanNote,
                 actions.updatePlanNote,
                 actions.addLine,
