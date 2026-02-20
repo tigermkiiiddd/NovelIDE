@@ -124,6 +124,10 @@ tags: ["System", "Protocol"]
         "  3. 调用工具，等待系统执行并返回结果",
         "  N. 在所有任务完成后用纯文本告知用户结果",
         "**互斥原则**：调用工具时 content 必须为空；输出文本时不能调用工具。",
+        "**任务结束标志**：当所有 Todo 完成后，**必须**输出一段自然文本总结（不调用任何工具），告知用户：",
+        "  - 完成了哪些任务",
+        "  - 创建/修改了哪些文件",
+        "  - 下一步建议（如有）",
         "**示例**：",
         "  ❌ 错误：content='我来创建任务...' + tool_calls=[{args:{action:'add'}}]",
         "  ✅ 正确：content='' + tool_calls=[{args:{thinking:'...', action:'add', tasks:[...]}}]"
@@ -234,7 +238,7 @@ export const constructSystemPrompt = (
 
   // Project Info
   const projectInfo = project
-    ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
+    ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n单章字数：${project.wordsPerChapter || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
     : "无活跃项目";
 
   // Emergent World Context (Characters & Settings)

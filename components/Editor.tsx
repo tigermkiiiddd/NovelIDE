@@ -513,6 +513,7 @@ const Editor: React.FC<EditorProps> = ({
                   e.preventDefault();
                   const newVal = val.substring(0, lineStartPos) + val.substring(end);
                   setContent(newVal);
+                  if (activeFile) saveFileContent(activeFile.id, newVal);
                   setTimeout(() => { if(textareaRef.current) textareaRef.current.selectionStart = textareaRef.current.selectionEnd = lineStartPos; }, 0);
               } else {
                   e.preventDefault();
@@ -525,6 +526,7 @@ const Editor: React.FC<EditorProps> = ({
                   const insertion = `\n${nextPrefix}`;
                   const newVal = val.substring(0, start) + insertion + val.substring(end);
                   setContent(newVal);
+                  if (activeFile) saveFileContent(activeFile.id, newVal);
                   setTimeout(() => { if(textareaRef.current) textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + insertion.length; }, 0);
               }
           }

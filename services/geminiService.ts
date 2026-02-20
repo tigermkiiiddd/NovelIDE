@@ -205,23 +205,8 @@ export class AIService {
       console.log('[AI Response]', JSON.stringify(responseMetadata, null, 2));
 
       if (!completion.choices || completion.choices.length === 0) {
-          // Include raw response metadata for debugging, especially safety-related fields
-          const metaInfo = {
-              id: completion.id,
-              model: completion.model,
-              usage: completion.usage,
-              object: completion.object,
-              hasError: !!completion.error,
-              error: completion.error,
-              // Safety-related fields (Gemini specific)
-              promptFeedback: completion.promptFeedback,
-              safetyRatings: completion.safetyRatings,
-              // Structure info
-              keys: Object.keys(completion || {}),
-              choicesType: typeof completion.choices,
-              choicesValue: completion.choices,
-          };
-          throw new Error(`OpenAI API returned an empty response. Meta: ${JSON.stringify(metaInfo, null, 2)}`);
+          // 直接输出原始完整响应，不做任何猜测或解析
+          throw new Error(`API 返回空响应，以下是原始响应内容供诊断：\n\n${JSON.stringify(completion, null, 2)}`);
       }
 
       const choice = completion.choices[0];

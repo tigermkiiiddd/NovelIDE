@@ -4,7 +4,7 @@
  * 支持搜索文件名和文件内容
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, X, File, FileText, Type, ChevronDown, ChevronUp } from 'lucide-react';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
@@ -40,8 +40,14 @@ export const FileSearch: React.FC<FileSearchProps> = ({
   const [isCaseSensitive, setIsCaseSensitive] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
 
+  // Use ref to avoid infinite re-renders when files reference changes
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
   // Perform search when term or type changes
   useEffect(() => {
+    const currentFiles = filesRef.current;
+
     if (!searchTerm.trim()) {
       setResults([]);
       setSelectedIndex(-1);
@@ -53,7 +59,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
 
     const foundResults: SearchResult[] = [];
 
-    files.filter(f => f.type === 'FILE').forEach(file => {
+    currentFiles.filter(f => f.type === 'FILE').forEach(file => {
       const matches: SearchResult['matches'] = [];
 
       if (searchType === 'name' || searchType === 'content') {
@@ -91,7 +97,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
         foundResults.push({
           fileId: file.id,
           fileName: file.name,
-          filePath: getNodePath(file, files),
+          filePath: getNodePath(file, currentFiles),
           type: searchType,
           matches
         });
@@ -103,7 +109,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
 
     setResults(foundResults);
     setSelectedIndex(foundResults.length > 0 ? 0 : -1);
-  }, [searchTerm, searchType, isCaseSensitive, files]);
+  }, [searchTerm, searchType, isCaseSensitive]);
 
   // Handle keyboard navigation
   useEffect(() => {

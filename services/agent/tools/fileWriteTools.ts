@@ -42,11 +42,21 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: 'Advanced batch editing tool. Supports performing MULTIPLE range replacements in a SINGLE call (e.g., "Replace lines 1-20 with A, AND lines 50-60 with B"). Always prefer this over updateFile for partial edits. [WRITE TOOL]',
+    description: `Advanced batch editing tool. [CRITICAL REQUIREMENTS]:
+1. You MUST readFile first to get accurate line numbers (format: "LineNum | Content").
+2. startLine must be the FIRST line of the OLD content to replace.
+3. endLine must be the LAST line of the OLD content to replace.
+4. If you set wrong line numbers, old content will remain and cause duplication.
+
+Example: To replace lines 24-30 (7 lines of old table) with new content:
+✅ CORRECT: startLine=24, endLine=30, newContent="new multi-line content"
+❌ WRONG: startLine=27, endLine=27 (only replaces line 27, lines 24-26 remain duplicated)
+
+[WRITE TOOL]`,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：要修改哪些行？为什么？确认范围不重叠。' },
+        thinking: { type: 'string', description: '【必须使用中文】思考过程：(1) 我读取了哪些行？(2) 旧内容从第几行到第几行？(3) 新内容会完全替换这个范围吗？' },
         path: { type: 'string', description: 'The FULL PATH of the file to patch.' },
         edits: {
           type: 'array',
@@ -54,8 +64,8 @@ export const patchFileTool: ToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              startLine: { type: 'integer', description: 'Start line (1-based).' },
-              endLine: { type: 'integer', description: 'End line (1-based, inclusive). To INSERT lines BEFORE startLine, set endLine = startLine - 1.' },
+              startLine: { type: 'integer', description: 'First line of OLD content to replace (1-based, from readFile output).' },
+              endLine: { type: 'integer', description: 'Last line of OLD content to replace (1-based, inclusive). Must cover the ENTIRE old section to avoid duplication.' },
               newContent: { type: 'string', description: 'New content. If empty string, the range is deleted.' }
             },
             required: ['startLine', 'endLine', 'newContent']
