@@ -18,7 +18,7 @@ const PLAN_NOTE_PARAMETERS = {
   properties: {
     thinking: {
       type: 'string',
-      description: '【必须使用中文】思考过程：说明你对任务的理解、分析思路和方案选择。'
+      description: '思考过程(用中文):说明你对任务的理解、分析思路和方案选择。'
     },
     action: {
       type: 'string',

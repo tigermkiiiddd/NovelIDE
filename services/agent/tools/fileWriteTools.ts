@@ -9,7 +9,7 @@ export const createFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么要创建这个文件？是否符合命名规范？' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么要创建这个文件？是否符合命名规范？' },
         path: { type: 'string', description: 'The FULL PATH including folder and extension (e.g., "03_剧情大纲/第一章_细纲.md"). The folder must exist.' },
         content: { type: 'string', description: 'The content of the file.' }
       },
@@ -26,7 +26,7 @@ export const updateFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么用 updateFile 而不是 patchFile？确认你有完整内容。' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么用 updateFile 而不是 patchFile？确认你有完整内容。' },
         path: { type: 'string', description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
         content: { 
           type: 'string', 
@@ -56,7 +56,7 @@ Example: To replace lines 24-30 (7 lines of old table) with new content:
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：(1) 我读取了哪些行？(2) 旧内容从第几行到第几行？(3) 新内容会完全替换这个范围吗？' },
+        thinking: { type: 'string', description: '思考过程(用中文):(1) 我读取了哪些行？(2) 旧内容从第几行到第几行？(3) 新内容会完全替换这个范围吗？' },
         path: { type: 'string', description: 'The FULL PATH of the file to patch.' },
         edits: {
           type: 'array',
@@ -85,7 +85,7 @@ export const renameFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么需要重命名？' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么需要重命名？' },
         oldPath: { type: 'string', description: 'The current full path (e.g. "05_正文草稿/old.md")' },
         newName: { type: 'string', description: 'The new FILENAME only (e.g. "new.md")' }
       },
@@ -102,7 +102,7 @@ export const deleteFileTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: { 
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么必须删除这个文件？安全吗？' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么必须删除这个文件？安全吗？' },
         path: { type: 'string', description: 'The full path of the file or folder to delete.' } 
       },
       required: ['thinking', 'path']

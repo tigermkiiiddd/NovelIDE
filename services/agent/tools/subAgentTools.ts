@@ -8,7 +8,7 @@ export const callSearchAgentTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '【必须使用中文】思考过程：为什么需要启动子 Agent？核心问题是什么？' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么需要启动子 Agent？核心问题是什么？' },
         request_description: { 
           type: 'string', 
           description: '用自然语言清楚描述你要找什么。例如：“找到所有提到‘黑色戒指’的地方” 或 “帮我梳理李逍遥在第二章的心理变化”。' 
