@@ -76,6 +76,7 @@ export const useAgentEngine = ({
             const MAX_LOOPS = 30;
             let keepGoing = true;
             let hasCalledThinking = false;  // 门阀状态：是否已调用 thinking 工具
+            let isFirstLoop = true;  // 标记是否是第一轮循环
 
             // 4. 进入 ReAct 循环
             while (keepGoing && loopCount < MAX_LOOPS) {
@@ -86,6 +87,25 @@ export const useAgentEngine = ({
                 const currentGlobalSessions = useAgentStore.getState().sessions;
                 const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
                 const currentMessages = currentFreshSession?.messages || [];
+
+                // === 判断是否需要强制 thinking ===
+                // 只在第一轮循环时判断：触发本次 processTurn 的是用户输入还是 tool response
+                // 用户输入（包括审批结果）必须先 thinking，tool response 不需要
+                let requireThinking = false;
+                if (isFirstLoop) {
+                    const lastMsg = currentMessages[currentMessages.length - 1];
+                    if (lastMsg) {
+                        const isUserInput = lastMsg.role === 'user' && !lastMsg.rawParts?.some((p: any) => p.functionResponse);
+                        const isApprovalResult = lastMsg.role === 'system';  // 审批结果（如 "User Approved"）
+                        requireThinking = isUserInput || isApprovalResult;
+                        console.log('[Thinking 门阀] 触发类型判断', {
+                            lastRole: lastMsg.role,
+                            hasFunctionResponse: lastMsg.rawParts?.some((p: any) => p.functionResponse),
+                            requireThinking
+                        });
+                    }
+                    isFirstLoop = false;
+                }
 
                 // 滑动窗口：只取最新的 N 条消息
                 const totalMessages = currentMessages.length;
@@ -226,19 +246,21 @@ export const useAgentEngine = ({
                         if (!part.functionCall) continue;
                         const { name, args, id } = part.functionCall;
 
-                        // === 代码门阀：强制首次工具调用必须是 thinking ===
-                        if (!hasCalledThinking && name !== 'thinking') {
+                        // === 代码门阀：用户输入后必须先 thinking 确认意图 ===
+                        // 只在 requireThinking=true（用户输入/审批结果触发）时强制要求
+                        // tool response 触发的不需要强制 thinking
+                        if (requireThinking && !hasCalledThinking && name !== 'thinking') {
                             // 拒绝执行，返回错误消息
                             functionResponses.push({
                                 functionResponse: {
                                     name,
                                     id,
                                     response: {
-                                        result: '❌ [代码门阀拦截] 必须先调用 thinking 工具进行意图推理，才能执行其他工具。'
+                                        result: '❌ [代码门阀拦截] 用户输入后必须先调用 thinking 工具确认意图，才能执行其他工具。'
                                     }
                                 }
                             });
-                            logToUi(`❌ [代码门阀] 拒绝执行 \`${name}\`：必须先调用 thinking 工具`);
+                            logToUi(`❌ [代码门阀] 拒绝执行 \`${name}\`：用户输入后必须先调用 thinking 工具`);
                             continue;  // 跳过此工具，继续处理下一个
                         }
 
