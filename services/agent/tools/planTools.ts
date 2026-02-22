@@ -6,47 +6,67 @@
 import { PlanNote, PlanNoteLine } from '../../../types';
 import { ToolDefinition } from '../types';
 
-export const managePlanNoteTool: ToolDefinition = {
+// 普通模式下的工具描述
+const NORMAL_MODE_DESC = `查看历史计划笔记本。**仅支持 list 操作**。思考过程请写在工具的 thinking 参数中，不要使用此工具记录想法。如需创建正式计划文档，请请求用户开启 Plan 模式。`;
+
+// Plan 模式下的工具描述
+const PLAN_MODE_DESC = `管理 Plan 笔记本。支持 create/append/update/replace/list 操作。用于整理**结构化的执行计划**供用户审批，而非随意记录想法。`;
+
+// 工具参数定义（共用）
+const PLAN_NOTE_PARAMETERS = {
+  type: 'object',
+  properties: {
+    thinking: {
+      type: 'string',
+      description: '【必须使用中文】思考过程：说明你对任务的理解、分析思路和方案选择。'
+    },
+    action: {
+      type: 'string',
+      enum: ['create', 'append', 'update', 'replace', 'list'],
+      description: 'create: 创建新笔记本; append: 追加新行; update: 更新指定行内容; replace: 替换全部内容; list: 列出当前内容'
+    },
+    title: {
+      type: 'string',
+      description: '笔记本标题（仅用于 create 操作）'
+    },
+    lines: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '要添加或替换的内容行数组。每个元素代表一行。'
+    },
+    lineIds: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '要更新的行ID数组（仅用于 update 操作）'
+    },
+    newContent: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '更新后的内容数组（仅用于 update 操作，与 lineIds 一一对应）'
+    }
+  },
+  required: ['thinking', 'action']
+};
+
+/**
+ * 创建 managePlanNote 工具（根据模式动态生成描述）
+ * @param planMode - 是否处于 Plan 模式
+ * @returns 工具定义
+ */
+export const createManagePlanNoteTool = (planMode: boolean): ToolDefinition => ({
   type: 'function',
   function: {
     name: 'managePlanNote',
-    description: `管理 Plan 笔记本。list 操作可随时查看历史计划；create/append/update/replace 仅在 Plan 模式下可用。用于记录中途思考、计划分解、方案讨论等。`,
-    parameters: {
-      type: 'object',
-      properties: {
-        thinking: {
-          type: 'string',
-          description: '【必须使用中文】思考过程：说明你对任务的理解、分析思路和方案选择。'
-        },
-        action: {
-          type: 'string',
-          enum: ['create', 'append', 'update', 'replace', 'list'],
-          description: 'create: 创建新笔记本; append: 追加新行; update: 更新指定行内容; replace: 替换全部内容; list: 列出当前内容'
-        },
-        title: {
-          type: 'string',
-          description: '笔记本标题（仅用于 create 操作）'
-        },
-        lines: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '要添加或替换的内容行数组。每个元素代表一行。'
-        },
-        lineIds: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '要更新的行ID数组（仅用于 update 操作）'
-        },
-        newContent: {
-          type: 'array',
-          items: { type: 'string' },
-          description: '更新后的内容数组（仅用于 update 操作，与 lineIds 一一对应）'
-        }
-      },
-      required: ['thinking', 'action']
-    }
+    description: planMode ? PLAN_MODE_DESC : NORMAL_MODE_DESC,
+    parameters: PLAN_NOTE_PARAMETERS
   }
-};
+});
+
+/**
+ * 静态导出（默认 Plan 模式描述，用于向后兼容）
+ * 注意：推荐使用 createManagePlanNoteTool(planMode) 获取动态描述
+ */
+export const managePlanNoteTool: ToolDefinition = createManagePlanNoteTool(true);
 
 /**
  * Plan 笔记本操作结果

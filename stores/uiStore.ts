@@ -39,9 +39,9 @@ const indexedDBStorage = {
     // Zustand expects the stored string value directly
     return settings ? JSON.stringify(settings) : null;
   },
-  setItem: async (name: string, value: string) => {
-    // Zustand passes JSON string, parse it before saving
-    const parsed = JSON.parse(value) as UiState;
+  setItem: async (name: string, value: string | object) => {
+    // Zustand may pass JSON string or already-parsed object
+    const parsed = typeof value === 'string' ? JSON.parse(value) as UiState : value as UiState;
     await dbAPI.saveUiSettings({
       isSidebarOpen: parsed.isSidebarOpen ?? true,
       isChatOpen: parsed.isChatOpen ?? true,

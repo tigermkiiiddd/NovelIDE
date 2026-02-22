@@ -104,9 +104,14 @@ export class AIService {
           if (msg.parts && msg.parts[0]?.functionResponse) {
               msg.parts.forEach((p: any) => {
                   if (p.functionResponse) {
+                      // Ensure name exists (fallback for legacy messages)
+                      const toolName = p.functionResponse.name || 'unknown_tool';
+                      const toolId = p.functionResponse.id || `call_${toolName}_${Date.now()}`;
+
                       openAIMessages.push({
                           role: 'tool',
-                          tool_call_id: p.functionResponse.id || 'call_unknown_fallback', // Safety fallback
+                          tool_call_id: toolId,
+                          name: toolName,  // Some proxies need this
                           content: JSON.stringify(p.functionResponse.response)
                       });
                   }
@@ -205,8 +210,16 @@ export class AIService {
       console.log('[AI Response]', JSON.stringify(responseMetadata, null, 2));
 
       if (!completion.choices || completion.choices.length === 0) {
-          // 直接输出原始完整响应，不做任何猜测或解析
-          throw new Error(`API 返回空响应，以下是原始响应内容供诊断：\n\n${JSON.stringify(completion, null, 2)}`);
+          // 检查是否是限流导致的空响应
+          const usage = completion.usage || {};
+          const isEmptyGeneration = usage.completion_tokens === 0;
+
+          let errorHint = 'API 返回空响应';
+          if (isEmptyGeneration) {
+            errorHint = '⚠️ API 限流或服务暂时不可用 (completion_tokens=0，可能是 429 Too Many Requests)';
+          }
+
+          throw new Error(`${errorHint}\n\n原始响应：\n${JSON.stringify(completion, null, 2)}`);
       }
 
       const choice = completion.choices[0];

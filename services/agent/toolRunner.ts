@@ -3,6 +3,7 @@ import { FileNode, TodoItem, PendingChange, FileType, PlanNote } from '../../typ
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
+import { formatThinkingResult } from './tools/thinkingTools';
 import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
@@ -176,7 +177,21 @@ export const executeTool = async (
     try {
         let result = '';
 
-        if (name === 'manageTodos') {
+        // --- THINKING TOOL ---
+        if (name === 'thinking') {
+            const { mode, content, confidence, nextAction, thinking } = args;
+
+            // 格式化结果用于前端显示
+            result = formatThinkingResult(mode, content, confidence, nextAction, thinking);
+
+            // Log to UI immediately
+            if (onUiLog) {
+                onUiLog(result);
+            }
+
+            return { type: 'EXECUTED', result };
+        }
+        else if (name === 'manageTodos') {
             const op = processManageTodos(context.todos, args.action, args.tasks, args.todoIds, args.updates);
             result = op.result;
             if (op.newTodos) {

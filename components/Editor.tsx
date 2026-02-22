@@ -71,15 +71,26 @@ const Editor: React.FC<EditorProps> = ({
   })));
 
   // 4. Local State & Undo/Redo
-  const { 
-    state: content, 
-    set: setContent, 
-    undo, 
-    redo, 
-    canUndo, 
-    canRedo, 
-    reset: resetHistory 
+  const {
+    state: content,
+    set: setContent,
+    undo: originalUndo,
+    redo: originalRedo,
+    canUndo,
+    canRedo,
+    reset: resetHistory
   } = useUndoRedo<string>('', 800);
+
+  // Wrap undo/redo to set flag and prevent external sync from overwriting
+  const undo = useCallback(() => {
+    isUndoRedoRef.current = true;
+    originalUndo();
+  }, [originalUndo]);
+
+  const redo = useCallback(() => {
+    isUndoRedoRef.current = true;
+    originalRedo();
+  }, [originalRedo]);
 
   const [internalMode, setInternalMode] = useState<'edit' | 'preview' | 'diff'>('edit');
   const [isDirty, setIsDirty] = useState(false);
@@ -97,6 +108,9 @@ const Editor: React.FC<EditorProps> = ({
 
   // Flag to prevent content sync during batch operations
   const isApplyingBatchRef = useRef(false);
+
+  // Flag to track undo/redo operations to prevent external sync from overwriting
+  const isUndoRedoRef = useRef(false);
 
   // Track if we've already sent a completion message for current diff session
   const completionMessageSentRef = useRef<string | null>(null);
@@ -307,6 +321,9 @@ const Editor: React.FC<EditorProps> = ({
 
   // Immediate save in diff mode (no debounce)
   // CRITICAL: Disable auto-save in diff mode to prevent conflicts with patch application
+  // FIX: Bug #3c - Add debounce to prevent infinite update loops
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     // FIX: Bug #3 - Only auto-save in EDIT mode, not in diff or preview mode
     // This prevents accidental saves during diff mode state transitions
@@ -318,13 +335,30 @@ const Editor: React.FC<EditorProps> = ({
                           computedContentFileIdRef.current === activeFile.id;
 
     if (shouldAutoSave) {
-      console.log('[Edit Mode] Auto-saving to fileStore', {
-        fileId: activeFile.id,
-        fileName: activeFile.name,
-        contentLength: computedContent.length
-      });
-      saveFileContent(activeFile.id, computedContent);
+      // Clear any pending save
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+
+      // Debounce: wait 300ms before saving to prevent rapid-fire updates
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        console.log('[Edit Mode] Auto-saving to fileStore', {
+          fileId: activeFile.id,
+          fileName: activeFile.name,
+          contentLength: computedContent.length
+        });
+        saveFileContent(activeFile.id, computedContent);
+        autoSaveTimeoutRef.current = null;
+      }, 300);
     }
+
+    // Cleanup on unmount or before next effect run
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+        autoSaveTimeoutRef.current = null;
+      }
+    };
   }, [computedContent, diffSession, activeFile?.id, internalMode]); 
 
   // Sync content from store
@@ -396,9 +430,15 @@ const Editor: React.FC<EditorProps> = ({
       // Skip during batch operations to prevent overwriting just-saved content
       // Also skip in diff mode since diff manages its own sync via computedContent
       else if (activeFile && activeFile.content !== content && !isApplyingBatchRef.current && internalMode !== 'diff') {
-          setContent(activeFile.content || '');
+          // Skip sync if triggered by undo/redo - let local state take precedence
+          if (isUndoRedoRef.current) {
+              isUndoRedoRef.current = false;
+              console.log('[Editor] Skipping external sync - undo/redo in progress');
+          } else {
+              setContent(activeFile.content || '');
+          }
       }
-  }, [activeFileId, activeFile, content, resetHistory, setContent, diffSession, clearDiffSession, pendingChanges, reviewingChangeId, setReviewingChangeId, files, internalMode]);
+  }, [activeFileId, activeFile, content, resetHistory, setContent, diffSession, clearDiffSession, pendingChanges, reviewingChangeId, setReviewingChangeId, files, internalMode, undo, redo]);
 
   // --- Preview Logic ---
   const { previewMetadata, previewBody } = useMemo(() => {
@@ -803,12 +843,14 @@ const Editor: React.FC<EditorProps> = ({
     const finalContent = targetChange.newContent || '';
 
     // ===== 新增：直接保存文件内容 =====
+    // 标记此文件刚刚保存过，防止退出 diff 模式时再次触发自动保存
     if (fileToSaveId && finalContent) {
       console.log('[handleAcceptAll] Saving file content:', {
         fileId: fileToSaveId,
         fileName: fileToSave?.name || targetChange.fileName,
         contentLength: finalContent.length
       });
+      computedContentFileIdRef.current = null;  // 清除，防止自动保存再次触发
       saveFileContent(fileToSaveId, finalContent);
     } else if (!fileToSaveId) {
       console.warn('[handleAcceptAll] Cannot save: fileToSaveId is undefined');

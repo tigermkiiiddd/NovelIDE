@@ -5,7 +5,7 @@ import { generateId } from '../services/fileSystem';
 import { constructSystemPrompt } from '../services/resources/skills/coreProtocol';
 import { useAgentContext } from './agent/useAgentContext';
 import { useAgentTools, AgentToolsImplementation } from './agent/useAgentTools';
-import { useAgentEngine } from './agent/useAgentEngine';
+import { useAgentEngine, MAX_CONTEXT_MESSAGES } from './agent/useAgentEngine';
 import { executeApprovedChange } from '../services/agent/toolRunner';
 import { usePlanStore } from '../stores/planStore';
 
@@ -66,7 +66,20 @@ export const useAgent = (
       currentPlanNote
   });
 
-  // --- 4. 辅助功能 (Token 估算 & 审批逻辑) ---
+  // --- 4. 辅助功能 (Token 估算 & 滑动窗口 & 审批逻辑) ---
+
+  // 滑动窗口信息：用于 UI 显示
+  const messageWindowInfo = useMemo(() => {
+      const total = currentSession?.messages?.length || 0;
+      const inContext = Math.min(total, MAX_CONTEXT_MESSAGES);
+      const dropped = Math.max(0, total - MAX_CONTEXT_MESSAGES);
+      return {
+          total,
+          inContext,
+          dropped,
+          windowSize: MAX_CONTEXT_MESSAGES
+      };
+  }, [currentSession?.messages]);
 
   const tokenUsage = useMemo(() => {
       const MAX_TOKENS_GEMINI = 1000000;
@@ -157,6 +170,7 @@ export const useAgent = (
     approveChange,
     rejectChange,
     tokenUsage,
+    messageWindowInfo,
     // Plan Mode
     planMode,
     togglePlanMode: usePlanStore.getState().togglePlanMode,

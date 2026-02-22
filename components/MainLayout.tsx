@@ -119,6 +119,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     createNewSession, switchSession, deleteSession,
     aiConfig, updateAiConfig, pendingChanges,
     tokenUsage,
+    messageWindowInfo,
     // Plan Mode
     planMode,
     togglePlanMode,
@@ -385,6 +386,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         width={agentWidth}
         isMobile={isMobile}
         tokenUsage={tokenUsage}
+        messageWindowInfo={messageWindowInfo}
         // Plan Mode Props
         planMode={planMode}
         onTogglePlanMode={togglePlanMode}

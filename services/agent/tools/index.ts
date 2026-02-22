@@ -4,7 +4,8 @@ import { createFileTool, updateFileTool, patchFileTool, renameFileTool, deleteFi
 import { updateProjectMetaTool } from './projectTools';
 import { manageTodosTool } from './todoTools';
 import { callSearchAgentTool } from './subAgentTools';
-import { managePlanNoteTool } from './planTools';
+import { managePlanNoteTool, createManagePlanNoteTool } from './planTools';
+import { thinkingTool } from './thinkingTools';
 import { ToolDefinition } from '../types';
 
 // 读取工具
@@ -26,12 +27,14 @@ const writeTools: ToolDefinition[] = [
 // 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
 // 但不再包含在 allTools 数组中。这迫使主 Agent 使用 Sub-Agent。
 // managePlanNoteTool 普通模式也能访问（只读 list 操作）
+// thinkingTool 是元工具，用于结构化思考
 export const allTools: ToolDefinition[] = [
   ...readTools,
   ...writeTools,
   manageTodosTool,
   callSearchAgentTool,
-  managePlanNoteTool
+  managePlanNoteTool,
+  thinkingTool
 ];
 
 /**
@@ -41,11 +44,12 @@ export const allTools: ToolDefinition[] = [
  */
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
   if (planMode) {
-    // Plan 模式：读取工具 + planNote + searchAgent
-    return [...readTools, managePlanNoteTool, callSearchAgentTool];
+    // Plan 模式：读取工具 + planNote（完整功能） + searchAgent + thinking
+    return [...readTools, createManagePlanNoteTool(true), callSearchAgentTool, thinkingTool];
   }
-  // 普通模式：所有工具（不包含 planNote）
-  return allTools;
+  // 普通模式：所有工具（包含受限的 planNote，仅 list 操作）+ thinking
+  // 注意：allTools 已包含 thinkingTool，但我们要确保 getToolsForMode 返回的工具列表正确
+  return [...readTools, ...writeTools, manageTodosTool, callSearchAgentTool, createManagePlanNoteTool(false), thinkingTool];
 };
 
 export * from './fileReadTools';
@@ -54,3 +58,4 @@ export * from './projectTools';
 export * from './todoTools';
 export * from './subAgentTools';
 export * from './planTools';
+export * from './thinkingTools';

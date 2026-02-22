@@ -40,6 +40,8 @@ interface AgentChatProps {
   isMobile: boolean;
   // Token Usage
   tokenUsage?: { used: number; limit: number; percent: number };
+  // Message Window Info (滑动窗口)
+  messageWindowInfo?: { total: number; inContext: number; dropped: number; windowSize: number };
   // Plan Mode Props
   planMode?: boolean;
   onTogglePlanMode?: () => void;
@@ -67,6 +69,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   width = 384,
   isMobile,
   tokenUsage,
+  messageWindowInfo,
   planMode = false,
   onTogglePlanMode,
   currentPlanNote,
@@ -154,15 +157,27 @@ const AgentChat: React.FC<AgentChatProps> = ({
           <Sparkles size={20} className="shrink-0" />
           <div className="flex flex-col min-w-0">
              <span className="font-bold text-gray-100 truncate text-sm">NovelGenie</span>
-             {tokenUsage && (
-                 <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono leading-none mt-0.5">
+             <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono leading-none mt-0.5">
+                 {tokenUsage && (
                      <div className="flex items-center gap-1">
                         <Cpu size={10} />
                         <span>{formatTokenCount(tokenUsage.used)} / {formatTokenCount(tokenUsage.limit)}</span>
+                        <span>({tokenUsage.percent}%)</span>
                      </div>
-                     <span>({tokenUsage.percent}%)</span>
-                 </div>
-             )}
+                 )}
+                 {messageWindowInfo && (
+                     <div className="flex items-center gap-1" title={`滑动窗口: 发送给 AI 的是最近 ${messageWindowInfo.windowSize} 条消息`}>
+                        <span className={messageWindowInfo.dropped > 0 ? 'text-yellow-500' : ''}>
+                            📜 {messageWindowInfo.inContext}/{messageWindowInfo.windowSize}
+                        </span>
+                        {messageWindowInfo.dropped > 0 && (
+                            <span className="text-yellow-600" title={`已省略 ${messageWindowInfo.dropped} 条旧消息`}>
+                                (-{messageWindowInfo.dropped})
+                            </span>
+                        )}
+                     </div>
+                 )}
+             </div>
           </div>
         </div>
 
