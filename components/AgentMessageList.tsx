@@ -1,12 +1,181 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon } from 'lucide-react';
+import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
 import { useUiStore } from '../stores/uiStore';
 import { useFileStore } from '../stores/fileStore';
 import { generateToolSummary } from '../utils/toolSummaryUtils';
 import { findNodeByPath } from '../services/fileSystem';
+
+// --- Debug Payload View Component ---
+interface DebugPayload {
+    systemInstruction?: string;
+    apiHistoryPreview?: Array<{ role: string; parts: any[] }>;
+    totalHistoryLength?: number;
+    slidingWindow?: {
+        inContext: number;
+        dropped: number;
+        windowSize: number;
+    };
+}
+
+const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPayload }) => {
+    const [activeTab, setActiveTab] = useState<'system' | 'history' | 'window'>('system');
+
+    if (!debugPayload) return null;
+
+    return (
+        <div className="mt-2 w-full max-w-[95%] sm:max-w-[85%]">
+            <details className="group" open>
+                <summary className="cursor-pointer list-none flex items-center gap-2 text-xs font-mono bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/50 p-2 rounded-lg transition-colors">
+                    <ChevronRight size={12} className="group-open:rotate-90 transition-transform text-purple-400" />
+                    <FileText size={12} className="text-purple-400" />
+                    <span className="text-purple-300 font-semibold">LLM 输入详情 (Debug)</span>
+                    {debugPayload.slidingWindow && (
+                        <span className="ml-auto text-[10px] text-purple-400 bg-purple-800/50 px-1.5 py-0.5 rounded">
+                            📜 {debugPayload.slidingWindow.inContext}/{debugPayload.slidingWindow.windowSize}
+                            {debugPayload.slidingWindow.dropped > 0 && ` (-${debugPayload.slidingWindow.dropped})`}
+                        </span>
+                    )}
+                </summary>
+
+                <div className="mt-2 bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
+                    {/* Tab Navigation */}
+                    <div className="flex border-b border-gray-800 bg-gray-900/50">
+                        <button
+                            onClick={() => setActiveTab('system')}
+                            className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wide transition-colors flex items-center gap-1 ${
+                                activeTab === 'system'
+                                    ? 'text-purple-300 border-b-2 border-purple-500 bg-gray-800/50'
+                                    : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                        >
+                            <FileText size={10} />
+                            System Prompt
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wide transition-colors flex items-center gap-1 ${
+                                activeTab === 'history'
+                                    ? 'text-blue-300 border-b-2 border-blue-500 bg-gray-800/50'
+                                    : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                        >
+                            <MessageSquare size={10} />
+                            History ({debugPayload.totalHistoryLength || debugPayload.apiHistoryPreview?.length || 0})
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('window')}
+                            className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wide transition-colors flex items-center gap-1 ${
+                                activeTab === 'window'
+                                    ? 'text-cyan-300 border-b-2 border-cyan-500 bg-gray-800/50'
+                                    : 'text-gray-500 hover:text-gray-300'
+                            }`}
+                        >
+                            <Layers size={10} />
+                            Sliding Window
+                        </button>
+                    </div>
+
+                    {/* Tab Content - 无高度限制，完整显示 */}
+                    <div className="p-3">
+                        {/* System Instruction Tab */}
+                        {activeTab === 'system' && debugPayload.systemInstruction && (
+                            <div className="space-y-2">
+                                <div className="text-[10px] text-purple-400 font-mono">
+                                    Length: {debugPayload.systemInstruction.length} chars
+                                </div>
+                                <pre className="font-mono text-[10px] text-gray-300 whitespace-pre-wrap leading-relaxed bg-black/30 p-2 rounded border border-gray-800">
+                                    {debugPayload.systemInstruction}
+                                </pre>
+                            </div>
+                        )}
+
+                        {/* History Tab - 完整显示每条消息 */}
+                        {activeTab === 'history' && debugPayload.apiHistoryPreview && (
+                            <div className="space-y-2">
+                                <div className="text-[10px] text-blue-400 font-mono mb-2">
+                                    发送给 LLM 的消息: {debugPayload.apiHistoryPreview.length} 条
+                                    {debugPayload.totalHistoryLength !== debugPayload.apiHistoryPreview.length && (
+                                        <span className="text-yellow-400 ml-2">
+                                            (原始 {debugPayload.totalHistoryLength} 条，已裁剪)
+                                        </span>
+                                    )}
+                                </div>
+                                {debugPayload.apiHistoryPreview.map((msg, idx) => (
+                                    <details key={idx} className="group/bg bg-black/30 rounded border border-gray-800">
+                                        <summary className="cursor-pointer list-none p-2 hover:bg-gray-800/50 transition-colors flex items-center gap-2">
+                                            <ChevronRight size={10} className="group-open/bg:rotate-90 transition-transform text-gray-500" />
+                                            <div className={`text-[10px] font-mono font-bold ${
+                                                msg.role === 'user' ? 'text-blue-400' :
+                                                msg.role === 'model' || msg.role === 'assistant' ? 'text-green-400' :
+                                                'text-gray-400'
+                                            }`}>
+                                                [{idx + 1}] {msg.role.toUpperCase()}
+                                            </div>
+                                            <span className="text-[9px] text-gray-500 truncate flex-1">
+                                                {msg.parts?.map((p: any) => p.text?.substring(0, 50) || '(tool call)').join(' | ') || '(empty)'}...
+                                            </span>
+                                        </summary>
+                                        <div className="p-2 pt-0">
+                                            <pre className="font-mono text-[9px] text-gray-400 whitespace-pre-wrap leading-relaxed">
+                                                {msg.parts?.map((p: any) => p.text || JSON.stringify(p, null, 2)).join('\n') || '(empty)'}
+                                            </pre>
+                                        </div>
+                                    </details>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Sliding Window Tab */}
+                        {activeTab === 'window' && debugPayload.slidingWindow && (
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-3 text-center">
+                                        <div className="text-2xl font-mono font-bold text-cyan-300">
+                                            {debugPayload.slidingWindow.inContext}
+                                        </div>
+                                        <div className="text-[10px] text-cyan-400 uppercase tracking-wide mt-1">
+                                            In Context
+                                        </div>
+                                    </div>
+                                    <div className={`border rounded-lg p-3 text-center ${
+                                        debugPayload.slidingWindow.dropped > 0
+                                            ? 'bg-yellow-900/20 border-yellow-700/50'
+                                            : 'bg-gray-800/50 border-gray-700/50'
+                                    }`}>
+                                        <div className={`text-2xl font-mono font-bold ${
+                                            debugPayload.slidingWindow.dropped > 0 ? 'text-yellow-300' : 'text-gray-400'
+                                        }`}>
+                                            {debugPayload.slidingWindow.dropped}
+                                        </div>
+                                        <div className={`text-[10px] uppercase tracking-wide mt-1 ${
+                                            debugPayload.slidingWindow.dropped > 0 ? 'text-yellow-400' : 'text-gray-500'
+                                        }`}>
+                                            Dropped
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
+                                    <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-2">
+                                        Window Size (MAX_CONTEXT_MESSAGES)
+                                    </div>
+                                    <div className="text-xl font-mono font-bold text-gray-200">
+                                        {debugPayload.slidingWindow.windowSize}
+                                    </div>
+                                </div>
+                                <div className="text-[10px] text-gray-500 italic">
+                                    💡 滑动窗口机制：只将最近 N 条消息发送给 LLM，以节省 Token 并保持上下文相关性。
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </details>
+        </div>
+    );
+};
 
 interface AgentMessageListProps {
   messages: ChatMessage[];
@@ -433,6 +602,11 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             apiMetadata={msg.metadata.apiMetadata}
                             label="API 调用详情"
                         />
+                    )}
+
+                    {/* Debug Payload Display - 仅 Debug 模式显示 (LLM 输入详情) */}
+                    {isDebugMode && msg.metadata?.debugPayload && (
+                        <DebugPayloadView debugPayload={msg.metadata.debugPayload} />
                     )}
 
                     {/* Action Buttons */}
