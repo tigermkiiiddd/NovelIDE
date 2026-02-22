@@ -292,18 +292,71 @@ export const executeTool = async (
 
 /**
  * Executes a previously approved change.
+ * 注意：创作类文件操作（create/update/patch）完成后，返回结果会包含强制反思提示
  */
 export const executeApprovedChange = (change: PendingChange, actions: ToolContext['actions']): string => {
     try {
+        let result = '';
+        const creativeTools = ['createFile', 'updateFile', 'patchFile'];
+        const isCreativeOp = creativeTools.includes(change.toolName);
+
         switch (change.toolName) {
-            case 'createFile': return actions.createFile(change.args.path, change.args.content);
-            case 'updateFile': return actions.updateFile(change.args.path, change.args.content);
-            case 'patchFile': return actions.patchFile(change.args.path, change.args.edits);
-            case 'deleteFile': return actions.deleteFile(change.args.path);
-            case 'renameFile': return actions.renameFile(change.args.oldPath, change.args.newName);
-            default: return 'Error: Unknown tool for approval';
+            case 'createFile':
+                result = actions.createFile(change.args.path, change.args.content);
+                break;
+            case 'updateFile':
+                result = actions.updateFile(change.args.path, change.args.content);
+                break;
+            case 'patchFile':
+                result = actions.patchFile(change.args.path, change.args.edits);
+                break;
+            case 'deleteFile':
+                result = actions.deleteFile(change.args.path);
+                break;
+            case 'renameFile':
+                result = actions.renameFile(change.args.oldPath, change.args.newName);
+                break;
+            default:
+                return 'Error: Unknown tool for approval';
         }
-    } catch (e: any) { 
-        return `Error executing approved change: ${e.message}`; 
+
+        // 创作类操作完成后，附加强制反思提示
+        if (isCreativeOp && !result.startsWith('Error')) {
+            const reflectionPrompt = `
+
+==================================================
+⚠️ 【强制创作反思】
+文件操作已完成。根据「创作反思机制」协议，你必须立即调用 thinking 工具进行反思：
+
+thinking(
+  mode='reflect_creative',
+  thinking='对 ${change.args.path} 的创作/修改进行反思',
+  content=\`
+## 1. 内容质量
+- 刚写的内容是否达到预期？
+- 是否有废话或AI味？
+
+## 2. 设定一致性
+- 人物行为/世界观是否与已有设定矛盾？
+
+## 3. 逻辑检查
+- 情节推进是否合理？是否有前后矛盾？
+
+## 4. 文风检查
+- 是否符合项目要求的文风？
+
+## 5. 遗漏检查
+- 是否有遗漏的伏笔或重要细节？
+\`,
+  confidence=<自评0-100>,
+  nextAction='proceed' 或 'think_again' 或 'ask_user'
+)
+==================================================`;
+            return result + reflectionPrompt;
+        }
+
+        return result;
+    } catch (e: any) {
+        return `Error executing approved change: ${e.message}`;
     }
 };

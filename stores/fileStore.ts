@@ -250,11 +250,33 @@ export const useFileStore = create<FileState>((set, get) => ({
     const lowerQuery = query.toLowerCase();
     const results = files.filter(f => f.name.toLowerCase().includes(lowerQuery) || (f.content && f.content.toLowerCase().includes(lowerQuery)));
     if (results.length === 0) return `No files found matching "${query}".`;
-    
-    return results.map(f => {
+
+    // 分类：只统计文件数量（用于提示）
+    const fileResults = results.filter(f => f.type === FileType.FILE);
+
+    // 构建结果列表
+    const resultList = results.map(f => {
         const path = getNodePath(f, files);
         return `${f.type === FileType.FOLDER ? '[DIR]' : '[FILE]'} ${path}`;
     }).join('\n');
+
+    // 添加尽职调查提示
+    const diligenceWarning = fileResults.length > 1
+      ? `\n\n==================================================
+⚠️ 【尽职调查提醒】
+搜索返回了 **${fileResults.length} 个相关文件**。根据「尽职调查原则」：
+- 你**必须逐一阅读所有 ${fileResults.length} 个文件**，不能只读1个就下结论
+- 阅读时如果发现引用了其他文件，需要继续追查
+- 只有阅读完所有相关文件后，才能形成结论
+
+待阅读文件列表：
+${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
+==================================================`
+      : fileResults.length === 1
+        ? `\n\n> 提示：只有1个相关文件，请阅读后形成结论。`
+        : '';
+
+    return resultList + diligenceWarning;
   },
 
   deleteFile: (pathOrId) => {

@@ -89,7 +89,38 @@ export const useAgentEngine = ({
 
                 // 滑动窗口：只取最新的 N 条消息
                 const totalMessages = currentMessages.length;
-                const windowedMessages = currentMessages.slice(-MAX_CONTEXT_MESSAGES);
+                let windowedMessages = currentMessages.slice(-MAX_CONTEXT_MESSAGES);
+
+                // --- 滑动窗口完整性修正 ---
+                // OpenAI API 要求：tool_calls 必须紧跟 tool response
+                // 如果窗口从中间截断，可能导致消息序列不合法
+                // 检查并修正窗口起始位置，确保消息序列完整
+                const fixWindowStart = (msgs: any[]): any[] => {
+                    if (msgs.length === 0) return msgs;
+
+                    // 检查第一条消息
+                    const firstMsg = msgs[0];
+
+                    // 情况1: 第一条是 system (UI系统消息) -> 视为 user，合法
+                    if (firstMsg.role === 'system') return msgs;
+
+                    // 情况2: 第一条是 model/assistant 且有 tool_calls -> 非法（缺少对应的 user 或 tool response）
+                    if ((firstMsg.role === 'model' || firstMsg.role === 'assistant') && firstMsg.rawParts?.some((p: any) => p.functionCall)) {
+                        // 跳过这条消息，从下一条开始
+                        console.warn('[滑动窗口] 跳过孤立的 tool_calls 消息，避免 API 格式错误');
+                        return fixWindowStart(msgs.slice(1));
+                    }
+
+                    // 情况3: 第一条是 user 但内容是 tool response (rawParts 有 functionResponse)
+                    // 这种情况是合法的，因为 tool response 可以作为新一轮的起始
+                    if (firstMsg.role === 'user' && firstMsg.rawParts?.some((p: any) => p.functionResponse)) {
+                        return msgs;
+                    }
+
+                    return msgs;
+                };
+
+                windowedMessages = fixWindowStart(windowedMessages);
                 const inContextCount = windowedMessages.length;
                 const droppedCount = totalMessages - inContextCount;
 

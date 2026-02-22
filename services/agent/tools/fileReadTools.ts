@@ -40,11 +40,16 @@ export const searchFilesTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'searchFiles',
-    description: 'Search for files by name or content keywords. Use this to find file paths if you are unsure. [READ TOOL]',
+    description: `Search for files by name or content keywords. [READ TOOL]
+
+【尽职调查原则】如果搜索返回多个文件，你**必须逐一阅读所有文件**，不能只读一个就下结论。
+- 搜索返回 N 个文件 → 必须阅读所有 N 个文件
+- 阅读时发现引用其他文件 → 继续追查
+- 只有阅读完所有相关文件后，才能形成结论`,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么要搜索？选择了哪些关键词？为什么？' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么要搜索？选择了哪些关键词？你打算如何处理多个搜索结果？' },
         query: { type: 'string', description: 'The search keyword (e.g., "李逍遥", "细纲").' }
       },
       required: ['thinking', 'query']

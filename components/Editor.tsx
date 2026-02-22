@@ -46,7 +46,7 @@ const Editor: React.FC<EditorProps> = ({
 }) => {
   // 1. Core Stores
   const fileStore = useFileStore();
-  const { files, activeFileId, saveFileContent, createFile } = fileStore;
+  const { files, activeFileId, saveFileContent, createFile, deleteFile } = fileStore;
   const activeFile = files.find(f => f.id === activeFileId);
 
   // 2. Diff Store (for diff session management)
@@ -890,38 +890,78 @@ const Editor: React.FC<EditorProps> = ({
   };
 
   const handleRejectAll = () => {
-    if (!activeFile || !diffSession) return;
-    const targetChange = mergedPendingChange || activePendingChange;
-    if (!targetChange) return;
+    console.log('[handleRejectAll] 开始执行', {
+      hasActiveFile: !!activeFile,
+      hasDiffSession: !!diffSession,
+      hasMergedChange: !!mergedPendingChange,
+      hasActiveChange: !!activePendingChange
+    });
 
-    // Set batch flag
+    const targetChange = mergedPendingChange || activePendingChange;
+
+    // 即使条件不满足，也要确保退出 diff 模式
+    const cleanupAndExit = () => {
+      // 清理 pending changes
+      if (targetChange) {
+        removePendingChange(targetChange.id);
+      }
+
+      // 添加系统消息
+      addMessage({
+        id: Math.random().toString(),
+        role: 'system',
+        text: `❌ 已拒绝变更: ${targetChange?.fileName || '未知文件'}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'info' }
+      });
+
+      // 立即退出 diff 模式
+      setDiffSession(null);
+      setInternalMode('edit');
+      isApplyingBatchRef.current = false;
+      completionMessageSentRef.current = null;
+    };
+
+    // 特殊处理：createFile 被拒绝 - 应该删除文件
+    if (targetChange?.toolName === 'createFile') {
+      console.log('[handleRejectAll] createFile 被拒绝，删除文件');
+
+      // 删除新创建的文件
+      if (activeFile) {
+        deleteFile(activeFile.id);
+      }
+
+      cleanupAndExit();
+      return;
+    }
+
+    // 特殊处理：没有 activeFile 的情况（可能是 createFile 创建的文件被切换走了）
+    if (!activeFile) {
+      console.log('[handleRejectAll] 没有 activeFile，直接清理');
+      cleanupAndExit();
+      return;
+    }
+
+    // 正常情况：updateFile / patchFile 被拒绝 - 恢复原内容
     isApplyingBatchRef.current = true;
 
-    // Save original content (reject all changes)
-    const originalContent = diffSession.sourceSnapshot;
+    // 获取原始内容
+    const originalContent = diffSession?.sourceSnapshot || targetChange?.originalContent || '';
+
+    console.log('[handleRejectAll] 恢复原内容', {
+      fileName: activeFile.name,
+      contentLength: originalContent.length
+    });
+
+    // 恢复原内容
     saveFileContent(activeFile.id, originalContent);
 
-    // Remove all pending changes for this file
+    // 清理所有相关的 pending changes
     const filePath = getNodePath(activeFile, files);
     const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
     changesToRemove.forEach(c => removePendingChange(c.id));
 
-    // Add system message
-    addMessage({
-      id: Math.random().toString(),
-      role: 'system',
-      text: `❌ 已拒绝所有变更: ${targetChange.fileName}`,
-      timestamp: Date.now(),
-      metadata: { logType: 'info' }
-    });
-
-    // Clear diff session and exit diff mode after a short delay
-    setTimeout(() => {
-      setDiffSession(null);
-      setInternalMode('edit');  // 退出 diff 模式
-      isApplyingBatchRef.current = false;
-      completionMessageSentRef.current = null; // Reset for next session
-    }, 100);
+    cleanupAndExit();
   };
 
   const handleDismiss = () => {
