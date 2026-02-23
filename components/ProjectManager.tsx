@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import { useAgentStore } from '../stores/agentStore';
 import { AIService } from '../services/geminiService';
@@ -44,6 +44,13 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
 
   // Check for effective API Key (Custom or Environment)
   const hasApiKey = !!(aiConfig.apiKey || process.env.API_KEY);
+
+  // Auto-open settings if no API Key configured
+  useEffect(() => {
+    if (!hasApiKey && !isLoading) {
+      setIsSettingsOpen(true);
+    }
+  }, [hasApiKey, isLoading]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,8 +208,8 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-4xl mx-auto w-full flex flex-col">
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-950 text-gray-100 p-6">
+      <div className="max-w-4xl mx-auto w-full flex flex-col flex-1 min-h-0">
         
         <header className="flex flex-col items-start gap-4 mb-8 md:flex-row md:justify-between md:items-center">
           <div>
@@ -348,7 +355,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto pr-2">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-2">
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl">
               <Book size={48} className="mb-4 opacity-20" />
