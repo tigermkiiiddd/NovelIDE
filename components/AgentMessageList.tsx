@@ -393,11 +393,20 @@ const ToolLogMessage: React.FC<{
             ? '执行中...'
             : (toolSummary ? toolSummary.summary : '执行完成'));
 
-    // 从 text 中提取 thinking 内容
+    // 从 text 中提取 thinking 内容（匹配 **思考内容**: 或 **反思内容**: 后的内容）
     const thinkingContent = (() => {
-        const match = text.match(/🧠 \*\*思考\*\*: ([^\n]+)/);
-        return match ? match[1] : null;
+        // 匹配 "**思考内容**:" 或 "**反思内容**:" 后的内容（到 --- 或文本结束）
+        const match = text.match(/\*\*(?:思考内容|反思内容)\*\*:\s*([\s\S]*?)(?:\n---|$)/);
+        if (match) {
+            // 清理并截取前200字符作为摘要
+            const content = match[1].trim();
+            return content.length > 200 ? content.slice(0, 200) + '...' : content;
+        }
+        return null;
     })();
+
+    // 判断是否是 thinking 工具的输出
+    const isThinkingOutput = text.includes('🧠 **【') || text.includes('🔍 **【创作反思】**');
 
     // 简化显示内容（普通模式只显示结果行）
     const displayText = isDebugMode
@@ -424,6 +433,16 @@ const ToolLogMessage: React.FC<{
                 )}
                 <span className="truncate flex-1 font-mono opacity-90">{titleText}</span>
             </button>
+
+            {/* Thinking 内容预览 - 普通模式下也显示 */}
+            {!isExpanded && thinkingContent && (
+                <div className="mt-1 px-3 py-2 text-xs text-gray-400 leading-relaxed">
+                    <div className="flex items-start gap-2">
+                        <Brain size={12} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />
+                        <span className="whitespace-pre-wrap line-clamp-3">{thinkingContent}</span>
+                    </div>
+                </div>
+            )}
 
             {isExpanded && (
                 <div className="mt-1 bg-gray-950 border border-gray-800 rounded-lg p-3 text-gray-300 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
