@@ -9,7 +9,17 @@ export const thinkingTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'thinking',
-    description: `[META TOOL] 结构化思考工具。用于意图推理、方案分析、自我反思。在执行关键操作前使用此工具整理思路。【重要】createFile/updateFile/patchFile 完成后必须调用 mode='reflect_creative' 进行创作反思。`,
+    description: `[META TOOL] 结构化思考工具。
+- intent: 用户输入后的意图推理
+- reflect_creative: 文件操作后的创作反思，必须回答：
+  1) 当前核心目标是什么？
+  2) 内容是否有AI味？
+  3) 是否符合项目文风规范？
+  4) 是否与已有设定一致？
+  5) 角色行为是否符合人设(角色OC检测)？
+  6) 剧情是否符合大纲(大纲OC检测)？
+  7) 是否达成核心目标？
+注意：反思是审视刚才写的内容质量，不是规划下一步行动。`,
     parameters: {
       type: 'object',
       properties: {
@@ -20,7 +30,7 @@ export const thinkingTool: ToolDefinition = {
         mode: {
           type: 'string',
           enum: ['intent', 'analyze', 'reflect', 'plan', 'reflect_creative'],
-          description: '思考模式: intent=意图推理; analyze=方案分析; reflect=自我反思; plan=行动规划; reflect_creative=创作反思(文件操作后强制调用)'
+          description: '思考模式: intent=意图推理; analyze=方案分析; reflect=自我反思; plan=行动规划; reflect_creative=创作反思，必须包含7项检测：核心目标、AI味(0-10)、文风符合度、设定一致性、角色OC、大纲OC、目标达成度。是审视内容质量，不是规划下一步。'
         },
         content: {
           type: 'string',
@@ -74,16 +84,19 @@ export const formatThinkingResult = (
   if (mode === 'reflect_creative') {
     return `🔍 **【创作反思】**
 
-**反思对象**: ${thinking}
+**核心目标**: ${thinking}
 
 **质量评分**: ${confidenceEmoji} ${confidence}%
 
-**下一步**: ${actionLabels[nextAction] || nextAction}
+**判定**: ${actionLabels[nextAction] || nextAction}
 
 ---
 
 **反思内容**:
-${content}`;
+${content}
+
+---
+> ⚠️ 反思检查项：AI味程度、文风符合度、设定一致性、角色OC检测、大纲OC检测、目标达成度`;
   }
 
   return `🧠 **【${modeLabels[mode] || '思考'}】**

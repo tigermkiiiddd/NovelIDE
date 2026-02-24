@@ -46,10 +46,18 @@ export const useAgentEngine = ({
 
     const { runTool, resetErrorTracker } = toolsHook;
     const abortControllerRef = useRef<AbortController | null>(null);
+    const isProcessingRef = useRef(false);  // 并发保护
 
     // --- 核心循环: Process Turn ---
     const processTurn = useCallback(async () => {
+        // 并发保护：如果正在处理中，直接返回
+        if (isProcessingRef.current) {
+            console.log('[AgentEngine] 已有任务在执行中，跳过本次调用');
+            return;
+        }
         if (!aiServiceInstance || !currentSessionId) return;
+
+        isProcessingRef.current = true;
 
         // 1. 初始化 AbortController
         if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -82,8 +90,13 @@ export const useAgentEngine = ({
             let loopCount = 0;
             const MAX_LOOPS = 30;
             let keepGoing = true;
-            let hasCalledThinking = false;  // 门阀状态：是否已调用 thinking 工具
-            let isFirstLoop = true;  // 标记是否是第一轮循环
+
+            // 判断是否需要强制 thinking（用户输入或审批结果触发）
+            const triggerMsg = freshSession?.messages?.[freshSession.messages.length - 1];
+            const isUserInput = triggerMsg?.role === 'user' && !triggerMsg?.rawParts?.some((p: any) => p.functionResponse);
+            const isApprovalResult = triggerMsg?.role === 'system';
+            const needForceThinking = isUserInput || isApprovalResult;
+            let hasCalledThinking = false;  // 标记是否已完成强制 thinking
 
             // 4. 进入 ReAct 循环
             while (keepGoing && loopCount < MAX_LOOPS) {
@@ -94,25 +107,6 @@ export const useAgentEngine = ({
                 const currentGlobalSessions = useAgentStore.getState().sessions;
                 const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
                 const currentMessages = currentFreshSession?.messages || [];
-
-                // === 判断是否需要强制 thinking ===
-                // 只在第一轮循环时判断：触发本次 processTurn 的是用户输入还是 tool response
-                // 用户输入（包括审批结果）必须先 thinking，tool response 不需要
-                let requireThinking = false;
-                if (isFirstLoop) {
-                    const lastMsg = currentMessages[currentMessages.length - 1];
-                    if (lastMsg) {
-                        const isUserInput = lastMsg.role === 'user' && !lastMsg.rawParts?.some((p: any) => p.functionResponse);
-                        const isApprovalResult = lastMsg.role === 'system';  // 审批结果（如 "User Approved"）
-                        requireThinking = isUserInput || isApprovalResult;
-                        console.log('[Thinking 门阀] 触发类型判断', {
-                            lastRole: lastMsg.role,
-                            hasFunctionResponse: lastMsg.rawParts?.some((p: any) => p.functionResponse),
-                            requireThinking
-                        });
-                    }
-                    isFirstLoop = false;
-                }
 
                 // 滑动窗口：只取最新的 N 条消息
                 const totalMessages = currentMessages.length;
@@ -181,12 +175,15 @@ export const useAgentEngine = ({
                 }
 
                 // 4.2 调用 LLM (Network Call)
+                // 如果需要强制 thinking 且还没调用过，强制调用 thinking 工具
+                const forceToolName = (needForceThinking && !hasCalledThinking) ? 'thinking' : undefined;
                 const response = await aiServiceInstance.sendMessage(
                     apiHistory,
                     '', // 当前消息已在 apiHistory 中
                     fullSystemInstruction,
                     toolsForMode,  // 使用根据模式选择的工具
-                    signal
+                    signal,
+                    forceToolName  // 强制调用指定工具（如果需要）
                 );
 
                 // Extract API metadata for debug display
@@ -274,35 +271,17 @@ export const useAgentEngine = ({
                         if (!part.functionCall) continue;
                         const { name, args, id } = part.functionCall;
 
-                        // === 代码门阀：用户输入后必须先 thinking 确认意图 ===
-                        // 只在 requireThinking=true（用户输入/审批结果触发）时强制要求
-                        // tool response 触发的不需要强制 thinking
-                        if (requireThinking && !hasCalledThinking && name !== 'thinking') {
-                            // 拒绝执行，返回错误消息
-                            functionResponses.push({
-                                functionResponse: {
-                                    name,
-                                    id,
-                                    response: {
-                                        result: '❌ [代码门阀拦截] 用户输入后必须先调用 thinking 工具确认意图，才能执行其他工具。'
-                                    }
-                                }
-                            });
-                            logToUi(`❌ [代码门阀] 拒绝执行 \`${name}\`：用户输入后必须先调用 thinking 工具`);
-                            continue;  // 跳过此工具，继续处理下一个
-                        }
-
-                        // 标记已调用 thinking
-                        if (name === 'thinking') {
-                            hasCalledThinking = true;
-                        }
-
                         // Execute
                         const resultString = await runTool(name, args, toolMsgId, signal, logToUi);
 
                         functionResponses.push({
                             functionResponse: { name, id, response: { result: resultString } }
                         });
+
+                        // 标记 thinking 已完成
+                        if (name === 'thinking') {
+                            hasCalledThinking = true;
+                        }
                     }
 
                     if (signal.aborted) break;
@@ -332,7 +311,14 @@ export const useAgentEngine = ({
             }
 
         } catch (error: any) {
-            if (error.name === 'AbortError') {
+            // 检测用户主动取消：多种可能的 AbortError 格式
+            const isUserAbort =
+                error.name === 'AbortError' ||
+                error instanceof DOMException ||
+                error.message?.includes('aborted') ||
+                error.message?.includes('Aborted');
+
+            if (isUserAbort) {
                 addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now() });
             } else {
                 // 使用错误工厂创建详细的错误信息
@@ -390,6 +376,7 @@ export const useAgentEngine = ({
         } finally {
             setLoading(false);
             abortControllerRef.current = null;
+            isProcessingRef.current = false;  // 重置并发保护
         }
     }, [
         aiServiceInstance, currentSessionId, files, project, activeFile,

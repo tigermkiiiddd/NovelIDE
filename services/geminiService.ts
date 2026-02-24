@@ -82,11 +82,12 @@ export class AIService {
   }
 
   async sendMessage(
-    history: any[], 
-    message: string, 
+    history: any[],
+    message: string,
     systemInstruction: string,
     tools: ToolDefinition[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    forceToolName?: string  // 强制调用指定工具名称
   ): Promise<any> {
     
     if (!this.client) throw new Error("API Key not configured.");
@@ -161,7 +162,9 @@ export class AIService {
         model: modelName,
         messages: openAIMessages,
         tools: tools.length > 0 ? tools : undefined,
-        tool_choice: tools.length > 0 ? 'auto' : undefined,
+        tool_choice: forceToolName
+          ? { type: 'function', function: { name: forceToolName } }  // 强制调用指定工具
+          : (tools.length > 0 ? 'auto' : undefined),
         max_tokens: this.config.maxOutputTokens,
       };
 

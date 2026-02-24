@@ -393,11 +393,11 @@ const ToolLogMessage: React.FC<{
             ? '执行中...'
             : (toolSummary ? toolSummary.summary : '执行完成'));
 
-    // 从 text 中提取 thinking 内容（普通模式只显示 thinking）
-    const extractThinking = (logText: string): string | null => {
-        const match = logText.match(/🧠 \*\*思考\*\*: ([^\n]+)/);
+    // 从 text 中提取 thinking 内容
+    const thinkingContent = (() => {
+        const match = text.match(/🧠 \*\*思考\*\*: ([^\n]+)/);
         return match ? match[1] : null;
-    };
+    })();
 
     // 简化显示内容（普通模式只显示结果行）
     const displayText = isDebugMode
@@ -427,6 +427,15 @@ const ToolLogMessage: React.FC<{
 
             {isExpanded && (
                 <div className="mt-1 bg-gray-950 border border-gray-800 rounded-lg p-3 text-gray-300 font-mono text-xs overflow-x-auto animate-in slide-in-from-top-2 duration-200">
+                    {/* Thinking Section - 始终显示 */}
+                    {thinkingContent && (
+                        <div className="mb-3 p-2 bg-blue-900/10 rounded text-gray-300 italic leading-relaxed">
+                            <div className="flex items-start gap-2">
+                                <Brain size={12} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />
+                                <span className="opacity-90">{thinkingContent}</span>
+                            </div>
+                        </div>
+                    )}
                     <div className="whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar">
                         {displayText || <span className="text-gray-600 italic">初始化执行环境...</span>}
                     </div>
@@ -635,7 +644,12 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             if (msg.isToolOutput) {
                 // 普通模式下：显示错误提示框（如果包含错误）
                 if (!isDebugMode) {
-                    const hasError = msg.text?.includes('❌') || msg.text?.includes('[SYSTEM ERROR]');
+                    // 更严格的错误检测：只匹配真正的错误格式，避免误判文件内容中的 ❌ 符号
+                    const hasError = msg.text?.includes('[SYSTEM ERROR]') ||
+                                     msg.text?.includes('❌ **Error**') ||
+                                     msg.text?.includes('❌ 错误') ||
+                                     msg.text?.includes('❌ 失败') ||
+                                     msg.text?.includes('❌ 执行失败');
                     if (!hasError) {
                         return null;  // 非错误信息才隐藏
                     }
