@@ -2,6 +2,7 @@
 import OpenAI from "openai";
 import { AIConfig } from "../types";
 import { ToolDefinition } from "./agent/types";
+import { AIResponseMetadata } from "../types/agentErrors";
 
 // --- Constants ---
 // Helper to generate settings based on config threshold
@@ -195,19 +196,34 @@ export class AIService {
       const requestEndTime = Date.now();
       const duration = requestEndTime - requestStartTime;
 
+      // 收集警告信息
+      const warnings: string[] = [];
+
       // Build response metadata for debug display
-      const responseMetadata = {
+      const finishReason = completion.choices?.[0]?.finish_reason;
+      const responseMetadata: AIResponseMetadata = {
+        requestId: completion.id,
+        model: completion.model,
+        usage: {
+          prompt_tokens: completion.usage?.prompt_tokens,
+          completion_tokens: completion.usage?.completion_tokens,
+          total_tokens: completion.usage?.total_tokens,
+        },
+        finishReason: finishReason,
+        duration,
+        warnings,
+      };
+
+      console.log('[AI Response]', JSON.stringify({
         requestId: completion.id,
         model: completion.model,
         usage: completion.usage,
-        finishReason: completion.choices?.[0]?.finish_reason,
+        finishReason,
         safetyRatings: completion.choices?.[0]?.safetyRatings,
         promptFeedback: completion.promptFeedback,
         duration: `${duration}ms`,
         timestamp: new Date().toISOString(),
-      };
-
-      console.log('[AI Response]', JSON.stringify(responseMetadata, null, 2));
+      }, null, 2));
 
       if (!completion.choices || completion.choices.length === 0) {
           // 检查是否是限流导致的空响应
@@ -216,14 +232,34 @@ export class AIService {
 
           let errorHint = 'API 返回空响应';
           if (isEmptyGeneration) {
-            errorHint = '⚠️ API 限流或服务暂时不可用 (completion_tokens=0，可能是 429 Too Many Requests)';
+            errorHint = 'API 限流或服务暂时不可用 (completion_tokens=0)';
+            warnings.push('空响应可能由限流导致');
           }
 
-          throw new Error(`${errorHint}\n\n原始响应：\n${JSON.stringify(completion, null, 2)}`);
+          const error = new Error(`${errorHint}\n\n原始响应：\n${JSON.stringify(completion, null, 2)}`);
+          // @ts-ignore - 添加元数据到错误对象
+          error._metadata = responseMetadata;
+          // @ts-ignore - 标记错误类型
+          error._isEmptyResponse = true;
+          throw error;
       }
 
       const choice = completion.choices[0];
       const msg = choice.message;
+
+      // 检查 finish_reason 并添加警告
+      if (finishReason === 'length') {
+        warnings.push('响应被截断 (finish_reason=length)');
+        console.warn('[AIService] Response truncated: finish_reason=length');
+      } else if (finishReason === 'content_filter') {
+        warnings.push('内容被安全过滤器拦截 (finish_reason=content_filter)');
+        console.warn('[AIService] Content filtered: finish_reason=content_filter');
+      }
+
+      // 检查空内容
+      if (!msg.content && (!msg.tool_calls || msg.tool_calls.length === 0)) {
+        warnings.push('响应无文本内容且无工具调用');
+      }
 
       // 3. Convert OpenAI Response back to Internal Format (parts based)
       const parts: any[] = [];
@@ -258,19 +294,45 @@ export class AIService {
             }
           }
         ],
-        // Attach metadata for debug display
+        // Attach metadata for debug display and error handling
         _metadata: {
           request: requestMetadata,
-          response: responseMetadata,
-        }
+          response: {
+            ...responseMetadata,
+            safetyRatings: completion.choices?.[0]?.safetyRatings,
+            promptFeedback: completion.promptFeedback,
+            rawCompletion: completion,
+          },
+        },
+        // 直接暴露 AIResponseMetadata 给上层使用
+        _aiMetadata: responseMetadata,
       };
 
-    } catch (error) {
+    } catch (error: any) {
        if (error instanceof DOMException && error.name === 'AbortError') throw error;
        // @ts-ignore
        if (error?.name === 'AbortError') throw error;
-       
-       console.error("OpenAI/Gemini API Error:", error);
+
+       // 增强错误信息
+       const errorInfo = {
+         message: error.message,
+         status: error.status || error.response?.status,
+         code: error.code,
+         requestId: error.requestId || error.response?.headers?.['x-request-id'],
+       };
+
+       console.error("[AIService] API Error:", {
+         ...errorInfo,
+         stack: error.stack,
+       });
+
+       // 将请求信息附加到错误对象，便于调试
+       error._requestInfo = {
+         endpoint: `${this.config.baseUrl || 'https://api.openai.com/v1'}/chat/completions`,
+         model: this.config.modelName,
+         timestamp: new Date().toISOString(),
+       };
+
        throw error;
     }
   }

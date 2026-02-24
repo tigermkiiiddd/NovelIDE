@@ -1,12 +1,182 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers } from 'lucide-react';
+import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers, Wifi, Key, Clock, AlertTriangle, Zap, WifiOff, Ban } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
 import { useUiStore } from '../stores/uiStore';
 import { useFileStore } from '../stores/fileStore';
 import { generateToolSummary } from '../utils/toolSummaryUtils';
 import { findNodeByPath } from '../services/fileSystem';
+import { AgentErrorInfo, AgentErrorCategory } from '../types/agentErrors';
+
+// --- Error Category Icons and Colors ---
+const getErrorCategoryStyle = (category: AgentErrorCategory) => {
+  switch (category) {
+    case AgentErrorCategory.NETWORK:
+      return { icon: WifiOff, color: 'text-orange-400', bg: 'bg-orange-900/30', border: 'border-orange-700/50' };
+    case AgentErrorCategory.AUTH:
+      return { icon: Key, color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700/50' };
+    case AgentErrorCategory.RATE_LIMIT:
+      return { icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-900/30', border: 'border-yellow-700/50' };
+    case AgentErrorCategory.PARSE:
+      return { icon: AlertTriangle, color: 'text-purple-400', bg: 'bg-purple-900/30', border: 'border-purple-700/50' };
+    case AgentErrorCategory.CONTENT:
+      return { icon: Ban, color: 'text-pink-400', bg: 'bg-pink-900/30', border: 'border-pink-700/50' };
+    case AgentErrorCategory.API:
+    default:
+      return { icon: AlertOctagon, color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-700/50' };
+  }
+};
+
+// --- Error Info View Component ---
+const ErrorInfoView: React.FC<{
+  errorInfo: AgentErrorInfo;
+  isDebugMode: boolean;
+  onRetry?: () => void;
+}> = ({ errorInfo, isDebugMode, onRetry }) => {
+  const [showDebug, setShowDebug] = useState(false);
+  const style = getErrorCategoryStyle(errorInfo.category);
+  const Icon = style.icon;
+
+  return (
+    <div className={`w-full max-w-[95%] sm:max-w-[85%] ${style.bg} ${style.border} border rounded-lg overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300`}>
+      {/* Error Header */}
+      <div className={`flex items-center gap-3 px-4 py-3 border-b ${style.border}`}>
+        <div className={`p-2 rounded-lg ${style.bg}`}>
+          <Icon size={18} className={style.color} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className={`font-semibold text-sm ${style.color}`}>{errorInfo.title}</div>
+          <div className="text-xs text-gray-400 mt-0.5">{errorInfo.message}</div>
+        </div>
+        {errorInfo.recoverable && onRetry && (
+          <button
+            onClick={onRetry}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${style.color} hover:bg-white/10 rounded-lg transition-colors`}
+          >
+            <RefreshCw size={12} />
+            重试
+          </button>
+        )}
+      </div>
+
+      {/* Suggestions */}
+      {errorInfo.suggestions.length > 0 && (
+        <div className="px-4 py-3">
+          <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">解决建议</div>
+          <ul className="space-y-1.5">
+            {errorInfo.suggestions.map((suggestion, idx) => (
+              <li key={idx} className="flex items-start gap-2 text-xs text-gray-300">
+                <span className={`${style.color} mt-0.5`}>{idx + 1}.</span>
+                <span>{suggestion}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Debug Data Toggle */}
+      {isDebugMode && errorInfo.debugData && (
+        <div className="border-t border-gray-800">
+          <button
+            onClick={() => setShowDebug(!showDebug)}
+            className="w-full flex items-center justify-between px-4 py-2 text-xs text-gray-500 hover:text-gray-300 hover:bg-white/5 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <Code size={12} />
+              Debug 详情
+            </span>
+            <ChevronRight size={12} className={`transition-transform ${showDebug ? 'rotate-90' : ''}`} />
+          </button>
+
+          {showDebug && (
+            <div className="px-4 py-3 bg-black/30 space-y-3">
+              {/* Raw Error */}
+              {errorInfo.debugData.rawError && (
+                <JsonView
+                  data={errorInfo.debugData.rawError}
+                  label="原始错误"
+                  icon={<AlertOctagon size={12} />}
+                  color="text-red-300"
+                />
+              )}
+
+              {/* Request Info */}
+              {errorInfo.debugData.request && (
+                <JsonView
+                  data={errorInfo.debugData.request}
+                  label="请求信息"
+                  icon={<Zap size={12} />}
+                  color="text-blue-300"
+                />
+              )}
+
+              {/* Response Info */}
+              {errorInfo.debugData.response && (
+                <JsonView
+                  data={errorInfo.debugData.response}
+                  label="响应信息"
+                  icon={<Database size={12} />}
+                  color="text-green-300"
+                />
+              )}
+
+              {/* Stack Trace */}
+              {errorInfo.debugData.stack && (
+                <div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">堆栈追踪</div>
+                  <pre className="text-[9px] text-gray-500 bg-black/50 p-2 rounded border border-gray-800 overflow-x-auto whitespace-pre-wrap">
+                    {errorInfo.debugData.stack}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Response Warning Badge ---
+const ResponseWarningBadge: React.FC<{
+  warnings: any[];
+}> = ({ warnings }) => {
+  if (!warnings || warnings.length === 0) return null;
+
+  // 提取警告类型
+  const hasTruncation = warnings.some((w: any) =>
+    typeof w === 'string' ? w.includes('truncated') || w.includes('length') :
+    w.title?.includes('截断')
+  );
+  const hasFilter = warnings.some((w: any) =>
+    typeof w === 'string' ? w.includes('filter') || w.includes('filtered') :
+    w.title?.includes('过滤')
+  );
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {hasTruncation && (
+        <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 rounded-full">
+          <AlertTriangle size={10} />
+          <span>响应被截断</span>
+        </div>
+      )}
+      {hasFilter && (
+        <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] bg-pink-900/30 border border-pink-700/50 text-pink-400 rounded-full">
+          <Ban size={10} />
+          <span>内容被过滤</span>
+        </div>
+      )}
+      {!hasTruncation && !hasFilter && warnings.map((w: any, idx: number) => (
+        <div key={idx} className="flex items-center gap-1.5 px-2 py-1 text-[10px] bg-orange-900/30 border border-orange-700/50 text-orange-400 rounded-full">
+          <AlertTriangle size={10} />
+          <span>{typeof w === 'string' ? w : w.title || '警告'}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // --- Debug Payload View Component ---
 interface DebugPayload {
@@ -538,6 +708,19 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             }
 
             // 3. Standard Message (User / Model / System-Error)
+            // Special handling for system error messages with errorInfo
+            if (isSystem && msg.metadata?.logType === 'error' && msg.metadata?.errorInfo) {
+              return (
+                <div key={msg.id} className="flex flex-col items-start animate-in fade-in duration-300">
+                  <ErrorInfoView
+                    errorInfo={msg.metadata.errorInfo}
+                    isDebugMode={isDebugMode}
+                    onRetry={onRegenerate ? () => onRegenerate(msg.id) : undefined}
+                  />
+                </div>
+              );
+            }
+
             return (
                 <div
                     key={msg.id}
@@ -593,6 +776,11 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                     <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} isDebugMode={isDebugMode} />
                                 ))}
                             </div>
+                        )}
+
+                        {/* Response Warnings - 显示在 Model 消息下方 */}
+                        {isModel && msg.metadata?.responseWarnings && (
+                            <ResponseWarningBadge warnings={msg.metadata.responseWarnings} />
                         )}
                     </div>
 

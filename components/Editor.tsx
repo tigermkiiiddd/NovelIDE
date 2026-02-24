@@ -462,6 +462,72 @@ const Editor: React.FC<EditorProps> = ({
       return new Array(content.split('\n').length).fill(0).map((_, i) => i + 1);
   }, [content]);
 
+  // --- 测量每行实际高度（用于 wordWrap 模式） ---
+  const [lineHeights, setLineHeights] = useState<number[]>([]);
+
+  // 测量每行实际高度的函数
+  const measureLineHeights = useCallback(() => {
+    const textarea = textareaRef.current;
+
+    if (!textarea || !wordWrap) {
+      // 非 wordWrap 模式，不需要测量
+      setLineHeights([]);
+      return;
+    }
+
+    // 获取 textarea 的样式信息
+    const computedStyle = window.getComputedStyle(textarea);
+
+    // 获取内容行
+    const contentLines = content.split('\n');
+    const newLineHeights: number[] = [];
+
+    // 获取 textarea 的可用宽度（减去 padding）
+    const textareaWidth = textarea.clientWidth;
+    const paddingLeft = parseFloat(computedStyle.paddingLeft) || 0;
+    const paddingRight = parseFloat(computedStyle.paddingRight) || 0;
+    const availableWidth = textareaWidth - paddingLeft - paddingRight;
+
+    // 测量每行的实际高度
+    const measureDiv = document.createElement('div');
+    measureDiv.style.cssText = `
+      position: absolute;
+      visibility: hidden;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      font-family: ${computedStyle.fontFamily};
+      font-size: ${computedStyle.fontSize};
+      line-height: ${computedStyle.lineHeight};
+      width: ${availableWidth}px;
+    `;
+    document.body.appendChild(measureDiv);
+
+    contentLines.forEach((line) => {
+      measureDiv.textContent = line || '\u200B'; // 使用零宽空格保持空行
+      const height = measureDiv.offsetHeight;
+      newLineHeights.push(height);
+    });
+
+    document.body.removeChild(measureDiv);
+    setLineHeights(newLineHeights);
+  }, [content, wordWrap]);
+
+  // 当 content 或 wordWrap 变化时重新测量行高
+  useEffect(() => {
+    measureLineHeights();
+  }, [measureLineHeights]);
+
+  // 当窗口大小变化时重新测量
+  useEffect(() => {
+    const handleResize = () => {
+      // 延迟测量，等待布局完成
+      setTimeout(measureLineHeights, 100);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [measureLineHeights]);
+
   // --- Handlers ---
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newText = e.target.value;
@@ -1098,12 +1164,22 @@ const Editor: React.FC<EditorProps> = ({
           {showLineNumbers && (
               <div
                   ref={gutterRef}
-                  className="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base leading-relaxed"
+                  className="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base"
                   aria-hidden="true"
               >
-                  {lines.map((ln) => (
-                      <div key={ln}>{ln}</div>
-                  ))}
+                  {lines.map((ln, index) => {
+                      // wordWrap 模式下使用测量的高度，否则使用默认行高
+                      const height = wordWrap && lineHeights[index] ? lineHeights[index] : undefined;
+                      return (
+                          <div
+                              key={ln}
+                              style={height ? { height: `${height}px`, lineHeight: `${height}px` } : {}}
+                              className={wordWrap ? 'leading-none' : 'leading-relaxed'}
+                          >
+                              {ln}
+                          </div>
+                      );
+                  })}
                   {/* Extra padding at bottom to match textarea scrolling */}
                   <div className="h-20" />
               </div>

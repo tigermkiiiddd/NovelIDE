@@ -30,6 +30,12 @@ export interface ChatMessage {
   metadata?: {
     systemPrompt?: string; // The specific system prompt used for this turn
     logType?: 'error' | 'info' | 'success'; // Distinguish between error and info messages
+    // AI 响应错误信息
+    errorInfo?: import('./types/agentErrors').AgentErrorInfo;
+    // AI 响应元数据
+    responseMetadata?: import('./types/agentErrors').AIResponseMetadata;
+    // 响应警告列表
+    responseWarnings?: any[];
     [key: string]: any;
   };
 }

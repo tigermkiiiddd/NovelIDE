@@ -8,6 +8,13 @@ import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
+import {
+  fromError,
+  checkFinishReason,
+  contentError,
+  formatErrorForDisplay,
+} from '../../services/agent/errorFactory';
+import { AgentErrorInfo, AgentErrorCategory } from '../../types/agentErrors';
 
 // 滑动窗口：最多发送给 LLM 的消息数量
 export const MAX_CONTEXT_MESSAGES = 30;
@@ -184,14 +191,33 @@ export const useAgentEngine = ({
 
                 // Extract API metadata for debug display
                 const apiMetadata = response._metadata;
+                const aiMetadata = response._aiMetadata;
 
                 if (signal.aborted) break;
 
                 const candidates = response.candidates;
-                if (!candidates || candidates.length === 0) throw new Error("No response from Agent");
+                if (!candidates || candidates.length === 0) {
+                  // 使用错误工厂创建空响应错误
+                  throw contentError('empty', aiMetadata, response);
+                }
 
                 const content = candidates[0].content;
                 const parts = content.parts;
+
+                // 检查 finish_reason 并处理内容问题
+                const finishReasonError = checkFinishReason(
+                  aiMetadata?.finishReason,
+                  aiMetadata,
+                  response
+                );
+                if (finishReasonError) {
+                  console.warn('[AgentEngine] finish_reason issue:', finishReasonError);
+                  // 如果是截断，记录警告但继续处理（响应仍可用）
+                  if (aiMetadata?.finishReason === 'length') {
+                    // 将警告添加到消息元数据
+                    // 后续会在消息 metadata 中标记
+                  }
+                }
 
                 // 4.3 处理文本响应
                 const textPart = parts.find((p: any) => p.text);
@@ -209,6 +235,8 @@ export const useAgentEngine = ({
                         metadata: {
                             loopCount: loopCount,
                             apiMetadata: apiMetadata, // Attach API metadata for debug display
+                            // 包含 finish_reason 警告
+                            responseWarnings: finishReasonError ? [finishReasonError] : aiMetadata?.warnings,
                         }
                         // Removed debugPayload from here since it's now on the INPUT message
                     });
@@ -307,8 +335,57 @@ export const useAgentEngine = ({
             if (error.name === 'AbortError') {
                 addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now() });
             } else {
-                console.error(error);
-                addMessage({ id: generateId(), role: 'system', text: 'Agent Error: ' + error.message, timestamp: Date.now() });
+                // 使用错误工厂创建详细的错误信息
+                let errorInfo: AgentErrorInfo;
+
+                try {
+                  // fromError 会根据错误类型自动判断
+                  errorInfo = fromError(
+                    error,
+                    error._requestInfo,
+                    error._metadata
+                  );
+                } catch (e) {
+                  // 如果 fromError 抛出（如 AbortError 已处理），使用通用错误
+                  if (error.category === AgentErrorCategory.CONTENT) {
+                    errorInfo = error as AgentErrorInfo;
+                  } else {
+                    errorInfo = {
+                      category: AgentErrorCategory.API,
+                      severity: 'medium' as any,
+                      title: 'Agent 错误',
+                      message: error.message || '未知错误',
+                      suggestions: ['请重试', '查看控制台获取详细信息'],
+                      recoverable: true,
+                      debugData: {
+                        rawError: error,
+                        stack: error.stack,
+                      },
+                    };
+                  }
+                }
+
+                console.error('[AgentEngine] Error:', {
+                  category: errorInfo.category,
+                  title: errorInfo.title,
+                  message: errorInfo.message,
+                  rawError: error,
+                  debugData: errorInfo.debugData,
+                });
+
+                // 格式化错误信息用于显示
+                const errorDisplayText = formatErrorForDisplay(errorInfo);
+
+                addMessage({
+                  id: generateId(),
+                  role: 'system',
+                  text: errorDisplayText,
+                  timestamp: Date.now(),
+                  metadata: {
+                    logType: 'error',
+                    errorInfo: errorInfo, // 存储结构化错误信息供 UI 使用
+                  },
+                });
             }
         } finally {
             setLoading(false);
