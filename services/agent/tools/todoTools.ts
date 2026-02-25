@@ -10,31 +10,31 @@ export const manageTodosTool: ToolDefinition = {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程(用中文):说明待办事项的更新策略。' },
-        action: { 
-          type: 'string', 
-          enum: ['add', 'complete', 'remove', 'update', 'list'], 
-          description: 'Action: "add" new tasks, "complete" tasks by ID, "remove" tasks by ID, "update" task details, or "list" all.' 
+        action: {
+          type: 'string',
+          enum: ['add', 'complete', 'remove', 'update', 'list'],
+          description: 'Action: "add" new tasks, "complete" tasks by index, "remove" tasks by index, "update" task details, or "list" all.'
         },
-        tasks: { 
-          type: 'array', 
+        tasks: {
+          type: 'array',
           items: { type: 'string' },
-          description: 'Array of task content strings. Required for action="add".' 
+          description: 'Array of task content strings. Required for action="add".'
         },
-        todoIds: { 
-          type: 'array', 
-          items: { type: 'string' },
-          description: 'Array of todo IDs. Required for action="complete" or "remove".'
+        indices: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'Array of 0-based task indices. Required for action="complete" or "remove". Use indices from list output.'
         },
         updates: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              id: { type: 'string' },
+              index: { type: 'number', description: '0-based task index' },
               task: { type: 'string', description: 'New task content' },
               status: { type: 'string', enum: ['pending', 'done'] }
             },
-            required: ['id']
+            required: ['index']
           },
           description: 'Array of update objects. Required for action="update".'
         }
@@ -49,16 +49,16 @@ export const manageTodosTool: ToolDefinition = {
  * Returns the description string and optionally the new array state.
  */
 export const processManageTodos = (
-    currentTodos: TodoItem[], 
-    action: string, 
-    tasks?: string[], 
-    todoIds?: string[], 
-    updates?: any[]
+    currentTodos: TodoItem[],
+    action: string,
+    tasks?: string[],
+    indices?: number[],
+    updates?: Array<{ index: number; task?: string; status?: string }>
 ): TodoOperationResult => {
     let result = '';
     let newTodos = [...currentTodos];
     let hasChanges = false;
-    
+
     switch (action) {
         case 'add':
             if (!tasks || tasks.length === 0) return { result: 'Error: "tasks" array is required for add action.' };
@@ -69,45 +69,40 @@ export const processManageTodos = (
             }));
             newTodos = [...newTodos, ...newItems];
             hasChanges = true;
-            result = `Batch Added ${newItems.length} tasks:\n${newItems.map(t => `- [ID:${t.id}] ${t.task}`).join('\n')}`;
+            result = `Batch Added ${newItems.length} tasks:\n${newItems.map((t, i) => `- [${currentTodos.length + i}] ${t.task}`).join('\n')}`;
             break;
 
         case 'complete':
-            if (!todoIds || todoIds.length === 0) return { result: 'Error: "todoIds" array is required for complete action.' };
+            if (!indices || indices.length === 0) return { result: 'Error: "indices" array is required for complete action.' };
             let completeCount = 0;
-            newTodos = newTodos.map(t => {
-                if (todoIds.includes(t.id)) {
+            newTodos = newTodos.map((t, i) => {
+                if (indices.includes(i)) {
                     completeCount++;
                     return { ...t, status: 'done' };
                 }
                 return t;
             });
             if (completeCount > 0) hasChanges = true;
-            result = `Batch Completed ${completeCount} tasks (IDs: ${todoIds.join(', ')}).`;
+            result = `Batch Completed ${completeCount} tasks (indices: ${indices.join(', ')}).`;
             break;
 
         case 'remove':
-            if (!todoIds || todoIds.length === 0) return { result: 'Error: "todoIds" array is required for remove action.' };
-            let removeCount = 0;
-            newTodos = newTodos.filter(t => {
-                if (todoIds.includes(t.id)) {
-                    removeCount++;
-                    return false; 
-                }
-                return true;
-            });
-            if (removeCount > 0) hasChanges = true;
-            result = `Batch Removed ${removeCount} tasks (IDs: ${todoIds.join(', ')}).`;
+            if (!indices || indices.length === 0) return { result: 'Error: "indices" array is required for remove action.' };
+            const validIndices = indices.filter(i => i >= 0 && i < newTodos.length);
+            if (validIndices.length === 0) return { result: 'Error: No valid indices provided.' };
+            newTodos = newTodos.filter((_, i) => !validIndices.includes(i));
+            hasChanges = true;
+            result = `Batch Removed ${validIndices.length} tasks (indices: ${validIndices.join(', ')}).`;
             break;
 
         case 'update':
             if (!updates || updates.length === 0) return { result: 'Error: "updates" array is required for update action.' };
             let updateCount = 0;
-            newTodos = newTodos.map(t => {
-                const update = updates.find(u => u.id === t.id);
+            newTodos = newTodos.map((t, i) => {
+                const update = updates.find(u => u.index === i);
                 if (update) {
                     updateCount++;
-                    return { ...t, ...update };
+                    return { ...t, ...(update.task && { task: update.task }), ...(update.status && { status: update.status }) };
                 }
                 return t;
             });
@@ -116,7 +111,7 @@ export const processManageTodos = (
             break;
 
         case 'list':
-            const listStr = currentTodos.map(t => `- [${t.status === 'done' ? 'x' : ' '}] ID:${t.id} ${t.task}`).join('\n');
+            const listStr = currentTodos.map((t, i) => `- [${t.status === 'done' ? 'x' : ' '}] [${i}] ${t.task}`).join('\n');
             result = listStr || '(Empty Todo List)';
             break;
 

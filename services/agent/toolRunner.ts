@@ -192,7 +192,7 @@ export const executeTool = async (
             return { type: 'EXECUTED', result };
         }
         else if (name === 'manageTodos') {
-            const op = processManageTodos(context.todos, args.action, args.tasks, args.todoIds, args.updates);
+            const op = processManageTodos(context.todos, args.action, args.tasks, args.indices, args.updates);
             result = op.result;
             if (op.newTodos) {
                 actions.setTodos(op.newTodos); // State update

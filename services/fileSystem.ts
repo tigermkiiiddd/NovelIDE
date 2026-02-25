@@ -1,13 +1,12 @@
 
 import { FileNode, FileType } from '../types';
-import { 
-  PROJECT_PROFILE_TEMPLATE, 
-  STYLE_GUIDE_TEMPLATE, 
-  OUTLINE_CHAPTER_TEMPLATE, 
-  OUTLINE_MASTER_TEMPLATE, 
-  CHARACTER_CARD_TEMPLATE, 
+import {
+  PROJECT_PROFILE_TEMPLATE,
+  STYLE_GUIDE_TEMPLATE,
+  OUTLINE_CHAPTER_TEMPLATE,
+  OUTLINE_MASTER_TEMPLATE,
+  CHARACTER_CARD_TEMPLATE,
   DEFAULT_AGENT_SKILL,
-  SKILL_EROTIC_WRITER,
   SKILL_WORLD_BUILDER,
   SKILL_OUTLINE_ARCHITECT,
   SKILL_CHARACTER_DESIGNER,
@@ -144,7 +143,6 @@ export const createInitialFileSystem = (): FileNode[] => {
     createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
     createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
     createFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE),
-    createFile('技能_涩涩扩写.md', subskillFolder.id, SKILL_EROTIC_WRITER),
 
     // --- 99_创作规范 (Templates & Guides) ---
     createFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE),
