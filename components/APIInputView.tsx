@@ -34,7 +34,7 @@ interface APIInputViewProps {
     label?: string;
 }
 
-const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; color?: string; defaultOpen?: boolean }> = ({ data, label, icon, color = "text-gray-400", defaultOpen = false }) => {
+const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; color?: string; defaultOpen?: boolean; maxHeight?: string }> = ({ data, label, icon, color = "text-gray-400", defaultOpen = false, maxHeight = "200px" }) => {
     if (!data) return null;
     return (
         <details className="group mt-2 text-xs" open={defaultOpen}>
@@ -43,7 +43,7 @@ const JsonView: React.FC<{ data: any; label?: string; icon?: React.ReactNode; co
                 <span className="font-mono font-bold opacity-80">{label || 'RAW DATA'}</span>
                 <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-[10px]">Click to expand</span>
             </summary>
-            <div className="mt-1 p-2 bg-black/50 rounded border border-gray-800 overflow-x-auto max-h-[200px] overflow-y-auto">
+            <div className="mt-1 p-2 bg-black/50 rounded border border-gray-800 overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
                 <pre className="font-mono text-[10px] text-gray-400 leading-normal whitespace-pre-wrap select-all">
                     {typeof data === 'string' ? data : JSON.stringify(data, null, 2)}
                 </pre>
@@ -198,6 +198,18 @@ const APIInputView: React.FC<APIInputViewProps> = ({ apiMetadata, messageCount =
                             label="Safety Ratings"
                             icon={<Settings size={12}/>}
                             color="text-orange-300"
+                        />
+                    )}
+
+                    {/* RAW Response - 原始 API 响应 */}
+                    {apiMetadata?.response?.rawCompletion && (
+                        <JsonView
+                            data={apiMetadata.response.rawCompletion}
+                            label="RAW Response (原始响应)"
+                            icon={<Database size={12}/>}
+                            color="text-red-300"
+                            defaultOpen={true}
+                            maxHeight="500px"
                         />
                     )}
 
