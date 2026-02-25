@@ -25,7 +25,8 @@ import {
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
-  SKILL_HUMANIZER_STYLE
+  SKILL_HUMANIZER_STYLE,
+  SKILL_EXPECTATION_MANAGER
 } from '../../services/templates';
 
 // 内联模板（用于世界线记录和伏笔记录）
@@ -190,6 +191,7 @@ export class FileService {
     ensureFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER);
     ensureFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW);
     ensureFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE);
+    ensureFile('技能_期待感管理.md', subskillFolder.id, SKILL_EXPECTATION_MANAGER);
 
     return updatedFiles;
   }

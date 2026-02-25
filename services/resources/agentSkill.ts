@@ -7,3 +7,4 @@ export * from './skills/draftExpander';
 export * from './skills/editorReview';
 export * from './skills/humanizerStyle';
 export * from './skills/coreProtocol';
+export * from './skills/expectationManager';
