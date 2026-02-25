@@ -232,7 +232,9 @@ export const constructSystemPrompt = (
 
   // Task Context
   const pendingList = todos.filter(t => t.status === 'pending');
-  const pendingTodos = pendingList.length > 0 ? pendingList.map((t, i) => `- [${i}] ${t.task}`).join('\n') : "(无待办事项)";
+  const pendingTodos = pendingList.length > 0
+    ? pendingList.map((t, i) => `> - [${i}] ${t.task}`).join('\n')
+    : "> (无待办事项)";
 
   // User Input History (新增)
   const userInputHistory = extractUserInputHistory(messages);
@@ -274,7 +276,9 @@ ${charactersSummary}
 ${worldSummary}
 
 ## 3. 当前工作区状态
-- **待办事项**:
+
+### ⚠️ 当前任务目标
+> 以下是你需要完成的任务，请专注于推进这些目标：
 ${pendingTodos}
 
 - **用户意图历史**:

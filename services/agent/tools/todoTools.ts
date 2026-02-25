@@ -12,8 +12,8 @@ export const manageTodosTool: ToolDefinition = {
         thinking: { type: 'string', description: '思考过程(用中文):说明待办事项的更新策略。' },
         action: {
           type: 'string',
-          enum: ['add', 'complete', 'remove', 'update', 'list'],
-          description: 'Action: "add" new tasks, "complete" tasks by index, "remove" tasks by index, "update" task details, or "list" all.'
+          enum: ['add', 'complete', 'remove', 'update'],
+          description: 'Action: "add" new tasks, "complete" tasks by index, "remove" tasks by index, or "update" task details.'
         },
         tasks: {
           type: 'array',
@@ -108,11 +108,6 @@ export const processManageTodos = (
             });
             if (updateCount > 0) hasChanges = true;
             result = `Batch Updated ${updateCount} tasks.`;
-            break;
-
-        case 'list':
-            const listStr = currentTodos.map((t, i) => `- [${t.status === 'done' ? 'x' : ' '}] [${i}] ${t.task}`).join('\n');
-            result = listStr || '(Empty Todo List)';
             break;
 
         default:
