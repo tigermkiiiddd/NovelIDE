@@ -232,7 +232,7 @@ export const constructSystemPrompt = (
 
   // Task Context
   const pendingList = todos.filter(t => t.status === 'pending');
-  const pendingTodos = pendingList.length > 0 ? pendingList.map(t => `- [ID:${t.id}] ${t.task}`).join('\n') : "(无待办事项)";
+  const pendingTodos = pendingList.length > 0 ? pendingList.map((t, i) => `- [${i}] ${t.task}`).join('\n') : "(无待办事项)";
 
   // User Input History (新增)
   const userInputHistory = extractUserInputHistory(messages);
