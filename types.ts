@@ -26,6 +26,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isToolOutput?: boolean; // 标记是否为工具执行结果的反馈
+  isError?: boolean; // 标记工具执行是否失败
   rawParts?: any[]; // Stores the raw API parts (ContentPart[]) to preserve FunctionCalls/Responses in history
   metadata?: {
     systemPrompt?: string; // The specific system prompt used for this turn

@@ -249,6 +249,7 @@ export const useAgentEngine = ({
                     // 创建 UI 上的工具执行状态消息 (System Role)
                     const toolMsgId = generateId();
                     let streamedLog = '';
+                    let hasAnyError = false;  // 追踪是否有工具执行失败
 
                     // Real-time logger callback
                     const logToUi = (text: string) => {
@@ -274,6 +275,11 @@ export const useAgentEngine = ({
                         // Execute
                         const resultString = await runTool(name, args, toolMsgId, signal, logToUi);
 
+                        // 检测工具执行是否失败
+                        if (resultString.startsWith('Error:') || resultString.startsWith('[SYSTEM ERROR]:')) {
+                            hasAnyError = true;
+                        }
+
                         functionResponses.push({
                             functionResponse: { name, id, response: { result: resultString } }
                         });
@@ -292,7 +298,8 @@ export const useAgentEngine = ({
                         messages: session.messages.map(m => m.id === toolMsgId ? {
                             ...m,
                             text: streamedLog.trim() || '✅ Execution Complete',
-                            rawParts: functionResponses
+                            rawParts: functionResponses,
+                            isError: hasAnyError  // 标记工具执行是否失败
                         } : m),
                         lastModified: Date.now()
                     }));

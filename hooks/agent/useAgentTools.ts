@@ -91,6 +91,11 @@ export const useAgentTools = ({
         // 获取 planStore actions
         const planStore = usePlanStore.getState();
 
+        // 动态获取最新的 todos（避免闭包陷阱）
+        const agentStore = useAgentStore.getState();
+        const currentSession = agentStore.sessions.find(s => s.id === sessionId);
+        const latestTodos = currentSession?.todos || [];
+
         // 动态构建包含 Shadow Read 的工具集
         const dynamicActions = {
             ...tools,
@@ -108,7 +113,7 @@ export const useAgentTools = ({
         // 执行工具
         const execResult = await executeTool(name, args, {
             files,
-            todos,
+            todos: latestTodos,  // 使用动态获取的最新值
             aiService: aiServiceInstance || undefined,
             onUiLog: logToUi,
             signal,
@@ -164,7 +169,7 @@ export const useAgentTools = ({
         }
 
         return resultString;
-    }, [files, todos, tools, aiServiceInstance, setTodos, shadowReadFile, addPendingChange, getShadowContent, planMode, currentPlanNote, sessionId, projectId]);
+    }, [files, tools, aiServiceInstance, setTodos, shadowReadFile, addPendingChange, getShadowContent, planMode, currentPlanNote, sessionId, projectId]);
 
     // 重置错误追踪器（通常在每轮对话开始时调用）
     const resetErrorTracker = useCallback(() => {

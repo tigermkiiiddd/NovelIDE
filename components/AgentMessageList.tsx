@@ -663,12 +663,8 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             if (msg.isToolOutput) {
                 // 普通模式下：显示错误提示框（如果包含错误）
                 if (!isDebugMode) {
-                    // 更严格的错误检测：只匹配真正的错误格式，避免误判文件内容中的 ❌ 符号
-                    const hasError = msg.text?.includes('[SYSTEM ERROR]') ||
-                                     msg.text?.includes('❌ **Error**') ||
-                                     msg.text?.includes('❌ 错误') ||
-                                     msg.text?.includes('❌ 失败') ||
-                                     msg.text?.includes('❌ 执行失败');
+                    // 直接使用 isError 字段判断，避免误判文件内容中的 ❌ 符号
+                    const hasError = msg.isError === true;
                     if (!hasError) {
                         return null;  // 非错误信息才隐藏
                     }
