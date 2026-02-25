@@ -1,6 +1,5 @@
 
 // Export individual skills from the skills directory
-export * from './skills/eroticArchitect';
 export * from './skills/worldBuilder';
 export * from './skills/outlineArchitect';
 export * from './skills/characterDesigner';
