@@ -123,7 +123,11 @@ export const useAgentEngine = ({
                     const firstMsg = msgs[0];
 
                     // 情况1: 第一条是 system (UI系统消息) -> 视为 user，合法
-                    if (firstMsg.role === 'system') return msgs;
+                    if (firstMsg.role === 'system') {
+                        // 继续检查剩余消息
+                        const fixedRest = fixWindowStart(msgs.slice(1));
+                        return [firstMsg, ...fixedRest];
+                    }
 
                     // 情况2: 第一条是 model/assistant 且有 tool_calls -> 非法（缺少对应的 user 或 tool response）
                     if ((firstMsg.role === 'model' || firstMsg.role === 'assistant') && firstMsg.rawParts?.some((p: any) => p.functionCall)) {
@@ -141,7 +145,41 @@ export const useAgentEngine = ({
                     return msgs;
                 };
 
+                // --- 滑动窗口内部完整性检查 ---
+                // 确保窗口内部没有孤立的 tool_calls（tool response 被截断到窗口外）
+                const fixWindowIntegrity = (msgs: any[]): any[] => {
+                    if (msgs.length === 0) return msgs;
+
+                    const result: any[] = [];
+
+                    for (let i = 0; i < msgs.length; i++) {
+                        const msg = msgs[i];
+
+                        // 检查是否是带 tool_calls 的 assistant 消息
+                        const hasToolCalls = (msg.role === 'model' || msg.role === 'assistant') &&
+                            msg.rawParts?.some((p: any) => p.functionCall);
+
+                        if (hasToolCalls) {
+                            // 检查下一条消息是否是对应的 tool response
+                            const nextMsg = msgs[i + 1];
+                            const isToolResponse = nextMsg?.role === 'user' &&
+                                nextMsg?.rawParts?.some((p: any) => p.functionResponse);
+
+                            if (!isToolResponse) {
+                                // 孤立的 tool_calls，跳过这条消息
+                                console.warn('[滑动窗口] 跳过孤立的 tool_calls 消息（索引', i, '），下一条不是 tool response');
+                                continue;
+                            }
+                        }
+
+                        result.push(msg);
+                    }
+
+                    return result;
+                };
+
                 windowedMessages = fixWindowStart(windowedMessages);
+                windowedMessages = fixWindowIntegrity(windowedMessages);
                 const inContextCount = windowedMessages.length;
                 const droppedCount = totalMessages - inContextCount;
 
