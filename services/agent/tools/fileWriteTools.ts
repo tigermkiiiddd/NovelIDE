@@ -42,21 +42,23 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: `Advanced batch editing tool. [CRITICAL REQUIREMENTS]:
+    description: `Precise batch editing tool for EXACT replacement. [CRITICAL REQUIREMENTS]:
 1. You MUST readFile first to get accurate line numbers (format: "LineNum | Content").
-2. startLine must be the FIRST line of the OLD content to replace.
-3. endLine must be the LAST line of the OLD content to replace.
-4. If you set wrong line numbers, old content will remain and cause duplication.
+2. ONLY replace the specific lines that need to change. DO NOT modify unrelated content.
+3. startLine must be the FIRST line of the OLD content to replace.
+4. endLine must be the LAST line of the OLD content to replace.
+5. If you set wrong line numbers, old content will remain and cause duplication.
 
 Example: To replace lines 24-30 (7 lines of old table) with new content:
 ✅ CORRECT: startLine=24, endLine=30, newContent="new multi-line content"
 ❌ WRONG: startLine=27, endLine=27 (only replaces line 27, lines 24-26 remain duplicated)
+❌ WRONG: Replacing lines 20-35 when only lines 24-30 need changes (modifies unrelated content)
 
 [WRITE TOOL]`,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):(1) 我读取了哪些行？(2) 旧内容从第几行到第几行？(3) 新内容会完全替换这个范围吗？' },
+        thinking: { type: 'string', description: '思考过程(用中文):(1) 我读取了哪些行？(2) 精确标注旧内容的起止行号 (3) 是否只替换需要修改的部分，没有扩大范围？' },
         path: { type: 'string', description: 'The FULL PATH of the file to patch.' },
         edits: {
           type: 'array',
