@@ -116,6 +116,13 @@ export const executeTool = async (
 
             // Pre-calculate Diff Metadata for UI
             if (name === 'createFile') {
+                // Check if file already exists - this is an error
+                if (existingFile) {
+                    return {
+                        type: 'ERROR',
+                        message: `❌ 文件已存在: "${filePath}"。createFile 只能用于创建新文件。如需更新已存在的文件，请使用 updateFile 或 patchFile。`
+                    };
+                }
                 description = `Create file: ${filePath}`;
                 originalContent = '';
                 newContent = args.content;
