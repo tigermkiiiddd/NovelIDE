@@ -358,13 +358,13 @@ export const useAgentEngine = ({
                   }
                 }
 
-                console.error('[AgentEngine] Error:', {
+                console.error('[AgentEngine] Error:', JSON.stringify({
                   category: errorInfo.category,
                   title: errorInfo.title,
                   message: errorInfo.message,
                   rawError: error,
                   debugData: errorInfo.debugData,
-                });
+                }, null, 2));
 
                 // 格式化错误信息用于显示
                 const errorDisplayText = formatErrorForDisplay(errorInfo);

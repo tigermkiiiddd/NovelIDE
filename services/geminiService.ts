@@ -324,10 +324,10 @@ export class AIService {
          requestId: error.requestId || error.response?.headers?.['x-request-id'],
        };
 
-       console.error("[AIService] API Error:", {
+       console.error("[AIService] API Error:", JSON.stringify({
          ...errorInfo,
          stack: error.stack,
-       });
+       }, null, 2));
 
        // 将请求信息附加到错误对象，便于调试
        error._requestInfo = {
