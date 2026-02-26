@@ -146,7 +146,7 @@ export const useAgentEngine = ({
                 };
 
                 // --- 滑动窗口内部完整性检查 ---
-                // 确保窗口内部没有孤立的 tool_calls（tool response 被截断到窗口外）
+                // 确保窗口内部没有孤立的 tool_calls 或 tool response
                 const fixWindowIntegrity = (msgs: any[]): any[] => {
                     if (msgs.length === 0) return msgs;
 
@@ -154,6 +154,23 @@ export const useAgentEngine = ({
 
                     for (let i = 0; i < msgs.length; i++) {
                         const msg = msgs[i];
+
+                        // 检查是否是孤立的 tool response（前一条不是 tool_calls）
+                        const hasToolResponse = (msg.role === 'user' || msg.role === 'system') &&
+                            msg.rawParts?.some((p: any) => p.functionResponse);
+
+                        if (hasToolResponse) {
+                            // 检查前一条消息是否是对应的 tool_calls
+                            const prevMsg = result[result.length - 1];  // 使用 result 而不是 msgs
+                            const isToolCalls = (prevMsg?.role === 'model' || prevMsg?.role === 'assistant') &&
+                                prevMsg?.rawParts?.some((p: any) => p.functionCall);
+
+                            if (!isToolCalls) {
+                                // 孤立的 tool response，跳过这条消息
+                                console.warn('[滑动窗口] 跳过孤立的 tool response 消息（索引', i, '），前一条不是 tool_calls');
+                                continue;
+                            }
+                        }
 
                         // 检查是否是带 tool_calls 的 assistant 消息
                         const hasToolCalls = (msg.role === 'model' || msg.role === 'assistant') &&
