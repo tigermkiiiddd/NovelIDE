@@ -330,6 +330,11 @@ export function fromError(error: any, requestInfo?: any, responseInfo?: any): Ag
     throw error; // 重新抛出，不作为错误处理
   }
 
+  // 检查是否是空响应错误（由 geminiService 抛出）
+  if (error?._isEmptyResponse) {
+    return contentError('empty', error._metadata, responseInfo);
+  }
+
   // 检查错误类型并返回对应的错误信息
   if (isNetworkError(error)) {
     return networkError(error, requestInfo);
@@ -348,8 +353,10 @@ export function fromError(error: any, requestInfo?: any, responseInfo?: any): Ag
     return apiError(error, requestInfo, responseInfo);
   }
 
-  // 默认返回通用 API 错误
-  return apiError(error, requestInfo, responseInfo);
+  // 默认返回通用 API 错误（但设置 recoverable: true 以便用户可以重试）
+  const defaultError = apiError(error, requestInfo, responseInfo);
+  defaultError.recoverable = true; // 未知错误也应该允许重试
+  return defaultError;
 }
 
 /**
