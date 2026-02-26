@@ -90,15 +90,13 @@ export const mergePendingChanges = (
   let result = baseContent;
 
   for (const change of sortedChanges) {
-    if (change.toolName === 'updateFile') {
+    if (change.toolName === 'updateFile' || change.toolName === 'createFile') {
       // Full content replacement for existing file
+      // createFile on existing file is treated as updateFile (兜底处理旧数据)
+      if (change.toolName === 'createFile') {
+        console.warn('[mergePendingChanges] createFile on existing file, treating as updateFile (legacy data)');
+      }
       result = change.newContent || '';
-    } else if (change.toolName === 'createFile') {
-      // createFile should NOT be merged into existing file content
-      // It creates a new file, not modify current one
-      // If this happens, it's a bug in caller logic (should be caught by toolRunner)
-      console.warn('[mergePendingChanges] createFile operation in merge - this should not happen!', change);
-      continue;
     } else if (change.toolName === 'patchFile') {
       // Apply patch edits
       const edits = change.args?.edits || [];
