@@ -136,9 +136,9 @@ export const useAgentEngine = ({
                         return fixWindowStart(msgs.slice(1));
                     }
 
-                    // 情况3: 第一条是 user 但内容是 tool response (rawParts 有 functionResponse)
+                    // 情况3: 第一条是 user/system 但内容是 tool response (rawParts 有 functionResponse)
                     // 这种情况是合法的，因为 tool response 可以作为新一轮的起始
-                    if (firstMsg.role === 'user' && firstMsg.rawParts?.some((p: any) => p.functionResponse)) {
+                    if ((firstMsg.role === 'user' || firstMsg.role === 'system') && firstMsg.rawParts?.some((p: any) => p.functionResponse)) {
                         return msgs;
                     }
 
@@ -162,7 +162,8 @@ export const useAgentEngine = ({
                         if (hasToolCalls) {
                             // 检查下一条消息是否是对应的 tool response
                             const nextMsg = msgs[i + 1];
-                            const isToolResponse = nextMsg?.role === 'user' &&
+                            // system role 也会被转换为 user 发送给 API，所以也是合法的 tool response
+                            const isToolResponse = (nextMsg?.role === 'user' || nextMsg?.role === 'system') &&
                                 nextMsg?.rawParts?.some((p: any) => p.functionResponse);
 
                             if (!isToolResponse) {
