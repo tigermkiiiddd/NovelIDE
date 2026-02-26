@@ -217,7 +217,7 @@ export function authError(error: any, requestInfo?: any): AgentErrorInfo {
       '如果使用第三方代理，请确认其支持您的 API Key',
       '前往 AI 设置页面更新您的 API Key',
     ],
-    recoverable: false,
+    recoverable: true,  // 允许重试，用户可能已更新 API Key
     debugData: {
       rawError: error,
       request: requestInfo,
