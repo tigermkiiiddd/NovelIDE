@@ -324,7 +324,13 @@ export const useAgentEngine = ({
 
                     // 依次执行工具
                     for (const part of toolParts) {
-                        if (signal.aborted) break;
+                        if (signal.aborted) {
+                            // 用户停止时，为当前和后续所有工具生成 aborted response
+                            functionResponses.push({
+                                functionResponse: { name: part.functionCall.name, id: part.functionCall.id, response: { result: '[ABORTED] User stopped execution' } }
+                            });
+                            continue;
+                        }
                         if (!part.functionCall) continue;
                         const { name, args, id } = part.functionCall;
 
@@ -346,7 +352,20 @@ export const useAgentEngine = ({
                         }
                     }
 
-                    if (signal.aborted) break;
+                    if (signal.aborted) {
+                        // 更新 UI 消息状态为已中止（确保 rawParts 被设置）
+                        useAgentStore.getState().updateCurrentSession(session => ({
+                            ...session,
+                            messages: session.messages.map(m => m.id === toolMsgId ? {
+                                ...m,
+                                text: streamedLog.trim() || '⛔ Execution Aborted',
+                                rawParts: functionResponses,
+                                isError: true
+                            } : m),
+                            lastModified: Date.now()
+                        }));
+                        break;
+                    }
 
                     // 更新 UI 消息状态为完成
                     useAgentStore.getState().updateCurrentSession(session => ({
