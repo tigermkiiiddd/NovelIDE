@@ -142,8 +142,10 @@ export const useAgent = (
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);
+      // 清除所有 pendingChanges，避免孤立的 tool_calls
+      pendingChanges.forEach(c => removePendingChange(c.id));
       setTimeout(() => engine.processTurn(), 0);
-  }, [deleteMessagesFrom, engine]);
+  }, [deleteMessagesFrom, engine, pendingChanges, removePendingChange]);
 
   const editUserMessage = useCallback(async (messageId: string, newText: string) => {
       editMessageContent(messageId, newText);
