@@ -15,9 +15,11 @@ import { applyPatchQueue, mergePendingChanges, generatePatchId, extractHunkConte
 import { findSearchResults, getLineAndColFromIndex, getIndexFromLineAndCol } from '../utils/searchUtils';
 import DiffViewer from './DiffViewer';
 import { useShallow } from 'zustand/react/shallow';
-import { PendingChange, DiffSessionState, FilePatch } from '../types';
+import { PendingChange, DiffSessionState, FilePatch, EditDiff, EditIncrement } from '../types';
 import { useDiffStore } from '../stores/diffStore';
 import { EditorToolbar, EditorGutter, EmptyState } from './editor';
+import EditHighlightOverlay from './editor/EditHighlightOverlay';
+import { computeLineDelta, detectEditedRegion, rebuildEditLineNumbers } from '../utils/editIncrement';
 import {
   FileText,
   Edit3,
@@ -34,7 +36,8 @@ import {
   ChevronUp,
   ChevronDown,
   Tag,
-  BookOpen
+  BookOpen,
+  Check
 } from 'lucide-react';
 
 interface EditorProps {
@@ -102,6 +105,11 @@ const Editor: React.FC<EditorProps> = ({
   const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [searchResults, setSearchResults] = useState<Array<{ index: number; length: number }>>([]);
+
+  // Edit mode diff highlighting state
+  const [editIncrements, setEditIncrements] = useState<EditIncrement[]>([]);
+  const [processedEditIds, setProcessedEditIds] = useState<string[]>([]);
+  const [overlayScrollTop, setOverlayScrollTop] = useState(0);
 
   // Diff session state (only used in diff mode)
   const [diffSession, setDiffSession] = useState<DiffSessionState | null>(null);
@@ -199,6 +207,183 @@ const Editor: React.FC<EditorProps> = ({
       metadata: { sourceChanges: fileChanges }
     };
   }, [activeFile?.id, pendingChanges]);
+
+  // 6.1 Collect all editDiffs from pending changes for the active file (for edit mode highlighting)
+  const activeEditDiffs = useMemo(() => {
+    if (!activeFile) return [];
+
+    const filePath = getNodePath(activeFile, files);
+    const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
+
+    // Collect all editDiffs from all pending changes
+    const allEdits: EditDiff[] = [];
+    for (const change of fileChanges) {
+      if (change.editDiffs) {
+        allEdits.push(...change.editDiffs);
+      }
+    }
+
+    return allEdits;
+  }, [activeFile?.id, pendingChanges, files]);
+
+  // 6.2 Count pending edits for toolbar display
+  const pendingEditCount = useMemo(() => {
+    return activeEditDiffs.filter(edit =>
+      edit.status === 'pending' && !processedEditIds.includes(edit.id)
+    ).length;
+  }, [activeEditDiffs, processedEditIds]);
+
+  // 6.3 Handler for individual edit actions (accept/reject)
+  const handleEditAction = useCallback((editId: string, action: 'accept' | 'reject') => {
+    console.log('[Editor] Edit action:', { editId, action });
+
+    if (action === 'accept') {
+      // Mark as accepted and add to processed list
+      setProcessedEditIds(prev => [...prev, editId]);
+
+      // Apply the edit - find which pending change contains this edit
+      const editDiff = activeEditDiffs.find(e => e.id === editId);
+      if (editDiff && activeFile) {
+        // Apply this specific edit to the file
+        const currentContent = content;
+        const lines = currentContent.split('\n');
+        const adjustedEdits = rebuildEditLineNumbers(activeEditDiffs, editIncrements);
+        const adjustedEdit = adjustedEdits.find(e => e.id === editId);
+
+        if (adjustedEdit) {
+          const startIdx = Math.max(0, adjustedEdit.startLine - 1);
+          const endIdx = Math.min(lines.length, adjustedEdit.endLine);
+          const newLines = editDiff.modifiedSegment.split('\n');
+
+          lines.splice(startIdx, endIdx - startIdx, ...newLines);
+          const newContent = lines.join('\n');
+
+          setContent(newContent);
+          saveFileContent(activeFile.id, newContent);
+        }
+      }
+
+      addMessage({
+        id: Math.random().toString(),
+        role: 'system',
+        text: `✅ 已批准变更 #${editDiff?.editIndex !== undefined ? editDiff.editIndex + 1 : editId}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'success' }
+      });
+    } else if (action === 'reject') {
+      // Mark as rejected and add to processed list
+      setProcessedEditIds(prev => [...prev, editId]);
+
+      const editDiff = activeEditDiffs.find(e => e.id === editId);
+      addMessage({
+        id: Math.random().toString(),
+        role: 'system',
+        text: `❌ 已拒绝变更 #${editDiff?.editIndex !== undefined ? editDiff.editIndex + 1 : editId}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'info' }
+      });
+    }
+
+    // Check if all edits have been processed
+    const remainingEdits = activeEditDiffs.filter(e =>
+      e.status === 'pending' && !processedEditIds.includes(e.id) && e.id !== editId
+    );
+
+    if (remainingEdits.length === 0) {
+      // All edits processed - clean up pending changes
+      if (activeFile) {
+        const filePath = getNodePath(activeFile, files);
+        const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+        changesToRemove.forEach(c => removePendingChange(c.id));
+
+        addMessage({
+          id: Math.random().toString(),
+          role: 'system',
+          text: `✅ 所有变更已处理完成`,
+          timestamp: Date.now(),
+          metadata: { logType: 'success' }
+        });
+      }
+    }
+  }, [activeEditDiffs, processedEditIds, activeFile, content, editIncrements, addMessage, pendingChanges, removePendingChange, saveFileContent, setContent, files]);
+
+  // 6.4 Handler for accepting all pending edits
+  const handleAcceptAllEdits = useCallback(() => {
+    if (!activeFile || activeEditDiffs.length === 0) return;
+
+    const pendingEdits = activeEditDiffs.filter(edit =>
+      edit.status === 'pending' && !processedEditIds.includes(edit.id)
+    );
+
+    if (pendingEdits.length === 0) return;
+
+    // Apply all pending edits to the file
+    const adjustedEdits = rebuildEditLineNumbers(activeEditDiffs, editIncrements);
+    const lines = content.split('\n');
+
+    // Sort edits by line number (descending) to apply from bottom to top
+    const sortedEdits = pendingEdits
+      .map(edit => ({
+        ...edit,
+        adjusted: adjustedEdits.find(e => e.id === edit.id)
+      }))
+      .filter(e => e.adjusted)
+      .sort((a, b) => b.adjusted!.startLine - a.adjusted!.startLine);
+
+    for (const edit of sortedEdits) {
+      const startIdx = Math.max(0, edit.adjusted!.startLine - 1);
+      const endIdx = Math.min(lines.length, edit.adjusted!.endLine);
+      const newLines = edit.modifiedSegment.split('\n');
+      lines.splice(startIdx, endIdx - startIdx, ...newLines);
+    }
+
+    const newContent = lines.join('\n');
+    setContent(newContent);
+    saveFileContent(activeFile.id, newContent);
+
+    // Mark all as processed
+    setProcessedEditIds(prev => [...prev, ...pendingEdits.map(e => e.id)]);
+
+    // Clean up pending changes
+    const filePath = getNodePath(activeFile, files);
+    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+    changesToRemove.forEach(c => removePendingChange(c.id));
+
+    addMessage({
+      id: Math.random().toString(),
+      role: 'system',
+      text: `✅ 已批准全部 ${pendingEdits.length} 个变更`,
+      timestamp: Date.now(),
+      metadata: { logType: 'success' }
+    });
+  }, [activeFile, activeEditDiffs, processedEditIds, editIncrements, content, setContent, saveFileContent, pendingChanges, removePendingChange, addMessage, files]);
+
+  // 6.5 Handler for rejecting all pending edits
+  const handleRejectAllEdits = useCallback(() => {
+    if (!activeFile || activeEditDiffs.length === 0) return;
+
+    const pendingEdits = activeEditDiffs.filter(edit =>
+      edit.status === 'pending' && !processedEditIds.includes(edit.id)
+    );
+
+    if (pendingEdits.length === 0) return;
+
+    // Mark all as processed (rejected = don't apply changes)
+    setProcessedEditIds(prev => [...prev, ...pendingEdits.map(e => e.id)]);
+
+    // Clean up pending changes
+    const filePath = getNodePath(activeFile, files);
+    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+    changesToRemove.forEach(c => removePendingChange(c.id));
+
+    addMessage({
+      id: Math.random().toString(),
+      role: 'system',
+      text: `❌ 已拒绝全部 ${pendingEdits.length} 个变更`,
+      timestamp: Date.now(),
+      metadata: { logType: 'info' }
+    });
+  }, [activeFile, activeEditDiffs, processedEditIds, pendingChanges, removePendingChange, addMessage, files]);
 
   // Auto-switch to Diff Mode
   // REMOVED: Auto-switching caused unwanted diff mode activation when switching files
@@ -369,6 +554,10 @@ const Editor: React.FC<EditorProps> = ({
           // FIX: Bug #4 - Clear computedContent file tracking when switching files
           // This prevents stale computed content from being saved to the new file
           computedContentFileIdRef.current = null;
+
+          // Clear edit mode diff state when switching files
+          setEditIncrements([]);
+          setProcessedEditIds([]);
 
           // CRITICAL: Clear diff session when switching files
           // This prevents comparing snapshots from different files
@@ -561,6 +750,8 @@ const Editor: React.FC<EditorProps> = ({
           highlightRef.current.scrollTop = e.currentTarget.scrollTop;
           highlightRef.current.scrollLeft = e.currentTarget.scrollLeft;
       }
+      // Track scroll position for EditHighlightOverlay
+      setOverlayScrollTop(e.currentTarget.scrollTop);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1203,6 +1394,21 @@ const Editor: React.FC<EditorProps> = ({
               </div>
           )}
 
+          {/* Edit Mode Diff Highlight Overlay */}
+          {internalMode === 'edit' && activeEditDiffs.length > 0 && pendingEditCount > 0 && (
+              <EditHighlightOverlay
+                  editDiffs={activeEditDiffs}
+                  increments={editIncrements}
+                  processedEditIds={processedEditIds}
+                  onEditClick={handleEditAction}
+                  lineHeights={lineHeights}
+                  scrollTop={overlayScrollTop}
+                  paddingTop={24}
+                  defaultLineHeight={24}
+                  showLineNumbers={showLineNumbers}
+              />
+          )}
+
           <textarea
             ref={textareaRef}
             className={`
@@ -1291,6 +1497,29 @@ const Editor: React.FC<EditorProps> = ({
                 Ln {cursorStats.line}, Col {cursorStats.col}
             </span>
         </div>
+
+        {/* Pending Edits Indicator & Actions */}
+        {internalMode === 'edit' && pendingEditCount > 0 && (
+          <div className="flex items-center gap-1 mx-2 px-2 py-1 bg-yellow-900/20 border border-yellow-900/40 rounded-lg">
+            <span className="text-[10px] text-yellow-400 font-medium whitespace-nowrap">
+              {pendingEditCount} 个待审变更
+            </span>
+            <button
+              onClick={handleRejectAllEdits}
+              className="flex items-center justify-center w-6 h-5 text-[10px] text-red-400 hover:bg-red-900/30 rounded transition-colors"
+              title="拒绝全部"
+            >
+              <X size={12} />
+            </button>
+            <button
+              onClick={handleAcceptAllEdits}
+              className="flex items-center justify-center w-6 h-5 text-[10px] text-green-400 hover:bg-green-900/30 rounded transition-colors"
+              title="批准全部"
+            >
+              <Check size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Toolbar Actions */}
         <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50 shrink-0">

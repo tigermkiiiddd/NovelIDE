@@ -105,6 +105,24 @@ export interface PlanNote {
   updatedAt: number;
 }
 
+// --- Edit-level Diff for Granular Approval ---
+export interface EditDiff {
+  id: string;                  // Unique ID for this edit
+  editIndex: number;           // Index in the original edits array
+  startLine: number;           // Original line number (relative to sourceSnapshot)
+  endLine: number;             // Original end line number
+  originalSegment: string;     // Original content
+  modifiedSegment: string;     // Modified content
+  status: 'pending' | 'accepted' | 'rejected' | 'manually_edited';
+}
+
+// --- Edit Increment for Line Number Tracking ---
+export interface EditIncrement {
+  editId: string;              // ID of the edit that was modified
+  lineDelta: number;           // Line count change (positive = added, negative = removed)
+  timestamp: number;
+}
+
 // --- Pending Changes for Approval ---
 export interface PendingChange {
   id: string;
@@ -116,6 +134,7 @@ export interface PendingChange {
   newContent: string | null;      // Null for deletions
   timestamp: number;
   description: string; // Summary for UI
+  editDiffs?: EditDiff[];  // Granular edit-level diffs for patchFile operations
 }
 
 // --- Diff Session State (for Editor's patch queue system) ---

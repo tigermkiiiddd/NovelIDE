@@ -1,5 +1,5 @@
 
-import { FileNode, TodoItem, PendingChange, FileType, PlanNote } from '../../types';
+import { FileNode, TodoItem, PendingChange, FileType, PlanNote, EditDiff } from '../../types';
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
@@ -8,6 +8,34 @@ import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
 import { BatchEdit } from '../../stores/fileStore';
+
+/**
+ * Generate EditDiffs for each edit in a patchFile operation.
+ * This enables granular approval/rejection of individual edits.
+ */
+const generateEditDiffs = (originalContent: string, edits: BatchEdit[], changeId: string): EditDiff[] => {
+    const originalLines = originalContent.split('\n');
+
+    return edits.map((edit, index) => {
+        const startLine = edit.startLine;
+        const endLine = edit.endLine;
+
+        // Extract original segment (0-indexed slice)
+        const originalSegment = originalLines
+            .slice(Math.max(0, startLine - 1), Math.min(originalLines.length, endLine))
+            .join('\n');
+
+        return {
+            id: `edit_${changeId}_${index}`,
+            editIndex: index,
+            startLine,
+            endLine,
+            originalSegment,
+            modifiedSegment: edit.newContent || '',
+            status: 'pending' as const
+        };
+    });
+};
 
 // Define the interface for the raw tools provided by useAgent/App
 export interface ToolContext {
@@ -165,7 +193,9 @@ export const executeTool = async (
                 originalContent,
                 newContent,
                 timestamp: Date.now(),
-                description: `${description}\n${args.thinking ? `思考: ${args.thinking}` : ''}`
+                description: `${description}\n${args.thinking ? `思考: ${args.thinking}` : ''}`,
+                // Generate editDiffs for patchFile operations
+                editDiffs: name === 'patchFile' ? generateEditDiffs(baseContent, args.edits, changeId) : undefined
             };
 
             return {

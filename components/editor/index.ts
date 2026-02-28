@@ -7,3 +7,5 @@
 export { EditorToolbar } from './EditorToolbar';
 export { EditorGutter } from './EditorGutter';
 export { EmptyState } from './EmptyState';
+export { default as EditHighlightOverlay } from './EditHighlightOverlay';
+export type { EditHighlightOverlayProps } from './EditHighlightOverlay';

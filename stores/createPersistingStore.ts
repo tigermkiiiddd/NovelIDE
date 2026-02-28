@@ -24,7 +24,7 @@ export interface PersistingStoreConfig<T> {
 }
 
 type WithSetState<T> = T & {
-  setState: (update: Partial<T> | ((prev: T) => Partial<T>) => void;
+  setState: (update: Partial<T> | ((prev: T) => Partial<T>)) => void;
 };
 
 /**
