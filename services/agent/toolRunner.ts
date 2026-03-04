@@ -216,10 +216,10 @@ export const executeTool = async (
 
         // --- THINKING TOOL ---
         if (name === 'thinking') {
-            const { mode, content, confidence, nextAction, thinking } = args;
+            const { mode, content, confidence, nextAction, thinking, maxResponseWords } = args;
 
             // 格式化结果用于前端显示
-            result = formatThinkingResult(mode, content, confidence, nextAction, thinking);
+            result = formatThinkingResult(mode, content, confidence, nextAction, thinking, maxResponseWords);
 
             // Log to UI immediately
             if (onUiLog) {

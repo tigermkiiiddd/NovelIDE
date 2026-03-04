@@ -19,6 +19,8 @@ export const thinkingTool: ToolDefinition = {
   5) 角色行为是否符合人设(角色OC检测)？
   6) 剧情是否符合大纲(大纲OC检测)？
   7) 是否达成核心目标？
+- maxResponseWords: 控制后续回复字数，默认600字，设为0无限制
+
 注意：反思是审视刚才写的内容质量，不是规划下一步行动。`,
     parameters: {
       type: 'object',
@@ -46,6 +48,10 @@ export const thinkingTool: ToolDefinition = {
           type: 'string',
           enum: ['proceed', 'think_again', 'ask_user'],
           description: '下一步行动，由AI自己决定: proceed=直接执行; think_again=需要再思考一轮; ask_user=需要向用户确认'
+        },
+        maxResponseWords: {
+          type: 'number',
+          description: '限制后续回复的最大字数。默认600字。用于控制输出长度，临时覆盖项目设定中的字数参数。设为0表示无限制。'
         }
       },
       required: ['thinking', 'mode', 'content', 'confidence', 'nextAction']
@@ -62,7 +68,8 @@ export const formatThinkingResult = (
   content: string,
   confidence: number,
   nextAction: string,
-  thinking: string
+  thinking: string,
+  maxResponseWords?: number
 ): string => {
   const modeLabels: Record<string, string> = {
     intent: '意图推理',
@@ -80,6 +87,11 @@ export const formatThinkingResult = (
 
   const confidenceEmoji = confidence >= 80 ? '🟢' : confidence >= 60 ? '🟡' : '🔴';
 
+  // 字数限制提示
+  const wordLimitHint = maxResponseWords !== undefined && maxResponseWords > 0
+    ? `\n**字数限制**: ${maxResponseWords}字以内`
+    : '';
+
   // 创作反思模式使用特殊格式
   if (mode === 'reflect_creative') {
     return `🔍 **【创作反思】**
@@ -88,7 +100,7 @@ export const formatThinkingResult = (
 
 **质量评分**: ${confidenceEmoji} ${confidence}%
 
-**判定**: ${actionLabels[nextAction] || nextAction}
+**判定**: ${actionLabels[nextAction] || nextAction}${wordLimitHint}
 
 ---
 
@@ -105,7 +117,7 @@ ${content}
 
 **置信度**: ${confidenceEmoji} ${confidence}%
 
-**下一步**: ${actionLabels[nextAction] || nextAction}
+**下一步**: ${actionLabels[nextAction] || nextAction}${wordLimitHint}
 
 ---
 

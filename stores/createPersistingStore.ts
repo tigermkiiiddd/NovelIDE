@@ -78,7 +78,7 @@ export function createPersistingStore<T extends object>(
     },
   }));
 
-  return Store as ReturnType<typeof Store>;
+  return store as ReturnType<typeof store>;
 }
 
 /**
