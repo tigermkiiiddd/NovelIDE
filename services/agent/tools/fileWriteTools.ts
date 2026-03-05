@@ -22,15 +22,27 @@ export const updateFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'updateFile',
-    description: '⚠️ DANGER: Overwrite the ENTIRE content of an existing file. [CRITICAL WARNING]: This tool REPLACES the file completely. If you provide partial content, the original content will be LOST FOREVER. STRICTLY FORBIDDEN to use placeholders like "// ... existing code", "<!-- unchanged -->" or "...". You MUST provide the FULL file content. If you only want to edit a part, use `patchFile` instead. [WRITE TOOL]',
+    description: `⚠️ DANGER: Overwrite the ENTIRE content of an existing file.
+
+【仅限以下场景使用】
+- 创建新文件（用 createFile 更好）
+- 完全重写整个文件
+- 文件内容极短（<10行）不值得精准定位
+
+【禁止场景】
+- ❌ 只修改部分内容 → 用 patchFile
+- ❌ 使用省略号 "...", "// ...", "<!-- unchanged -->" → 这些会导致数据丢失
+
+[CRITICAL WARNING]: This tool REPLACES the file completely. You MUST provide the FULL file content.
+[WRITE TOOL]`,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么用 updateFile 而不是 patchFile？确认你有完整内容。' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么必须用 updateFile 而不是 patchFile？确认你有完整内容且无省略。' },
         path: { type: 'string', description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
-        content: { 
-          type: 'string', 
-          description: 'The COMPLETE, BYTE-FOR-BYTE content of the file. DO NOT OMIT ANYTHING. DO NOT USE "...". If you omit lines, they are deleted. If the file is large, prefer `patchFile`.' 
+        content: {
+          type: 'string',
+          description: 'The COMPLETE, BYTE-FOR-BYTE content of the file. DO NOT OMIT ANYTHING. DO NOT USE "...". If you omit lines, they are deleted. If the file is large, prefer `patchFile`.'
         }
       },
       required: ['thinking', 'path', 'content']
@@ -42,17 +54,26 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: `Precise batch editing tool for EXACT replacement. [CRITICAL REQUIREMENTS]:
-1. You MUST readFile first to get accurate line numbers (format: "LineNum | Content").
-2. ONLY replace the specific lines that need to change. DO NOT modify unrelated content.
-3. startLine must be the FIRST line of the OLD content to replace.
-4. endLine must be the LAST line of the OLD content to replace.
-5. If you set wrong line numbers, old content will remain and cause duplication.
+    description: `✅ RECOMMENDED: 修改已有文件时优先使用此工具，精准高效。
 
-Example: To replace lines 24-30 (7 lines of old table) with new content:
-✅ CORRECT: startLine=24, endLine=30, newContent="new multi-line content"
-❌ WRONG: startLine=27, endLine=27 (only replaces line 27, lines 24-26 remain duplicated)
-❌ WRONG: Replacing lines 20-35 when only lines 24-30 need changes (modifies unrelated content)
+【适用场景】
+- 修改文件中的部分内容
+- 更新特定段落/章节
+- 添加或删除若干行
+
+【使用流程】
+1. 先 readFile 获取行号（格式: "LineNum | Content"）
+2. 精确定位需要修改的起止行
+3. 只替换需要改变的部分
+
+【关键规则】
+- startLine = 旧内容的第一行
+- endLine = 旧内容的最后一行
+- 行号错误会导致重复或丢失内容
+
+示例：替换第24-30行
+✅ startLine=24, endLine=30, newContent="新内容"
+❌ startLine=27, endLine=27 (只替换27行，24-26行会重复)
 
 [WRITE TOOL]`,
     parameters: {
