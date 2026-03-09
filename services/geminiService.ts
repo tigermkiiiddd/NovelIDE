@@ -190,7 +190,34 @@ export class AIService {
         timestamp: new Date().toISOString(),
       };
 
-      console.log('[AI Request]', JSON.stringify(requestMetadata, null, 2));
+      // 构建完整 URL - baseURL 可能是: https://api.openai.com/v1, https://xinyun.ai/v1, https://api.moonshot.cn/v1 等
+      const fullURL = baseURL.includes('/v1')
+        ? `${baseURL}/chat/completions`
+        : baseURL.includes('/chat/completions')
+          ? baseURL
+          : `${baseURL}/v1/chat/completions`;
+
+      console.log('[AI Request - 完整请求]', JSON.stringify({
+        baseURL: baseURL,
+        fullURL: fullURL,
+        payload: {
+          ...requestPayload,
+          messages: openAIMessages.map((m: any) => ({
+            role: m.role,
+            content: typeof m.content === 'string' ? m.content?.substring(0, 500) : '[多部分内容]',
+            toolCalls: m.toolCalls?.map((tc: any) => tc.function?.name),
+            toolCallId: m.toolCallId
+          })),
+          tools: tools.map((t: any) => ({
+            type: t.type,
+            function: {
+              name: t.function?.name,
+              description: t.function?.description?.substring(0, 100)
+            }
+          }))
+        },
+        timestamp: new Date().toISOString(),
+      }, null, 2));
 
       const completion: any = await this.withRetry(() =>
           this.client!.chat.completions.create(requestPayload, { signal })
@@ -253,10 +280,27 @@ export class AIService {
       // 检查 finish_reason 并添加警告
       if (finishReason === 'length') {
         warnings.push('响应被截断 (finish_reason=length)');
-        console.warn('[AIService] Response truncated: finish_reason=length');
+        console.warn('[AIService] Response truncated - Full Response:', JSON.stringify({
+          requestId: completion.id,
+          model: completion.model,
+          usage: completion.usage,
+          finishReason,
+          fullChoice: completion.choices?.[0],
+          timestamp: new Date().toISOString(),
+        }, null, 2));
       } else if (finishReason === 'content_filter') {
         warnings.push('内容被安全过滤器拦截 (finish_reason=content_filter)');
-        console.warn('[AIService] Content filtered: finish_reason=content_filter');
+        // 记录完整的原始响应以便调试
+        console.error('[AIService] Content filtered - Full Response:', JSON.stringify({
+          requestId: completion.id,
+          model: completion.model,
+          usage: completion.usage,
+          finishReason,
+          safetyRatings: completion.choices?.[0]?.safetyRatings,
+          promptFeedback: completion.promptFeedback,
+          fullChoice: completion.choices?.[0],
+          timestamp: new Date().toISOString(),
+        }, null, 2));
       }
 
       // 检查空内容

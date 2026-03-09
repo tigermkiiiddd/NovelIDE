@@ -1,10 +1,11 @@
 
 import React, { useState } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList } from 'lucide-react';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
 import AgentTodoList from './AgentTodoList';
+import MemoryDebugPanel from './MemoryDebugPanel';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore'; // Import AgentStore
 import { useUiStore } from '../stores/uiStore';
@@ -76,6 +77,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   onOpenPlanViewer
 }) => {
   const [showHistory, setShowHistory] = useState(false);
+  const [showMemoryDebug, setShowMemoryDebug] = useState(false);
 
   // Use file store to navigate
   const setActiveFileId = useFileStore(state => state.setActiveFileId);
@@ -227,6 +229,16 @@ const AgentChat: React.FC<AgentChatProps> = ({
             >
                 <Bug size={18} />
             </button>
+            {/* Memory Debug Panel Toggle */}
+            {isDebugMode && (
+                <button
+                    onClick={() => setShowMemoryDebug(true)}
+                    className="p-2 rounded-lg bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-colors"
+                    title="记忆衰减管理"
+                >
+                    <Layers size={18} />
+                </button>
+            )}
             {!showHistory && (
                 <button
                     onClick={handleExportCurrentSession}
@@ -386,6 +398,14 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 autoFocus={isOpen} 
             />
         </>
+      )}
+
+      {/* Memory Debug Panel */}
+      {showMemoryDebug && (
+        <MemoryDebugPanel
+          session={sessions.find(s => s.id === currentSessionId) || null}
+          onClose={() => setShowMemoryDebug(false)}
+        />
       )}
     </div>
   );
