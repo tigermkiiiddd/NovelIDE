@@ -201,15 +201,10 @@ export const buildRefinedHistory = (
     return b.message.timestamp - a.message.timestamp;
   });
 
-  // 5. 应用衰减并限制数量
+  // 5. 应用衰减
   const result: ChatMessage[] = [];
 
   for (const { message, classification } of classifiedMessages) {
-    // 检查是否超过最大消息数
-    if (result.length >= cfg.maxMessages) {
-      break;
-    }
-
     // 应用内容衰减 - 根据内容价值和位置
     let processedText = message.text;
 
@@ -232,7 +227,8 @@ export const buildRefinedHistory = (
   // 6. 按时间顺序排列返回
   result.sort((a, b) => a.timestamp - b.timestamp);
 
-  return result;
+  // 7. 最终滑动窗口截断（哪怕是永久保留的高价值，超过窗口大小也会被剔除）
+  return result.slice(-cfg.maxMessages);
 };
 
 /**
@@ -256,21 +252,48 @@ export const buildSimpleHistory = (
 ): ChatMessage[] => {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const groups = groupMessagesByValue(messages, config);
+  const result: ChatMessage[] = [];
+  let remaining = cfg.maxMessages;
 
-  // 按顺序合并：高价值 -> 系统 -> 错误 -> 中价值 -> 低价值
-  const combined: ChatMessage[] = [
-    ...groups.highValue,
-    ...groups.system,
-    ...groups.errors,
-    ...groups.mediumValue,
-    ...groups.lowValue
-  ];
+  // 辅助函数：将按老到新排序的消息，从新到老（优先保留新消息）地填充到 result
+  const fillMessages = (pool: ChatMessage[]) => {
+    // 按时间从新到老排列候选池
+    const sortedPool = [...pool].sort((a, b) => b.timestamp - a.timestamp);
+    const toTake = sortedPool.slice(0, remaining);
+    remaining -= toTake.length;
+    result.push(...toTake);
+  };
 
-  // 按时间排序
-  combined.sort((a, b) => a.timestamp - b.timestamp);
+  // 按优先级顺序填充（高级别全拿如果配额足够，或者取最新的）
 
-  // 限制数量
-  return combined.slice(-cfg.maxMessages);
+  // 1. 高价值 (永久保留，就算超配额也优先取最新)
+  fillMessages(groups.highValue);
+
+  // 2. 必须保留的系统/报错
+  if (remaining > 0) fillMessages(groups.system);
+  if (remaining > 0) fillMessages(groups.errors);
+
+  // 3. 中等价值
+  if (remaining > 0) fillMessages(groups.mediumValue);
+
+  // 4. 低等价值 (并且尝试应用长文本衰减截断)
+  if (remaining > 0) {
+    const sortedLowPool = [...groups.lowValue].sort((a, b) => b.timestamp - a.timestamp);
+    const toTakeLow = sortedLowPool.slice(0, remaining);
+    const decayedLow = toTakeLow.map(msg => {
+      const classification = classifyMessages([msg])[0];
+      const strategy = getAttenuationStrategy(classification.contentLocation, 2);
+      return {
+        ...msg,
+        text: applyAttenuation(msg.text, strategy, cfg.truncateLongText)
+      };
+    });
+    result.push(...decayedLow);
+    remaining -= toTakeLow.length;
+  }
+
+  // 最后把被选中的按时间老 -> 新正序排列返回
+  return result.sort((a, b) => a.timestamp - b.timestamp);
 };
 
 /**
