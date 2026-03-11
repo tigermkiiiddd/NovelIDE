@@ -92,13 +92,6 @@ export const useAgentEngine = ({
       const MAX_LOOPS = 30;
       let keepGoing = true;
 
-      // 判断是否需要强制 thinking（用户输入或审批结果触发）
-      const triggerMsg = freshSession?.messages?.[freshSession.messages.length - 1];
-      const isUserInput = triggerMsg?.role === 'user' && !triggerMsg?.rawParts?.some((p: any) => p.functionResponse);
-      const isApprovalResult = triggerMsg?.role === 'system';
-      const needForceThinking = isUserInput || isApprovalResult;
-      let hasCalledThinking = false;  // 标记是否已完成强制 thinking
-
 
       // 4. 进入 ReAct 循环
       while (keepGoing && loopCount < MAX_LOOPS) {
@@ -280,15 +273,12 @@ export const useAgentEngine = ({
         }
 
         // 4.2 调用 LLM (Network Call)
-        // 如果需要强制 thinking 且还没调用过，强制调用 thinking 工具
-        const forceToolName = (needForceThinking && !hasCalledThinking) ? 'thinking' : undefined;
         const response = await aiServiceInstance.sendMessage(
           apiHistory,
           '', // 当前消息已在 apiHistory 中
           fullSystemInstruction,
           toolsForMode,  // 使用根据模式选择的工具
-          signal,
-          forceToolName  // 强制调用指定工具（如果需要）
+          signal
         );
 
         // Extract API metadata for debug display
@@ -436,11 +426,6 @@ export const useAgentEngine = ({
               };
             })
           );
-
-          // 标记 thinking 完成（如果有任何 thinking 工具）
-          if (toolResults.some(r => r.toolName === 'thinking')) {
-            hasCalledThinking = true;
-          }
 
           const hasAnyError = toolResults.some(r => r.hasError);
 

@@ -16,8 +16,8 @@ export enum ToolType {
   // 任务管理
   MANAGE_TODOS = 'manageTodos',
 
-  // 思考工具
-  THINKING = 'thinking',
+  // 思考工具（已移除）
+  // THINKING = 'thinking',
 
   // 搜索
   CALL_SEARCH_AGENT = 'call_search_agent',
@@ -384,21 +384,6 @@ export interface MessageClassification {
  */
 export const classifyMessage = (message: ChatMessage): MessageClassification => {
   const toolInfo = extractToolCallInfo(message);
-
-  // 检查是否是 thinking 工具
-  if (toolInfo?.functionName === 'thinking' || message.text.startsWith('thinking:')) {
-    return {
-      messageId: message.id,
-      role: message.role,
-      isToolCall: false,
-      isToolResult: false,
-      isThinking: true,
-      contentValue: ContentValue.HIGH,
-      decayRounds: -1,
-      contentLocation: ContentLocation.TEXT,
-      decayDimension: 'content'
-    };
-  }
 
   // 是工具调用 (call)
   if (toolInfo && !message.isToolOutput) {

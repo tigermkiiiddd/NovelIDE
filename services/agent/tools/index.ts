@@ -25,31 +25,27 @@ const writeTools: ToolDefinition[] = [
 ];
 
 // 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
-// 但不再包含在 allTools 数组中。这迫使主 Agent 使用 Sub-Agent。
-// managePlanNoteTool 普通模式也能访问（只读 list 操作）
-// thinkingTool 是元工具，用于结构化思考
+// 但不再包含在 allTools 数组中。
+// thinkingTool 已被移除
+// callSearchAgentTool 已被移除，不再提供给 Agent 使用
+// managePlanNoteTool 已被移除
 export const allTools: ToolDefinition[] = [
   ...readTools,
   ...writeTools,
   manageTodosTool,
-  callSearchAgentTool,
-  managePlanNoteTool,
-  thinkingTool
+  // callSearchAgentTool,  // 已屏蔽
+  // managePlanNoteTool,  // 已移除
+  // thinkingTool  // 已移除
 ];
 
 /**
  * 根据模式获取可用工具
- * @param planMode - 是否处于 Plan 模式
+ * @param planMode - 是否处于 Plan 模式（已废弃，保留参数以兼容）
  * @returns 可用工具列表
  */
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
-  if (planMode) {
-    // Plan 模式：读取工具 + planNote（完整功能） + searchAgent + thinking
-    return [...readTools, createManagePlanNoteTool(true), callSearchAgentTool, thinkingTool];
-  }
-  // 普通模式：所有工具（包含受限的 planNote，仅 list 操作）+ thinking
-  // 注意：allTools 已包含 thinkingTool，但我们要确保 getToolsForMode 返回的工具列表正确
-  return [...readTools, ...writeTools, manageTodosTool, callSearchAgentTool, createManagePlanNoteTool(false), thinkingTool];
+  // Plan 模式已移除，统一返回所有工具
+  return [...readTools, ...writeTools, manageTodosTool];
 };
 
 export * from './fileReadTools';

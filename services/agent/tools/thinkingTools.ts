@@ -9,7 +9,9 @@ export const thinkingTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'thinking',
-    description: `[META TOOL] 结构化思考工具。
+    description: `[META TOOL] 结构化思考工具。**必须与操作工具并发调用，禁止单独使用。**
+
+用途：
 - intent: 用户输入后的意图推理
 - reflect_creative: 文件操作后的创作反思，必须回答：
   1) 当前核心目标是什么？
@@ -20,6 +22,13 @@ export const thinkingTool: ToolDefinition = {
   6) 剧情是否符合大纲(大纲OC检测)？
   7) 是否达成核心目标？
 - maxResponseWords: 控制后续回复字数，默认600字，设为0无限制
+
+⚠️ 重要：thinking 只是思考过程记录，不是工作成果。必须同时调用其他工具（readFile, createFile 等）完成实际工作。
+⚠️ 禁止：单独调用 thinking 后就结束一轮，这会导致效率低下。
+⚠️ 字数限制：content 参数必须控制在 300 字以内，保持思考简洁高效。
+
+正确示例：[thinking + listFiles + readFile] 并发调用
+错误示例：只调用 thinking，下一轮再调用 listFiles
 
 注意：反思是审视刚才写的内容质量，不是规划下一步行动。`,
     parameters: {
@@ -36,7 +45,8 @@ export const thinkingTool: ToolDefinition = {
         },
         content: {
           type: 'string',
-          description: '结构化的思考内容，使用 markdown 格式'
+          description: '结构化的思考内容，使用 markdown 格式。**必须控制在 300 字以内**，保持简洁高效。',
+          maxLength: 300
         },
         confidence: {
           type: 'number',

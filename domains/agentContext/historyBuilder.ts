@@ -20,7 +20,6 @@ import {
 interface HistoryBuilderConfig {
   maxRounds: number;           // 最大轮次数
   maxMessages: number;         // 最大消息数
-  preserveThinking: boolean;   // 是否保留 thinking
   preserveSystem: boolean;     // 是否保留系统消息
   preserveErrors: boolean;     // 是否保留错误消息
   truncateLongText: number;   // 长文本截断阈值
@@ -32,7 +31,6 @@ interface HistoryBuilderConfig {
 const DEFAULT_CONFIG: HistoryBuilderConfig = {
   maxRounds: 10,
   maxMessages: 30,
-  preserveThinking: true,
   preserveSystem: true,
   preserveErrors: true,
   truncateLongText: 2000
@@ -82,11 +80,6 @@ export const groupMessagesByValue = (
       return;
     }
 
-    // thinking 工具消息完整保留
-    if (cfg.preserveThinking && classification.isThinking) {
-      groups.highValue.push(message);
-      return;
-    }
 
     // 根据价值分组
     switch (classification.contentValue) {
@@ -269,7 +262,7 @@ const computeRoundsElapsed = (messages: ChatMessage[]): Map<string, number> => {
  * 简化版历史构建：基于真实轮次的精细化三维衰减
  *
  * 衰减规则：
- * - user/thinking 消息：永久保留
+ * - user 消息：永久保留
  * - 工具调用对（AI call + system response）：
  *     - roundsElapsed >= response.decayRounds → 整对从 API history 移除
  *     - roundsElapsed >= content.decayRounds  → 清空 args，只保留函数名（无内容）
@@ -333,23 +326,7 @@ export const buildSimpleHistory = (
       continue;
     }
 
-    // ——— thinking 消息（AI 调用 thinking 工具的 model 消息）：永久保留 ———
-    if (classification.isThinking) {
-      resultMessages.push(msg);
-      continue;
-    }
-
-    // ——— thinking 的 system result（高价值）：永久保留 ———
-    if (msg.role === 'system' && responseToCallMap.has(msg.id)) {
-      const callMsgId = responseToCallMap.get(msg.id)!;
-      const callMsg = messages.find(m => m.id === callMsgId);
-      if (callMsg && classifyMessage(callMsg).isThinking) {
-        resultMessages.push(msg);
-        continue;
-      }
-    }
-
-    // ——— AI 工具调用消息（model with functionCall，非 thinking）———
+    // ——— AI 工具调用消息（model with functionCall，非特殊工具）———
     // ⚠️ 关键修复：如果 model 消息有 functionCall 但找不到对应的 system response，
     // 则为孤立 tool_call（如会话意外中断），直接丢弃。
     // 原先此类消息会 fall-through 到"普通 model 文本回复"分支被保留，

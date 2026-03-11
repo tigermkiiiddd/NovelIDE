@@ -66,14 +66,16 @@ export const patchFileTool: ToolDefinition = {
 2. 精确定位需要修改的起止行
 3. 只替换需要改变的部分
 
-【关键规则】
-- startLine = 旧内容的第一行
-- endLine = 旧内容的最后一行
+【关键规则 - CRITICAL】
+- startLine 必须是旧内容的第一行
+- endLine 必须是旧内容的最后一行
 - 行号错误会导致重复或丢失内容
+- 只替换需要修改的部分，不要扩大范围
 
-示例：替换第24-30行
-✅ startLine=24, endLine=30, newContent="新内容"
-❌ startLine=27, endLine=27 (只替换27行，24-26行会重复)
+示例：替换第24-30行（7行旧表格）
+✅ 正确: startLine=24, endLine=30, newContent="新的多行内容"
+❌ 错误: startLine=27, endLine=27 (只替换27行，24-26行会保留并重复)
+❌ 错误: startLine=20, endLine=35 (只需改24-30行，却修改了20-35行，影响了无关内容)
 
 [WRITE TOOL]`,
     parameters: {

@@ -214,21 +214,8 @@ export const executeTool = async (
     try {
         let result = '';
 
-        // --- THINKING TOOL ---
-        if (name === 'thinking') {
-            const { mode, content, confidence, nextAction, thinking, maxResponseWords } = args;
-
-            // 格式化结果用于前端显示
-            result = formatThinkingResult(mode, content, confidence, nextAction, thinking, maxResponseWords);
-
-            // Log to UI immediately
-            if (onUiLog) {
-                onUiLog(result);
-            }
-
-            return { type: 'EXECUTED', result };
-        }
-        else if (name === 'manageTodos') {
+        // --- TODO TOOL ---
+        if (name === 'manageTodos') {
             const op = processManageTodos(context.todos, args.action, args.tasks, args.indices, args.updates);
             result = op.result;
             if (op.newTodos) {

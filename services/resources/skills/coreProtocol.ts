@@ -11,27 +11,8 @@
 import { FileNode, ProjectMeta, FileType, TodoItem } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 
-// Plan 模式专用协议
-export const PLAN_MODE_PROTOCOL = `## Plan 模式规则
-
-当前处于 **Plan 模式**，你只能进行只读操作和计划整理。
-
-**可用工具**：listFiles, readFile, managePlanNote, callSearchAgent
-
-**工作流程**：
-1. 使用 managePlanNote 整理结构化的执行计划
-2. 计划包含：目标分析、方案对比、风险评估、建议方案
-3. 告知用户计划已准备好，等待审批
-4. 用户批准后系统自动退出 Plan 模式并执行
-
-**Plan 笔记本规范**：
-- 📋 **任务目标**: 明确要完成什么
-- 🎯 **核心策略**: 采用什么方法
-- 📝 **具体步骤**: 分步执行计划
-- ⚠️ **风险提示**: 可能的问题和备选方案
-- ✅ **预期结果**: 完成后的预期产出
-
-> Plan 笔记本是正式文档，不是草稿本。思考过程请写在工具的 thinking 参数中。`;
+// Plan 模式已移除
+// export const PLAN_MODE_PROTOCOL = ...
 
 // 核心 Agent 协议 - 精简版本
 // 原则：主Agent保留顶层方法论、工作流程、禁止项，基础写作技巧已移至子技能
@@ -72,7 +53,7 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - ⚠️ **优先使用 patchFile** - 确认文件内容后，若是局部修改则用 patchFile 精准定位；若需大幅重写或创建新文件才使用 updateFile
 - 工具选择决策链：\`listFiles 确认文件存在\` → \`readFile 查看当前内容\` → \`判断改动范围\` → \`小改用 patchFile / 大改或新建用 updateFile\`
 - 文字无物理效力，必须调用工具才能改变文件
-- **调用工具时**：content 必须为空，thinking 参数必填（文本输出与工具调用互斥，不可同时出现）
+- **调用工具时**：content 必须为空（文本输出与工具调用互斥，不可同时出现）
 - **🚨 工具全部执行完毕后**：必须立即输出纯文字总结（不调用任何工具），告知用户完成了什么、结果如何。**这一步是强制要求，不能省略。**
 - **绝不允许空输出**：任何一轮对话必须满足其一：
   1) 调用工具；或
@@ -81,19 +62,13 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 任务未完成时：不要给出“最终结论/最终交付”，但可以输出**进度、已完成事项、下一步动作**。
 
 **默认自主策略（先自查，后提问）**：
-- 信息不足时，优先使用只读工具自查（按优先级）：listFiles → readFile → searchFiles / callSearchAgent。
+- 信息不足时，优先使用只读工具自查（按优先级）：listFiles → readFile → searchFiles。
 - 只有在完成自查后仍缺少关键决策点，才向用户提问；提问必须具体到“需要用户选择/补充的最小信息”。
 
 **� 工具并发调用（推荐）**：
 - 同一轮中可以同时调用 **多个** 工具，它们会并发执行，提升效率
 - 所有工具执行完成后，才会进行下一次 LLM 思考（LLM 调用本身仍串行）
 - 有依赖关系的步骤（后一步需要前一步结果）才需要分轮串行调用
-
-**执行阈值**：
-- confidence >= 80：直接执行
-- confidence 60-79：再思考
-- confidence < 60：询问用户
-
 
 ═══════════════════════════════════
 ## 五、工作流程（固化）
@@ -240,22 +215,6 @@ export const constructSystemPrompt = (
   const userInputHistory = extractUserInputHistory(messages);
 
   // --- 3. 最终组装 (Final Assembly) ---
-  // 如果是 Plan 模式，注入 Plan 模式协议
-  const planModeSection = planMode ? `
-═══════════════════════════════════════════════════════════════
-【Plan 模式已激活】
-${PLAN_MODE_PROTOCOL}
-` : '';
-
-  // 普通模式下的工具限制说明
-  const normalModeSection = !planMode ? `
-═══════════════════════════════════════════════════════════════
-【普通模式工具限制】
-> managePlanNote 工具仅支持 list 操作（查看历史计划）
-> 思考过程请写在工具的 thinking 参数中
-> 如需创建正式计划文档供审批，请请求用户开启 Plan 模式
-` : '';
-
   // 替换占位符
   const wordsPerChapter = String(project?.wordsPerChapter || '未定');
   const skillListSection = emergentSkillsData !== "(无额外技能)"
@@ -271,11 +230,5 @@ ${PLAN_MODE_PROTOCOL}
 
   return `
 ${processedAgentInstruction}
-${planModeSection}
-${normalModeSection}
-
-═══════════════════════════════════════════════════════════════
-【系统当前状态】
-- 当前模式: ${planMode ? 'Plan 模式' : '普通模式'}
 `;
 };
