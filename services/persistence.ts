@@ -49,7 +49,7 @@ interface NovelGenieDB extends DBSchema {
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 6;
+const DB_VERSION = 8;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -88,6 +88,9 @@ export const initDB = () => {
         if (!db.objectStoreNames.contains('pendingChanges')) {
           db.createObjectStore('pendingChanges');
         }
+
+        // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
+        // No new object stores required for these versions.
       },
     });
   }

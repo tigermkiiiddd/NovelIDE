@@ -249,11 +249,27 @@ export class AIService {
         model: completion.model,
         usage: completion.usage,
         finishReason,
+        choicesCount: completion.choices?.length ?? 0,
+        // 打印第一个 choice 的完整内容以便调试
+        firstChoice: completion.choices?.[0] ? {
+          index: completion.choices[0].index,
+          finishReason: completion.choices[0].finishReason,
+          message: completion.choices[0].message ? {
+            role: completion.choices[0].message.role,
+            content: completion.choices[0].message.content,
+            toolCallsCount: completion.choices[0].message.tool_calls?.length ?? 0,
+          } : null,
+        } : null,
         safetyRatings: completion.choices?.[0]?.safetyRatings,
         promptFeedback: completion.promptFeedback,
         duration: `${duration}ms`,
         timestamp: new Date().toISOString(),
       }, null, 2));
+
+      // 调试：如果 completion_tokens 为 0，打印完整响应
+      if ((completion.usage?.completion_tokens ?? 0) === 0) {
+        console.error('[AI Response] ⚠️ completion_tokens=0，完整响应:', JSON.stringify(completion, null, 2));
+      }
 
       if (!completion.choices || completion.choices.length === 0) {
           // 检查是否是限流导致的空响应

@@ -99,6 +99,9 @@ export const useAgentEngine = ({
       const needForceThinking = isUserInput || isApprovalResult;
       let hasCalledThinking = false;  // 标记是否已完成强制 thinking
 
+      let prevLoopHadToolCalls = false;  // 追踪上一轮是否调用了工具（用于强制总结）
+      let forceSummaryRetried = false;   // 强制总结重试只做一次
+
       // 4. 进入 ReAct 循环
       while (keepGoing && loopCount < MAX_LOOPS) {
         if (signal.aborted) break;
@@ -324,14 +327,28 @@ export const useAgentEngine = ({
         const textPart = parts.find((p: any) => p.text);
         const toolParts = parts.filter((p: any) => p.functionCall);
 
-        // ▼ LLM 响应摘要
+        // ▼ 【原始 LLM 响应 - 未加工】
         const toolCallNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
         console.log(
-          `[LLM-Response] Loop#${loopCount} | finishReason: ${aiMetadata?.finishReason ?? 'n/a'}` +
+          `[LLM-Raw] Loop#${loopCount} | finishReason: ${aiMetadata?.finishReason ?? 'n/a'}` +
           ` | tokens: prompt=${aiMetadata?.promptTokens ?? 'n/a'} completion=${aiMetadata?.completionTokens ?? 'n/a'}` +
-          ` | text: ${textPart ? textPart.text.slice(0, 60).replace(/\n/g, ' ') + (textPart.text.length > 60 ? '…' : '') : '(无)'}` +
+          ` | parts: ${parts.length}个` +
+          ` | text长度: ${textPart ? textPart.text.length : 0}` +
           ` | tools: [${toolCallNames || '无'}]`
         );
+        parts.forEach((p: any, i: number) => {
+          if (p.text) {
+            const preview = p.text.slice(0, 200).replace(/\n/g, '\u21b5');
+            console.log(`[LLM-Raw]   part[${i}] TEXT(${p.text.length}chars): "${preview}${p.text.length > 200 ? '...' : ''}"`);
+          } else if (p.functionCall) {
+            console.log(`[LLM-Raw]   part[${i}] TOOL_CALL: ${p.functionCall.name}`, p.functionCall.args);
+          } else if (p.thought !== undefined) {
+            const t = String(p.thought);
+            console.log(`[LLM-Raw]   part[${i}] THOUGHT(${t.length}chars): "${t.slice(0, 100).replace(/\n/g, '\u21b5')}${t.length > 100 ? '...' : ''}"`);
+          } else {
+            console.log(`[LLM-Raw]   part[${i}] UNKNOWN:`, JSON.stringify(p).slice(0, 200));
+          }
+        });
 
         // CRITICAL: Always add a MODEL message if there's any content (text OR tool calls).
         if (textPart || toolParts.length > 0) {
@@ -417,6 +434,10 @@ export const useAgentEngine = ({
             hasCalledThinking = true;
           }
 
+          // 标记本轮有工具调用（供下一轮检测是否需要强制总结）
+          prevLoopHadToolCalls = true;
+          forceSummaryRetried = false; // 重置：新的工具轮次允许再次重试
+
           const hasAnyError = toolResults.some(r => r.hasError);
 
           if (signal.aborted) {
@@ -445,18 +466,39 @@ export const useAgentEngine = ({
           }));
 
         } else {
-          // 没有工具调用，结束循环
+          // 没有工具调用
           if (!textPart) {
-            // ⚠️ 最严重的静默失败场景：LLM 返回空响应（无 text 无 tools），通常是 API 返回 0 tokens
-            console.warn(
-              `[AgentEngine] ⚠️ LLM 返回空响应（无文本无工具），loop#${loopCount} 将退出循环。` +
-              ` finishReason=${aiMetadata?.finishReason}, tokens=${aiMetadata?.completionTokens ?? 'n/a'}。` +
-              ` 可能原因：窗口消息结构非法被 API 拒绝，或代理返回空 content。`
-            );
+            // ⚠️ LLM 返回空响应（无 text 无 tools）
+            if (prevLoopHadToolCalls && !forceSummaryRetried) {
+              forceSummaryRetried = true;
+              console.warn(
+                `[AgentEngine] ⚠️ Loop#${loopCount} 工具完成后 LLM 未输出总结，注入强制提醒并重试。` +
+                ` prevLoopHadToolCalls=true parts=${parts.length}`
+              );
+              addMessage({
+                id: generateId(),
+                role: 'system',
+                text: '【系统提示】所有工具已执行完毕，请立即用纯文字向用户汇报工作结果和总结，不要再调用任何工具。',
+                timestamp: Date.now(),
+                metadata: { logType: 'system_reminder' }
+              });
+              prevLoopHadToolCalls = false;
+            } else {
+              console.warn(
+                `[AgentEngine-EXIT] ❌ 退出原因: LLM空响应（无文本无工具）\n` +
+                `  loop#=${loopCount} finishReason=${aiMetadata?.finishReason ?? 'n/a'} tokens=${aiMetadata?.completionTokens ?? 'n/a'}\n` +
+                `  prevLoopHadToolCalls=${prevLoopHadToolCalls} forceSummaryRetried=${forceSummaryRetried} parts=${parts.length}\n` +
+                `  诊断: 若parts=0则API返回空内容; 若parts>0但无text/tool则是思考链消息被误判`
+              );
+              keepGoing = false;
+            }
           } else {
-            console.log(`[AgentEngine] ✅ Loop#${loopCount} 完成，LLM 返回纯文本（无工具调用），正常退出。`);
+            console.log(
+              `[AgentEngine-EXIT] ✅ 退出原因: 正常完成（LLM纯文本回复，无工具调用）\n` +
+              `  loop#=${loopCount} text长度=${textPart.text.length} finishReason=${aiMetadata?.finishReason ?? 'n/a'}`
+            );
+            keepGoing = false;
           }
-          keepGoing = false;
         }
       }
 

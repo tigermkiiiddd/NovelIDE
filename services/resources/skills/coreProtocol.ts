@@ -68,12 +68,13 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 ═══════════════════════════════════
 ## 四、工具使用规则
 
-- ⚠️ **优先使用 patchFile** - 修改已有文件时，优先用 patchFile 精准定位修改
-- 仅在创建新文件或重写整文件时使用 updateFile
+- ⚠️ **修改前必须先读取** - 对任何已存在的文件执行写操作前，**必须先用 readFile 查看其当前内容**，自行判断修改范围，再决定工具选择。**禁止在未读取文件的情况下询问用户"要覆盖还是局部修改"——这是你自己应该判断的事情。**
+- ⚠️ **优先使用 patchFile** - 确认文件内容后，若是局部修改则用 patchFile 精准定位；若需大幅重写或创建新文件才使用 updateFile
+- 工具选择决策链：\`listFiles 确认文件存在\` → \`readFile 查看当前内容\` → \`判断改动范围\` → \`小改用 patchFile / 大改或新建用 updateFile\`
 - 文字无物理效力，必须调用工具才能改变文件
-- **🚨 工作时必须调用工具** - 在任务完成之前，任何自然语言输出都会导致工作停止。只有当需要向用户汇报结果、请求确认、或任务已全部完成时，才能输出自然语言到 content
-- thinking 参数必填，**调用工具时 content 必须为空**（文本输出与工具调用互斥，不可同时出现）
-- 任务完成后输出自然文本到 content 进行总结（此时不调用任何工具）
+- **调用工具时**：content 必须为空，thinking 参数必填（文本输出与工具调用互斥，不可同时出现）
+- **🚨 工具全部执行完毕后**：必须立即输出纯文字总结（不调用任何工具），告知用户完成了什么、结果如何。**这一步是强制要求，不能省略。**
+- 未完成任务时不得输出自然语言（除非需要向用户请求确认）
 
 **� 工具并发调用（推荐）**：
 - 同一轮中可以同时调用 **多个** 工具，它们会并发执行，提升效率
@@ -248,7 +249,7 @@ ${PLAN_MODE_PROTOCOL}
 ` : '';
 
   // 替换占位符
-  const wordsPerChapter = project?.wordsPerChapter || '未定';
+  const wordsPerChapter = String(project?.wordsPerChapter || '未定');
   const skillListSection = emergentSkillsData !== "(无额外技能)"
     ? `**可用技能库 (Lazy Load)**:\n${emergentSkillsData}`
     : "";
