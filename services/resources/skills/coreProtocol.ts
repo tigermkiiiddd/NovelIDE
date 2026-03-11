@@ -74,6 +74,12 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - thinking 参数必填，调用工具时 content 为空
 - 任务完成后输出自然文本到 content 进行总结
 
+**执行阈值**：
+- confidence >= 80：直接执行
+- confidence 60-79：再思考
+- confidence < 60：询问用户
+
+
 ═══════════════════════════════════
 ## 五、工作流程（固化）
 
@@ -123,24 +129,6 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 4. 禁止在总纲中合并章节（必须逐章罗列）
 `;
 
-// Helper to extract summary from file nodes for Emergent Context
-const extractFolderSummary = (files: FileNode[], folderName: string): string => {
-  const folder = files.find(f => f.name.includes(folderName) && f.type === FileType.FOLDER);
-  if (!folder) return "(暂无信息)";
-
-  const children = files.filter(f => f.parentId === folder.id && f.type === FileType.FILE);
-  if (children.length === 0) return "(暂无文件)";
-
-  return children.map(f => {
-    const metaSummary = f.metadata?.summarys?.[0];
-    // If no metadata summary, take first 50 chars of content
-    const contentPreview = !metaSummary && f.content
-      ? f.content.replace(/[#\n]/g, ' ').substring(0, 50) + "..."
-      : "";
-
-    return `- ${f.name.replace('.md', '')}: ${metaSummary || contentPreview || "(无摘要)"}`;
-  }).join('\n');
-};
 
 /**
  * 提取并格式化用户输入历史
@@ -221,10 +209,6 @@ export const constructSystemPrompt = (
     ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n单章字数：${project.wordsPerChapter || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
     : "无活跃项目";
 
-  // Emergent World Context (Characters & Settings)
-  // 关键点：直接注入摘要，让 Agent "涌现"出对设定的认知，无需查询
-  const charactersSummary = extractFolderSummary(files, '角色档案');
-  const worldSummary = extractFolderSummary(files, '世界观');
 
   // File Context (Folders Only)
   // 优化：仅提供文件夹结构，减少 Context 占用。Agent 需通过工具查找具体文件。
@@ -264,8 +248,6 @@ ${PLAN_MODE_PROTOCOL}
     : "";
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
     .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
-    .replace(/\{\{CHARACTERS_SUMMARY\}\}/g, charactersSummary)
-    .replace(/\{\{WORLD_SUMMARY\}\}/g, worldSummary)
     .replace(/\{\{PENDING_TODOS\}\}/g, pendingTodos)
     .replace(/\{\{USER_INPUT_HISTORY\}\}/g, userInputHistory)
     .replace(/\{\{FILE_TREE\}\}/g, fileTree)
