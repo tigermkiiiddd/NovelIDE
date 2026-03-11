@@ -330,6 +330,11 @@ export function fromError(error: any, requestInfo?: any, responseInfo?: any): Ag
     throw error; // 重新抛出，不作为错误处理
   }
 
+  // 如果上层已经构造了标准 AgentErrorInfo（例如 contentError），直接透传
+  if (error?.category && error?.title && typeof error?.message === 'string' && Array.isArray(error?.suggestions)) {
+    return error as AgentErrorInfo;
+  }
+
   // 检查是否是空响应错误（由 geminiService 抛出）
   if (error?._isEmptyResponse) {
     return contentError('empty', error._metadata, responseInfo);

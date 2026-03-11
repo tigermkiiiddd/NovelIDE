@@ -111,11 +111,13 @@ describe('E2E: Cross-File Diff Workflow', () => {
       lastModified: Date.now()
     };
 
+    const timestamp = Date.now();
+
     const originalSession = {
       sourceSnapshot: 'Original content',
       sourceFileName: 'saved.ts',
       patchQueue: [
-        { id: 'patch-1', type: 'accept', hunkId: 'hunk-1', newContent: 'Modified', timestamp: Date.now() }
+        { id: 'patch-1', type: 'accept', hunkId: 'hunk-1', newContent: 'Modified', timestamp }
       ]
     };
 
@@ -128,7 +130,7 @@ describe('E2E: Cross-File Diff Workflow', () => {
       sourceSnapshot: 'Original content',
       sourceFileName: 'saved.ts',
       patchQueue: [
-        { id: 'patch-1', type: 'accept', hunkId: 'hunk-1', newContent: 'Modified', timestamp: Date.now() }
+        { id: 'patch-1', type: 'accept', hunkId: 'hunk-1', newContent: 'Modified', timestamp }
       ]
     };
 

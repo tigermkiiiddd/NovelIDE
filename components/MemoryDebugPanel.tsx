@@ -31,13 +31,12 @@ interface MessageWithClassification {
 }
 
 // 计算单个维度的衰减状态
+// 这里的 currentRound 含义改为：距当前已过的"轮"数（与 buildSimpleHistory 的 computeRoundsElapsed 保持一致）
 const calculateDecayStatus = (
   dimension: DecayDimension,
   config: { value: ContentValue; decayRounds: number },
-  currentRound: number,
-  messageRound: number
+  roundsSinceAdded: number
 ): DecayStatus => {
-  const roundsSinceAdded = currentRound - messageRound;
   const maxRounds = config.decayRounds;
 
   // 高价值永久存活
@@ -50,16 +49,12 @@ const calculateDecayStatus = (
 };
 
 // 计算消息的生命周期状态（支持三个维度）
+// roundsSinceAdded = 从当前视角看，这条消息之后已经经历了多少"轮"（user/model 消息）
 const calculateMessageLifecycles = (
   message: ChatMessage,
   classification: MessageClassification,
-  currentRound: number,
-  allMessages: ChatMessage[]
+  roundsSinceAdded: number
 ): DecayStatus[] => {
-  // 估算消息加入的轮次
-  const messageIndex = allMessages.findIndex(m => m.id === message.id);
-  const messageRound = Math.floor(messageIndex / 2);
-
   const statuses: DecayStatus[] = [];
 
   // 如果有精细化配置，显示三个维度
@@ -67,20 +62,20 @@ const calculateMessageLifecycles = (
     const configs = classification.toolDecayConfigs;
 
     // call - 工具名称
-    statuses.push(calculateDecayStatus('call', configs.call, currentRound, messageRound));
+    statuses.push(calculateDecayStatus('call', configs.call, roundsSinceAdded));
 
     // content - 参数内容
-    statuses.push(calculateDecayStatus('content', configs.content, currentRound, messageRound));
+    statuses.push(calculateDecayStatus('content', configs.content, roundsSinceAdded));
 
     // response - 返回结果
     if (classification.isToolResult) {
-      statuses.push(calculateDecayStatus('response', configs.response, currentRound, messageRound));
+      statuses.push(calculateDecayStatus('response', configs.response, roundsSinceAdded));
     }
   } else {
     // 非工具消息，使用统一的衰减配置
     const config = { value: classification.contentValue, decayRounds: classification.decayRounds };
     const dimension = classification.decayDimension || 'content_text';
-    statuses.push(calculateDecayStatus(dimension, config, currentRound, messageRound));
+    statuses.push(calculateDecayStatus(dimension, config, roundsSinceAdded));
   }
 
   return statuses;
@@ -90,6 +85,26 @@ const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ session, onClose })
   const [currentRound, setCurrentRound] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
+  // 计算每条消息"距当前已过轮次"（和 buildSimpleHistory 的 computeRoundsElapsed 语义对齐）
+  const roundsMap = useMemo(() => {
+    if (!session) return new Map<string, number>();
+
+    // 从后往前扫，统计每条消息之后经过了多少轮（user/model）
+    let roundCounter = 0;
+    const map = new Map<string, number>();
+    const msgs = session.messages;
+
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i];
+      map.set(msg.id, roundCounter);
+      if (msg.role === 'user' || msg.role === 'model') {
+        roundCounter++;
+      }
+    }
+
+    return map;
+  }, [session]);
+
   // 计算每条消息的生命周期状态
   const messagesWithLifecycle = useMemo(() => {
     if (!session) return [];
@@ -98,11 +113,13 @@ const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ session, onClose })
 
     return session.messages.map((message, idx) => {
       const classification = classifications[idx];
+      const baseRounds = roundsMap.get(message.id) ?? 0;
+      // 允许在 Debug 面板里用 currentRound 做一个偏移，模拟"再过 N 轮"的效果
+      const effectiveRounds = baseRounds + currentRound;
       const decayStatuses = calculateMessageLifecycles(
         message,
         classification,
-        currentRound,
-        session.messages
+        effectiveRounds
       );
 
       return {
@@ -111,7 +128,7 @@ const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ session, onClose })
         decayStatuses
       };
     });
-  }, [session, currentRound]);
+  }, [session, currentRound, roundsMap]);
 
   // 统计信息
   const stats = useMemo(() => {

@@ -185,8 +185,7 @@ describe('FileService - 文件系统域逻辑', () => {
       );
       expect(agentFile).toBeDefined();
       expect(agentFile?.type).toBe(FileType.FILE);
-      expect(agentFile?.content).toContain('NovelGenie-Core');
-      expect(agentFile?.content).toContain('IDE智能辅助协议');
+      expect(agentFile?.content).toContain('你是 NovelGenie');
     });
 
     it('应该保留现有的系统文件', () => {

@@ -172,9 +172,10 @@ describe('createPersistingStore - 统一持久化策略', () => {
 
       store.setState({ items: ['a', 'b'], count: 2 });
 
-      // 使用selector应该能正常工作
-      const items = store((state) => state.items);
-      const count = store((state) => state.count);
+      // 在非 React 环境下，直接通过 getState 使用 selector 等价验证
+      const state = store.getState();
+      const items = ((s: any) => s.items)(state);
+      const count = ((s: any) => s.count)(state);
 
       expect(items).toEqual(['a', 'b']);
       expect(count).toBe(2);

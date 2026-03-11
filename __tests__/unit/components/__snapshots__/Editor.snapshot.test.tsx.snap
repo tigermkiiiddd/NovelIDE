@@ -1,0 +1,1691 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Editor - 快照测试 Diff模式 应该渲染diff模式的UI 1`] = `
+<div>
+  <div
+    class="flex flex-col h-full bg-[#0d1117] undefined"
+  >
+    <div
+      class="flex items-center justify-between px-2 sm:px-4 py-2 border-b shrink-0 transition-colors bg-[#161b22] border-gray-800"
+    >
+      <div
+        class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-file-text text-blue-400 shrink-0"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path
+            d="M14 2v5a1 1 0 0 0 1 1h5"
+          />
+          <path
+            d="M10 9H8"
+          />
+          <path
+            d="M16 13H8"
+          />
+          <path
+            d="M16 17H8"
+          />
+        </svg>
+        <span
+          class="truncate font-mono text-xs sm:text-sm text-gray-200"
+        >
+          test.txt
+        </span>
+        <span
+          class="text-[10px] text-gray-500 font-mono hidden sm:inline"
+        >
+          0
+           字
+        </span>
+        <span
+          class="text-[10px] text-gray-600 font-mono hidden md:inline"
+        >
+          Ln 
+          1
+          , Col 
+          1
+        </span>
+      </div>
+      <div
+        class="flex items-center gap-0.5 sm:gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50 shrink-0"
+      >
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
+          title="搜索 (Ctrl+F)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-search"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m21 21-4.34-4.34"
+            />
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all bg-gray-700 text-blue-400"
+          title="自动换行: 开启"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-text-wrap"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m16 16-3 3 3 3"
+            />
+            <path
+              d="M3 12h14.5a1 1 0 0 1 0 7H13"
+            />
+            <path
+              d="M3 19h6"
+            />
+            <path
+              d="M3 5h18"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 bg-gray-700 text-blue-400"
+          title="显示行号"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-list-ordered"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11 5h10"
+            />
+            <path
+              d="M11 12h10"
+            />
+            <path
+              d="M11 19h10"
+            />
+            <path
+              d="M4 4h1v5"
+            />
+            <path
+              d="M4 9h2"
+            />
+            <path
+              d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Undo (Ctrl+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-ccw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-cw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+            />
+            <path
+              d="M21 3v5h-5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all bg-gray-700 text-blue-400 shadow-sm"
+          title="Edit Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-pen-line"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13 21h8"
+            />
+            <path
+              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-500 hover:text-gray-300"
+          title="Preview Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-eye"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-500 hover:text-gray-300"
+          title="开启分屏对比"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-columns2 lucide-columns-2"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="18"
+              rx="2"
+              width="18"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M12 3v18"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex-1 overflow-hidden relative bg-[#0d1117]"
+    >
+      <div
+        class="h-full relative flex"
+      >
+        <div
+          class="w-full h-full transition-all"
+        >
+          <div
+            class="flex h-full w-full relative overflow-hidden"
+          >
+            <div
+              aria-hidden="true"
+              class="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base"
+            >
+              <div
+                class="leading-none"
+              >
+                1
+              </div>
+              <div
+                class="h-20"
+              />
+            </div>
+            <textarea
+              class="
+                flex-1 h-full w-full bg-[#0d1117] text-gray-300 resize-none focus:outline-none
+                font-mono text-sm sm:text-base leading-relaxed
+                pt-4 sm:pt-6 pb-20
+                pl-2
+                whitespace-pre-wrap
+                
+            "
+              placeholder="在此处开始您的创作..."
+              spellcheck="false"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Editor - 快照测试 编辑模式 应该渲染编辑模式的UI 1`] = `
+<div>
+  <div
+    class="flex flex-col h-full bg-[#0d1117] undefined"
+  >
+    <div
+      class="flex items-center justify-between px-2 sm:px-4 py-2 border-b shrink-0 transition-colors bg-[#161b22] border-gray-800"
+    >
+      <div
+        class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-file-text text-blue-400 shrink-0"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path
+            d="M14 2v5a1 1 0 0 0 1 1h5"
+          />
+          <path
+            d="M10 9H8"
+          />
+          <path
+            d="M16 13H8"
+          />
+          <path
+            d="M16 17H8"
+          />
+        </svg>
+        <span
+          class="truncate font-mono text-xs sm:text-sm text-gray-200"
+        >
+          test.txt
+        </span>
+        <span
+          class="text-[10px] text-gray-500 font-mono hidden sm:inline"
+        >
+          0
+           字
+        </span>
+        <span
+          class="text-[10px] text-gray-600 font-mono hidden md:inline"
+        >
+          Ln 
+          1
+          , Col 
+          1
+        </span>
+      </div>
+      <div
+        class="flex items-center gap-0.5 sm:gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50 shrink-0"
+      >
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
+          title="搜索 (Ctrl+F)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-search"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m21 21-4.34-4.34"
+            />
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all bg-gray-700 text-blue-400"
+          title="自动换行: 开启"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-text-wrap"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m16 16-3 3 3 3"
+            />
+            <path
+              d="M3 12h14.5a1 1 0 0 1 0 7H13"
+            />
+            <path
+              d="M3 19h6"
+            />
+            <path
+              d="M3 5h18"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 bg-gray-700 text-blue-400"
+          title="显示行号"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-list-ordered"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11 5h10"
+            />
+            <path
+              d="M11 12h10"
+            />
+            <path
+              d="M11 19h10"
+            />
+            <path
+              d="M4 4h1v5"
+            />
+            <path
+              d="M4 9h2"
+            />
+            <path
+              d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Undo (Ctrl+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-ccw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-cw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+            />
+            <path
+              d="M21 3v5h-5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all bg-gray-700 text-blue-400 shadow-sm"
+          title="Edit Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-pen-line"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13 21h8"
+            />
+            <path
+              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-500 hover:text-gray-300"
+          title="Preview Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-eye"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-500 hover:text-gray-300"
+          title="开启分屏对比"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-columns2 lucide-columns-2"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="18"
+              rx="2"
+              width="18"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M12 3v18"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex-1 overflow-hidden relative bg-[#0d1117]"
+    >
+      <div
+        class="h-full relative flex"
+      >
+        <div
+          class="w-full h-full transition-all"
+        >
+          <div
+            class="flex h-full w-full relative overflow-hidden"
+          >
+            <div
+              aria-hidden="true"
+              class="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base"
+            >
+              <div
+                class="leading-none"
+              >
+                1
+              </div>
+              <div
+                class="h-20"
+              />
+            </div>
+            <textarea
+              class="
+                flex-1 h-full w-full bg-[#0d1117] text-gray-300 resize-none focus:outline-none
+                font-mono text-sm sm:text-base leading-relaxed
+                pt-4 sm:pt-6 pb-20
+                pl-2
+                whitespace-pre-wrap
+                
+            "
+              placeholder="在此处开始您的创作..."
+              spellcheck="false"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Editor - 快照测试 行号和代码折叠 应该支持自动换行 1`] = `
+<div>
+  <div
+    class="flex flex-col h-full bg-[#0d1117] undefined"
+  >
+    <div
+      class="flex items-center justify-between px-2 sm:px-4 py-2 border-b shrink-0 transition-colors bg-[#161b22] border-gray-800"
+    >
+      <div
+        class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-file-text text-blue-400 shrink-0"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path
+            d="M14 2v5a1 1 0 0 0 1 1h5"
+          />
+          <path
+            d="M10 9H8"
+          />
+          <path
+            d="M16 13H8"
+          />
+          <path
+            d="M16 17H8"
+          />
+        </svg>
+        <span
+          class="truncate font-mono text-xs sm:text-sm text-gray-200"
+        >
+          test.txt
+        </span>
+        <span
+          class="text-[10px] text-gray-500 font-mono hidden sm:inline"
+        >
+          0
+           字
+        </span>
+        <span
+          class="text-[10px] text-gray-600 font-mono hidden md:inline"
+        >
+          Ln 
+          1
+          , Col 
+          1
+        </span>
+      </div>
+      <div
+        class="flex items-center gap-0.5 sm:gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50 shrink-0"
+      >
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
+          title="搜索 (Ctrl+F)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-search"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m21 21-4.34-4.34"
+            />
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all bg-gray-700 text-blue-400"
+          title="自动换行: 开启"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-text-wrap"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m16 16-3 3 3 3"
+            />
+            <path
+              d="M3 12h14.5a1 1 0 0 1 0 7H13"
+            />
+            <path
+              d="M3 19h6"
+            />
+            <path
+              d="M3 5h18"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 bg-gray-700 text-blue-400"
+          title="显示行号"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-list-ordered"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11 5h10"
+            />
+            <path
+              d="M11 12h10"
+            />
+            <path
+              d="M11 19h10"
+            />
+            <path
+              d="M4 4h1v5"
+            />
+            <path
+              d="M4 9h2"
+            />
+            <path
+              d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Undo (Ctrl+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-ccw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-cw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+            />
+            <path
+              d="M21 3v5h-5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all bg-gray-700 text-blue-400 shadow-sm"
+          title="Edit Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-pen-line"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13 21h8"
+            />
+            <path
+              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-500 hover:text-gray-300"
+          title="Preview Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-eye"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-500 hover:text-gray-300"
+          title="开启分屏对比"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-columns2 lucide-columns-2"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="18"
+              rx="2"
+              width="18"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M12 3v18"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex-1 overflow-hidden relative bg-[#0d1117]"
+    >
+      <div
+        class="h-full relative flex"
+      >
+        <div
+          class="w-full h-full transition-all"
+        >
+          <div
+            class="flex h-full w-full relative overflow-hidden"
+          >
+            <div
+              aria-hidden="true"
+              class="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base"
+            >
+              <div
+                class="leading-none"
+              >
+                1
+              </div>
+              <div
+                class="h-20"
+              />
+            </div>
+            <textarea
+              class="
+                flex-1 h-full w-full bg-[#0d1117] text-gray-300 resize-none focus:outline-none
+                font-mono text-sm sm:text-base leading-relaxed
+                pt-4 sm:pt-6 pb-20
+                pl-2
+                whitespace-pre-wrap
+                
+            "
+              placeholder="在此处开始您的创作..."
+              spellcheck="false"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Editor - 快照测试 行号和代码折叠 应该支持行号显示 1`] = `
+<div>
+  <div
+    class="flex flex-col h-full bg-[#0d1117] undefined"
+  >
+    <div
+      class="flex items-center justify-between px-2 sm:px-4 py-2 border-b shrink-0 transition-colors bg-[#161b22] border-gray-800"
+    >
+      <div
+        class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-file-text text-blue-400 shrink-0"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path
+            d="M14 2v5a1 1 0 0 0 1 1h5"
+          />
+          <path
+            d="M10 9H8"
+          />
+          <path
+            d="M16 13H8"
+          />
+          <path
+            d="M16 17H8"
+          />
+        </svg>
+        <span
+          class="truncate font-mono text-xs sm:text-sm text-gray-200"
+        >
+          test.txt
+        </span>
+        <span
+          class="text-[10px] text-gray-500 font-mono hidden sm:inline"
+        >
+          0
+           字
+        </span>
+        <span
+          class="text-[10px] text-gray-600 font-mono hidden md:inline"
+        >
+          Ln 
+          1
+          , Col 
+          1
+        </span>
+      </div>
+      <div
+        class="flex items-center gap-0.5 sm:gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50 shrink-0"
+      >
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
+          title="搜索 (Ctrl+F)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-search"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m21 21-4.34-4.34"
+            />
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all bg-gray-700 text-blue-400"
+          title="自动换行: 开启"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-text-wrap"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m16 16-3 3 3 3"
+            />
+            <path
+              d="M3 12h14.5a1 1 0 0 1 0 7H13"
+            />
+            <path
+              d="M3 19h6"
+            />
+            <path
+              d="M3 5h18"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 bg-gray-700 text-blue-400"
+          title="显示行号"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-list-ordered"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11 5h10"
+            />
+            <path
+              d="M11 12h10"
+            />
+            <path
+              d="M11 19h10"
+            />
+            <path
+              d="M4 4h1v5"
+            />
+            <path
+              d="M4 9h2"
+            />
+            <path
+              d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Undo (Ctrl+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-ccw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-cw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+            />
+            <path
+              d="M21 3v5h-5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all bg-gray-700 text-blue-400 shadow-sm"
+          title="Edit Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-pen-line"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13 21h8"
+            />
+            <path
+              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-500 hover:text-gray-300"
+          title="Preview Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-eye"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-500 hover:text-gray-300"
+          title="开启分屏对比"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-columns2 lucide-columns-2"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="18"
+              rx="2"
+              width="18"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M12 3v18"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex-1 overflow-hidden relative bg-[#0d1117]"
+    >
+      <div
+        class="h-full relative flex"
+      >
+        <div
+          class="w-full h-full transition-all"
+        >
+          <div
+            class="flex h-full w-full relative overflow-hidden"
+          >
+            <div
+              aria-hidden="true"
+              class="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base"
+            >
+              <div
+                class="leading-none"
+              >
+                1
+              </div>
+              <div
+                class="h-20"
+              />
+            </div>
+            <textarea
+              class="
+                flex-1 h-full w-full bg-[#0d1117] text-gray-300 resize-none focus:outline-none
+                font-mono text-sm sm:text-base leading-relaxed
+                pt-4 sm:pt-6 pb-20
+                pl-2
+                whitespace-pre-wrap
+                
+            "
+              placeholder="在此处开始您的创作..."
+              spellcheck="false"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`Editor - 快照测试 预览模式 应该渲染预览模式的UI 1`] = `
+<div>
+  <div
+    class="flex flex-col h-full bg-[#0d1117] undefined"
+  >
+    <div
+      class="flex items-center justify-between px-2 sm:px-4 py-2 border-b shrink-0 transition-colors bg-[#161b22] border-gray-800"
+    >
+      <div
+        class="flex items-center gap-2 min-w-0 flex-1 overflow-hidden"
+      >
+        <svg
+          aria-hidden="true"
+          class="lucide lucide-file-text text-blue-400 shrink-0"
+          fill="none"
+          height="14"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+          width="14"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+          />
+          <path
+            d="M14 2v5a1 1 0 0 0 1 1h5"
+          />
+          <path
+            d="M10 9H8"
+          />
+          <path
+            d="M16 13H8"
+          />
+          <path
+            d="M16 17H8"
+          />
+        </svg>
+        <span
+          class="truncate font-mono text-xs sm:text-sm text-gray-200"
+        >
+          test.txt
+        </span>
+        <span
+          class="text-[10px] text-gray-500 font-mono hidden sm:inline"
+        >
+          0
+           字
+        </span>
+        <span
+          class="text-[10px] text-gray-600 font-mono hidden md:inline"
+        >
+          Ln 
+          1
+          , Col 
+          1
+        </span>
+      </div>
+      <div
+        class="flex items-center gap-0.5 sm:gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50 shrink-0"
+      >
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
+          title="搜索 (Ctrl+F)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-search"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m21 21-4.34-4.34"
+            />
+            <circle
+              cx="11"
+              cy="11"
+              r="8"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all bg-gray-700 text-blue-400"
+          title="自动换行: 开启"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-text-wrap"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m16 16-3 3 3 3"
+            />
+            <path
+              d="M3 12h14.5a1 1 0 0 1 0 7H13"
+            />
+            <path
+              d="M3 19h6"
+            />
+            <path
+              d="M3 5h18"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 bg-gray-700 text-blue-400"
+          title="显示行号"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-list-ordered"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M11 5h10"
+            />
+            <path
+              d="M11 12h10"
+            />
+            <path
+              d="M11 19h10"
+            />
+            <path
+              d="M4 4h1v5"
+            />
+            <path
+              d="M4 9h2"
+            />
+            <path
+              d="M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Undo (Ctrl+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-ccw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 text-gray-700 cursor-not-allowed"
+          disabled=""
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-rotate-cw"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"
+            />
+            <path
+              d="M21 3v5h-5"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all bg-gray-700 text-blue-400 shadow-sm"
+          title="Edit Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-pen-line"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M13 21h8"
+            />
+            <path
+              d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+            />
+          </svg>
+        </button>
+        <button
+          class="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all text-gray-500 hover:text-gray-300"
+          title="Preview Mode"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-eye"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="3"
+            />
+          </svg>
+        </button>
+        <button
+          class="hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-500 hover:text-gray-300"
+          title="开启分屏对比"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-columns2 lucide-columns-2"
+            fill="none"
+            height="14"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="14"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="18"
+              rx="2"
+              width="18"
+              x="3"
+              y="3"
+            />
+            <path
+              d="M12 3v18"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div
+      class="flex-1 overflow-hidden relative bg-[#0d1117]"
+    >
+      <div
+        class="h-full relative flex"
+      >
+        <div
+          class="w-full h-full transition-all"
+        >
+          <div
+            class="flex h-full w-full relative overflow-hidden"
+          >
+            <div
+              aria-hidden="true"
+              class="shrink-0 w-10 sm:w-12 bg-[#0d1117] border-r border-gray-800 text-right pr-2 pt-4 sm:pt-6 text-gray-600 select-none overflow-hidden font-mono text-sm sm:text-base"
+            >
+              <div
+                class="leading-none"
+              >
+                1
+              </div>
+              <div
+                class="h-20"
+              />
+            </div>
+            <textarea
+              class="
+                flex-1 h-full w-full bg-[#0d1117] text-gray-300 resize-none focus:outline-none
+                font-mono text-sm sm:text-base leading-relaxed
+                pt-4 sm:pt-6 pb-20
+                pl-2
+                whitespace-pre-wrap
+                
+            "
+              placeholder="在此处开始您的创作..."
+              spellcheck="false"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;

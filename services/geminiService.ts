@@ -322,6 +322,22 @@ export class AIService {
       // 检查空内容
       if (!msg.content && (!msg.tool_calls || msg.tool_calls.length === 0)) {
         warnings.push('响应无文本内容且无工具调用');
+
+        const usage = completion.usage || {};
+        const isEmptyGeneration = usage.completion_tokens === 0;
+
+        let errorHint = 'API 返回空消息（无文本且无工具调用）';
+        if (isEmptyGeneration) {
+          errorHint = 'API 限流或服务暂时不可用 (completion_tokens=0)';
+          warnings.push('空响应可能由限流导致');
+        }
+
+        const error = new Error(`${errorHint}\n\n原始响应：\n${JSON.stringify(completion, null, 2)}`);
+        // @ts-ignore - 添加元数据到错误对象
+        error._metadata = responseMetadata;
+        // @ts-ignore - 标记错误类型
+        error._isEmptyResponse = true;
+        throw error;
       }
 
       // 3. Convert OpenAI Response back to Internal Format (parts based)

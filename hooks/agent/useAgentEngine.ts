@@ -306,6 +306,11 @@ export const useAgentEngine = ({
         const content = candidates[0].content;
         const parts = content.parts;
 
+        // 防御性保护：部分提供方可能返回空 parts，避免“无工具调用→直接退出”的静默失败
+        if (!parts || parts.length === 0) {
+          throw contentError('empty', aiMetadata, response);
+        }
+
         // 检查 finish_reason 并处理内容问题
         const finishReasonError = checkFinishReason(
           aiMetadata?.finishReason,
@@ -324,6 +329,11 @@ export const useAgentEngine = ({
         // 4.3 处理文本响应
         const textPart = parts.find((p: any) => p.text);
         const toolParts = parts.filter((p: any) => p.functionCall);
+
+        // 二次防御：parts 存在但既无文本也无工具（例如 provider 返回空字符串/空工具数组）
+        if (!textPart && toolParts.length === 0) {
+          throw contentError('empty', aiMetadata, response);
+        }
 
         // ▼ 【原始 LLM 响应 - 未加工】
         const toolCallNames = toolParts.map((p: any) => p.functionCall.name).join(', ');

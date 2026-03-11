@@ -14,18 +14,14 @@
  * - 保持Zustand的简洁API
  */
 
-import { create, StateCreator } from 'zustand';
+import { create } from 'zustand';
 
 export interface PersistingStoreConfig<T> {
   name: string;
   initialState: T;
-  saver: (state: T) => Promise<any>;
+  saver?: (state: T) => Promise<any>;
   debounceMs?: number;
 }
-
-type WithSetState<T> = T & {
-  setState: (update: Partial<T> | ((prev: T) => Partial<T>)) => void;
-};
 
 /**
  * 创建带持久化功能的Zustand store
@@ -37,48 +33,73 @@ type WithSetState<T> = T & {
  * @returns Zustand store
  */
 export function createPersistingStore<T extends object>(
+  name: string,
+  initialState: T,
+  saver: ((state: T) => Promise<any>) | undefined,
+  debounceMs: number = 1000
+) {
+  // Backward-compatible wrapper: existing code uses (name, initialState, saver, debounceMs)
+  return createPersistingStoreFromConfig<T>({
+    name,
+    initialState,
+    saver,
+    debounceMs,
+  });
+}
+
+// 新签名：更清晰的配置对象形式
+export function createPersistingStoreFromConfig<T extends object>(
   config: PersistingStoreConfig<T>
 ) {
   const { name, initialState, saver, debounceMs = 1000 } = config;
 
-  let debounceTimer: NodeJS.Timeout | null = null;
-  let pendingState: Partial<T> | null = null;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingState: T | null = null;
 
-  // 创建防抖保存函数
+  const saveNow = (state: T) => {
+    if (typeof saver !== 'function') return;
+
+    Promise.resolve(saver(state)).catch((error) => {
+      console.error(`[${name}] Failed to persist state: Failed to persist ${name}`, error);
+    });
+  };
+
+  // 创建防抖保存函数（基于 store.setState 包装触发）
   const debouncedSave = (state: T) => {
-    // 保存pending的状态
+    if (typeof saver !== 'function') return;
+
+    // 0ms 表示立即保存（便于同步测试与需要立刻落盘的场景）
+    if (debounceMs <= 0) {
+      saveNow(state);
+      return;
+    }
+
     pendingState = state;
 
-    // 清除之前的定时器
     if (debounceTimer !== null) {
       clearTimeout(debounceTimer);
     }
 
-    // 设置新的定时器
     debounceTimer = setTimeout(() => {
-      // 保存pending的状态
       const stateToSave = pendingState || state;
       pendingState = null;
-
-      // 调用持久化函数
-      Promise.resolve(saver(stateToSave)).catch((error) => {
-        console.error(`[${name}] Failed to persist state:`, error);
-      });
+      saveNow(stateToSave);
     }, debounceMs);
   };
 
-  // 创建store
-  const store = create<WithSetState<T>>((set, get) => ({
+  // 创建 store（保持 Zustand 默认 API：store.setState / store.getState / selector）
+  const store = create<T>(() => ({
     ...initialState,
+  } as T));
 
-    setState: (update) => {
-      set(update);
-      // 状态更新后触发防抖保存
-      debouncedSave(get());
-    },
-  }));
+  // 包装 Zustand 的 setState：每次更新后触发防抖持久化
+  const rawSetState = store.setState;
+  (store as any).setState = (partial: any, replace?: boolean) => {
+    rawSetState(partial, replace);
+    debouncedSave(store.getState());
+  };
 
-  return store as ReturnType<typeof store>;
+  return store;
 }
 
 /**
@@ -87,10 +108,9 @@ export function createPersistingStore<T extends object>(
  * 用于需要立即持久化的场景，如页面卸载
  */
 export function flushPersistingStore<T = any>(
-  store: ReturnType<ReturnType<typeof create<T>>>
+  store: any
 ): void {
-  const state = store.getState();
-  // 这里无法访问debouncedSave，所以不实现
-  // 如果需要立即保存，可以直接调用saver
+  const state = store.getState?.();
+  void state;
   console.warn('[flushPersistingStore] Manual flush not implemented. Use setState trigger instead.');
 }

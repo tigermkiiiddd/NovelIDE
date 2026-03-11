@@ -83,9 +83,9 @@ export class FileService {
         return true;
       }
 
-      // 98_技能配置/subskill 目录下的文件允许删除（用户可重置内容）
+      // 98_技能配置/subskill 目录下的文件禁止删除（系统技能文件保护）
       if (filePath.startsWith('/98_技能配置/subskill/')) {
-        return true;
+        return false;
       }
 
       // 检查文件名前缀（保护 98_技能配置 根目录下的文件）

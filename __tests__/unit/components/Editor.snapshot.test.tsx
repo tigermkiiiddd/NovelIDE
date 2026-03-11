@@ -8,14 +8,119 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { Editor } from '../../../components/Editor';
+
+jest.mock('react-markdown', () => {
+  return {
+    __esModule: true,
+    default: ({ children }: any) => <div data-testid="react-markdown">{children}</div>,
+  };
+});
+
+jest.mock('remark-gfm', () => ({
+  __esModule: true,
+  default: () => {},
+}));
+
+jest.mock('remark-breaks', () => ({
+  __esModule: true,
+  default: () => {},
+}));
 
 // Mock stores
-jest.mock('../../../stores/fileStore');
-jest.mock('../../../stores/agentStore');
-jest.mock('../../../stores/diffStore');
-jest.mock('../../../stores/uiStore');
-jest.mock('../../../hooks/useUndoRedo');
+jest.mock('../../../services/persistence', () => ({
+  __esModule: true,
+  dbAPI: {
+    getUiSettings: jest.fn().mockResolvedValue(undefined),
+    saveUiSettings: jest.fn().mockResolvedValue(undefined),
+    getDiffSession: jest.fn().mockResolvedValue(null),
+    saveDiffSession: jest.fn().mockResolvedValue(undefined),
+    deleteDiffSession: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.mock('../../../stores/fileStore', () => ({
+  __esModule: true,
+  useFileStore: () => ({
+    files: [
+      {
+        id: 'file-1',
+        name: 'test.txt',
+        type: 'file',
+        content: 'original content',
+        lastModified: Date.now(),
+      },
+    ],
+    activeFileId: 'file-1',
+    saveFileContent: jest.fn(),
+    createFile: jest.fn(),
+    deleteFile: jest.fn(),
+  }),
+}));
+
+jest.mock('../../../stores/agentStore', () => ({
+  __esModule: true,
+  useAgentStore: () => ({
+    pendingChanges: [],
+    updatePendingChange: jest.fn(),
+    removePendingChange: jest.fn(),
+    addMessage: jest.fn(),
+    reviewingChangeId: null,
+    setReviewingChangeId: jest.fn(),
+  }),
+}));
+
+jest.mock('../../../stores/diffStore', () => ({
+  __esModule: true,
+  useDiffStore: () => ({
+    loadDiffSession: jest.fn(),
+    saveDiffSession: jest.fn(),
+    clearDiffSession: jest.fn(),
+  }),
+}));
+
+jest.mock('../../../stores/uiStore', () => ({
+  __esModule: true,
+  useUiStore: (selector?: any) => {
+    const state = {
+      isSplitView: false,
+      toggleSplitView: jest.fn(),
+      showLineNumbers: true,
+      toggleLineNumbers: jest.fn(),
+      wordWrap: true,
+      toggleWordWrap: jest.fn(),
+      // extra fields (in case other code paths read them)
+      mode: 'edit',
+      setMode: jest.fn(),
+      wordCount: 0,
+      setWordCount: jest.fn(),
+      isSidebarOpen: true,
+      isChatOpen: true,
+      sidebarWidth: 280,
+      agentWidth: 360,
+      setSidebarOpen: jest.fn(),
+      setChatOpen: jest.fn(),
+      setSidebarWidth: jest.fn(),
+      setAgentWidth: jest.fn(),
+      toggleChat: jest.fn(),
+      toggleSidebar: jest.fn(),
+    };
+    return selector ? selector(state) : state;
+  },
+}));
+
+jest.mock('../../../hooks/useUndoRedo', () => ({
+  __esModule: true,
+  useUndoRedo: () => ({
+    state: '',
+    set: jest.fn(),
+    canUndo: false,
+    canRedo: false,
+    undo: jest.fn(),
+    redo: jest.fn(),
+    push: jest.fn(),
+    reset: jest.fn(),
+  }),
+}));
 
 // Mock dependencies
 jest.mock('../../../services/agent/toolRunner', () => ({
@@ -45,6 +150,12 @@ jest.mock('../../../services/fileSystem', () => ({
     path: '/test/file.txt'
   }))
 }));
+
+let Editor: any;
+
+beforeAll(async () => {
+  ({ default: Editor } = await import('../../../components/Editor'));
+});
 
 describe('Editor - 快照测试', () => {
   const mockFiles = [
@@ -104,8 +215,8 @@ describe('Editor - 快照测试', () => {
     it('应该显示编辑工具栏按钮', () => {
       render(<Editor />);
 
-      // 验证工具按钮存在（具体按钮根据uiStore状态）
-      expect(screen.getByRole('button')).toBeInTheDocument();
+      // 只要至少有一个按钮存在即可
+      expect(screen.getAllByRole('button').length).toBeGreaterThan(0);
     });
   });
 
