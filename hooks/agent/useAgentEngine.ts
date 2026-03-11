@@ -132,45 +132,64 @@ export const useAgentEngine = ({
 
           // 情况2: 第一条是 model/assistant 且有 tool_calls -> 非法（缺少对应的 user 或 tool response）
           if ((firstMsg.role === 'model' || firstMsg.role === 'assistant') && firstMsg.rawParts?.some((p: any) => p.functionCall)) {
-            // 跳过这条消息，从下一条开始
-            console.warn('[滑动窗口] 跳过孤立的 tool_calls 消息，避免 API 格式错误');
+            const toolNames = firstMsg.rawParts
+              ?.filter((p: any) => p.functionCall)
+              .map((p: any) => p.functionCall.name)
+              .join(', ');
+            console.warn(`[窗口-Start] 丢弃孤立 tool_calls 消息（窗口首条）: [${toolNames}]`);
             return fixWindowStart(msgs.slice(1));
           }
 
           // 情况3: 第一条是 user/system 但内容是 tool response (rawParts 有 functionResponse)
           // 这种情况是合法的，因为 tool response 可以作为新一轮的起始
           if ((firstMsg.role === 'user' || firstMsg.role === 'system') && firstMsg.rawParts?.some((p: any) => p.functionResponse)) {
+            const toolNames = firstMsg.rawParts
+              ?.filter((p: any) => p.functionResponse)
+              .map((p: any) => p.functionResponse.name)
+              .join(', ');
+            console.warn(`[窗口-Start] 窗口首条是孤立 tool response（无对应 call），保留作上下文: [${toolNames}]`);
             return msgs;
           }
 
           return msgs;
         };
 
-        // --- 滑动窗口内部完整性检查 ---
-        // 确保窗口内部没有孤立的 tool_calls 或 tool response
+        // --- 滑动窗口内部完整性检查（最后防线） ---
+        // buildSimpleHistory 已保证工具调用对完整性。
+        // 此函数仅处理边界截断导致的孤立消息。
+        // ⚠️ 并发工具模式：1条 model 消息 → N条 system 消息（1:N 关系）
         const fixWindowIntegrity = (msgs: any[]): any[] => {
           if (msgs.length === 0) return msgs;
 
           const result: any[] = [];
 
+          // 用于追踪：最近一个进入 result 的 model/assistant（有 tool_calls）消息
+          // 支持 1 model → N system 的并发模式
+          let lastToolCallsMsg: any = null;
+
           for (let i = 0; i < msgs.length; i++) {
             const msg = msgs[i];
 
-            // 检查是否是孤立的 tool response（前一条不是 tool_calls）
+            // 检查是否是 tool response 消息
             const hasToolResponse = (msg.role === 'user' || msg.role === 'system') &&
               msg.rawParts?.some((p: any) => p.functionResponse);
 
             if (hasToolResponse) {
-              // 检查前一条消息是否是对应的 tool_calls
-              const prevMsg = result[result.length - 1];  // 使用 result 而不是 msgs
-              const isToolCalls = (prevMsg?.role === 'model' || prevMsg?.role === 'assistant') &&
-                prevMsg?.rawParts?.some((p: any) => p.functionCall);
-
-              if (!isToolCalls) {
-                // 孤立的 tool response，跳过这条消息
-                console.warn('[滑动窗口] 跳过孤立的 tool response 消息（索引', i, '），前一条不是 tool_calls');
+              // ⚠️ 关键修复：检查 lastToolCallsMsg 而不是 result[-1]
+              // 原因：并发工具下多条 system 响应连续出现，result[-1] 是上一个 system 响应，
+              // 但它们都属于同一个 model tool_calls 消息，所以需要追踪该 model 消息
+              if (!lastToolCallsMsg) {
+                const toolNames = msg.rawParts
+                  ?.filter((p: any) => p.functionResponse)
+                  .map((p: any) => p.functionResponse.name)
+                  .join(', ');
+                console.warn(`[窗口-Integrity] 丢弃孤立 tool response（i=${i}，工具: [${toolNames}]），前方无 tool_calls`);
                 continue;
               }
+              // tool response 合法，继续
+            } else {
+              // 非 tool response 消息出现，重置 lastToolCallsMsg
+              lastToolCallsMsg = null;
             }
 
             // 检查是否是带 tool_calls 的 assistant 消息
@@ -178,17 +197,33 @@ export const useAgentEngine = ({
               msg.rawParts?.some((p: any) => p.functionCall);
 
             if (hasToolCalls) {
-              // 检查下一条消息是否是对应的 tool response
-              const nextMsg = msgs[i + 1];
-              // system role 也会被转换为 user 发送给 API，所以也是合法的 tool response
-              const isToolResponse = (nextMsg?.role === 'user' || nextMsg?.role === 'system') &&
-                nextMsg?.rawParts?.some((p: any) => p.functionResponse);
+              // 向前扫描：检查是否有对应的 tool response 紧随其后（跳过非 response 消息）
+              let hasNextResponse = false;
+              for (let j = i + 1; j < msgs.length; j++) {
+                const next = msgs[j];
+                const isResponse = (next?.role === 'user' || next?.role === 'system') &&
+                  next?.rawParts?.some((p: any) => p.functionResponse);
+                if (isResponse) {
+                  hasNextResponse = true;
+                  break;
+                }
+                // 如果遇到非 response 的实质性消息，就停止扫描
+                const isSubstantial = next?.role === 'model' || next?.role === 'assistant' ||
+                  (next?.role === 'user' && !next?.rawParts?.some((p: any) => p.functionResponse));
+                if (isSubstantial) break;
+              }
 
-              if (!isToolResponse) {
-                // 孤立的 tool_calls，跳过这条消息
-                console.warn('[滑动窗口] 跳过孤立的 tool_calls 消息（索引', i, '），下一条不是 tool response');
+              if (!hasNextResponse) {
+                const toolNames = msg.rawParts
+                  ?.filter((p: any) => p.functionCall)
+                  .map((p: any) => p.functionCall.name)
+                  .join(', ');
+                console.warn(`[窗口-Integrity] 丢弃孤立 tool_calls 消息（i=${i}，工具: [${toolNames}]），后方无 tool response`);
                 continue;
               }
+
+              // 记录这个有效的 tool_calls 消息
+              lastToolCallsMsg = msg;
             }
 
             result.push(msg);
@@ -201,6 +236,18 @@ export const useAgentEngine = ({
         windowedMessages = fixWindowIntegrity(windowedMessages);
         const inContextCount = windowedMessages.length;
         const droppedCount = totalMessages - inContextCount;
+
+        // ▼ 窗口构建摘要
+        const windowSummary = windowedMessages.map((m, idx) => {
+          const toolNames = m.rawParts
+            ?.filter((p: any) => p.functionCall || p.functionResponse)
+            .map((p: any) => p.functionCall?.name || p.functionResponse?.name)
+            .join('+');
+          return `  [${idx}] ${m.role}${toolNames ? `<${toolNames}>` : ''}`;
+        }).join('\n');
+        console.log(
+          `[窗口-Summary] Loop#${loopCount} | 总消息: ${totalMessages} → 入窗: ${inContextCount}（丢弃: ${droppedCount}）\n${windowSummary}`
+        );
 
         // 格式化为 API 需要的结构
         const apiHistory = windowedMessages.map(m => {
@@ -277,6 +324,15 @@ export const useAgentEngine = ({
         const textPart = parts.find((p: any) => p.text);
         const toolParts = parts.filter((p: any) => p.functionCall);
 
+        // ▼ LLM 响应摘要
+        const toolCallNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
+        console.log(
+          `[LLM-Response] Loop#${loopCount} | finishReason: ${aiMetadata?.finishReason ?? 'n/a'}` +
+          ` | tokens: prompt=${aiMetadata?.promptTokens ?? 'n/a'} completion=${aiMetadata?.completionTokens ?? 'n/a'}` +
+          ` | text: ${textPart ? textPart.text.slice(0, 60).replace(/\n/g, ' ') + (textPart.text.length > 60 ? '…' : '') : '(无)'}` +
+          ` | tools: [${toolCallNames || '无'}]`
+        );
+
         // CRITICAL: Always add a MODEL message if there's any content (text OR tool calls).
         if (textPart || toolParts.length > 0) {
           const displayText = textPart ? textPart.text : '';
@@ -300,88 +356,107 @@ export const useAgentEngine = ({
         if (toolParts.length > 0) {
           await new Promise(resolve => setTimeout(resolve, 0));
 
-          const functionResponses: any[] = [];
-          const executingToolNames = toolParts.map((p: any) => p.functionCall.name).join(', ');
+          // 并发执行所有工具调用
+          console.log(`[AgentEngine] 并发执行 ${toolParts.length} 个工具: [${toolParts.map((p: any) => p.functionCall.name).join(', ')}]`);
 
-          // 创建 UI 上的工具执行状态消息 (System Role)
-          const toolMsgId = generateId();
-          let streamedLog = '';
-          let hasAnyError = false;  // 追踪是否有工具执行失败
+          // 为每个工具预先创建 UI 消息
+          const toolMsgIds: string[] = toolParts.map(() => generateId());
 
-          // Real-time logger callback
-          const logToUi = (text: string) => {
-            streamedLog += (streamedLog ? '\n' : '') + text;
-            editMessageContent(toolMsgId, streamedLog);
-          };
-
-          addMessage({
-            id: toolMsgId,
-            role: 'system',
-            text: `⏳ Starting execution: ${executingToolNames}...`,
-            isToolOutput: true,
-            timestamp: Date.now(),
-            metadata: { executingTools: executingToolNames }
+          // 创建初始 UI 状态消息（全部先出现）
+          toolParts.forEach((toolPart: any, idx: number) => {
+            const toolName = toolPart.functionCall.name;
+            addMessage({
+              id: toolMsgIds[idx],
+              role: 'system',
+              text: `⏳ Starting execution: ${toolName}...`,
+              isToolOutput: true,
+              timestamp: Date.now() + idx, // 微小偏移保证顺序
+              metadata: { executingTools: toolName }
+            });
           });
 
-          // 依次执行工具
-          for (const part of toolParts) {
-            if (signal.aborted) {
-              // 用户停止时，为当前和后续所有工具生成 aborted response
-              functionResponses.push({
-                functionResponse: { name: part.functionCall.name, id: part.functionCall.id, response: { result: '[ABORTED] User stopped execution' } }
-              });
-              continue;
-            }
-            if (!part.functionCall) continue;
-            const { name, args, id } = part.functionCall;
+          // 并发执行所有工具
+          const toolResults = await Promise.all(
+            toolParts.map(async (toolPart: any, idx: number) => {
+              const toolMsgId = toolMsgIds[idx];
+              let streamedLog = '';
+              let hasError = false;
 
-            // Execute
-            const resultString = await runTool(name, args, toolMsgId, signal, logToUi);
+              const logToUi = (text: string) => {
+                streamedLog += (streamedLog ? '\n' : '') + text;
+                editMessageContent(toolMsgId, streamedLog);
+              };
 
-            // 检测工具执行是否失败
-            if (resultString.startsWith('Error:') || resultString.startsWith('[SYSTEM ERROR]:')) {
-              hasAnyError = true;
-            }
+              if (signal.aborted) {
+                const { name, id } = toolPart.functionCall;
+                return {
+                  toolMsgId,
+                  functionResponse: { functionResponse: { name, id, response: { result: '[ABORTED] User stopped execution' } } },
+                  hasError: true,
+                  streamedLog: '⛔ Execution Aborted',
+                  toolName: name,
+                };
+              }
 
-            functionResponses.push({
-              functionResponse: { name, id, response: { result: resultString } }
-            });
+              const { name, args, id } = toolPart.functionCall;
+              const resultString = await runTool(name, args, toolMsgId, signal, logToUi);
+              hasError = resultString.startsWith('Error:') || resultString.startsWith('[SYSTEM ERROR]:');
 
-            // 标记 thinking 已完成
-            if (name === 'thinking') {
-              hasCalledThinking = true;
-            }
+              return {
+                toolMsgId,
+                functionResponse: { functionResponse: { name, id, response: { result: resultString } } },
+                hasError,
+                streamedLog: streamedLog.trim() || (hasError ? '❌ Execution Failed' : '✅ Execution Complete'),
+                toolName: name,
+              };
+            })
+          );
+
+          // 标记 thinking 完成（如果有任何 thinking 工具）
+          if (toolResults.some(r => r.toolName === 'thinking')) {
+            hasCalledThinking = true;
           }
 
+          const hasAnyError = toolResults.some(r => r.hasError);
+
           if (signal.aborted) {
-            // 更新 UI 消息状态为已中止（确保 rawParts 被设置）
+            // 更新所有 UI 消息为已中止
             useAgentStore.getState().updateCurrentSession(session => ({
               ...session,
-              messages: session.messages.map(m => m.id === toolMsgId ? {
-                ...m,
-                text: streamedLog.trim() || '⛔ Execution Aborted',
-                rawParts: functionResponses,
-                isError: true
-              } : m),
+              messages: session.messages.map(m => {
+                const result = toolResults.find(r => r.toolMsgId === m.id);
+                if (!result) return m;
+                return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: true };
+              }),
               lastModified: Date.now()
             }));
             break;
           }
 
-          // 更新 UI 消息状态为完成
+          // 更新所有 UI 消息为完成，并把 functionResponse 挂载到对应 system 消息上
           useAgentStore.getState().updateCurrentSession(session => ({
             ...session,
-            messages: session.messages.map(m => m.id === toolMsgId ? {
-              ...m,
-              text: streamedLog.trim() || '✅ Execution Complete',
-              rawParts: functionResponses,
-              isError: hasAnyError  // 标记工具执行是否失败
-            } : m),
+            messages: session.messages.map(m => {
+              const result = toolResults.find(r => r.toolMsgId === m.id);
+              if (!result) return m;
+              return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: result.hasError };
+            }),
             lastModified: Date.now()
           }));
 
         } else {
-          keepGoing = false; // 没有工具调用，结束循环
+          // 没有工具调用，结束循环
+          if (!textPart) {
+            // ⚠️ 最严重的静默失败场景：LLM 返回空响应（无 text 无 tools），通常是 API 返回 0 tokens
+            console.warn(
+              `[AgentEngine] ⚠️ LLM 返回空响应（无文本无工具），loop#${loopCount} 将退出循环。` +
+              ` finishReason=${aiMetadata?.finishReason}, tokens=${aiMetadata?.completionTokens ?? 'n/a'}。` +
+              ` 可能原因：窗口消息结构非法被 API 拒绝，或代理返回空 content。`
+            );
+          } else {
+            console.log(`[AgentEngine] ✅ Loop#${loopCount} 完成，LLM 返回纯文本（无工具调用），正常退出。`);
+          }
+          keepGoing = false;
         }
       }
 

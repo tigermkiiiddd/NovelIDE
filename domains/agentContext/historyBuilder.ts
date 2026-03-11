@@ -5,7 +5,8 @@ import {
   classifyMessages,
   MessageClassification,
   ToolType,
-  ContentLocation
+  ContentLocation,
+  getToolDecayConfigs,
 } from './messageClassifier';
 import {
   LifecycleManager,
@@ -243,57 +244,200 @@ export const buildSessionHistory = (
 };
 
 /**
- * 简化版：仅按价值矩阵过滤，不使用生命周期管理
- * 适用于不需要轮次追踪的场景
+ * 计算每条消息距当前经过了多少"轮"
+ * 一轮 = 一条 user 消息 或 一条 model 消息（system 消息不计轮次）
+ * 返回 Map<messageId, roundsElapsed>
+ */
+const computeRoundsElapsed = (messages: ChatMessage[]): Map<string, number> => {
+  // 从后往前扫，統計每條消息之後經過了多少輪
+  let roundCounter = 0;
+  const result = new Map<string, number>();
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    result.set(msg.id, roundCounter);
+    // user 或 model 消息才算一轮（system 是工具结果，不是对话轮次）
+    if (msg.role === 'user' || msg.role === 'model') {
+      roundCounter++;
+    }
+  }
+
+  return result;
+};
+
+/**
+ * 简化版历史构建：基于真实轮次的精细化三维衰减
+ *
+ * 衰减规则：
+ * - user/thinking 消息：永久保留
+ * - 工具调用对（AI call + system response）：
+ *     - roundsElapsed >= response.decayRounds → 整对从 API history 移除
+ *     - roundsElapsed >= content.decayRounds  → 清空 args，只保留函数名（无内容）
+ *     - roundsElapsed >= call.decayRounds     → 消息降级但保留
+ * - 普通 model 文本回复：超过 decayRounds(4) 轮后移除
  */
 export const buildSimpleHistory = (
   messages: ChatMessage[],
   config: Partial<HistoryBuilderConfig> = {}
 ): ChatMessage[] => {
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  const groups = groupMessagesByValue(messages, config);
-  const result: ChatMessage[] = [];
-  let remaining = cfg.maxMessages;
 
-  // 辅助函数：将按老到新排序的消息，从新到老（优先保留新消息）地填充到 result
-  const fillMessages = (pool: ChatMessage[]) => {
-    // 按时间从新到老排列候选池
-    const sortedPool = [...pool].sort((a, b) => b.timestamp - a.timestamp);
-    const toTake = sortedPool.slice(0, remaining);
-    remaining -= toTake.length;
-    result.push(...toTake);
-  };
+  if (messages.length === 0) return [];
 
-  // 按优先级顺序填充（高级别全拿如果配额足够，或者取最新的）
+  // 1. 计算每条消息的已过轮次
+  const roundsMap = computeRoundsElapsed(messages);
 
-  // 1. 高价值 (永久保留，就算超配额也优先取最新)
-  fillMessages(groups.highValue);
+  // 2. 找出所有工具调用对：AI functionCall message → system functionResponse messages（1:N 支持并发工具）
+  //    一条 model 消息可能有多个 functionCall，对应多个 system functionResponse 消息
+  const callToResponsesMap = new Map<string, string[]>(); // aiMsgId → systemMsgId[]
+  const responseToCallMap = new Map<string, string>();   // systemMsgId → aiMsgId
 
-  // 2. 必须保留的系统/报错
-  if (remaining > 0) fillMessages(groups.system);
-  if (remaining > 0) fillMessages(groups.errors);
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    if (msg.role !== 'model' || !msg.rawParts?.some((p: any) => p.functionCall)) continue;
 
-  // 3. 中等价值
-  if (remaining > 0) fillMessages(groups.mediumValue);
+    // 收集紧跟在这条 model 消息之后的所有 system functionResponse 消息
+    const responseSysIds: string[] = [];
+    for (let j = i + 1; j < messages.length; j++) {
+      const next = messages[j];
+      if (next.role === 'system' && next.rawParts?.some((p: any) => p.functionResponse)) {
+        responseSysIds.push(next.id);
+        responseToCallMap.set(next.id, msg.id);
+      } else {
+        break; // 遇到非 system-response 消息就停止收集
+      }
+    }
 
-  // 4. 低等价值 (并且尝试应用长文本衰减截断)
-  if (remaining > 0) {
-    const sortedLowPool = [...groups.lowValue].sort((a, b) => b.timestamp - a.timestamp);
-    const toTakeLow = sortedLowPool.slice(0, remaining);
-    const decayedLow = toTakeLow.map(msg => {
-      const classification = classifyMessages([msg])[0];
-      const strategy = getAttenuationStrategy(classification.contentLocation, 2);
-      return {
-        ...msg,
-        text: applyAttenuation(msg.text, strategy, cfg.truncateLongText)
-      };
-    });
-    result.push(...decayedLow);
-    remaining -= toTakeLow.length;
+    if (responseSysIds.length > 0) {
+      callToResponsesMap.set(msg.id, responseSysIds);
+    }
   }
 
-  // 最后把被选中的按时间老 -> 新正序排列返回
-  return result.sort((a, b) => a.timestamp - b.timestamp);
+  // 3. 遍历消息，按衰减规则决定是否保留
+  const resultMessages: ChatMessage[] = [];
+  // ⚠️ 修复：拆分为两个 Set，避免双重职责导致 system response 被误删
+  // processedSysIds: 防止 system response 在主循环中被重复处理
+  // droppedIds: 真正需要从最终输出中排除的消息（整组丢弃时使用）
+  const processedSysIds = new Set<string>(); // 已经由 call 消息统一处理的 sys response id
+  const droppedIds = new Set<string>();      // 需要从最终输出中排除的 id
+
+  for (const msg of messages) {
+    if (processedSysIds.has(msg.id)) continue; // 已由配对的 call 消息处理，跳过
+
+    const rounds = roundsMap.get(msg.id) ?? 0;
+    const classification = classifyMessage(msg);
+
+    // ——— 用户消息：永久保留 ———
+    if (msg.role === 'user') {
+      resultMessages.push(msg);
+      continue;
+    }
+
+    // ——— thinking 消息（AI 调用 thinking 工具的 model 消息）：永久保留 ———
+    if (classification.isThinking) {
+      resultMessages.push(msg);
+      continue;
+    }
+
+    // ——— thinking 的 system result（高价值）：永久保留 ———
+    if (msg.role === 'system' && responseToCallMap.has(msg.id)) {
+      const callMsgId = responseToCallMap.get(msg.id)!;
+      const callMsg = messages.find(m => m.id === callMsgId);
+      if (callMsg && classifyMessage(callMsg).isThinking) {
+        resultMessages.push(msg);
+        continue;
+      }
+    }
+
+    // ——— AI 工具调用消息（model with functionCall，非 thinking）———
+    // ⚠️ 关键修复：如果 model 消息有 functionCall 但找不到对应的 system response，
+    // 则为孤立 tool_call（如会话意外中断），直接丢弃。
+    // 原先此类消息会 fall-through 到"普通 model 文本回复"分支被保留，
+    // 之后 fixWindowIntegrity 再丢弃它，导致上下文只剩 user 消息，LLM 无限重试同一工具。
+    if (msg.role === 'model' && msg.rawParts?.some((p: any) => p.functionCall) && !callToResponsesMap.has(msg.id)) {
+      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call 模型消息（无配对 response）: msgId=${msg.id}`);
+      continue;
+    }
+
+    if (msg.role === 'model' && callToResponsesMap.has(msg.id)) {
+      const sysIds = callToResponsesMap.get(msg.id)!;
+      const sysMsgs = sysIds.map(id => messages.find(m => m.id === id)).filter(Boolean) as ChatMessage[];
+
+      // 取该 model 消息中所有 functionCall 对应的最短 decayRounds（短板效应）
+      const allFunctionCalls = msg.rawParts?.filter((p: any) => p.functionCall) ?? [];
+      const allConfigs = allFunctionCalls.map((p: any) => {
+        const toolType = classification.toolType ?? ToolType.UNKNOWN;
+        return getToolDecayConfigs(toolType);
+      });
+      // 如果有多个工具，用最快衰减的工具配置（最保守）
+      const minResponseDecay = Math.min(...allConfigs.map(c => c.response.decayRounds));
+      const minContentDecay = Math.min(...allConfigs.map(c => c.content.decayRounds));
+
+      // response 维度衰减 → 整组丢弃（维持 API 合法性）
+      if (rounds >= minResponseDecay) {
+        droppedIds.add(msg.id);  // 标记 model 消息为丢弃
+        sysIds.forEach(id => {
+          processedSysIds.add(id); // 防止主循环再次处理
+          droppedIds.add(id);      // 同时标记为丢弃
+        });
+        continue;
+      }
+
+      // content 维度衰减 → 保留函数名但清空所有 args
+      if (rounds >= minContentDecay) {
+        const strippedParts = msg.rawParts?.map((p: any) => {
+          if (p.functionCall) {
+            return { functionCall: { ...p.functionCall, args: {} } };
+          }
+          return p;
+        });
+        resultMessages.push({ ...msg, rawParts: strippedParts });
+        sysMsgs.forEach(sysMsg => {
+          resultMessages.push(sysMsg);
+          processedSysIds.add(sysMsg.id); // 只防重复，不丢弃
+        });
+        continue;
+      }
+
+      // 完整保留
+      resultMessages.push(msg);
+      sysMsgs.forEach(sysMsg => {
+        resultMessages.push(sysMsg);
+        processedSysIds.add(sysMsg.id); // 只防重复，不丢弃
+      });
+      continue;
+    }
+
+    // ——— system 工具结果消息（对应的 AI call 在 responseToCallMap 中但上面未处理）———
+    // 通常已经被上面的 AI call 处理逻辑 push 进去了，如果到这里说明没配对
+    if (msg.role === 'system' && responseToCallMap.has(msg.id)) {
+      // 孤立的 response（AI call 已衰减移除），一并移除
+      continue;
+    }
+
+    // ——— 普通 system 消息（非工具输出，如错误、停止通知等）：保留 ———
+    if (msg.role === 'system' && !msg.isToolOutput) {
+      resultMessages.push(msg);
+      continue;
+    }
+
+    // ——— 普通 model 文本回复（无工具调用）———
+    if (msg.role === 'model') {
+      const decayRounds = classification.decayRounds === -1 ? Infinity : classification.decayRounds;
+      if (rounds >= decayRounds) continue; // 超过轮次，丢弃
+      resultMessages.push(msg);
+      continue;
+    }
+
+    // ——— 兜底：保留 ———
+    resultMessages.push(msg);
+  }
+
+  // 4. 移除真正被丢弃的消息（只过滤 droppedIds，不影响已 push 的 system response）
+  const finalMessages = resultMessages.filter(m => !droppedIds.has(m.id));
+
+  // 5. 按时间正序返回（保持 API 历史正确顺序）
+  return finalMessages.sort((a, b) => a.timestamp - b.timestamp);
 };
 
 /**
