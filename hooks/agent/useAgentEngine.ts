@@ -100,6 +100,7 @@ export const useAgentEngine = ({
       let hasCalledThinking = false;  // 标记是否已完成强制 thinking
 
       let prevLoopHadToolCalls = false;  // 追踪上一轮是否调用了工具（用于强制总结）
+      let lastExecutedToolName: string | undefined;  // 追踪上一个执行的工具名称
       let forceSummaryRetried = false;   // 强制总结重试只做一次
 
       // 4. 进入 ReAct 循环
@@ -436,6 +437,9 @@ export const useAgentEngine = ({
 
           // 标记本轮有工具调用（供下一轮检测是否需要强制总结）
           prevLoopHadToolCalls = true;
+          // 记录最后一个执行的工具名称（非 thinking 工具才记录）
+          const executedTools = toolResults.map(r => r.toolName).filter(Boolean);
+          lastExecutedToolName = executedTools[executedTools.length - 1];
           forceSummaryRetried = false; // 重置：新的工具轮次允许再次重试
 
           const hasAnyError = toolResults.some(r => r.hasError);
@@ -469,16 +473,18 @@ export const useAgentEngine = ({
           // 没有工具调用
           if (!textPart) {
             // ⚠️ LLM 返回空响应（无 text 无 tools）
-            if (prevLoopHadToolCalls && !forceSummaryRetried) {
+            // 注意：只有非 thinking 工具执行完后才能提示总结
+            // thinking 只是思考过程，不代表工作完成
+            if (prevLoopHadToolCalls && !forceSummaryRetried && lastExecutedToolName && lastExecutedToolName !== 'thinking') {
               forceSummaryRetried = true;
               console.warn(
-                `[AgentEngine] ⚠️ Loop#${loopCount} 工具完成后 LLM 未输出总结，注入强制提醒并重试。` +
-                ` prevLoopHadToolCalls=true parts=${parts.length}`
+                `[AgentEngine] ⚠️ Loop#${loopCount} 工作工具完成后 LLM 未输出总结，注入强制提醒并重试。` +
+                ` toolName=${lastExecutedToolName} parts=${parts.length}`
               );
               addMessage({
                 id: generateId(),
                 role: 'system',
-                text: '【系统提示】所有工具已执行完毕，请立即用纯文字向用户汇报工作结果和总结，不要再调用任何工具。',
+                text: '【系统提示】工作已完成，请立即用纯文字向用户汇报工作结果。',
                 timestamp: Date.now(),
                 metadata: { logType: 'system_reminder' }
               });
@@ -488,7 +494,8 @@ export const useAgentEngine = ({
                 `[AgentEngine-EXIT] ❌ 退出原因: LLM空响应（无文本无工具）\n` +
                 `  loop#=${loopCount} finishReason=${aiMetadata?.finishReason ?? 'n/a'} tokens=${aiMetadata?.completionTokens ?? 'n/a'}\n` +
                 `  prevLoopHadToolCalls=${prevLoopHadToolCalls} forceSummaryRetried=${forceSummaryRetried} parts=${parts.length}\n` +
-                `  诊断: 若parts=0则API返回空内容; 若parts>0但无text/tool则是思考链消息被误判`
+                `  lastTool=${lastExecutedToolName} (thinking后不强制总结)\n` +
+                `  诊断: thinking工具后LLM应继续工作，若返回空响应可能是API问题`
               );
               keepGoing = false;
             }
