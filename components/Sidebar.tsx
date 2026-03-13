@@ -5,7 +5,7 @@ import FileExplorer from './FileExplorer';
 import FileSearch from './FileSearch';
 import { useFileStore } from '../stores/fileStore';
 import { useShallow } from 'zustand/react/shallow';
-import { getNodePath } from '../services/fileSystem';
+import { getNodePath, FileNode } from '../services/fileSystem';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ interface SidebarProps {
   className?: string;
   width?: number; // 新增：支持动态宽度
   isMobile: boolean;
+  onAnalyzeFile?: (file: FileNode) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -24,7 +25,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   className = '',
   width = 256, // 默认宽度
-  isMobile
+  isMobile,
+  onAnalyzeFile
 }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -111,9 +113,9 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="flex-1 overflow-hidden flex flex-col">
-            <FileExplorer 
-                files={files} 
-                activeFileId={activeFileId} 
+            <FileExplorer
+                files={files}
+                activeFileId={activeFileId}
                 onSelectFile={(id) => {
                   setActiveFileId(id);
                   if (isMobile) onClose();
@@ -122,6 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onCreateFile={createFileById}
                 onCreateFolder={createFolderById}
                 onRenameFile={handleRename}
+                onAnalyzeFile={onAnalyzeFile}
                 className="flex-1"
             />
         </div>

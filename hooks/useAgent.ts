@@ -117,12 +117,36 @@ export const useAgent = (
 
     const result = executeApprovedChange(change, fullActions);
     removePendingChange(change.id);
-    
-    addMessage({ 
-        id: generateId(), role: 'system', 
-        text: `✅ User Approved: ${change.description}\nResult: ${result}`, timestamp: Date.now() 
+
+    addMessage({
+        id: generateId(), role: 'system',
+        text: `✅ User Approved: ${change.description}\nResult: ${result}`, timestamp: Date.now()
     });
-  }, [tools, addMessage, removePendingChange, setTodos, toolsHook.accessedFiles]);
+
+    // 新增：检测是否为"05_正文草稿"文件的写入操作
+    if (change.fileName?.startsWith('05_正文草稿/') &&
+        (change.toolName === 'createFile' || change.toolName === 'updateFile')) {
+
+      // 异步触发提取（非阻塞）
+      const { useChapterAnalysisStore } = require('../stores/chapterAnalysisStore');
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+
+      chapterAnalysisStore.triggerExtraction(
+        change.fileName,
+        currentSessionId || '',
+        project?.id || ''
+      ).catch((err: Error) => {
+        // 错误处理：记录到系统消息
+        addMessage({
+          id: generateId(),
+          role: 'system',
+          text: `⚠️ 章节分析失败: ${err.message}`,
+          timestamp: Date.now(),
+          metadata: { logType: 'error' }
+        });
+      });
+    }
+  }, [tools, addMessage, removePendingChange, setTodos, toolsHook.accessedFiles, currentSessionId, project]);
 
   const rejectChange = useCallback((change: PendingChange) => {
       removePendingChange(change.id);

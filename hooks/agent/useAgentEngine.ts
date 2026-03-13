@@ -89,7 +89,7 @@ export const useAgentEngine = ({
       const toolsForMode = getToolsForMode(planMode);
 
       let loopCount = 0;
-      const MAX_LOOPS = 30;
+      const MAX_LOOPS = 90;
       let keepGoing = true;
 
 

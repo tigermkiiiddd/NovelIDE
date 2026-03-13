@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { FileNode, FileType } from '../types';
-import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2, Download } from 'lucide-react';
+import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2, Download, Sparkles } from 'lucide-react';
 import { downloadSingleFile, downloadFolderAsZip } from '../utils/exportUtils';
 
 interface FileExplorerProps {
@@ -12,18 +12,20 @@ interface FileExplorerProps {
   onCreateFile?: (parentId: string, name: string) => void;
   onCreateFolder?: (parentId: string, name: string) => void;
   onRenameFile?: (id: string, newName: string) => void;
+  onAnalyzeFile?: (file: FileNode) => void; // 章节分析回调
   className?: string;
 }
 
-const FileExplorer: React.FC<FileExplorerProps> = ({ 
-  files, 
-  activeFileId, 
+const FileExplorer: React.FC<FileExplorerProps> = ({
+  files,
+  activeFileId,
   onSelectFile,
   onDeleteFile,
   onCreateFile,
   onCreateFolder,
   onRenameFile,
-  className 
+  onAnalyzeFile,
+  className
 }) => {
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']));
 
@@ -154,6 +156,24 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             {/* Actions Group - Always visible for mobile */}
             <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 
+                {/* Analyze Button - Only for files in 05_正文草稿 */}
+                {node.type === FileType.FILE && onAnalyzeFile && (() => {
+                  const parentFolder = files.find(f => f.id === node.parentId);
+                  const isInDraftFolder = parentFolder?.name === '05_正文草稿';
+                  return isInDraftFolder ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAnalyzeFile(node);
+                      }}
+                      className="p-1 hover:text-purple-400 text-gray-500 transition-colors"
+                      title="章节分析"
+                    >
+                      <Sparkles size={14} />
+                    </button>
+                  ) : null;
+                })()}
+
                 {/* Download Button (New) */}
                 <button
                     onClick={(e) => handleDownloadClick(e, node)}

@@ -193,6 +193,12 @@ export class FileService {
     ensureFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE);
     ensureFile('技能_期待感管理.md', subskillFolder.id, SKILL_EXPECTATION_MANAGER);
 
+    // 7. 确保 00_基础信息 文件夹存在
+    const infoFolder = ensureFolder('00_基础信息', 'root');
+
+    // 8. 确保章节分析.json 文件存在
+    ensureFile('章节分析.json', infoFolder.id, '[]');
+
     return updatedFiles;
   }
 

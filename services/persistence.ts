@@ -1,6 +1,6 @@
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange } from '../types';
+import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis } from '../types';
 
 interface UiSettings {
   isSidebarOpen: boolean;
@@ -46,10 +46,14 @@ interface NovelGenieDB extends DBSchema {
     key: string; // 'session-pending-{sessionId}'
     value: PendingChange[];
   };
+  chapterAnalyses: {
+    key: string; // 'chapter-analyses-{projectId}'
+    value: ChapterAnalysis[];
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -87,6 +91,11 @@ export const initDB = () => {
         // Version 6: Add pendingChanges store
         if (!db.objectStoreNames.contains('pendingChanges')) {
           db.createObjectStore('pendingChanges');
+        }
+
+        // Version 9: Add chapterAnalyses store
+        if (!db.objectStoreNames.contains('chapterAnalyses')) {
+          db.createObjectStore('chapterAnalyses');
         }
 
         // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
@@ -387,6 +396,37 @@ export const dbAPI = {
       console.log('[Persistence] Deleted pending changes for session:', sessionId);
     } catch (error) {
       console.error('删除待审变更失败:', error);
+    }
+  },
+
+  // --- Chapter Analyses ---
+  getChapterAnalyses: async (projectId: string): Promise<ChapterAnalysis[] | undefined> => {
+    try {
+      console.log('[dbAPI.getChapterAnalyses] 开始读取, projectId:', projectId);
+      const db = await initDB();
+      const result = await db.get('chapterAnalyses', `chapter-analyses-${projectId}`);
+      console.log('[dbAPI.getChapterAnalyses] 读取结果:', result ? `找到 ${result.length} 个章节分析` : '无数据');
+      return result;
+    } catch (error) {
+      console.error('[dbAPI.getChapterAnalyses] 读取章节分析失败:', projectId, error);
+      return undefined;
+    }
+  },
+
+  saveChapterAnalyses: async (projectId: string, analyses: ChapterAnalysis[]) => {
+    console.log('[dbAPI.saveChapterAnalyses] 开始保存, projectId:', projectId, '分析数量:', analyses.length);
+    const db = await initDB();
+    await db.put('chapterAnalyses', analyses, `chapter-analyses-${projectId}`);
+    console.log('[dbAPI.saveChapterAnalyses] 保存完成');
+  },
+
+  deleteChapterAnalyses: async (projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('chapterAnalyses', `chapter-analyses-${projectId}`);
+      console.log('[Persistence] Deleted chapter analyses for project:', projectId);
+    } catch (error) {
+      console.error('删除章节分析失败:', error);
     }
   }
 };

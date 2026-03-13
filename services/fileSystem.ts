@@ -120,7 +120,7 @@ export const createInitialFileSystem = (): FileNode[] => {
 
   return [
     { id: rootId, parentId: null, name: 'Root', type: FileType.FOLDER, lastModified: Date.now() },
-    
+
     infoFolder,
     worldFolder,
     charFolder,
@@ -128,9 +128,9 @@ export const createInitialFileSystem = (): FileNode[] => {
     inspirationFolder,
     draftFolder,
     skillFolder,
-    subskillFolder, 
+    subskillFolder,
     rulesFolder,
-    
+
     // --- 00-05 业务文件夹初始为空 (用户要求) ---
     
     // --- 98_技能配置 (Agent Skills) ---

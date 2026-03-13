@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { AIConfig, AIProvider, OpenAIBackend } from '../types';
-import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle } from 'lucide-react';
+import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Zap } from 'lucide-react';
 import { generateId } from '../services/fileSystem';
 
 interface AISettingsFormProps {
@@ -200,6 +200,25 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                     </div>
                 </div>
             )}
+
+            {/* Lightweight Model for Auto Tasks */}
+            <div className="animate-in fade-in">
+                <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                    <Zap size={16}/>
+                    轻量模型（自动任务）
+                </label>
+                <input
+                    type="text"
+                    value={tempConfig.lightweightModelName || ''}
+                    onChange={e => setTempConfig({...tempConfig, lightweightModelName: e.target.value || undefined})}
+                    placeholder={activeBackend?.modelName || 'gpt-4o-mini'}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                    用于章节分析等轻量自动任务的模型。若留空则使用主模型。
+                    建议使用更便宜、快速的模型（如 deepseek-coder、gpt-4o-mini）。
+                </p>
+            </div>
 
             {/* Safety Settings (Gemini only) */}
             <div className="animate-in fade-in">
