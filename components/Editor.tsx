@@ -14,6 +14,9 @@ import { parseFrontmatter } from '../utils/frontmatter';
 import { applyPatchQueue, mergePendingChanges, generatePatchId, extractHunkContent, areAllHunksProcessed } from '../utils/patchQueue';
 import { findSearchResults, getLineAndColFromIndex, getIndexFromLineAndCol } from '../utils/searchUtils';
 import DiffViewer from './DiffViewer';
+import { ReadingLightView } from './ReadingLightView';
+import { JsonViewer } from './JsonViewer';
+import { LongTermMemoryView } from './LongTermMemoryView';
 import { useShallow } from 'zustand/react/shallow';
 import { PendingChange, DiffSessionState, FilePatch, EditDiff, EditIncrement } from '../types';
 import { useDiffStore } from '../stores/diffStore';
@@ -44,7 +47,7 @@ interface EditorProps {
   className?: string;
 }
 
-const Editor: React.FC<EditorProps> = ({ 
+const Editor: React.FC<EditorProps> = ({
   className,
 }) => {
   // 1. Core Stores
@@ -1475,6 +1478,37 @@ const Editor: React.FC<EditorProps> = ({
       </div>
     );
   }
+
+  // 检测是否为章节分析虚拟文件（用于阅读灯视图）- 优先级最高
+  if (activeFile) {
+    const filePath = getNodePath(activeFile, files).replace(/\\/g, '/'); // 统一用正斜杠
+    // 章节分析.json -> ReadingLightView（优先级最高）
+    if (filePath === '00_基础信息/章节分析.json') {
+      return (
+        <div className={`h-full ${className}`}>
+          <ReadingLightView />
+        </div>
+      );
+    }
+    // 长期记忆.json -> LongTermMemoryView
+    if (filePath === '00_基础信息/长期记忆.json') {
+      return (
+        <div className={`h-full ${className}`}>
+          <LongTermMemoryView />
+        </div>
+      );
+    }
+    // 其他 JSON 文件 -> JsonViewer
+    if (activeFile.name.endsWith('.json') && activeFile.content) {
+      return (
+        <div className={`h-full ${className}`}>
+          <JsonViewer content={activeFile.content} />
+        </div>
+      );
+    }
+  }
+
+  // 正常的 Markdown/其他文件渲染
 
   return (
     <div className={`flex flex-col h-full bg-[#0d1117] ${className}`}>

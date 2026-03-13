@@ -43,8 +43,13 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 1. **项目基础优先** - 所有内容必须与项目概况保持一致
 2. **设定一致性** - 新内容需与已有设定保持逻辑自洽，发现矛盾主动协调
 3. **先查后写** - 写任何内容前，先查看当前设定摘要
-4. **模板规范** - 创建档案必须遵循 99_创作规范 中的模板格式
+4. **模板规范** - 创建相关文档前必须遵循 99_创作规范 中的模板
 5. **正文字数达标** - 必须保证正文内容达到单章字数目标({{WORDS_PER_CHAPTER}}字/章)，单次输出不足时可多次续写追加
+
+**6. 长期记忆（写作规范）**：
+> - 查询记忆：开始写作前、遇到新角色、不确定规则时，使用 recall_memory 工具召回相关记忆
+> - 保存规则：用户明确指定"以后都不能..."、"必须遵守..."等规则时 -> 使用 manage_memory 添为 critical；确定写作风格或偏好时 -> 添加为 important
+> - 自动遵守：importance=critical 的记忆会自动注入系统提示词，必须遵守
 
 ═══════════════════════════════════
 ## 四、工具使用规则
@@ -93,8 +98,9 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 读取 99_创作规范/指南_文风规范.md
 
 **完成后**：
-- 提议更新角色状态和世界线记录
+- **必须主动提议**更新角色状态和世界线记录（如角色位置、状态变化、关系变化、伏笔埋设等）
 - 标记相关 TODO 为完成
+- 如果写了正文，必须询问用户是否需要更新"角色最新情况"文档
 
 **文件命名规范**：
 - 细纲：03_剧情大纲/卷[X]_章[X]_细纲.md
@@ -214,12 +220,36 @@ export const constructSystemPrompt = (
   // User Input History (新增)
   const userInputHistory = extractUserInputHistory(messages);
 
+  // Long Term Memory (长期记忆)
+  const getLongTermMemorySection = () => {
+    try {
+      // 延迟导入避免循环依赖
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { useLongTermMemoryStore } = require('../../../stores/longTermMemoryStore');
+      const memoryStore = useLongTermMemoryStore.getState();
+      const critical = memoryStore.getByImportance('critical');
+      if (critical.length === 0) return '';
+
+      return `## 📚 长期记忆（必须遵守）
+
+${critical.map(m => `### ${m.name} [${m.type}]
+- 关键字: ${m.keywords.join(', ')}
+- 摘要: ${m.summary}
+`).join('\n')}
+`;
+    } catch (e) {
+      // 可能在非 React 上下文中调用，或循环依赖
+      return '';
+    }
+  };
+
   // --- 3. 最终组装 (Final Assembly) ---
   // 替换占位符
   const wordsPerChapter = String(project?.wordsPerChapter || '未定');
   const skillListSection = emergentSkillsData !== "(无额外技能)"
     ? `**可用技能库 (Lazy Load)**:\n${emergentSkillsData}`
     : "";
+  const longTermMemorySection = getLongTermMemorySection();
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
     .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
     .replace(/\{\{PENDING_TODOS\}\}/g, pendingTodos)
@@ -230,5 +260,6 @@ export const constructSystemPrompt = (
 
   return `
 ${processedAgentInstruction}
+${longTermMemorySection}
 `;
 };

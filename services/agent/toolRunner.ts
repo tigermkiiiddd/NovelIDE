@@ -4,6 +4,7 @@ import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
 import { formatThinkingResult } from './tools/thinkingTools';
+import { executeRecallMemory, executeManageMemory } from './tools/longTermMemoryTools';
 import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
@@ -283,10 +284,17 @@ export const executeTool = async (
                 case 'listFiles': 
                     result = actions.listFiles(); 
                     break;
-                case 'updateProjectMeta': 
-                    result = actions.updateProjectMeta(args); 
+                case 'updateProjectMeta':
+                    result = actions.updateProjectMeta(args);
                     break;
-                default: 
+                // --- LONG TERM MEMORY TOOLS ---
+                case 'recall_memory':
+                    result = await executeRecallMemory(args);
+                    break;
+                case 'manage_memory':
+                    result = await executeManageMemory(args);
+                    break;
+                default:
                     result = `Error: Unknown tool ${name}`;
             }
         }

@@ -174,6 +174,7 @@ export interface AIConfig {
   // OpenAI Specifics (Also used for compatible APIs like DeepSeek)
   baseUrl?: string; // Active Base URL
   modelName: string; // Active Model Name
+  lightweightModelName?: string; // Lightweight model for auto-tasks (chapter analysis, etc.)
   maxOutputTokens?: number; // 控制单次回复的最大长度
   safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE (Gemini only)
 
@@ -186,6 +187,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   provider: AIProvider.OPENAI,
   apiKey: '',
   modelName: 'deepseek-chat',
+  lightweightModelName: 'deepseek-coder', // 轻量任务专用模型
   maxOutputTokens: 8192,
   safetySetting: 'BLOCK_NONE',
   openAIBackends: [
@@ -220,3 +222,73 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   ],
   activeOpenAIBackendId: 'gemini'
 };
+
+// --- Chapter Analysis Types ---
+
+export interface PlotKeyPoint {
+  id: string;
+  description: string;
+  importance: 'high' | 'medium' | 'low';
+  tags: string[];
+  relatedCharacters: string[];
+}
+
+export interface CharacterState {
+  id: string;
+  characterName: string;
+  stateDescription: string;
+  emotionalState?: string;
+  location?: string;
+  relationships?: { with: string; status: string; }[];
+  changes: string[];
+}
+
+export interface ForeshadowingItem {
+  id: string;
+  content: string;
+  type: 'planted' | 'developed' | 'resolved';
+  tags: string[];
+  relatedChapters?: string[];
+  notes?: string;
+}
+
+export interface ChapterAnalysis {
+  id: string;
+  chapterPath: string;
+  chapterTitle: string;
+  sessionId: string;
+  projectId: string;
+  plotSummary: PlotKeyPoint[];
+  characterStates: CharacterState[];
+  foreshadowing: ForeshadowingItem[];
+  extractedAt: number;
+  lastModified: number;
+  wordCount: number;
+}
+
+// 长期记忆类型
+export type MemoryType =
+  | 'setting'        // 不可违背的设定
+  | 'style'           // 正文扩写风格
+  | 'restriction'     // 绝对限制
+  | 'experience'      // 写作经验
+  | 'character_rule'  // 角色规则
+  | 'world_rule';    // 世界观规则
+
+// 长期记忆条目
+export interface LongTermMemory {
+  id: string;
+  name: string;           // 记忆名称
+  type: MemoryType;       // 记忆类型
+  tags: string[];         // 标签（知识图谱索引）
+  keywords: string[];     // 关键字（注入系统提示词）
+  summary: string;        // 摘要（注入系统提示词，50-100字）
+  content: string;        // 完整内容
+  importance: 'critical' | 'important' | 'normal'; // 重要程度
+  relatedMemories: string[]; // 关联记忆ID（知识图谱边）
+  metadata: {
+    createdAt: number;
+    updatedAt: number;
+    source: 'user' | 'agent';
+  };
+}

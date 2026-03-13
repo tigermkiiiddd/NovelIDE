@@ -6,12 +6,14 @@ import { manageTodosTool } from './todoTools';
 import { callSearchAgentTool } from './subAgentTools';
 import { managePlanNoteTool, createManagePlanNoteTool } from './planTools';
 import { thinkingTool } from './thinkingTools';
+import { recallMemoryTool, manageMemoryTool } from './longTermMemoryTools';
 import { ToolDefinition } from '../types';
 
 // 读取工具
 const readTools: ToolDefinition[] = [
   listFilesTool,
-  readFileTool
+  readFileTool,
+  recallMemoryTool
 ];
 
 // 写入工具
@@ -21,7 +23,8 @@ const writeTools: ToolDefinition[] = [
   patchFileTool,
   renameFileTool,
   deleteFileTool,
-  updateProjectMetaTool
+  updateProjectMetaTool,
+  manageMemoryTool
 ];
 
 // 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
@@ -33,6 +36,8 @@ export const allTools: ToolDefinition[] = [
   ...readTools,
   ...writeTools,
   manageTodosTool,
+  recallMemoryTool,
+  manageMemoryTool,
   // callSearchAgentTool,  // 已屏蔽
   // managePlanNoteTool,  // 已移除
   // thinkingTool  // 已移除
@@ -45,7 +50,7 @@ export const allTools: ToolDefinition[] = [
  */
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
   // Plan 模式已移除，统一返回所有工具
-  return [...readTools, ...writeTools, manageTodosTool];
+  return [...readTools, ...writeTools, manageTodosTool, recallMemoryTool, manageMemoryTool];
 };
 
 export * from './fileReadTools';

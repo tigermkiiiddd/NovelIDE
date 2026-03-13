@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { FileNode } from '../types';
 import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import Editor from './Editor';
 import AgentChat from './AgentChat';
@@ -13,8 +14,10 @@ import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
 import { usePlanStore } from '../stores/planStore';
+import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
+import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { useShallow } from 'zustand/react/shallow';
-import { generateId } from '../services/fileSystem';
+import { generateId, getNodePath } from '../services/fileSystem';
 
 interface MainLayoutProps {
     projectId: string;
@@ -55,13 +58,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const currentProject = useProjectStore(state => state.getCurrentProject());
   const updateProject = useProjectStore(state => state.updateProject);
   const loadFiles = useFileStore(state => state.loadFiles);
-  
-  // Initialize Files when Project Changes
+  const loadProjectAnalyses = useChapterAnalysisStore(state => state.loadProjectAnalyses);
+  const triggerExtraction = useChapterAnalysisStore(state => state.triggerExtraction);
+  const loadProjectMemories = useLongTermMemoryStore(state => state.loadProjectMemories);
+  const currentProjectId = useProjectStore(state => state.currentProjectId);
+
+  // Initialize Files and Chapter Analyses when Project Changes
   useEffect(() => {
     if (projectId) {
-        loadFiles(projectId);
+        // 先加载文件，等完成后再加载章节分析和长期记忆
+        loadFiles(projectId).then(() => {
+          loadProjectAnalyses(projectId);
+          loadProjectMemories(projectId);
+        });
     }
-  }, [projectId, loadFiles]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories]);
 
   // File System State & Actions
   const { 
@@ -98,6 +109,22 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       searchFiles,
       listFiles,
       renameFile
+  };
+
+  // 手动触发章节分析
+  const handleAnalyzeFile = async (file: FileNode) => {
+    console.log('[MainLayout] 开始分析文件:', file.name);
+
+    // 使用 getNodePath 获取完整路径
+    const filePath = getNodePath(file, files);
+    console.log('[MainLayout] 文件路径:', filePath);
+
+    try {
+      await triggerExtraction(filePath, 'manual', currentProjectId || '');
+      console.log('[MainLayout] 章节分析完成');
+    } catch (error) {
+      console.error('[MainLayout] 章节分析失败:', error);
+    }
   };
 
   const handleAgentUpdateProject = (updates: any) => {
@@ -250,7 +277,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   return (
     <div className="flex h-[100dvh] bg-gray-950 text-gray-100 font-sans overflow-hidden relative selection:bg-blue-500/30">
       
-      <Sidebar 
+      <Sidebar
         isOpen={isSidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onBackToProjects={onBack}
@@ -260,6 +287,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         }}
         width={sidebarWidth}
         isMobile={isMobile}
+        onAnalyzeFile={handleAnalyzeFile}
       />
 
       {/* Sidebar Resizer (Desktop Only) */}
@@ -282,7 +310,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           <span className="font-bold text-gray-200 truncate max-w-[200px] text-sm">
             {activeFile ? activeFile.name : currentProject.name}
           </span>
-          <button 
+          <button
             onClick={toggleChat}
             className={`p-1 -mr-1 ${isChatOpen ? 'text-blue-400' : 'text-gray-400'}`}
           >
@@ -301,7 +329,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
                </span>
             </div>
             <div className="flex items-center gap-2">
-                 <button 
+                 <button
                     onClick={toggleChat}
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isChatOpen ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}
                  >
