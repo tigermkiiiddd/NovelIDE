@@ -53,81 +53,91 @@ const submitAnalysisTool: ToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              id: { type: 'string', description: '唯一标识符，用于追踪和更新' },
-              description: { type: 'string', description: '剧情关键点的详细描述' },
+              id: { type: 'string', description: '唯一标识符，用于追踪和更新（如果是新增则留空，系统会自动生成）' },
+              description: {
+                type: 'string',
+                description: '剧情关键点的详细描述（必须详细，至少50字）。例如："苏清月在咖啡厅与秦雨薇见面，当面揭穿她的虚伪面目，并暗示自己已经知道前世的真相。秦雨薇表面镇定，内心慌乱，开始怀疑苏清月是否真的重生了。"'
+              },
               importance: {
                 type: 'string',
                 enum: ['high', 'medium', 'low'],
-                description: '重要性等级：high=核心转折/冲突，medium=重要推进，low=次要情节'
+                description: '重要性等级：high=核心转折/冲突（如主角重生、反派暴露），medium=重要推进（如获得关键信息），low=次要情节（如日常互动）'
               },
               tags: {
                 type: 'array',
                 items: { type: 'string' },
-                description: '标签，如：冲突、转折、揭秘、情感高潮等'
+                description: '标签列表（至少2个），如：["冲突", "揭秘"]、["转折", "情感高潮"]、["伏笔", "悬念"]等'
               },
               relatedCharacters: {
                 type: 'array',
                 items: { type: 'string' },
-                description: '相关角色名称列表'
+                description: '相关角色名称列表（至少1个），如：["苏清月", "秦雨薇"]'
               }
             },
             required: ['description', 'importance', 'tags', 'relatedCharacters']
           },
-          description: '本章核心剧情点列表（3-5个关键点）'
+          description: '本章核心剧情点列表（必须3-5个关键点，每个description至少50字）'
         },
         characterStates: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              id: { type: 'string', description: '唯一标识符' },
-              characterName: { type: 'string', description: '角色名称' },
-              stateDescription: { type: 'string', description: '角色当前状态的综合描述' },
-              emotionalState: { type: 'string', description: '情绪状态（可选）' },
-              location: { type: 'string', description: '所在位置（可选）' },
+              id: { type: 'string', description: '唯一标识符（如果是新增则留空）' },
+              characterName: { type: 'string', description: '角色名称，如："苏清月"' },
+              stateDescription: {
+                type: 'string',
+                description: '角色当前状态的综合描述（必须详细，至少30字）。例如："苏清月此时心态平静而坚定，已经完全接受了重生的事实。她对秦雨薇和林逸充满警惕，决心不再重蹈覆辙。同时，她开始尝试使用玄学能力，对未来充满期待。"'
+              },
+              emotionalState: { type: 'string', description: '情绪状态（可选），如："冷静而警惕"、"愤怒但克制"' },
+              location: { type: 'string', description: '所在位置（可选），如："星巴克咖啡厅"、"自家公寓"' },
               relationships: {
                 type: 'array',
                 items: {
                   type: 'object',
                   properties: {
-                    with: { type: 'string', description: '关系对象' },
-                    status: { type: 'string', description: '关系状态描述' }
-                  }
+                    with: { type: 'string', description: '关系对象，如："秦雨薇"' },
+                    status: { type: 'string', description: '关系状态描述，如："表面闺蜜，实则敌对"' }
+                  },
+                  required: ['with', 'status']
                 },
-                description: '人际关系变化（可选）'
+                description: '人际关系变化（可选），列出本章中有变化的关系'
               },
               changes: {
                 type: 'array',
                 items: { type: 'string' },
-                description: '本章中该角色的重要变化列表'
+                description: '本章中该角色的重要变化列表（至少1个），如：["掌握了绘制符咒的能力", "决定与秦雨薇彻底决裂"]'
               }
             },
             required: ['characterName', 'stateDescription', 'changes']
           },
-          description: '主要角色状态列表（至少包含出场的主要角色）'
+          description: '主要角色状态列表（至少包含本章出场的主要角色，每个stateDescription至少30字）'
         },
         foreshadowing: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
-              id: { type: 'string', description: '唯一标识符' },
-              content: { type: 'string', description: '伏笔内容描述' },
+              id: { type: 'string', description: '唯一标识符（如果是新增则留空）' },
+              content: {
+                type: 'string',
+                description: '伏笔内容描述（必须详细，至少30字）。例如："苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。"'
+              },
               type: {
                 type: 'string',
                 enum: ['planted', 'developed', 'resolved'],
-                description: 'planted=新埋下的伏笔，developed=推进中的伏笔，resolved=回收的伏笔'
+                description: 'planted=新埋下的伏笔（本章首次出现），developed=推进中的伏笔（之前埋下，本章有进展），resolved=回收的伏笔（本章揭晓答案）'
               },
               tags: {
                 type: 'array',
                 items: { type: 'string' },
-                description: '伏笔标签，如：身世、宝物、预言等'
+                description: '伏笔标签（至少1个），如：["身世"]、["宝物", "玄学"]、["预言"]、["感情线"]等'
               },
-              notes: { type: 'string', description: '补充说明（可选）' }
+              notes: { type: 'string', description: '补充说明（可选），如："这个伏笔将在第10章回收"' }
             },
             required: ['content', 'type', 'tags']
           },
-          description: '伏笔跟踪列表（如果本章没有伏笔相关内容，可以为空数组）'
+          description: '伏笔跟踪列表（如果本章有伏笔则必须填写，每个content至少30字；如果确实没有伏笔可以为空数组）'
         }
       },
       required: ['thinking', 'mergeActions', 'plotSummary', 'characterStates', 'foreshadowing']
@@ -185,7 +195,81 @@ ${existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}`
 - **update**: 更新现有内容，需要指定 ID 和新数据
 - **remove**: 移除内容，需要指定 ID 和原因
 
-## 输出要求
+## 🚨 输出质量要求（CRITICAL）
+
+### 1. 剧情关键点（plotSummary）
+- **数量**：必须3-5个
+- **description长度**：每个至少50字
+- **示例**：
+  \`\`\`json
+  {
+    "description": "苏清月在咖啡厅与秦雨薇见面，当面揭穿她的虚伪面目，并暗示自己已经知道前世的真相。秦雨薇表面镇定，内心慌乱，开始怀疑苏清月是否真的重生了。两人的对话充满暗流涌动，为后续的正面冲突埋下伏笔。",
+    "importance": "high",
+    "tags": ["冲突", "揭秘", "心理战"],
+    "relatedCharacters": ["苏清月", "秦雨薇"]
+  }
+  \`\`\`
+
+### 2. 角色状态（characterStates）
+- **数量**：至少包含本章出场的主要角色
+- **stateDescription长度**：每个至少30字
+- **changes数量**：至少1个
+- **示例**：
+  \`\`\`json
+  {
+    "characterName": "苏清月",
+    "stateDescription": "苏清月此时心态平静而坚定，已经完全接受了重生的事实。她对秦雨薇和林逸充满警惕，决心不再重蹈覆辙。同时，她开始尝试使用玄学能力，对未来充满期待。",
+    "emotionalState": "冷静而警惕",
+    "location": "星巴克咖啡厅",
+    "changes": [
+      "掌握了绘制符咒的能力",
+      "决定与秦雨薇彻底决裂",
+      "开始主动规划复仇计划"
+    ]
+  }
+  \`\`\`
+
+### 3. 伏笔（foreshadowing）
+- **content长度**：每个至少30字
+- **tags数量**：至少1个
+- **示例**：
+  \`\`\`json
+  {
+    "content": "苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。",
+    "type": "planted",
+    "tags": ["感情线", "男主登场"],
+    "notes": "预计在第5章回收"
+  }
+  \`\`\`
+
+## ❌ 禁止的错误输出
+
+**错误示例1：描述过于简短**
+\`\`\`json
+{
+  "description": "苏清月见秦雨薇",  // ❌ 太短，没有细节
+  "importance": "high"
+}
+\`\`\`
+
+**错误示例2：只有标题没有内容**
+\`\`\`json
+{
+  "characterName": "苏清月",
+  "stateDescription": "重生后的状态",  // ❌ 太笼统，没有具体描述
+  "changes": []  // ❌ 空数组，必须至少有1个变化
+}
+\`\`\`
+
+**错误示例3：伏笔描述不清**
+\`\`\`json
+{
+  "content": "提到了酒会",  // ❌ 太简单，没有说明伏笔的意义
+  "type": "planted"
+}
+\`\`\`
+
+## 输出要求总结
 - **mergeActions**: 必须详细说明每个合并操作
 - **最终数据**: 提供合并后的完整数据（用于替换现有数据）
 - **标签使用**: 使用准确的标签帮助后续检索
@@ -286,6 +370,9 @@ export async function runChapterAnalysisAgent(
         if (name === 'submit_analysis') {
           if (onLog) onLog(`✅ [Chapter Analysis] 分析完成`);
 
+          // 调试：打印完整的 args
+          console.log('[ChapterAnalysisAgent] LLM 返回的完整数据:', JSON.stringify(args, null, 2));
+
           // Parse merge actions
           const mergeActions: MergeAction[] = (args.mergeActions || []).map((a: any) => ({
             action: a.action || 'add',
@@ -325,6 +412,14 @@ export async function runChapterAnalysisAgent(
             notes: f.notes
           }));
 
+          // 调试：打印解析后的数据
+          console.log('[ChapterAnalysisAgent] 解析后的数据:', {
+            mergeActionsCount: mergeActions.length,
+            plotSummaryCount: plotSummary.length,
+            characterStatesCount: characterStates.length,
+            foreshadowingCount: foreshadowing.length
+          });
+
           return {
             mergeActions,
             plotSummary,
@@ -337,6 +432,12 @@ export async function runChapterAnalysisAgent(
       if (!textPart) {
         throw new Error("Chapter Analysis Agent 异常：未提交分析结果");
       }
+      // LLM 只返回了文本，催促它调用工具
+      if (onLog) onLog(`📖 [Analysis] LLM 返回文本，催促调用 submit_analysis 工具...`);
+      history.push({
+        role: 'user',
+        parts: [{ text: '请立即调用 submit_analysis 工具提交你的分析结果，不要只输出文字。' }]
+      });
     }
   }
 

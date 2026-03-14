@@ -5,6 +5,8 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore';
+import { useProjectStore } from '../stores/projectStore';
+import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useUiStore } from '../stores/uiStore';
 import { DiffHunk, computeLineDiff, groupDiffIntoHunks } from '../utils/diffUtils';
 import { executeApprovedChange } from '../services/agent/toolRunner';
@@ -306,6 +308,52 @@ const Editor: React.FC<EditorProps> = ({
           timestamp: Date.now(),
           metadata: { logType: 'success' }
         });
+
+        // 新增：检测是否为"05_正文草稿"文件的写入操作，触发自动章节分析
+        console.log('[AutoAnalysis] 检查文件:', filePath);
+
+        if (filePath?.startsWith('05_正文草稿/') && changesToRemove.length > 0) {
+          console.log('[AutoAnalysis] ✅ 触发条件满足，开始章节分析');
+
+          // 添加系统消息通知用户
+          addMessage({
+            id: Math.random().toString(),
+            role: 'system',
+            text: `🔍 正在自动分析章节: ${filePath}`,
+            timestamp: Date.now(),
+            metadata: { logType: 'info' }
+          });
+
+          // 异步触发提取（非阻塞）
+          const chapterAnalysisStore = useChapterAnalysisStore.getState();
+          const agentStore = useAgentStore.getState();
+          const projectStore = useProjectStore.getState();
+
+          chapterAnalysisStore.triggerExtraction(
+            filePath,
+            agentStore.currentSessionId || '',
+            projectStore.project?.id || ''
+          ).then(() => {
+            addMessage({
+              id: Math.random().toString(),
+              role: 'system',
+              text: `✅ 章节分析完成: ${filePath}`,
+              timestamp: Date.now(),
+              metadata: { logType: 'success' }
+            });
+          }).catch((err: Error) => {
+            console.error('[AutoAnalysis] 分析失败:', err);
+            addMessage({
+              id: Math.random().toString(),
+              role: 'system',
+              text: `⚠️ 章节分析失败: ${err.message}`,
+              timestamp: Date.now(),
+              metadata: { logType: 'error' }
+            });
+          });
+        } else {
+          console.log('[AutoAnalysis] ❌ 触发条件不满足');
+        }
       }
     }
   }, [activeEditDiffs, processedEditIds, activeFile, content, editIncrements, addMessage, pendingChanges, removePendingChange, saveFileContent, setContent, files]);
@@ -359,6 +407,53 @@ const Editor: React.FC<EditorProps> = ({
       timestamp: Date.now(),
       metadata: { logType: 'success' }
     });
+
+    // 新增：检测是否为"05_正文草稿"文件的写入操作，触发自动章节分析
+    console.log('[AutoAnalysis] 检查文件:', filePath);
+
+    if (filePath?.startsWith('05_正文草稿/') && changesToRemove.length > 0) {
+      const firstChange = changesToRemove[0];
+      console.log('[AutoAnalysis] ✅ 触发条件满足，开始章节分析');
+
+      // 添加系统消息通知用户
+      addMessage({
+        id: Math.random().toString(),
+        role: 'system',
+        text: `🔍 正在自动分析章节: ${filePath}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'info' }
+      });
+
+      // 异步触发提取（非阻塞）
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+      const agentStore = useAgentStore.getState();
+      const projectStore = useProjectStore.getState();
+
+      chapterAnalysisStore.triggerExtraction(
+        filePath,
+        agentStore.currentSessionId || '',
+        projectStore.project?.id || ''
+      ).then(() => {
+        addMessage({
+          id: Math.random().toString(),
+          role: 'system',
+          text: `✅ 章节分析完成: ${filePath}`,
+          timestamp: Date.now(),
+          metadata: { logType: 'success' }
+        });
+      }).catch((err: Error) => {
+        console.error('[AutoAnalysis] 分析失败:', err);
+        addMessage({
+          id: Math.random().toString(),
+          role: 'system',
+          text: `⚠️ 章节分析失败: ${err.message}`,
+          timestamp: Date.now(),
+          metadata: { logType: 'error' }
+        });
+      });
+    } else {
+      console.log('[AutoAnalysis] ❌ 触发条件不满足');
+    }
   }, [activeFile, activeEditDiffs, processedEditIds, editIncrements, content, setContent, saveFileContent, pendingChanges, removePendingChange, addMessage, files]);
 
   // 6.5 Handler for rejecting all pending edits
@@ -1139,6 +1234,56 @@ const Editor: React.FC<EditorProps> = ({
       timestamp: Date.now(),
       metadata: { logType: 'success' }
     });
+
+    // 新增：检测是否为"05_正文草稿"文件的写入操作，触发自动章节分析
+    console.log('[AutoAnalysis] 检查文件:', filePath, '工具:', targetChange.toolName);
+
+    if (filePath?.startsWith('05_正文草稿/') &&
+        (targetChange.toolName === 'createFile' || targetChange.toolName === 'updateFile' || targetChange.toolName === 'patchFile')) {
+
+      console.log('[AutoAnalysis] ✅ 触发条件满足，开始章节分析');
+
+      // 添加系统消息通知用户
+      addMessage({
+        id: Math.random().toString(),
+        role: 'system',
+        text: `🔍 正在自动分析章节: ${filePath}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'info' }
+      });
+
+      // 异步触发提取（非阻塞）
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+      const agentStore = useAgentStore.getState();
+      const projectStore = useProjectStore.getState();
+
+      chapterAnalysisStore.triggerExtraction(
+        filePath,
+        agentStore.currentSessionId || '',
+        projectStore.project?.id || ''
+      ).then(() => {
+        // 成功后通知用户
+        addMessage({
+          id: Math.random().toString(),
+          role: 'system',
+          text: `✅ 章节分析完成: ${filePath}`,
+          timestamp: Date.now(),
+          metadata: { logType: 'success' }
+        });
+      }).catch((err: Error) => {
+        // 错误处理：记录到系统消息
+        console.error('[AutoAnalysis] 分析失败:', err);
+        addMessage({
+          id: Math.random().toString(),
+          role: 'system',
+          text: `⚠️ 章节分析失败: ${err.message}`,
+          timestamp: Date.now(),
+          metadata: { logType: 'error' }
+        });
+      });
+    } else {
+      console.log('[AutoAnalysis] ❌ 触发条件不满足');
+    }
 
     // Clear diff session and exit diff mode after a short delay to allow file save to complete
     setTimeout(() => {

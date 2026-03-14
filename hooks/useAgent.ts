@@ -124,8 +124,21 @@ export const useAgent = (
     });
 
     // 新增：检测是否为"05_正文草稿"文件的写入操作
+    console.log('[AutoAnalysis] 检查文件:', change.fileName, '工具:', change.toolName);
+
     if (change.fileName?.startsWith('05_正文草稿/') &&
-        (change.toolName === 'createFile' || change.toolName === 'updateFile')) {
+        (change.toolName === 'createFile' || change.toolName === 'updateFile' || change.toolName === 'patchFile')) {
+
+      console.log('[AutoAnalysis] ✅ 触发条件满足，开始章节分析');
+
+      // 添加系统消息通知用户
+      addMessage({
+        id: generateId(),
+        role: 'system',
+        text: `🔍 正在自动分析章节: ${change.fileName}`,
+        timestamp: Date.now(),
+        metadata: { logType: 'info' }
+      });
 
       // 异步触发提取（非阻塞）
       const { useChapterAnalysisStore } = require('../stores/chapterAnalysisStore');
@@ -135,8 +148,18 @@ export const useAgent = (
         change.fileName,
         currentSessionId || '',
         project?.id || ''
-      ).catch((err: Error) => {
+      ).then(() => {
+        // 成功后通知用户
+        addMessage({
+          id: generateId(),
+          role: 'system',
+          text: `✅ 章节分析完成: ${change.fileName}`,
+          timestamp: Date.now(),
+          metadata: { logType: 'success' }
+        });
+      }).catch((err: Error) => {
         // 错误处理：记录到系统消息
+        console.error('[AutoAnalysis] 分析失败:', err);
         addMessage({
           id: generateId(),
           role: 'system',
@@ -145,6 +168,8 @@ export const useAgent = (
           metadata: { logType: 'error' }
         });
       });
+    } else {
+      console.log('[AutoAnalysis] ❌ 触发条件不满足');
     }
   }, [tools, addMessage, removePendingChange, setTodos, toolsHook.accessedFiles, currentSessionId, project]);
 

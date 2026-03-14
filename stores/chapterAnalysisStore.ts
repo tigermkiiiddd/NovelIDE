@@ -222,20 +222,11 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         // 3. 提取章节标题
         const chapterTitle = file.name.replace(/\.md$/, '');
 
-        // 4. 调用分析子代理
-        const result = await runChapterAnalysisAgent(
-          aiService,
-          file.content,
-          chapterTitle,
-          (msg) => console.log(msg), // onLog callback
-          undefined // signal
-        );
-
-        // 5. 检查是否已存在该章节的分析
+        // 4. 检查是否已存在该章节的分析
         const existingAnalysis = state.getByPath(chapterPath);
         console.log('[ChapterAnalysisStore] 现有分析:', existingAnalysis ? '有' : '无');
 
-        // 6. 调用分析代理（传入现有分析，让 LLM 做决策）
+        // 5. 调用分析代理（传入现有分析，让 LLM 做决策）
         const analysisResult = await runChapterAnalysisAgent(
           aiService,
           file.content,
@@ -244,14 +235,14 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           (msg) => console.log(msg)
         );
 
-        // 7. LLM 决策：如果 mergeActions 中全是 skip 或无操作，则不更新
+        // 6. LLM 决策：如果 mergeActions 中全是 skip 或无操作，则不更新
         const hasChanges = analysisResult.mergeActions.some((action: any) => action.action !== 'skip');
         if (!hasChanges && existingAnalysis) {
           console.log('[ChapterAnalysisStore] LLM 决策：数据无变化，跳过更新');
           return;
         }
 
-        // 8. 应用 LLM 的合并决策
+        // 7. 应用 LLM 的合并决策
         const finalAnalysis = applyMergeActions(
           existingAnalysis,
           analysisResult,
@@ -259,7 +250,7 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           chapterPath
         );
 
-        // 9. 更新状态
+        // 8. 更新状态
         if (existingAnalysis) {
           state.updateAnalysis(existingAnalysis.id, finalAnalysis);
           console.log('[ChapterAnalysisStore] 更新章节分析:', chapterPath);
@@ -268,7 +259,7 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           console.log('[ChapterAnalysisStore] 添加章节分析:', chapterPath);
         }
 
-        console.log('[ChapterAnalysisStore] 章节分析完成');
+        console.log('[ChapterAnalysisStore] 章节分析完成，最终数据:', finalAnalysis);
 
       } catch (error: any) {
         console.error('[ChapterAnalysisStore] 提取失败:', error);
