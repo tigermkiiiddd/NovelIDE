@@ -26,6 +26,7 @@ const EMPTY_MEMORY: Omit<LongTermMemory, 'id' | 'metadata'> = {
   summary: '',
   content: '',
   importance: 'normal',
+  isResident: false,
   relatedMemories: []
 };
 
@@ -62,6 +63,7 @@ export const LongTermMemoryView: React.FC = () => {
       summary: memory.summary,
       content: memory.content,
       importance: memory.importance,
+      isResident: memory.isResident ?? false,
       relatedMemories: [...memory.relatedMemories]
     });
     setTagInput('');
@@ -169,6 +171,22 @@ export const LongTermMemoryView: React.FC = () => {
                 <option value="important">Important - 重要</option>
                 <option value="normal">Normal - 普通</option>
               </select>
+            </div>
+
+            {/* 常驻标记 */}
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-400 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.isResident}
+                  onChange={(e) => setFormData({ ...formData, isResident: e.target.checked })}
+                  className="w-4 h-4 bg-gray-800 border border-gray-700 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span>常驻记忆（在系统提示词中显示标题和关键词）</span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1 ml-6">
+                常驻记忆会自动注入到每次对话的上下文中，方便快速索引。需要完整内容时，AI会使用recall_memory工具召回。
+              </p>
             </div>
 
             {/* 关键字 */}
@@ -325,6 +343,11 @@ export const LongTermMemoryView: React.FC = () => {
                     {memory.importance === 'critical' && (
                       <span className="text-xs text-red-400 bg-red-900/50 px-1.5 py-0.5 rounded">
                         Critical
+                      </span>
+                    )}
+                    {memory.isResident && (
+                      <span className="text-xs text-blue-400 bg-blue-900/50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        🔖 常驻
                       </span>
                     )}
                   </div>

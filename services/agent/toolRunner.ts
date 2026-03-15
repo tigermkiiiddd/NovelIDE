@@ -11,6 +11,70 @@ import { AIService } from '../geminiService';
 import { BatchEdit } from '../../stores/fileStore';
 
 /**
+ * Extract character names from 02_角色档案 folder.
+ * Uses file name (strips prefix like 主角_/配角_) and metadata.name as fallback.
+ */
+const extractCharacterNames = (files: FileNode[]): string[] => {
+    const charFolder = files.find(f => f.name === '02_角色档案' && f.type === FileType.FOLDER);
+    if (!charFolder) return [];
+
+    return files
+        .filter(f => f.parentId === charFolder.id && f.type === FileType.FILE)
+        .flatMap(f => {
+            const names: string[] = [];
+            // Strip prefix: [任意前缀]_姓名.md -> 姓名
+            const baseName = f.name.replace(/\.md$/, '').replace(/^[^_]+_/, '');
+            if (baseName) names.push(baseName);
+            // Also use metadata.name if present
+            if (f.metadata?.name && f.metadata.name !== baseName) names.push(f.metadata.name);
+            return names;
+        })
+        .filter(Boolean);
+};
+
+/**
+ * For draft files (05_正文草稿/), auto-detect characters mentioned in content
+ * and inject them into the frontmatter `characters` field.
+ * If the agent already provided characters, merge and deduplicate.
+ */
+const injectMatchedCharacters = (content: string, files: FileNode[]): string => {
+    const allNames = extractCharacterNames(files);
+    if (allNames.length === 0) return content;
+
+    // Match names against content body (after frontmatter)
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/);
+    const bodyStart = frontmatterMatch ? frontmatterMatch[0].length : 0;
+    const body = content.slice(bodyStart);
+
+    const matched = allNames.filter(name => body.includes(name));
+    if (matched.length === 0) return content;
+
+    if (frontmatterMatch) {
+        // Frontmatter exists — merge into characters field
+        const fm = frontmatterMatch[1];
+        const existingMatch = fm.match(/^characters:\s*\[([^\]]*)\]/m);
+        if (existingMatch) {
+            // Parse existing, merge, deduplicate
+            const existing = existingMatch[1]
+                .split(',')
+                .map(s => s.trim().replace(/^["']|["']$/g, ''))
+                .filter(Boolean);
+            const merged = [...new Set([...existing, ...matched])];
+            const newField = `characters: [${merged.map(n => `"${n}"`).join(', ')}]`;
+            return content.replace(/^characters:\s*\[[^\]]*\]/m, newField);
+        } else {
+            // No characters field yet — insert after tags line
+            const newFm = fm.replace(/(tags:\s*\[[^\]]*\])/, `$1\ncharacters: [${matched.map(n => `"${n}"`).join(', ')}]`);
+            return content.replace(frontmatterMatch[1], newFm);
+        }
+    } else {
+        // No frontmatter at all — prepend a minimal one
+        const header = `---\nsummarys: []\ntags: ["正文"]\ncharacters: [${matched.map(n => `"${n}"`).join(', ')}]\n---\n`;
+        return header + content;
+    }
+};
+
+/**
  * Generate EditDiffs for each edit in a patchFile operation.
  * This enables granular approval/rejection of individual edits.
  */
@@ -152,9 +216,23 @@ export const executeTool = async (
                         message: `❌ 文件已存在: "${filePath}"。createFile 只能用于创建新文件。如需更新已存在的文件，请使用 updateFile 或 patchFile。`
                     };
                 }
+                // Enforce character file naming convention: [前缀]_[姓名].md
+                if (filePath.includes('02_角色档案/')) {
+                    const fileName = filePath.split('/').pop() || '';
+                    const validFormat = /^[^_]+_[^_].+\.md$/;
+                    if (!validFormat.test(fileName)) {
+                        return {
+                            type: 'ERROR',
+                            message: `❌ 角色档案命名不合规: "${fileName}"。\n必须使用 [前缀]_[姓名].md 格式，例如：主角_陈浩.md、配角_林晓月.md`
+                        };
+                    }
+                }
                 description = `Create file: ${filePath}`;
                 originalContent = '';
-                newContent = args.content;
+                // Auto-inject matched characters for draft files
+                newContent = filePath.includes('05_正文草稿/')
+                    ? injectMatchedCharacters(args.content, files)
+                    : args.content;
             } else if (name === 'updateFile') {
                 description = `Overwrite: ${filePath}`;
                 originalContent = baseContent;
@@ -331,7 +409,8 @@ export const executeApprovedChange = (change: PendingChange, actions: ToolContex
 
         switch (change.toolName) {
             case 'createFile':
-                result = actions.createFile(change.args.path, change.args.content);
+                // Use newContent (may have been enriched, e.g. auto-injected characters)
+                result = actions.createFile(change.args.path, change.newContent ?? change.args.content);
                 break;
             case 'updateFile':
                 result = actions.updateFile(change.args.path, change.args.content);

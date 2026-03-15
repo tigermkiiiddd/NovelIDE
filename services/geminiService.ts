@@ -87,7 +87,8 @@ export class AIService {
     systemInstruction: string,
     tools: ToolDefinition[],
     signal?: AbortSignal,
-    forceToolName?: string  // 强制调用指定工具名称
+    forceToolName?: string,  // 强制调用指定工具名称
+    maxTokensOverride?: number  // 覆盖默认的 max_tokens（用于限制纯文字回复长度）
   ): Promise<any> {
     
     if (!this.client) throw new Error("API Key not configured.");
@@ -165,7 +166,7 @@ export class AIService {
         tool_choice: forceToolName
           ? { type: 'function', function: { name: forceToolName } }  // 强制调用指定工具
           : (tools.length > 0 ? 'auto' : undefined),
-        max_tokens: this.config.maxOutputTokens,
+        max_tokens: maxTokensOverride ?? this.config.maxOutputTokens,
       };
 
       // Support Safety Settings for Gemini models (even in OpenAI compatible mode)

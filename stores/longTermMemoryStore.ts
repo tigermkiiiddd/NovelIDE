@@ -28,6 +28,7 @@ interface LongTermMemoryState {
   searchByKeyword: (keyword: string) => LongTermMemory[];
   getByImportance: (importance: 'critical' | 'important') => LongTermMemory[];
   getRelated: (id: string) => LongTermMemory[];
+  getResident: () => LongTermMemory[];
 
   // 内部方法：同步到 JSON 文件
   _syncToJsonFile: () => Promise<void>;
@@ -81,8 +82,13 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
           try {
             const memories = JSON.parse(memoryFile.content);
             if (Array.isArray(memories)) {
-              useLongTermMemoryStore.setState({ memories, isInitialized: true });
-              console.log('[LongTermMemoryStore] 从 JSON 文件加载完成, 记忆数量:', memories.length);
+              // 向后兼容：为旧数据添加默认值
+              const migratedMemories = memories.map(m => ({
+                ...m,
+                isResident: m.isResident ?? false
+              }));
+              useLongTermMemoryStore.setState({ memories: migratedMemories, isInitialized: true });
+              console.log('[LongTermMemoryStore] 从 JSON 文件加载完成, 记忆数量:', migratedMemories.length);
               return;
             }
           } catch (parseError) {
@@ -230,6 +236,11 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
 
       const relatedIds = new Set(memory.relatedMemories);
       return state.memories.filter((m) => relatedIds.has(m.id));
+    },
+
+    getResident: () => {
+      const state = useLongTermMemoryStore.getState();
+      return state.memories.filter((m) => m.isResident === true);
     }
   },
   async (state) => {

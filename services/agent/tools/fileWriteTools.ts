@@ -5,13 +5,34 @@ export const createFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'createFile',
-    description: 'Create a new markdown file with content at a specific path. [WRITE TOOL]',
+    description: `Create a new markdown file with content at a specific path. [WRITE TOOL]
+
+⚠️ CRITICAL: All markdown files MUST start with YAML frontmatter metadata.
+
+General format (all files):
+\`\`\`
+---
+summarys: ["一句话摘要"]
+tags: ["标签1", "标签2"]
+---
+\`\`\`
+
+Draft format (05_正文草稿/ files ONLY) — must add characters field:
+\`\`\`
+---
+summarys: ["本章剧情摘要"]
+tags: ["正文", "第X卷", "第X章"]
+characters: ["角色A", "角色B"]
+---
+\`\`\`
+
+Skipping the frontmatter is NOT allowed.`,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么要创建这个文件？是否符合命名规范？' },
+        thinking: { type: 'string', description: '思考过程(用中文):为什么要创建这个文件？是否符合命名规范？是否包含了必需的 metadata 头部？' },
         path: { type: 'string', description: 'The FULL PATH including folder and extension (e.g., "03_剧情大纲/第一章_细纲.md"). The folder must exist.' },
-        content: { type: 'string', description: 'The content of the file.' }
+        content: { type: 'string', description: 'The COMPLETE content of the file. MUST start with YAML frontmatter metadata (---\\nsummarys: [...]\\ntags: [...]\\n---) followed by the actual content.' }
       },
       required: ['thinking', 'path', 'content']
     }

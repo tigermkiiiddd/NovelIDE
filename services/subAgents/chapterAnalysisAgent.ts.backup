@@ -1,9 +1,8 @@
 import { AIService } from '../geminiService';
 import { ChapterAnalysis, PlotKeyPoint, CharacterState, ForeshadowingItem } from '../../types';
 import { ToolDefinition } from '../agent/types';
-import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
 
-// --- 工具定义 ---
+// --- Sub-Agent 专用工具：提交分析结果 ---
 const submitAnalysisTool: ToolDefinition = {
   type: 'function',
   function: {
@@ -16,6 +15,7 @@ const submitAnalysisTool: ToolDefinition = {
           type: 'string',
           description: '【必须使用中文】最终反思：你对分析结果有信心吗？是否遗漏了重要信息？'
         },
+        // 合并操作说明
         mergeActions: {
           type: 'array',
           items: {
@@ -145,28 +145,14 @@ const submitAnalysisTool: ToolDefinition = {
   }
 };
 
-// --- 输入输出类型 ---
-interface ChapterAnalysisInput {
-  chapterContent: string;
-  chapterTitle: string;
-  existingAnalysis?: ChapterAnalysis;
-}
+const ANALYSIS_AGENT_TOOLS = [submitAnalysisTool];
 
-interface ChapterAnalysisOutput {
-  mergeActions: any[];
-  plotSummary: PlotKeyPoint[];
-  characterStates: CharacterState[];
-  foreshadowing: ForeshadowingItem[];
-}
-
-// --- 配置 ---
-const chapterAnalysisConfig: SubAgentConfig<ChapterAnalysisInput, ChapterAnalysisOutput> = {
-  name: 'Chapter Analysis',
-  maxLoops: 5,
-  tools: [submitAnalysisTool],
-  terminalToolName: 'submit_analysis',
-
-  getSystemPrompt: (input) => `
+// --- System Prompt ---
+const getSystemPrompt = (
+  chapterContent: string,
+  chapterTitle: string,
+  existingAnalysis?: ChapterAnalysis
+) => `
 你是一个专用的【章节结构化分析专家 (Chapter Analysis Sub-Agent)】。
 你的任务是从小说章节中提取结构化信息，并与现有分析进行智能合并。
 
@@ -177,25 +163,25 @@ const chapterAnalysisConfig: SubAgentConfig<ChapterAnalysisInput, ChapterAnalysi
 4. **智能合并**：对比新旧数据，制定合并方案
 
 ## 章节信息
-**章节标题**: ${input.chapterTitle}
+**章节标题**: ${chapterTitle}
 
 ## 章节内容
 \`\`\`
-${input.chapterContent}
+${chapterContent}
 \`\`\`
 
-${input.existingAnalysis ? `
+${existingAnalysis ? `
 ## 现有分析数据（必须参考）
 \`\`\`
 剧情关键点:
-${input.existingAnalysis.plotSummary.map(p => `- [${p.id}] [${p.importance}] ${p.description}`).join('\n')}
+${existingAnalysis.plotSummary.map(p => `- [${p.id}] [${p.importance}] ${p.description}`).join('\n')}
 
 角色状态:
-${input.existingAnalysis.characterStates.map(c => `- [${c.id}] ${c.characterName}: ${c.stateDescription}`).join('\n')}
+${existingAnalysis.characterStates.map(c => `- [${c.id}] ${c.characterName}: ${c.stateDescription}`).join('\n')}
 
 伏笔:
-${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}`).join('\n')}
-\`\`\`
+${existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}`).join('\n')}
+\`\*\`
 
 ## 重要任务
 在提交分析结果时，你必须：
@@ -289,73 +275,18 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
 - **标签使用**: 使用准确的标签帮助后续检索
 
 现在开始分析，完成后调用 submit_analysis 工具提交结果。
-`,
+`;
 
-  getInitialMessage: (input) => `请分析上述章节内容，并制定合并策略。`,
+interface MergeAction {
+  action: 'add' | 'update' | 'remove';
+  target: 'plot' | 'character' | 'foreshadowing';
+  id?: string;
+  data?: any;
+  reason: string;
+}
 
-  parseTerminalResult: (args) => {
-    console.log('[ChapterAnalysisAgent] LLM 返回的完整数据:', JSON.stringify(args, null, 2));
+// --- Core Loop ---
 
-    // Parse merge actions
-    const mergeActions = (args.mergeActions || []).map((a: any) => ({
-      action: a.action || 'add',
-      target: a.target || 'plot',
-      id: a.id,
-      data: a.data,
-      reason: a.reason || ''
-    }));
-
-    // Parse plot summary
-    const plotSummary: PlotKeyPoint[] = (args.plotSummary || []).map((p: any, idx: number) => ({
-      id: p.id || `plot-${Date.now()}-${idx}`,
-      description: p.description || '',
-      importance: p.importance || 'medium',
-      tags: p.tags || [],
-      relatedCharacters: p.relatedCharacters || []
-    }));
-
-    // Parse character states
-    const characterStates: CharacterState[] = (args.characterStates || []).map((c: any, idx: number) => ({
-      id: c.id || `char-${Date.now()}-${idx}`,
-      characterName: c.characterName || '',
-      stateDescription: c.stateDescription || '',
-      emotionalState: c.emotionalState,
-      location: c.location,
-      relationships: c.relationships || [],
-      changes: c.changes || []
-    }));
-
-    // Parse foreshadowing
-    const foreshadowing: ForeshadowingItem[] = (args.foreshadowing || []).map((f: any, idx: number) => ({
-      id: f.id || `foreshadow-${Date.now()}-${idx}`,
-      content: f.content || '',
-      type: f.type || 'planted',
-      tags: f.tags || [],
-      relatedChapters: [],
-      notes: f.notes
-    }));
-
-    console.log('[ChapterAnalysisAgent] 解析后的数据:', {
-      mergeActionsCount: mergeActions.length,
-      plotSummaryCount: plotSummary.length,
-      characterStatesCount: characterStates.length,
-      foreshadowingCount: foreshadowing.length
-    });
-
-    return {
-      mergeActions,
-      plotSummary,
-      characterStates,
-      foreshadowing
-    };
-  },
-
-  handleTextResponse: (text, loopCount) => {
-    return '请立即调用 submit_analysis 工具提交你的分析结果，不要只输出文字。';
-  }
-};
-
-// --- 导出函数（保持向后兼容） ---
 export async function runChapterAnalysisAgent(
   aiService: AIService,
   chapterContent: string,
@@ -363,25 +294,162 @@ export async function runChapterAnalysisAgent(
   existingAnalysis?: ChapterAnalysis,
   onLog?: (msg: string) => void,
   signal?: AbortSignal
-): Promise<ChapterAnalysisOutput> {
-  const agent = new BaseSubAgent(chapterAnalysisConfig);
-  return agent.run(
-    aiService,
-    { chapterContent, chapterTitle, existingAnalysis },
-    undefined,
-    onLog,
-    signal
-  );
+): Promise<{
+  mergeActions: MergeAction[];
+  plotSummary: PlotKeyPoint[];
+  characterStates: CharacterState[];
+  foreshadowing: ForeshadowingItem[];
+}> {
+
+  const history: any[] = [];
+  const MAX_LOOPS = 5;
+  let loopCount = 0;
+
+  const systemPrompt = getSystemPrompt(chapterContent, chapterTitle, existingAnalysis);
+
+  history.push({
+    role: 'user',
+    parts: [{ text: `请分析上述章节内容，并制定合并策略。` }]
+  });
+
+  if (onLog) onLog(`📖 [Chapter Analysis] 开始分析章节: "${chapterTitle}"`);
+
+  while (loopCount < MAX_LOOPS) {
+    if (signal?.aborted) {
+      throw new Error("Chapter Analysis Agent Aborted");
+    }
+
+    loopCount++;
+
+    const response = await aiService.sendMessage(
+      history,
+      '',
+      systemPrompt,
+      ANALYSIS_AGENT_TOOLS,
+      signal
+    );
+
+    const candidates = response.candidates;
+    if (!candidates || candidates.length === 0) {
+      throw new Error("Chapter Analysis Agent 无响应");
+    }
+
+    const content = candidates[0].content;
+    const parts = content.parts;
+
+    // Log thinking
+    const textPart = parts.find((p: any) => p.text);
+    if (textPart && onLog) {
+      onLog(`📖 [Analysis 思考]: ${textPart.text.substring(0, 80)}...`);
+    }
+
+    history.push({ role: 'model', parts });
+
+    // Handle tools
+    const toolParts = parts.filter((p: any) => p.functionCall);
+
+    if (toolParts.length > 0) {
+      for (const part of toolParts) {
+        if (signal?.aborted) throw new Error("Chapter Analysis Agent Aborted");
+
+        const { name, args } = part.functionCall;
+
+        // Log thinking
+        if (args.thinking && onLog) {
+          onLog(`🤔 [分析思考]: ${args.thinking}`);
+        }
+
+        // Log merge actions
+        if (args.mergeActions && onLog) {
+          const actions = args.mergeActions as MergeAction[];
+          actions.forEach((action, idx) => {
+            onLog(`🔄 [合并操作 ${idx + 1}]: ${action.action} ${action.target} - ${action.reason}`);
+          });
+        }
+
+        if (name === 'submit_analysis') {
+          if (onLog) onLog(`✅ [Chapter Analysis] 分析完成`);
+
+          // 调试：打印完整的 args
+          console.log('[ChapterAnalysisAgent] LLM 返回的完整数据:', JSON.stringify(args, null, 2));
+
+          // Parse merge actions
+          const mergeActions: MergeAction[] = (args.mergeActions || []).map((a: any) => ({
+            action: a.action || 'add',
+            target: a.target || 'plot',
+            id: a.id,
+            data: a.data,
+            reason: a.reason || ''
+          }));
+
+          // Parse plot summary
+          const plotSummary: PlotKeyPoint[] = (args.plotSummary || []).map((p: any, idx: number) => ({
+            id: p.id || `plot-${Date.now()}-${idx}`,
+            description: p.description || '',
+            importance: p.importance || 'medium',
+            tags: p.tags || [],
+            relatedCharacters: p.relatedCharacters || []
+          }));
+
+          // Parse character states
+          const characterStates: CharacterState[] = (args.characterStates || []).map((c: any, idx: number) => ({
+            id: c.id || `char-${Date.now()}-${idx}`,
+            characterName: c.characterName || '',
+            stateDescription: c.stateDescription || '',
+            emotionalState: c.emotionalState,
+            location: c.location,
+            relationships: c.relationships || [],
+            changes: c.changes || []
+          }));
+
+          // Parse foreshadowing
+          const foreshadowing: ForeshadowingItem[] = (args.foreshadowing || []).map((f: any, idx: number) => ({
+            id: f.id || `foreshadow-${Date.now()}-${idx}`,
+            content: f.content || '',
+            type: f.type || 'planted',
+            tags: f.tags || [],
+            relatedChapters: [],
+            notes: f.notes
+          }));
+
+          // 调试：打印解析后的数据
+          console.log('[ChapterAnalysisAgent] 解析后的数据:', {
+            mergeActionsCount: mergeActions.length,
+            plotSummaryCount: plotSummary.length,
+            characterStatesCount: characterStates.length,
+            foreshadowingCount: foreshadowing.length
+          });
+
+          return {
+            mergeActions,
+            plotSummary,
+            characterStates,
+            foreshadowing
+          };
+        }
+      }
+    } else {
+      if (!textPart) {
+        throw new Error("Chapter Analysis Agent 异常：未提交分析结果");
+      }
+      // LLM 只返回了文本，催促它调用工具
+      if (onLog) onLog(`📖 [Analysis] LLM 返回文本，催促调用 submit_analysis 工具...`);
+      history.push({
+        role: 'user',
+        parts: [{ text: '请立即调用 submit_analysis 工具提交你的分析结果，不要只输出文字。' }]
+      });
+    }
+  }
+
+  throw new Error("Chapter Analysis Agent 超时：达到最大循环次数");
 }
 
-// 导出配置（用于测试或自定义）
-export { chapterAnalysisConfig };
+// --- Apply Merge Actions ---
 
-// 导出 applyMergeActions 函数（向后兼容）
 export function applyMergeActions(
   existingAnalysis: ChapterAnalysis | undefined,
   newAnalysis: {
-    mergeActions: any[];
+    mergeActions: MergeAction[];
     plotSummary: PlotKeyPoint[];
     characterStates: CharacterState[];
     foreshadowing: ForeshadowingItem[];
@@ -400,6 +468,7 @@ export function applyMergeActions(
   newAnalysis.mergeActions.forEach(action => {
     if (action.target === 'plot') {
       if (action.action === 'add') {
+        // Generate new ID
         const newId = `plot-${now}-${plotSummary.length}`;
         plotSummary.push({
           id: newId,
@@ -414,7 +483,7 @@ export function applyMergeActions(
           plotSummary[idx] = {
             ...plotSummary[idx],
             ...action.data,
-            id: action.id
+            id: action.id // Keep original ID
           };
         }
       } else if (action.action === 'remove') {

@@ -285,6 +285,7 @@ export interface LongTermMemory {
   summary: string;        // 摘要（注入系统提示词，50-100字）
   content: string;        // 完整内容
   importance: 'critical' | 'important' | 'normal'; // 重要程度
+  isResident: boolean;    // 常驻标记（常驻记忆会在系统提示词中显示标题和关键词）
   relatedMemories: string[]; // 关联记忆ID（知识图谱边）
   metadata: {
     createdAt: number;

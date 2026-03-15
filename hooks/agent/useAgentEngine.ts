@@ -273,12 +273,20 @@ export const useAgentEngine = ({
         }
 
         // 4.2 调用 LLM (Network Call)
+        // 动态设置 max_tokens：
+        // - 如果有工具可用，使用默认值（不限制，因为工具参数可能很长）
+        // - 如果没有工具（纯文字回复），限制为 800 tokens（约 400-600 字）
+        const maxTokensForTextReply = 800;
+        const shouldLimitTokens = toolsForMode.length === 0;
+
         const response = await aiServiceInstance.sendMessage(
           apiHistory,
           '', // 当前消息已在 apiHistory 中
           fullSystemInstruction,
           toolsForMode,  // 使用根据模式选择的工具
-          signal
+          signal,
+          undefined,  // forceToolName
+          shouldLimitTokens ? maxTokensForTextReply : undefined  // maxTokensOverride
         );
 
         // Extract API metadata for debug display
