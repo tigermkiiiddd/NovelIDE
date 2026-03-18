@@ -5,6 +5,7 @@ import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
 import { formatThinkingResult } from './tools/thinkingTools';
 import { executeRecallMemory, executeManageMemory } from './tools/longTermMemoryTools';
+import { executeStoryOutlineTool, executeProcessOutlineInput } from './tools/outlineTools';
 import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
@@ -371,6 +372,17 @@ export const executeTool = async (
                     break;
                 case 'manage_memory':
                     result = await executeManageMemory(args);
+                    break;
+                // --- STORY OUTLINE TOOLS ---
+                case 'processOutlineInput':
+                    result = await executeProcessOutlineInput(args);
+                    break;
+                case 'storyOutline_batchUpdate':
+                case 'storyOutline_getVolumes':
+                case 'storyOutline_getChapters':
+                case 'storyOutline_getChapter':
+                case 'storyOutline_addScene':
+                    result = await executeStoryOutlineTool(name, args);
                     break;
                 default:
                     result = `Error: Unknown tool ${name}`;

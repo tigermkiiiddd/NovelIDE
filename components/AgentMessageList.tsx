@@ -1,6 +1,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers, Wifi, Key, Clock, AlertTriangle, Zap, WifiOff, Ban } from 'lucide-react';
+import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers, Wifi, Key, Clock, AlertTriangle, Zap, WifiOff, Ban, Cpu } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
 import { useUiStore } from '../stores/uiStore';
@@ -481,12 +481,59 @@ const ToolLogMessage: React.FC<{
     );
 };
 
+// --- SubAgent Output Block (格式化报告显示) ---
+const SubAgentOutputBlock: React.FC<{
+    text: string;
+    isError?: boolean;
+    isLast: boolean;
+    isLoading: boolean;
+}> = ({ text, isError, isLast, isLoading }) => {
+    const [isExpanded, setIsExpanded] = useState(true);
+
+    // 提取报告摘要（第一行）
+    const summaryLine = text.split('\n')[0] || '大纲处理完成';
+
+    return (
+        <div className="w-full max-w-[95%] sm:max-w-[85%] my-2">
+            <div className="text-xs font-mono bg-[#0d1117] rounded-lg border border-purple-700 overflow-hidden">
+                <div
+                    className="px-3 py-2 bg-purple-900/30 border-b border-purple-700 flex items-center gap-2 cursor-pointer"
+                    onClick={() => setIsExpanded(!isExpanded)}
+                >
+                    <ChevronRight size={14} className={`text-purple-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    <Cpu size={14} className="text-purple-400" />
+                    <span className="font-medium text-purple-300 truncate flex-1">
+                        {isLoading ? '📝 大纲子Agent执行中...' : (isError ? '❌ 大纲处理失败' : '✅ 大纲处理完成')}
+                    </span>
+                    <span className="text-[10px] text-purple-400 bg-purple-900/50 px-1.5 py-0.5 rounded">
+                        {isExpanded ? '收起' : '展开'}
+                    </span>
+                </div>
+                {isExpanded && (
+                    <div className="p-3 bg-gray-950 text-gray-300 whitespace-pre-wrap leading-relaxed">
+                        {text}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- Tool Call Block (Input Visualization) ---
+// 判断是否是大纲子Agent的工具（只有 processOutlineInput 是入口）
+const isOutlineSubAgentTool = (name: string) => {
+    return name === 'processOutlineInput';
+};
+
 const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }> = ({ name, args, isDebugMode }) => {
     const { thinking, ...restArgs } = args || {};
     const summary = generateToolSummary(name, args);
     const files = useFileStore(state => state.files);
     const setActiveFileId = useFileStore(state => state.setActiveFileId);
+    const [isSubAgentExpanded, setIsSubAgentExpanded] = useState(false);
+
+    // 检查是否是大纲子Agent工具
+    const isSubAgent = isOutlineSubAgentTool(name);
 
     // 提取文件路径并查找节点
     const filePath = restArgs.path || restArgs.oldPath;
@@ -501,8 +548,8 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
 
     // 普通模式：只显示摘要 + thinking
     if (!isDebugMode) {
-        return (
-            <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
+        const content = (
+            <>
                 {/* 摘要行 - 如果有文件则可点击 */}
                 <div
                     className={`px-3 py-2 bg-gray-800 border-b border-gray-700 text-blue-300 flex items-center gap-2 ${
@@ -528,6 +575,34 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
                         </div>
                     </div>
                 )}
+            </>
+        );
+
+        // 大纲子Agent工具使用可折叠容器
+        if (isSubAgent) {
+            return (
+                <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-purple-700 overflow-hidden">
+                    <div
+                        className="px-3 py-2 bg-purple-900/30 border-b border-purple-700 flex items-center gap-2 cursor-pointer"
+                        onClick={() => setIsSubAgentExpanded(!isSubAgentExpanded)}
+                    >
+                        <ChevronRight size={14} className={`text-purple-400 transition-transform ${isSubAgentExpanded ? 'rotate-90' : ''}`} />
+                        <Cpu size={14} className="text-purple-400" />
+                        <span className="font-medium text-purple-300 truncate flex-1">
+                            {name === 'processOutlineInput' ? '📝 大纲子Agent执行中...' : `大纲操作: ${summary.summary}`}
+                        </span>
+                        <span className="text-[10px] text-purple-400 bg-purple-900/50 px-1.5 py-0.5 rounded">
+                            {isSubAgentExpanded ? '收起' : '展开'}
+                        </span>
+                    </div>
+                    {isSubAgentExpanded && content}
+                </div>
+            );
+        }
+
+        return (
+            <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-gray-700 overflow-hidden">
+                {content}
             </div>
         );
     }
@@ -659,7 +734,25 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             const isLast = index === messages.length - 1;
             const prevMsg = index > 0 ? messages[index-1] : null;
 
-            // 1. Tool Outputs (System Message - Collapsible Log)
+            // 检查是否是 SubAgent (processOutlineInput) 工具的输出
+            const isSubAgentOutput = msg.rawParts?.some((p: any) =>
+                p.functionResponse?.name === 'processOutlineInput'
+            );
+
+            // 1. SubAgent 输出 - 使用折叠气泡显示
+            if (msg.isToolOutput && isSubAgentOutput) {
+                return (
+                    <SubAgentOutputBlock
+                        key={msg.id}
+                        text={msg.text}
+                        isError={msg.isError}
+                        isLast={isLast}
+                        isLoading={isLoading}
+                    />
+                );
+            }
+
+            // 2. Tool Outputs (System Message - Collapsible Log)
             if (msg.isToolOutput) {
                 // 普通模式下：显示错误提示框（如果包含错误）
                 if (!isDebugMode) {

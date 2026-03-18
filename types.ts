@@ -28,6 +28,8 @@ export interface ChatMessage {
   isToolOutput?: boolean; // 标记是否为工具执行结果的反馈
   isError?: boolean; // 标记工具执行是否失败
   rawParts?: any[]; // Stores the raw API parts (ContentPart[]) to preserve FunctionCalls/Responses in history
+  isSubAgentOutput?: boolean; // 标记是否为 subagent 的输出
+  subAgentName?: string; // subagent 名称
   metadata?: {
     systemPrompt?: string; // The specific system prompt used for this turn
     logType?: 'error' | 'info' | 'success'; // Distinguish between error and info messages
@@ -292,4 +294,51 @@ export interface LongTermMemory {
     updatedAt: number;
     source: 'user' | 'agent';
   };
+}
+
+// --- Story Outline Types ---
+
+export type OutlineStatus = 'draft' | 'outline' | 'writing' | 'completed';
+
+// 场景节点（章节内的细分场景）
+export interface SceneNode {
+  id: string;
+  nodeNumber: number;               // 节点序号
+  title: string;                    // 场景标题
+  content: string;                  // 场景内容/要点
+  location: string;                 // 场景地点
+  characters: string[];             // 出场角色
+  emotion: string;                  // 情绪氛围
+  purpose: string;                  // 场景作用
+}
+
+// 章节大纲
+export interface ChapterOutline {
+  id: string;
+  chapterNumber: number;
+  title: string;
+  pov: string;                      // POV角色
+  summary: string;                  // 章节一句话概要
+  driver: string;                   // 谁在推动
+  conflict: string;                 // 冲突来源
+  hook: string;                     // 章末悬念
+  status: OutlineStatus;
+  scenes: SceneNode[];              // 场景节点列表
+}
+
+// 卷大纲
+export interface VolumeOutline {
+  id: string;
+  volumeNumber: number;
+  title: string;
+  description: string;               // 卷核心冲突
+  chapters: ChapterOutline[];
+}
+
+// 故事大纲
+export interface StoryOutline {
+  id: string;
+  projectId: string;
+  volumes: VolumeOutline[];
+  lastModified: number;
 }

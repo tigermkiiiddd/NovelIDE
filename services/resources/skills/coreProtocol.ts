@@ -183,7 +183,6 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 标记相关 TODO 为完成
 
 **文件命名规范**：
-- 细纲：03_剧情大纲/卷[X]_章[X]_细纲.md
 - 正文：05_正文草稿/卷[X]_章[X]_[章节名].md
 - 角色档案（⚠️ 严格执行）：02_角色档案/[前缀]_[姓名].md
   - 格式要求：必须是 '前缀_姓名.md'，前缀可自定义（如：主角、配角、反派、龙套、导师等）
@@ -197,6 +196,15 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 专业任务优先调用技能处理
 - 技能采用延迟加载模式，需先 readFile 读取对应路径以激活
 - 技能执行结果如需写入文件，必须经过用户审批
+
+**大纲工具使用**：
+- 当用户想了解故事整体结构时，使用 storyOutline_getVolumes
+- 当用户想了解某卷的章节安排时，使用 storyOutline_getChapters(volumeId)
+- 当用户想查看章节详情时，使用 storyOutline_getChapter(chapterId)
+- 当用户要添加/更新大纲时，使用 storyOutline_batchUpdate（批量操作）
+  ⚠️ 尽量使用批量操作，避免多次单个操作
+- 当用户提供剧情内容要写入大纲时，使用 processOutlineInput(userInput, mode='add', volumeId)
+- 当用户要更新大纲时，使用 processOutlineInput(userInput, mode='update', targetChapterId)
 
 {{SKILL_LIST}}
 

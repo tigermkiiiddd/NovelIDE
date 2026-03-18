@@ -94,7 +94,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
                  />
              </div>
 
-             <Settings size={12} className="text-gray-500 hover:text-white ml-1 sm:ml-2 shrink-0" />
+             <Settings size={12} className="text-gray-500 hover:text-white ml-1 sm:ml-2 shrink-0 cursor-pointer" onClick={onOpenSettings} />
          </div>
 
          <div className="ml-1 sm:ml-2 pl-1 sm:pl-2 border-l border-gray-700 flex items-center gap-1 sm:gap-2">

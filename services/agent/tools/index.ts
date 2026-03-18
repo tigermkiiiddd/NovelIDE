@@ -7,16 +7,27 @@ import { callSearchAgentTool } from './subAgentTools';
 import { managePlanNoteTool, createManagePlanNoteTool } from './planTools';
 import { thinkingTool } from './thinkingTools';
 import { recallMemoryTool, manageMemoryTool } from './longTermMemoryTools';
+import {
+  getVolumesTool,
+  getChaptersTool,
+  getChapterDetailTool,
+  processOutlineInputTool
+} from './outlineTools';
 import { ToolDefinition } from '../types';
 
 // 读取工具
 const readTools: ToolDefinition[] = [
   listFilesTool,
   readFileTool,
-  recallMemoryTool
+  recallMemoryTool,
+  getVolumesTool,
+  getChaptersTool,
+  getChapterDetailTool
 ];
 
 // 写入工具
+// 注意：storyOutline_* 写入工具（addVolume, addChapter, updateChapter, batchUpdate）
+// 只能通过 processOutlineInput（SubAgent）调用，不直接暴露给主 Agent
 const writeTools: ToolDefinition[] = [
   createFileTool,
   updateFileTool,
@@ -24,7 +35,8 @@ const writeTools: ToolDefinition[] = [
   renameFileTool,
   deleteFileTool,
   updateProjectMetaTool,
-  manageMemoryTool
+  manageMemoryTool,
+  processOutlineInputTool
 ];
 
 // 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
@@ -50,7 +62,7 @@ export const allTools: ToolDefinition[] = [
  */
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
   // Plan 模式已移除，统一返回所有工具
-  return [...readTools, ...writeTools, manageTodosTool, recallMemoryTool, manageMemoryTool];
+  return allTools;
 };
 
 export * from './fileReadTools';
@@ -60,3 +72,4 @@ export * from './todoTools';
 export * from './subAgentTools';
 export * from './planTools';
 export * from './thinkingTools';
+export * from './outlineTools';

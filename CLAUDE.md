@@ -5,7 +5,7 @@ AI-powered novel writing IDE built with React 19, TypeScript, and Vite.
 ## Development Commands
 
 ```bash
-npm run dev          # Start dev server on port 3000
+npm run dev          # Start dev server on port 6388
 npm run build        # Production build
 npm run build:cf     # Cloudflare-compatible build
 npm test             # Run Jest tests

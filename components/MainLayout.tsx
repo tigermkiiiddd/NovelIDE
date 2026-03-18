@@ -8,6 +8,7 @@ import Sidebar from './Sidebar';
 import ProjectOverview from './ProjectOverview';
 import StatusBar from './StatusBar';
 import PlanNoteViewer from './PlanNoteViewer';
+import OutlineViewer from './OutlineViewer';
 import { useAgent } from '../hooks/useAgent';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useProjectStore } from '../stores/projectStore';
@@ -15,6 +16,7 @@ import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
 import { usePlanStore } from '../stores/planStore';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
+import { useStoryOutlineStore } from '../stores/storyOutlineStore';
 import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { useShallow } from 'zustand/react/shallow';
 import { generateId, getNodePath } from '../services/fileSystem';
@@ -61,15 +63,17 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const loadProjectAnalyses = useChapterAnalysisStore(state => state.loadProjectAnalyses);
   const triggerExtraction = useChapterAnalysisStore(state => state.triggerExtraction);
   const loadProjectMemories = useLongTermMemoryStore(state => state.loadProjectMemories);
+  const loadOutline = useStoryOutlineStore(state => state.loadOutline);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
   // Initialize Files and Chapter Analyses when Project Changes
   useEffect(() => {
     if (projectId) {
-        // 先加载文件，等完成后再加载章节分析和长期记忆
+        // 先加载文件，等完成后再加载章节分析、长期记忆和大纲
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectMemories(projectId);
+          loadOutline(projectId);
         });
     }
   }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories]);
@@ -163,6 +167,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   // Plan Viewer State
   const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
+
+  // Outline Viewer State
+  const [isOutlineViewerOpen, setIsOutlineViewerOpen] = useState(false);
+
+  // Auto-open/close OutlineViewer based on active file
+  useEffect(() => {
+    if (!activeFile) return;
+
+    const shouldBeOpen = activeFile.name === 'outline.json';
+
+    // 使用函数式更新避免依赖 isOutlineViewerOpen
+    setIsOutlineViewerOpen(prev => {
+      if (shouldBeOpen && !prev) return true;
+      if (!shouldBeOpen && prev) return false;
+      return prev;
+    });
+  }, [activeFile]);
 
   // Plan Store Actions
   const planStore = usePlanStore();
@@ -341,7 +362,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
         {/* Editor Container */}
         <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-          {isPlanViewerOpen ? (
+          {isOutlineViewerOpen ? (
+            <OutlineViewer
+              isOpen={isOutlineViewerOpen}
+              onClose={() => setIsOutlineViewerOpen(false)}
+            />
+          ) : isPlanViewerOpen ? (
             <PlanNoteViewer
               planNote={currentPlanNote || null}
               isOpen={isPlanViewerOpen}
@@ -365,9 +391,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         </div>
 
         {/* Status Bar */}
-        <StatusBar 
-            project={currentProject} 
-            files={files} 
+        <StatusBar
+            project={currentProject}
+            files={files}
             activeFile={activeFile}
             onOpenSettings={() => setIsProjectOverviewOpen(true)}
             isAgentThinking={isLoading}
