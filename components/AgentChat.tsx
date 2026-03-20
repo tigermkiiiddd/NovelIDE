@@ -100,8 +100,14 @@ const AgentChat: React.FC<AgentChatProps> = ({
           if (node) {
               setActiveFileId(node.id);
           } else {
-              // If file doesn't exist (New File), clear active file but still trigger review
-              setActiveFileId(null);
+              // For createFile: file doesn't exist yet, clear activeFileId
+              // For deleteFile/updateFile/patchFile: file should exist, if not found,
+              // still set reviewingChangeId so DiffViewer can use pendingChange.originalContent
+              if (change.toolName === 'createFile') {
+                  setActiveFileId(null);
+              }
+              // For other operations, don't change activeFileId if file not found
+              // The DiffViewer will use pendingChange.originalContent as fallback
           }
       }
 

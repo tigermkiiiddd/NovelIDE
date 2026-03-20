@@ -42,41 +42,60 @@ export class AIService {
 
   /**
    * Exponential Backoff Retry Wrapper
+   * 对于网络错误自动增加重试次数
    */
   private async withRetry<T>(
-    operation: () => Promise<T>, 
-    retries = 3, 
+    operation: () => Promise<T>,
+    retries = 3,
     initialDelay = 2000
   ): Promise<T> {
     let lastError: any;
-    
-    for (let i = 0; i < retries; i++) {
+    let currentRetries = retries;
+
+    for (let i = 0; i < currentRetries; i++) {
       try {
         return await operation();
       } catch (error: any) {
         // Don't retry if aborted
         if (error?.name === 'AbortError') throw error;
-        
+
         lastError = error;
-        
+
         // Identify Retryable Errors: 429 (Rate Limit) or 5xx (Server)
-        const isRateLimit = 
-            error?.status === 429 || 
-            error?.code === 429 || 
+        const isRateLimit =
+            error?.status === 429 ||
+            error?.code === 429 ||
             (error?.message && error.message.includes('429'));
 
         const isServerError = error?.status >= 500 || error?.code >= 500;
 
-        if (isRateLimit || isServerError) {
-          console.warn(`[AIService] API Error (${error.status || error.code}). Retrying in ${initialDelay}ms... (Attempt ${i + 1}/${retries})`);
+        // Network-level errors (HTTP/2 protocol errors, fetch failures)
+        const isNetworkError =
+            error?.message?.includes('Failed to fetch') ||
+            error?.message?.includes('ERR_HTTP2') ||
+            error?.message?.includes('NetworkError') ||
+            error?.message?.includes('network') ||
+            error?.message?.includes('protocol error') ||
+            error?.message?.includes('stream reset');
+
+        // 网络错误增加额外重试次数（最多5次）
+        if (isNetworkError && currentRetries < 5) {
+          currentRetries = 5;
+          console.warn(`[AIService] 检测到网络错误，增加重试次数至 ${currentRetries}`);
+        }
+
+        if (isRateLimit || isServerError || isNetworkError) {
+          console.warn(`[AIService] API Error (${error.status || error.code || 'network'}): ${error?.message?.substring(0, 100)}. Retrying in ${initialDelay}ms... (Attempt ${i + 1}/${currentRetries})`);
           await new Promise(resolve => setTimeout(resolve, initialDelay));
           initialDelay *= 2; // Exponential backoff
+          // 最大延迟 30 秒
+          if (initialDelay > 30000) initialDelay = 30000;
         } else {
           throw error;
         }
       }
     }
-    
+
     console.error("[AIService] Max retries exceeded.");
     throw lastError;
   }
@@ -88,7 +107,8 @@ export class AIService {
     tools: ToolDefinition[],
     signal?: AbortSignal,
     forceToolName?: string,  // 强制调用指定工具名称
-    maxTokensOverride?: number  // 覆盖默认的 max_tokens（用于限制纯文字回复长度）
+    maxTokensOverride?: number,  // 覆盖默认的 max_tokens（用于限制纯文字回复长度）
+    temperatureOverride?: number  // 覆盖默认的 temperature（用于 SubAgent 低温度执行）
   ): Promise<any> {
     
     if (!this.client) throw new Error("API Key not configured.");
@@ -167,6 +187,7 @@ export class AIService {
           ? { type: 'function', function: { name: forceToolName } }  // 强制调用指定工具
           : (tools.length > 0 ? 'auto' : undefined),
         max_tokens: maxTokensOverride ?? this.config.maxOutputTokens,
+        temperature: temperatureOverride ?? (this.config as any).temperature ?? 0.7,  // SubAgent 可覆盖温度，默认 0.7
       };
 
       // Support Safety Settings for Gemini models (even in OpenAI compatible mode)

@@ -19,7 +19,8 @@ import {
   X,
   ChevronUp,
   ChevronDown,
-  Circle
+  Circle,
+  History
 } from 'lucide-react';
 
 export interface EditorToolbarProps {
@@ -47,6 +48,7 @@ export interface EditorToolbarProps {
   onSearchNext?: () => void;
   onSearchPrev?: () => void;
   onToggleCaseSensitive?: () => void;
+  onOpenVersionHistory?: () => void;
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -73,7 +75,8 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onSearchChange,
   onSearchNext,
   onSearchPrev,
-  onToggleCaseSensitive
+  onToggleCaseSensitive,
+  onOpenVersionHistory
 }) => {
   return (
     <>
@@ -149,6 +152,15 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             title="Redo (Ctrl+Shift+Z)"
           >
             <RotateCw size={14} />
+          </button>
+
+          {/* 版本历史 */}
+          <button
+            onClick={onOpenVersionHistory}
+            className="flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
+            title="版本历史"
+          >
+            <History size={14} />
           </button>
 
           {/* 模式切换 */}

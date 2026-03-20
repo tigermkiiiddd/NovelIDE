@@ -7,27 +7,34 @@ import { callSearchAgentTool } from './subAgentTools';
 import { managePlanNoteTool, createManagePlanNoteTool } from './planTools';
 import { thinkingTool } from './thinkingTools';
 import { recallMemoryTool, manageMemoryTool } from './longTermMemoryTools';
+import { processOutlineInputTool } from './outlineTools';
 import {
-  getVolumesTool,
+  getEventsTool,
+  getEventDetailTool,
   getChaptersTool,
-  getChapterDetailTool,
-  processOutlineInputTool
-} from './outlineTools';
+  getVolumesTool,
+  getStoryLinesTool,
+  getTimeRangeTool,
+  batchUpdateTimelineTool,
+  processTimelineInputTool
+} from './timelineTools';
 import { ToolDefinition } from '../types';
 
-// 读取工具
+// 读取工具（统一使用 Timeline 系统）
 const readTools: ToolDefinition[] = [
   listFilesTool,
   readFileTool,
   recallMemoryTool,
   getVolumesTool,
   getChaptersTool,
-  getChapterDetailTool
+  getEventsTool,
+  getEventDetailTool,
+  getStoryLinesTool,
+  getTimeRangeTool
 ];
 
 // 写入工具
-// 注意：storyOutline_* 写入工具（addVolume, addChapter, updateChapter, batchUpdate）
-// 只能通过 processOutlineInput（SubAgent）调用，不直接暴露给主 Agent
+// 注意：写入操作通过 SubAgent 调用，不直接暴露给主 Agent
 const writeTools: ToolDefinition[] = [
   createFileTool,
   updateFileTool,
@@ -36,7 +43,8 @@ const writeTools: ToolDefinition[] = [
   deleteFileTool,
   updateProjectMetaTool,
   manageMemoryTool,
-  processOutlineInputTool
+  processOutlineInputTool,  // 已合并到 Timeline SubAgent
+  processTimelineInputTool
 ];
 
 // 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
@@ -73,3 +81,4 @@ export * from './subAgentTools';
 export * from './planTools';
 export * from './thinkingTools';
 export * from './outlineTools';
+export * from './timelineTools';

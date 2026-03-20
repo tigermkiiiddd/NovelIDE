@@ -6,6 +6,7 @@ import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructu
 import { parseFrontmatter } from '../utils/frontmatter';
 import { FileService } from '../domains/file/fileService';
 import { formatWordCount } from '../utils/wordCount';
+import { useVersionStore, VersionSource } from './versionStore';
 
 // Create FileService instance for domain logic
 const fileService = new FileService(generateId);
@@ -164,6 +165,18 @@ export const useFileStore = create<FileState>((set, get) => ({
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File at "${path}" not found.`;
 
+    // 创建修改前版本（仅在内容有变化时）
+    if (file.content !== content) {
+      useVersionStore.getState().createVersion(
+        file.id,
+        file.name,
+        path,
+        file.content || '',
+        'user',
+        '修改前自动备份'
+      );
+    }
+
     const metadata = parseFrontmatter(content);
     set(state => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content, metadata, lastModified: Date.now() } : f)
@@ -174,7 +187,22 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
   
   saveFileContent: (id, content) => {
-    const { _saveToDB } = get();
+    const { files, _saveToDB } = get();
+    const file = files.find(f => f.id === id);
+
+    // 创建修改前版本（仅在内容有变化时）
+    if (file && file.content !== content) {
+      const filePath = getNodePath(file, files);
+      useVersionStore.getState().createVersion(
+        id,
+        file.name,
+        filePath,
+        file.content || '',
+        'user',
+        '保存前自动备份'
+      );
+    }
+
     // Parse metadata on save to keep it sync
     const metadata = parseFrontmatter(content);
     set(state => ({
@@ -187,6 +215,18 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB } = get();
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File not found.`;
+
+    // 创建修改前版本
+    if (file.content) {
+      useVersionStore.getState().createVersion(
+        file.id,
+        file.name,
+        path,
+        file.content,
+        'agent',
+        'Patch 修改前自动备份'
+      );
+    }
 
     const allLines = (file.content || '').split(/\r?\n/);
 

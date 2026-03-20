@@ -26,6 +26,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   isToolOutput?: boolean; // 标记是否为工具执行结果的反馈
+  skipInHistory?: boolean; // 标记是否跳过 AI 历史记录（如停止通知、中断提示等）
   isError?: boolean; // 标记工具执行是否失败
   rawParts?: any[]; // Stores the raw API parts (ContentPart[]) to preserve FunctionCalls/Responses in history
   isSubAgentOutput?: boolean; // 标记是否为 subagent 的输出
@@ -310,6 +311,7 @@ export interface SceneNode {
   characters: string[];             // 出场角色
   emotion: string;                  // 情绪氛围
   purpose: string;                  // 场景作用
+  relativeTime?: string;            // 相对时间（如"第1天 早晨"）
 }
 
 // 章节大纲
@@ -340,5 +342,96 @@ export interface StoryOutline {
   id: string;
   projectId: string;
   volumes: VolumeOutline[];
+  lastModified: number;
+}
+
+// --- World Timeline Types (Event-First Architecture) ---
+
+// 时间单位
+export type TimeUnit = 'hour' | 'day';
+
+// 结构化时间（用户输入 + 存储）
+export interface QuantizedTime {
+  value: number;        // 数值
+  unit: TimeUnit;       // 单位：hour 或 day
+}
+
+// 故事线
+export interface StoryLine {
+  id: string;
+  name: string;
+  color: string;
+  isMain: boolean;
+}
+
+// 时间线事件（原子单位）- 合并自 storyOutline 的 SceneNode
+export interface TimelineEvent {
+  id: string;
+  eventIndex: number;          // 序号（备用排序）
+  time: QuantizedTime;         // 结构化时间（数值 + 单位）
+  title: string;
+  content: string;
+  storyLineId: string;         // 所属故事线（默认主线）
+
+  // 可选属性（来自原 Timeline）
+  location?: string;
+  characters?: string[];
+  emotion?: string;
+  chapterId?: string;          // 所属章节（可选）
+
+  // 合并自 SceneNode 的属性
+  purpose?: string;            // 场景作用/目的
+  relativeTime?: string;       // 相对时间描述（如"第1天 早晨"）
+}
+
+// 章节分组（事件的容器）- 合并自 storyOutline 的 ChapterOutline
+export interface ChapterGroup {
+  id: string;
+  chapterIndex: number;        // 章节序号
+  title: string;
+  summary?: string;            // 章节概要
+  eventIds: string[];          // 包含的事件ID列表（按顺序）
+
+  // 合并自 ChapterOutline 的属性
+  pov?: string;                // POV角色
+  driver?: string;             // 谁在推动
+  conflict?: string;           // 冲突来源
+  hook?: string;               // 章末悬念
+  status?: OutlineStatus;      // 章节状态
+
+  // 计算属性
+  timeRange?: string;          // 基于事件自动计算
+  volumeId?: string;           // 所属卷
+}
+
+// 卷分组（章节的容器）
+export interface VolumeGroup {
+  id: string;
+  volumeIndex: number;         // 卷序号
+  title: string;
+  description?: string;
+  chapterIds: string[];        // 包含的章节ID列表
+
+  // 计算属性
+  timeRange?: string;          // 基于章节自动计算
+}
+
+// 世界线大纲（顶层）
+export interface WorldTimeline {
+  id: string;
+  projectId: string;
+  timeStart: string;           // 起始时间（如"第0天"）
+
+  // 三层数据
+  events: TimelineEvent[];     // 所有事件（按 eventIndex 排序）
+  chapters: ChapterGroup[];    // 所有章节（按 chapterIndex 排序）
+  volumes: VolumeGroup[];      // 所有卷（按 volumeIndex 排序）
+
+  // 故事线
+  storyLines: StoryLine[];
+
+  // 计算属性
+  totalTimeRange?: string;     // 基于事件自动计算
+
   lastModified: number;
 }

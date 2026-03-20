@@ -267,6 +267,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       },
 
       editMessageContent: (messageId, newText) => {
+        const session = get().sessions.find(s => s.id === get().currentSessionId);
+        const msgExists = session?.messages.some(m => m.id === messageId);
+        if (!msgExists) {
+          console.warn('[editMessageContent] 消息不存在:', messageId, '当前消息IDs:', session?.messages.map(m => m.id));
+        }
         get().updateCurrentSession(session => ({
             ...session,
             messages: session.messages.map(m => m.id === messageId ? { ...m, text: newText } : m),

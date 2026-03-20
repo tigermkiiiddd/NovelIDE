@@ -3,12 +3,9 @@ import { FileNode, FileType } from '../types';
 import {
   PROJECT_PROFILE_TEMPLATE,
   STYLE_GUIDE_TEMPLATE,
-  OUTLINE_CHAPTER_TEMPLATE,
-  OUTLINE_MASTER_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
   DEFAULT_AGENT_SKILL,
   SKILL_WORLD_BUILDER,
-  SKILL_OUTLINE_ARCHITECT,
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
@@ -135,10 +132,9 @@ export const createInitialFileSystem = (): FileNode[] => {
     
     // --- 98_技能配置 (Agent Skills) ---
     createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
-    
+
     // --- Sub Skills (Enhanced) ---
     createFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER),
-    createFile('技能_大纲构建.md', subskillFolder.id, SKILL_OUTLINE_ARCHITECT),
     createFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER),
     createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
     createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
@@ -146,11 +142,9 @@ export const createInitialFileSystem = (): FileNode[] => {
 
     // --- 99_创作规范 (Templates & Guides) ---
     createFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE),
-    
+
     createFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE),
     createFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE),
-    createFile('模板_全书总纲.md', rulesFolder.id, OUTLINE_MASTER_TEMPLATE),
-    createFile('模板_章节细纲.md', rulesFolder.id, OUTLINE_CHAPTER_TEMPLATE),
     createFile('模板_世界线记录.md', rulesFolder.id, withMeta('# 世界线记录\n\n| 章节 | 事件 | 状态变更 | 伏笔 |\n|---|---|---|---|\n', '此文件为标准的世界线记录模板，提供了表格格式以供复制使用，旨在规范化记录剧情事件与状态变更。', ['模板'])),
     createFile('模板_伏笔记录.md', rulesFolder.id, withMeta('# 伏笔记录\n\n- [ ] [章节名] 伏笔内容 (未回收)\n', '此文件为标准的伏笔追踪模板，采用了任务列表的格式，方便作者在创作过程中随时添加和勾选已回收的伏笔。', ['模板'])),
   ];

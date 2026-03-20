@@ -2,95 +2,31 @@
 import { AIService } from '../../geminiService';
 import { ToolDefinition } from '../types';
 import { runOutlineSubAgent, OutlineInput } from '../../subAgents/outlineAgent';
+import { runTimelineSubAgent, TimelineInput } from '../../subAgents/timelineAgent';
 import { useAgentStore } from '../../../stores/agentStore';
 import { useStoryOutlineStore } from '../../../stores/storyOutlineStore';
+import { useWorldTimelineStore } from '../../../stores/worldTimelineStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { ChapterOutline, VolumeOutline } from '../../../types';
 
 // ============================================
-// 读取工具 - 三级渐进式
+// 已废弃：读取工具 - 迁移到 timelineTools.ts
+// ============================================
+// getVolumesTool, getChaptersTool, getChapterDetailTool 已移至 Timeline 系统
+// 保留 executeStoryOutlineTool 用于 outlineAgent 内部调用
+
+// ============================================
+// 批量写入工具（保留用于 outlineAgent 内部）
 // ============================================
 
 /**
- * Level 1: 获取所有卷纲列表
- */
-export const getVolumesTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'storyOutline_getVolumes',
-    description: `获取所有卷纲列表。每卷返回：卷号、卷名、简介、章节数。`,
-    parameters: {
-      type: 'object',
-      properties: {
-        thinking: { type: 'string', description: '思考过程' }
-      },
-      required: ['thinking']
-    }
-  }
-};
-
-/**
- * Level 2: 获取指定卷的章纲列表
- */
-export const getChaptersTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'storyOutline_getChapters',
-    description: `获取指定卷的所有章节概要。`,
-    parameters: {
-      type: 'object',
-      properties: {
-        thinking: { type: 'string', description: '思考过程' },
-        volumeId: { type: 'string', description: '卷ID' }
-      },
-      required: ['thinking', 'volumeId']
-    }
-  }
-};
-
-/**
- * Level 3: 获取章节详细大纲
- */
-export const getChapterDetailTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'storyOutline_getChapter',
-    description: `获取章节的详细大纲。`,
-    parameters: {
-      type: 'object',
-      properties: {
-        thinking: { type: 'string', description: '思考过程' },
-        chapterId: { type: 'string', description: '章节ID' }
-      },
-      required: ['thinking', 'chapterId']
-    }
-  }
-};
-
-// ============================================
-// 批量写入工具
-// ============================================
-
-/**
- * 批量操作大纲
+ * 批量操作大纲（内部使用，通过 SubAgent 调用）
  */
 export const batchUpdateOutlineTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'storyOutline_batchUpdate',
-    description: `批量操作大纲，支持：
-- 添加卷 (addVolumes)
-- 添加章节 (addChapters) - 可指定新卷名自动创建
-- 更新章节 (updateChapters)
-
-混合操作示例：
-{
-  addVolumes: [{volumeNumber: 1, title: "第一卷", description: "..."}],
-  addChapters: [
-    {volumeNumber: 1, chapterNumber: 1, title: "第1章", summary: "..."},
-    {volumeNumber: 1, chapterNumber: 2, title: "第2章", summary: "..."}
-  ]
-}`,
+    description: `批量操作大纲（内部工具，通过 processOutlineInput 调用）`,
     parameters: {
       type: 'object',
       properties: {
@@ -156,11 +92,23 @@ export const processOutlineInputTool: ToolDefinition = {
     name: 'processOutlineInput',
     description: `将剧情内容写入结构化大纲。
 
-参数：
-- userInput: 剧情内容
-- volumeId: 添加到哪个卷（mode=add时）
-- targetChapterId: 更新哪个章节（mode=update时）
-- mode: add 或 update
+## ⚠️ 重要说明
+1. **可以传入大量内容**：支持一次性传入整卷甚至多卷的大纲
+2. **Subagent 会自动分段处理**：内容量大时会分批次写入
+3. **禁止脑补**：Subagent 只做结构化转换，不会创作原文没有的内容
+
+## 参数说明
+- userInput: 剧情内容（可以是单章、整卷或多卷）
+  - 卷纲格式：卷名、章节标题和概要
+  - 细纲格式：包含详细的场景/情节描述
+- volumeId: 添加到哪个卷（mode=add时可选，不填则自动创建）
+- targetChapterId: 更新哪个章节（mode=update时必填）
+- mode: add（添加新内容）或 update（更新现有内容）
+
+## 使用示例
+- 添加整卷：userInput 包含完整卷纲，Subagent 会解析并批量创建
+- 添加单章：userInput 包含单章内容
+- 更新章节：mode=update + targetChapterId
 `,
     parameters: {
       type: 'object',
@@ -181,7 +129,8 @@ export const processOutlineInputTool: ToolDefinition = {
 // ============================================
 
 export const executeProcessOutlineInput = async (
-  args: any
+  args: any,
+  onUiLog?: (msg: string) => void
 ): Promise<string> => {
   const agentStore = useAgentStore.getState();
   const aiConfig = agentStore.aiConfig;
@@ -193,40 +142,45 @@ export const executeProcessOutlineInput = async (
   // 创建AI服务实例
   const aiService = new AIService(aiConfig);
 
-  // 确保大纲已加载
-  let store = useStoryOutlineStore.getState();
+  // 确保 Timeline 已加载
+  let timelineStore = useWorldTimelineStore.getState();
   const projectStore = useProjectStore.getState();
-  if (!store.outline && projectStore.project?.id) {
-    await store.loadOutline(projectStore.project.id);
-    store = useStoryOutlineStore.getState();
+  const currentProject = projectStore.getCurrentProject();
+  if (!timelineStore.timeline && currentProject?.id) {
+    await timelineStore.loadTimeline(currentProject.id);
+    timelineStore = useWorldTimelineStore.getState();
   }
 
   // 自动注入上下文
   let contextInfo = '';
 
   if (args.mode === 'update' && args.targetChapterId) {
-    const chapter = store.getChapter(args.targetChapterId);
+    const chapter = timelineStore.getChapter(args.targetChapterId);
     if (chapter) {
       contextInfo = `\n\n【当前章节内容】\n${JSON.stringify(chapter, null, 2)}`;
     }
   } else if (args.mode === 'add' && args.volumeId) {
-    const chapters = store.getChapters(args.volumeId);
+    const chapters = timelineStore.getChapters(args.volumeId);
     if (chapters.length > 0) {
       contextInfo = `\n\n【该卷现有章节】\n${JSON.stringify(chapters, null, 2)}`;
     }
   }
 
-  const input: OutlineInput = {
+  const input: TimelineInput = {
     userInput: args.userInput + contextInfo,
-    projectId: agentStore.currentProjectId || '',
+    projectId: currentProject?.id || '',
     mode: args.mode,
     targetChapterId: args.targetChapterId,
     volumeId: args.volumeId
   };
 
   try {
-    const result = await runOutlineSubAgent(aiService, input, (msg) => {
-      console.log('[OutlineSubAgent]', msg);
+    // 使用 Timeline SubAgent 替代 Outline SubAgent
+    const result = await runTimelineSubAgent(aiService, input, (msg) => {
+      if (onUiLog) {
+        onUiLog(msg);  // 传递给 UI
+      }
+      console.log('[TimelineSubAgent]', msg);
     });
 
     // 直接返回格式化的自然语言报告
@@ -244,10 +198,11 @@ export const executeStoryOutlineTool = async (
 ): Promise<string> => {
   let store = useStoryOutlineStore.getState();
   const projectStore = useProjectStore.getState();
+  const currentProject = projectStore.getCurrentProject();
 
   // 确保大纲已加载
-  if (!store.outline && projectStore.project?.id) {
-    await store.loadOutline(projectStore.project.id);
+  if (!store.outline && currentProject?.id) {
+    await store.loadOutline(currentProject.id);
     store = useStoryOutlineStore.getState();
   }
 

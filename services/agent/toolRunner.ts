@@ -6,10 +6,12 @@ import { processManagePlanNote } from './tools/planTools';
 import { formatThinkingResult } from './tools/thinkingTools';
 import { executeRecallMemory, executeManageMemory } from './tools/longTermMemoryTools';
 import { executeStoryOutlineTool, executeProcessOutlineInput } from './tools/outlineTools';
+import { executeTimelineTool, executeProcessTimelineInput } from './tools/timelineTools';
 import { applyPatchInMemory } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
 import { BatchEdit } from '../../stores/fileStore';
+import { useVersionStore } from '../../stores/versionStore';
 
 /**
  * Extract character names from 02_角色档案 folder.
@@ -181,8 +183,8 @@ export const executeTool = async (
     }
 
     // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
-    if (onUiLog && name !== 'call_search_agent') {
-        onUiLog(`${startLog}`); 
+    if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput' && name !== 'processTimelineInput') {
+        onUiLog(`${startLog}`);
     }
 
     // --- 1. Check for Approval Requirements (Write Operations) ---
@@ -255,9 +257,16 @@ export const executeTool = async (
                 }
                 newContent = allLines.join('\n');
             } else if (name === 'deleteFile') {
+                // 验证文件存在
+                if (!existingFile) {
+                    return {
+                        type: 'ERROR',
+                        message: `❌ 无法删除: 文件 "${filePath}" 不存在。请检查路径是否正确。`
+                    };
+                }
                 description = `Delete: ${filePath}`;
-                originalContent = baseContent || '(File Content)';
-                newContent = null; 
+                originalContent = baseContent;
+                newContent = null;
             } else if (name === 'renameFile') {
                 description = `Rename ${args.oldPath} -> ${args.newName}`;
                 originalContent = `Name: ${existingFile?.name || 'Unknown'}`;
@@ -375,7 +384,7 @@ export const executeTool = async (
                     break;
                 // --- STORY OUTLINE TOOLS ---
                 case 'processOutlineInput':
-                    result = await executeProcessOutlineInput(args);
+                    result = await executeProcessOutlineInput(args, onUiLog);
                     break;
                 case 'storyOutline_batchUpdate':
                 case 'storyOutline_getVolumes':
@@ -384,13 +393,26 @@ export const executeTool = async (
                 case 'storyOutline_addScene':
                     result = await executeStoryOutlineTool(name, args);
                     break;
+                // --- TIMELINE TOOLS ---
+                case 'processTimelineInput':
+                    result = await executeProcessTimelineInput(args, onUiLog);
+                    break;
+                case 'timeline_batchUpdate':
+                case 'timeline_getEvents':
+                case 'timeline_getEvent':
+                case 'timeline_getChapters':
+                case 'timeline_getVolumes':
+                case 'timeline_getStoryLines':
+                case 'timeline_getTimeRange':
+                    result = await executeTimelineTool(name, args);
+                    break;
                 default:
                     result = `Error: Unknown tool ${name}`;
             }
         }
         
-        // Log Completion (Append to the start log)
-        if (onUiLog && name !== 'call_search_agent') {
+        // Log Completion (Append to the start log) - Except for SubAgent which handles its own internal logging
+        if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput' && name !== 'processTimelineInput') {
             // Truncate output for UI performance if it's too massive (the full result is still returned to the Agent)
             const MAX_UI_LENGTH = 1000;
             let displayResult = result;

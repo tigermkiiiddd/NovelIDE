@@ -31,6 +31,9 @@ export interface SubAgentConfig<TInput, TOutput> {
 
   /** 可选：文本响应处理器（当LLM只返回文本时） */
   handleTextResponse?: (text: string, loopCount: number) => string | null;
+
+  /** 可选：SubAgent 专用温度参数（默认 0.2，执行级 Agent 应使用低温度） */
+  temperature?: number;
 }
 
 /**
@@ -71,13 +74,16 @@ export class BaseSubAgent<TInput, TOutput> {
 
       loopCount++;
 
-      // 调用AI
+      // 调用AI（使用 SubAgent 专用温度，默认 0.2）
       const response = await aiService.sendMessage(
         history,
         '',
         systemPrompt,
         this.config.tools,
-        signal
+        signal,
+        undefined,  // forceToolName
+        undefined,  // maxTokensOverride
+        this.config.temperature ?? 0.2  // SubAgent 默认低温度
       );
 
       const candidates = response.candidates;

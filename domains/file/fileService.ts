@@ -18,10 +18,7 @@ import {
   STYLE_GUIDE_TEMPLATE,
   PROJECT_PROFILE_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
-  OUTLINE_MASTER_TEMPLATE,
-  OUTLINE_CHAPTER_TEMPLATE,
   SKILL_WORLD_BUILDER,
-  SKILL_OUTLINE_ARCHITECT,
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
@@ -176,8 +173,6 @@ export class FileService {
     ensureFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE);
     ensureFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE);
     ensureFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE);
-    ensureFile('模板_全书总纲.md', rulesFolder.id, OUTLINE_MASTER_TEMPLATE);
-    ensureFile('模板_章节细纲.md', rulesFolder.id, OUTLINE_CHAPTER_TEMPLATE);
     ensureFile('模板_世界线记录.md', rulesFolder.id, TIMELINE_TEMPLATE);
     ensureFile('模板_伏笔记录.md', rulesFolder.id, FORESHADOW_TEMPLATE);
 
@@ -186,7 +181,6 @@ export class FileService {
 
     // 6. 确保 subskill 文件（使用正确的文件名和模板常量）
     ensureFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER);
-    ensureFile('技能_大纲构建.md', subskillFolder.id, SKILL_OUTLINE_ARCHITECT);
     ensureFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER);
     ensureFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER);
     ensureFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW);

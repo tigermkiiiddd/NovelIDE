@@ -1,6 +1,7 @@
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis } from '../types';
+import { FileVersion } from '../stores/versionStore';
 
 interface UiSettings {
   isSidebarOpen: boolean;
@@ -50,10 +51,14 @@ interface NovelGenieDB extends DBSchema {
     key: string; // 'chapter-analyses-{projectId}'
     value: ChapterAnalysis[];
   };
+  versions: {
+    key: string; // 'versions-{projectId}'
+    value: FileVersion[];
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -96,6 +101,11 @@ export const initDB = () => {
         // Version 9: Add chapterAnalyses store
         if (!db.objectStoreNames.contains('chapterAnalyses')) {
           db.createObjectStore('chapterAnalyses');
+        }
+
+        // Version 10: Add versions store for document version management
+        if (!db.objectStoreNames.contains('versions')) {
+          db.createObjectStore('versions');
         }
 
         // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
@@ -427,6 +437,37 @@ export const dbAPI = {
       console.log('[Persistence] Deleted chapter analyses for project:', projectId);
     } catch (error) {
       console.error('删除章节分析失败:', error);
+    }
+  },
+
+  // --- File Versions ---
+  getVersions: async (projectId: string): Promise<FileVersion[] | undefined> => {
+    try {
+      console.log('[dbAPI.getVersions] 开始读取, projectId:', projectId);
+      const db = await initDB();
+      const result = await db.get('versions', `versions-${projectId}`);
+      console.log('[dbAPI.getVersions] 读取结果:', result ? `找到 ${result.length} 个版本` : '无数据');
+      return result;
+    } catch (error) {
+      console.error('[dbAPI.getVersions] 读取版本失败:', projectId, error);
+      return undefined;
+    }
+  },
+
+  saveVersions: async (projectId: string, versions: FileVersion[]) => {
+    console.log('[dbAPI.saveVersions] 开始保存, projectId:', projectId, '版本数量:', versions.length);
+    const db = await initDB();
+    await db.put('versions', versions, `versions-${projectId}`);
+    console.log('[dbAPI.saveVersions] 保存完成');
+  },
+
+  deleteVersions: async (projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('versions', `versions-${projectId}`);
+      console.log('[Persistence] Deleted versions for project:', projectId);
+    } catch (error) {
+      console.error('删除版本失败:', error);
     }
   }
 };

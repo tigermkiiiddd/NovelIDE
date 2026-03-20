@@ -392,9 +392,12 @@ export const buildSimpleHistory = (
       continue;
     }
 
-    // ——— 普通 system 消息（非工具输出，如错误、停止通知等）：保留 ———
+    // ——— 普通 system 消息（非工具输出，如错误、停止通知等）———
+    // 跳过标记为 skipInHistory 的消息（如"用户已停止生成"）
     if (msg.role === 'system' && !msg.isToolOutput) {
-      resultMessages.push(msg);
+      if (!msg.skipInHistory) {
+        resultMessages.push(msg);
+      }
       continue;
     }
 

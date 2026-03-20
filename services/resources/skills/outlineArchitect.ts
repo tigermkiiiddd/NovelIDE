@@ -10,10 +10,10 @@ tags: ["技能", "大纲"]
 
 ## 触发条件（主动判断）
 当你发现以下情况时，**主动激活此技能**：
-*   需要创建或更新剧情大纲
+*   需要规划或梳理剧情结构
 *   用户卡文，需要梳理剧情走向
-*   新章节需要规划细纲
-*   需要设计爽点节奏
+*   需要设计爽点节奏和情绪曲线
+*   需要使用 Timeline 系统添加事件
 
 ---
 
@@ -196,9 +196,11 @@ tags: ["技能", "大纲"]
 
 ---
 
-## 六、细纲模板
+## 六、章节规划思考框架
 
-### 单章细纲格式
+> 以下格式用于思考和组织章节内容，不是创建文件的模板。
+
+### 单章规划格式
 \`\`\`
 # 第X章 [章节名]
 
@@ -265,4 +267,50 @@ tags: ["技能", "大纲"]
 - [ ] 跨卷伏笔是否已登记？
 - [ ] 是否有伏笔回收时间表？
 - [ ] 是否有长期未回收的伏笔？
+
+---
+
+## 七、Timeline 工具使用指南
+
+> ⚠️ **重要**：规划剧情时必须使用 Timeline 工具，不要创建 md 文件。
+
+### 工具调用流程
+
+1. **查看现有结构**
+   - 先调用 timeline_getVolumes() 查看卷结构
+   - 再调用 timeline_getChapters(volumeId) 查看章节
+   - 最后调用 timeline_getEvents(chapterId) 查看事件
+
+2. **添加新内容**
+   - 使用 processTimelineInput(userInput, 'add') 处理用户的剧情描述
+   - 或使用 timeline_batchUpdate 精确控制添加
+
+3. **更新现有内容**
+   - 使用 processTimelineInput(userInput, 'update') 处理修改
+   - 或使用 timeline_batchUpdate 中的 updateEvents
+
+### 事件格式
+\`\`\`
+{
+  "eventIndex": 1,
+  "time": { "value": 8, "unit": "hour" },
+  "title": "事件标题",
+  "content": "事件详细描述",
+  "location": "发生地点",
+  "characters": ["涉及角色"],
+  "emotion": "情绪基调"
+}
+\`\`\`
+
+### 常见操作示例
+
+**添加一卷**：
+\`\`\`
+processTimelineInput("添加第一卷：觉醒篇", 'add')
+\`\`\`
+
+**添加章节事件**：
+\`\`\`
+processTimelineInput("第一章：主角在新手村醒来，发现自己穿越了，决定先探索周围环境", 'add')
+\`\`\`
 `;

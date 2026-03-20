@@ -1,243 +1,943 @@
 /**
  * OutlineViewer.tsx
- * 大纲查看器组件 - 嵌入式版本（在 Editor 区域显示）
+ * 时间线编辑器 - 管理事件、章节和卷
  *
- * 功能：
- * - 三级渐进式显示：卷纲列表 → 章纲列表 → 章节细纲
- * - 加载和显示大纲数据
+ * 层级结构：事件 → 章节 → 卷
  */
 
-import React, { useState, useEffect } from 'react';
-import { X, ChevronRight, ChevronDown, BookOpen, FileText, Users, ArrowLeft, Plus } from 'lucide-react';
-import { useStoryOutlineStore } from '../stores/storyOutlineStore';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  X, Clock, Plus, Pencil, ChevronDown, ChevronRight
+} from 'lucide-react';
+import { useWorldTimelineStore, formatTimeDisplay } from '../stores/worldTimelineStore';
 import { useProjectStore } from '../stores/projectStore';
-import { VolumeOutline, ChapterOutline } from '../types';
+import { TimelineEvent } from '../types';
 
 interface OutlineViewerProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type ViewLevel = 'volumes' | 'chapters' | 'detail';
+type TimelineLevel = 'events' | 'chapters' | 'volumes';
+
+// 事件表单数据类型
+interface EventFormData {
+  eventIndex: number;
+  timeValue: number;
+  timeUnit: 'hour' | 'day';
+  title: string;
+  content: string;
+  location: string;
+  characters: string;
+  emotion: string;
+  storyLineId: string;
+  chapterId: string;  // 所属章节
+}
+
+// === 独立的 EventForm 组件（避免内部定义导致的重渲染问题）===
+const EventForm = React.memo(({
+  formData,
+  storyLines,
+  chapters,
+  onFieldChange,
+  onSubmit,
+  onCancel,
+  onQuickCreateChapter
+}: {
+  formData: EventFormData;
+  storyLines: { id: string; name: string }[];
+  chapters: { id: string; chapterIndex: number; title: string; volumeId?: string }[];
+  onFieldChange: (field: keyof EventFormData, value: any) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  onQuickCreateChapter?: (title: string) => Promise<string | null>; // 返回新章节ID
+}) => {
+  const previewTime = formatTimeDisplay({ value: formData.timeValue, unit: formData.timeUnit });
+  const [showQuickCreate, setShowQuickCreate] = useState(false);
+  const [quickCreateTitle, setQuickCreateTitle] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700">
+      {/* 时间输入：数值 + 单位 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs text-gray-500">时间数值</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={formData.timeValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '') {
+                onFieldChange('timeValue', 0);
+              } else {
+                const num = parseInt(val);
+                if (!isNaN(num) && num >= 0) {
+                  onFieldChange('timeValue', num);
+                }
+              }
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">单位</label>
+          <select
+            value={formData.timeUnit}
+            onChange={(e) => onFieldChange('timeUnit', e.target.value as 'hour' | 'day')}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          >
+            <option value="hour">小时</option>
+            <option value="day">天</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">显示预览</label>
+          <div className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-blue-300">
+            {previewTime}
+          </div>
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-gray-500">事件标题</label>
+        <input
+          type="text"
+          value={formData.title}
+          onChange={(e) => onFieldChange('title', e.target.value)}
+          placeholder="事件标题"
+          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+        />
+      </div>
+      <div>
+        <label className="text-xs text-gray-500">事件内容</label>
+        <textarea
+          value={formData.content}
+          onChange={(e) => onFieldChange('content', e.target.value)}
+          placeholder="事件详细描述..."
+          rows={3}
+          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-500">地点</label>
+          <input
+            type="text"
+            value={formData.location}
+            onChange={(e) => onFieldChange('location', e.target.value)}
+            placeholder="事件地点"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">出场角色（逗号分隔）</label>
+          <input
+            type="text"
+            value={formData.characters}
+            onChange={(e) => onFieldChange('characters', e.target.value)}
+            placeholder="角色A, 角色B"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-500">情绪氛围</label>
+          <input
+            type="text"
+            value={formData.emotion}
+            onChange={(e) => onFieldChange('emotion', e.target.value)}
+            placeholder="紧张、温馨、压抑..."
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">故事线</label>
+          <select
+            value={formData.storyLineId}
+            onChange={(e) => onFieldChange('storyLineId', e.target.value)}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          >
+            <option value="">默认主线</option>
+            {storyLines.map(s => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-gray-500">所属章节（可选）</label>
+        {showQuickCreate ? (
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={quickCreateTitle}
+              onChange={(e) => setQuickCreateTitle(e.target.value)}
+              placeholder="输入章节标题"
+              className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              autoFocus
+              disabled={isCreating}
+            />
+            <button
+              onClick={async () => {
+                if (!quickCreateTitle.trim() || !onQuickCreateChapter) return;
+                setIsCreating(true);
+                const newId = await onQuickCreateChapter(quickCreateTitle.trim());
+                setIsCreating(false);
+                if (newId) {
+                  onFieldChange('chapterId', newId);
+                  setShowQuickCreate(false);
+                  setQuickCreateTitle('');
+                }
+              }}
+              disabled={!quickCreateTitle.trim() || isCreating}
+              className="px-2 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded text-sm"
+            >
+              {isCreating ? '...' : '创建'}
+            </button>
+            <button
+              onClick={() => {
+                setShowQuickCreate(false);
+                setQuickCreateTitle('');
+              }}
+              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm"
+            >
+              取消
+            </button>
+          </div>
+        ) : (
+          <select
+            value={formData.chapterId}
+            onChange={(e) => {
+              if (e.target.value === '__quick_create__') {
+                setShowQuickCreate(true);
+              } else {
+                onFieldChange('chapterId', e.target.value);
+              }
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          >
+            <option value="">未分类</option>
+            {chapters.map(c => (
+              <option key={c.id} value={c.id}>第{c.chapterIndex}章「{c.title}」</option>
+            ))}
+            <option value="__quick_create__">➕ 快速创建章节</option>
+          </select>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onSubmit} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm">
+          确认
+        </button>
+        <button onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm">
+          取消
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// === Chapter Form Component ===
+const ChapterForm = React.memo(({
+  mode,
+  formData,
+  volumes,
+  onFieldChange,
+  onSubmit,
+  onCancel,
+  onQuickCreateVolume
+}: {
+  mode: 'add' | 'edit';
+  formData: { chapterIndex: number; title: string; summary: string; volumeId: string };
+  volumes: { id: string; volumeIndex: number; title: string }[];
+  onFieldChange: (field: string, value: any) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  onQuickCreateVolume?: (title: string) => Promise<string | null>;
+}) => {
+  const [showQuickCreateVolume, setShowQuickCreateVolume] = useState(false);
+  const [quickVolumeTitle, setQuickVolumeTitle] = useState('');
+  const [isCreatingVolume, setIsCreatingVolume] = useState(false);
+
+  return (
+    <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-blue-500 mb-4">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-500">章节序号</label>
+          <input
+            type="number"
+            min="1"
+            value={formData.chapterIndex}
+            onChange={(e) => onFieldChange('chapterIndex', parseInt(e.target.value) || 1)}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">章节标题</label>
+          <input
+            type="text"
+            value={formData.title}
+            onChange={(e) => onFieldChange('title', e.target.value)}
+            placeholder="第一章"
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-gray-500">章节概要</label>
+        <textarea
+          value={formData.summary}
+          onChange={(e) => onFieldChange('summary', e.target.value)}
+          placeholder="章节概要..."
+          rows={2}
+          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
+        />
+      </div>
+      <div>
+        <label className="text-xs text-gray-500">所属卷（可选）</label>
+        {showQuickCreateVolume ? (
+          <div className="flex gap-1">
+            <input
+              type="text"
+              value={quickVolumeTitle}
+              onChange={(e) => setQuickVolumeTitle(e.target.value)}
+              placeholder="输入卷标题"
+              className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              autoFocus
+              disabled={isCreatingVolume}
+            />
+            <button
+              onClick={async () => {
+                if (!quickVolumeTitle.trim() || !onQuickCreateVolume) return;
+                setIsCreatingVolume(true);
+                const newId = await onQuickCreateVolume(quickVolumeTitle.trim());
+                setIsCreatingVolume(false);
+                if (newId) {
+                  onFieldChange('volumeId', newId);
+                  setShowQuickCreateVolume(false);
+                  setQuickVolumeTitle('');
+                }
+              }}
+              disabled={!quickVolumeTitle.trim() || isCreatingVolume}
+              className="px-2 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded text-sm"
+            >
+              {isCreatingVolume ? '...' : '创建'}
+            </button>
+            <button
+              onClick={() => {
+                setShowQuickCreateVolume(false);
+                setQuickVolumeTitle('');
+              }}
+              className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm"
+            >
+              取消
+            </button>
+          </div>
+        ) : (
+          <select
+            value={formData.volumeId}
+            onChange={(e) => {
+              if (e.target.value === '__quick_create__') {
+                setShowQuickCreateVolume(true);
+              } else {
+                onFieldChange('volumeId', e.target.value);
+              }
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          >
+            <option value="">未分组</option>
+            {volumes.map(v => (
+              <option key={v.id} value={v.id}>第{v.volumeIndex}卷「{v.title}」</option>
+            ))}
+            <option value="__quick_create__">➕ 快速创建卷</option>
+          </select>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button onClick={onSubmit} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm">
+          {mode === 'edit' ? '保存' : '确认'}
+        </button>
+        <button onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm">
+          取消
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// === Chapter Card Component ===
+const ChapterCard = React.memo(({
+  chapter,
+  isEditing,
+  onEdit,
+  onDelete
+}: {
+  chapter: { id: string; chapterIndex: number; title: string; summary?: string; eventIds: string[] };
+  isEditing: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) => {
+  return (
+    <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 flex items-center justify-between">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 shrink-0">第{chapter.chapterIndex}章</span>
+          <h4 className="font-medium text-gray-200 truncate">{chapter.title}</h4>
+        </div>
+        {chapter.summary && (
+          <p className="text-xs text-gray-400 mt-1 truncate">{chapter.summary}</p>
+        )}
+        <div className="text-xs text-gray-500 mt-1">
+          {chapter.eventIds.length} 个事件
+        </div>
+      </div>
+      <div className="flex items-center gap-1 ml-2">
+        <button
+          onClick={onEdit}
+          className="p-1 text-gray-500 hover:text-blue-400"
+          title="编辑"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={onDelete}
+          className="p-1 text-gray-500 hover:text-red-400"
+          title="删除"
+        >
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+});
+
+// === Volume Section Component ===
+const VolumeSection = React.memo(({
+  volume,
+  chapters,
+  editingChapterId,
+  editingVolumeId,
+  newVolume,
+  onEditChapter,
+  onDeleteChapter,
+  onEditVolume,
+  onSaveVolume,
+  onCancelVolume,
+  onDeleteVolume,
+  newChapter,
+  onChapterFieldChange,
+  onSaveChapter,
+  onCancelChapter,
+  onQuickCreateVolume,
+  volumes
+}: {
+  volume: { id: string; volumeIndex: number; title: string; description?: string };
+  chapters: Array<{ id: string; chapterIndex: number; title: string; summary?: string; eventIds: string[]; volumeId?: string }>;
+  editingChapterId: string | null;
+  editingVolumeId: string | null;
+  newVolume: { volumeIndex: number; title: string; description: string };
+  onEditChapter: (chapter: any) => void;
+  onDeleteChapter: (id: string) => void;
+  onEditVolume: (volume: any) => void;
+  onSaveVolume: () => void;
+  onCancelVolume: () => void;
+  onDeleteVolume: (id: string) => void;
+  newChapter: { chapterIndex: number; title: string; summary: string; volumeId: string };
+  onChapterFieldChange: (field: string, value: any) => void;
+  onSaveChapter: () => void;
+  onCancelChapter: () => void;
+  onQuickCreateVolume?: (title: string) => Promise<string | null>;
+  volumes: { id: string; volumeIndex: number; title: string }[];
+}) => {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const totalEvents = chapters.reduce((sum, ch) => sum + ch.eventIds.length, 0);
+
+  return (
+    <div className="border border-gray-700 rounded-lg overflow-hidden">
+      {/* Volume Header */}
+      {editingVolumeId === volume.id ? (
+        <div className="bg-gray-800 p-3 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-gray-500">卷序号</label>
+              <input
+                type="number"
+                min="1"
+                value={newVolume.volumeIndex}
+                onChange={(e) => onEditVolume({ ...volume, volumeIndex: parseInt(e.target.value) || 1 })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">卷标题</label>
+              <input
+                type="text"
+                value={newVolume.title}
+                onChange={(e) => onEditVolume({ ...volume, title: e.target.value })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">卷描述</label>
+            <input
+              type="text"
+              value={newVolume.description}
+              onChange={(e) => onEditVolume({ ...volume, description: e.target.value })}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onSaveVolume} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-sm">保存</button>
+            <button onClick={onCancelVolume} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 text-sm">取消</button>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="bg-gray-800/80 p-3 flex items-center justify-between cursor-pointer hover:bg-gray-800"
+          onClick={() => setIsExpanded(!isExpanded)}
+        >
+          <div className="flex items-center gap-2">
+            {isExpanded ? <ChevronDown size={16} className="text-gray-500" /> : <ChevronRight size={16} className="text-gray-500" />}
+            <span className="text-xs text-gray-500">第{volume.volumeIndex}卷</span>
+            <h3 className="font-medium text-gray-200">{volume.title}</h3>
+            <span className="text-xs text-gray-500">({chapters.length}章 / {totalEvents}事件)</span>
+          </div>
+          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+            <button
+              onClick={() => onEditVolume(volume)}
+              className="p-1 text-gray-500 hover:text-blue-400"
+              title="编辑卷"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={() => onDeleteVolume(volume.id)}
+              className="p-1 text-gray-500 hover:text-red-400"
+              title="删除卷"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Chapters in Volume */}
+      {isExpanded && (
+        <div className="p-2 space-y-2 bg-gray-900/50">
+          {chapters.map(chapter => (
+            editingChapterId === chapter.id ? (
+              <ChapterForm
+                key={chapter.id}
+                mode="edit"
+                formData={newChapter}
+                volumes={volumes}
+                onFieldChange={onChapterFieldChange}
+                onSubmit={onSaveChapter}
+                onCancel={onCancelChapter}
+                onQuickCreateVolume={onQuickCreateVolume}
+              />
+            ) : (
+              <ChapterCard
+                key={chapter.id}
+                chapter={chapter}
+                isEditing={false}
+                onEdit={() => onEditChapter(chapter)}
+                onDelete={() => onDeleteChapter(chapter.id)}
+              />
+            )
+          ))}
+          {chapters.length === 0 && (
+            <div className="text-gray-500 text-sm text-center py-4">暂无章节</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
 
 const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
-  const [level, setLevel] = useState<ViewLevel>('volumes');
-  const [selectedVolumeId, setSelectedVolumeId] = useState<string | null>(null);
-  const [selectedChapterId, setSelectedChapterId] = useState<string | null>(null);
-  const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
+  // 视图状态
+  const [timelineLevel, setTimelineLevel] = useState<TimelineLevel>('events');
 
   // 创建表单状态
   const [showAddVolume, setShowAddVolume] = useState(false);
+  const [editingVolumeId, setEditingVolumeId] = useState<string | null>(null);
   const [showAddChapter, setShowAddChapter] = useState<string | null>(null);
-  const [showAddScene, setShowAddScene] = useState<string | null>(null);
-  const [editingScene, setEditingScene] = useState<string | null>(null);
-  const [newVolume, setNewVolume] = useState({ volumeNumber: 1, title: '', description: '' });
-  const [newChapter, setNewChapter] = useState({ chapterNumber: 1, title: '', summary: '' });
-  const [newScene, setNewScene] = useState({ nodeNumber: 1, title: '', content: '', location: '', characters: '', emotion: '', purpose: '' });
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [showAddEvent, setShowAddEvent] = useState<boolean>(false);
+  const [newVolume, setNewVolume] = useState({ volumeIndex: 1, title: '', description: '' });
+  const [newChapter, setNewChapter] = useState({ chapterIndex: 1, title: '', summary: '', volumeId: '' });
 
-  const outline = useStoryOutlineStore(state => state.outline);
-  const isLoading = useStoryOutlineStore(state => state.isLoading);
-  const loadOutline = useStoryOutlineStore(state => state.loadOutline);
-  const addVolume = useStoryOutlineStore(state => state.addVolume);
-  const updateVolume = useStoryOutlineStore(state => state.updateVolume);
-  const deleteVolume = useStoryOutlineStore(state => state.deleteVolume);
-  const addChapter = useStoryOutlineStore(state => state.addChapter);
-  const updateChapter = useStoryOutlineStore(state => state.updateChapter);
-  const deleteChapter = useStoryOutlineStore(state => state.deleteChapter);
-  const addScene = useStoryOutlineStore(state => state.addScene);
-  const updateScene = useStoryOutlineStore(state => state.updateScene);
-  const deleteScene = useStoryOutlineStore(state => state.deleteScene);
+  // Event form states
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [newEvent, setNewEvent] = useState({
+    eventIndex: 1,
+    timeValue: 8,
+    timeUnit: 'hour' as 'hour' | 'day',
+    title: '',
+    content: '',
+    location: '',
+    characters: '',
+    emotion: '',
+    storyLineId: '',
+    chapterId: ''
+  });
+
+  // Store - 使用 worldTimelineStore 作为唯一数据源
+  const timeline = useWorldTimelineStore(state => state.timeline);
+  const isLoading = useWorldTimelineStore(state => state.isLoading);
+  const loadTimeline = useWorldTimelineStore(state => state.loadTimeline);
+  const addEvent = useWorldTimelineStore(state => state.addEvent);
+  const updateEvent = useWorldTimelineStore(state => state.updateEvent);
+  const deleteEvent = useWorldTimelineStore(state => state.deleteEvent);
+  const addChapter = useWorldTimelineStore(state => state.addChapter);
+  const updateChapter = useWorldTimelineStore(state => state.updateChapter);
+  const addVolume = useWorldTimelineStore(state => state.addVolume);
+  const updateVolume = useWorldTimelineStore(state => state.updateVolume);
+  const deleteVolume = useWorldTimelineStore(state => state.deleteVolume);
+  const deleteChapter = useWorldTimelineStore(state => state.deleteChapter);
+  const getEvents = useWorldTimelineStore(state => state.getEvents);
+  const getChapters = useWorldTimelineStore(state => state.getChapters);
+  const getVolumes = useWorldTimelineStore(state => state.getVolumes);
+  const getStoryLines = useWorldTimelineStore(state => state.getStoryLines);
+  const getTimeRange = useWorldTimelineStore(state => state.getTimeRange);
+  const addChaptersToVolume = useWorldTimelineStore(state => state.addChaptersToVolume);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
-  // 编辑状态
-  const [editingVolume, setEditingVolume] = useState<string | null>(null);
-  const [editingChapter, setEditingChapter] = useState<string | null>(null);
-  const [editVolumeForm, setEditVolumeForm] = useState({ volumeNumber: 1, title: '', description: '' });
-  const [editChapterForm, setEditChapterForm] = useState({ chapterNumber: 1, title: '', summary: '', pov: '', driver: '', conflict: '', hook: '' });
+  // 缓存数据，避免每次渲染返回新数组
+  const cachedChapters = useMemo(() => {
+    return timeline ? getChapters() : [];
+  }, [timeline]);
 
-  // 加载大纲数据 - 只在 store 中没有数据时才加载
-  useEffect(() => {
-    if (isOpen && currentProjectId && !outline) {
-      loadOutline(currentProjectId);
-    }
-  }, [isOpen, currentProjectId, outline, loadOutline]);
+  const cachedVolumes = useMemo(() => {
+    return timeline ? getVolumes() : [];
+  }, [timeline]);
 
-  // 重置状态
+  const cachedStoryLines = useMemo(() => {
+    return timeline ? getStoryLines() : [];
+  }, [timeline]);
+
+  // 加载时间线数据
   useEffect(() => {
-    if (!isOpen) {
-      setLevel('volumes');
-      setSelectedVolumeId(null);
-      setSelectedChapterId(null);
-      setExpandedVolumes(new Set());
+    if (isOpen && currentProjectId && !timeline) {
+      loadTimeline(currentProjectId);
     }
-  }, [isOpen]);
+  }, [isOpen, currentProjectId, timeline, loadTimeline]);
 
   if (!isOpen) return null;
 
-  // 获取当前卷和章节
-  const selectedVolume = outline?.volumes.find(v => v.id === selectedVolumeId);
-  const selectedChapter = selectedVolume?.chapters.find(c => c.id === selectedChapterId);
+  // === Timeline Handlers ===
 
-  // 切换卷的展开状态
-  const toggleVolumeExpand = (volumeId: string) => {
-    const newExpanded = new Set(expandedVolumes);
-    if (newExpanded.has(volumeId)) {
-      newExpanded.delete(volumeId);
-    } else {
-      newExpanded.add(volumeId);
+  const handleAddTimelineEvent = async () => {
+    if (!newEvent.title.trim()) return;
+    if (!timeline && currentProjectId) {
+      await loadTimeline(currentProjectId);
     }
-    setExpandedVolumes(newExpanded);
-  };
+    if (!timeline) return;
 
-  // 状态颜色
-  const statusColors = {
-    draft: 'bg-gray-600 text-gray-200',
-    outline: 'bg-blue-600 text-blue-200',
-    writing: 'bg-yellow-600 text-yellow-200',
-    completed: 'bg-green-600 text-green-200'
-  };
-
-  // 创建卷
-  const handleAddVolume = async () => {
-    if (!newVolume.title.trim()) return;
-
-    // 确保大纲已加载
-    if (!outline && currentProjectId) {
-      await loadOutline(currentProjectId);
-    }
-
-    if (!outline) return;
-
-    addVolume({
-      volumeNumber: newVolume.volumeNumber,
-      title: newVolume.title.trim(),
-      description: newVolume.description.trim()
+    addEvent({
+      time: {
+        value: newEvent.timeValue,
+        unit: newEvent.timeUnit
+      },
+      title: newEvent.title.trim(),
+      content: newEvent.content.trim(),
+      location: newEvent.location.trim(),
+      characters: newEvent.characters.split(',').map(c => c.trim()).filter(Boolean),
+      emotion: newEvent.emotion.trim(),
+      storyLineId: newEvent.storyLineId || undefined,
+      chapterId: newEvent.chapterId || undefined
     });
-    setNewVolume({ volumeNumber: newVolume.volumeNumber + 1, title: '', description: '' });
-    setShowAddVolume(false);
+    setNewEvent({
+      eventIndex: 1,
+      timeValue: newEvent.timeValue + (newEvent.timeUnit === 'hour' ? 4 : 1),
+      timeUnit: newEvent.timeUnit,
+      title: '',
+      content: '',
+      location: '',
+      characters: '',
+      emotion: '',
+      storyLineId: '',
+      chapterId: ''
+    });
+    setShowAddEvent(false);
   };
 
-  // 创建章节
-  const handleAddChapter = (volumeId: string) => {
-    if (!newChapter.title.trim()) return;
-    addChapter(volumeId, {
-      chapterNumber: newChapter.chapterNumber,
+  const handleDeleteTimelineEvent = (eventId: string) => {
+    deleteEvent(eventId);
+  };
+
+  const handleStartEditEvent = (event: TimelineEvent) => {
+    setEditingEventId(event.id);
+    setNewEvent({
+      eventIndex: event.eventIndex,
+      timeValue: event.time?.value || 0,
+      timeUnit: event.time?.unit || 'hour',
+      title: event.title,
+      content: event.content,
+      location: event.location || '',
+      characters: event.characters?.join(', ') || '',
+      emotion: event.emotion || '',
+      storyLineId: event.storyLineId || '',
+      chapterId: event.chapterId || ''
+    });
+    setShowAddEvent(false);
+  };
+
+  const handleSaveEditEvent = () => {
+    if (!editingEventId || !newEvent.title.trim()) return;
+    updateEvent(editingEventId, {
+      eventIndex: newEvent.eventIndex,
+      time: {
+        value: newEvent.timeValue,
+        unit: newEvent.timeUnit
+      },
+      title: newEvent.title.trim(),
+      content: newEvent.content.trim(),
+      location: newEvent.location.trim() || undefined,
+      characters: newEvent.characters ? newEvent.characters.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+      emotion: newEvent.emotion.trim() || undefined,
+      storyLineId: newEvent.storyLineId || undefined,
+      chapterId: newEvent.chapterId || undefined
+    });
+    setEditingEventId(null);
+    setNewEvent({
+      eventIndex: 1,
+      timeValue: 8,
+      timeUnit: 'hour',
+      title: '',
+      content: '',
+      location: '',
+      characters: '',
+      emotion: '',
+      storyLineId: '',
+      chapterId: ''
+    });
+  };
+
+  const handleCancelEditEvent = () => {
+    setEditingEventId(null);
+    setNewEvent({
+      eventIndex: 1,
+      timeValue: 8,
+      timeUnit: 'hour',
+      title: '',
+      content: '',
+      location: '',
+      characters: '',
+      emotion: '',
+      storyLineId: '',
+      chapterId: ''
+    });
+  };
+
+  const handleAddTimelineChapter = () => {
+    if (!newChapter.title.trim()) {
+      console.warn('[OutlineViewer] 章节标题不能为空');
+      return;
+    }
+
+    const result = addChapter({
+      chapterIndex: newChapter.chapterIndex,
       title: newChapter.title.trim(),
       summary: newChapter.summary.trim(),
-      pov: '',
-      driver: '',
-      conflict: '',
-      hook: '',
-      status: 'outline',
-      scenes: []
+      volumeId: newChapter.volumeId || undefined
     });
-    setNewChapter({ chapterNumber: newChapter.chapterNumber + 1, title: '', summary: '' });
+
+    // 解析返回结果
+    try {
+      const parsed = JSON.parse(result);
+      if (parsed.existing) {
+        console.log('[OutlineViewer] 章节序号已存在，已自动关联');
+      }
+    } catch {
+      // 忽略解析错误
+    }
+
+    // 自动计算下一个章节序号
+    const currentChapters = getChapters();
+    const maxIndex = currentChapters.reduce((max, c) => Math.max(max, c.chapterIndex), 0);
+
+    setNewChapter({ chapterIndex: maxIndex + 1, title: '', summary: '', volumeId: '' });
     setShowAddChapter(null);
   };
 
-  // 创建场景
-  const handleAddScene = (chapterId: string) => {
-    if (!newScene.title.trim()) return;
-    addScene(chapterId, {
-      nodeNumber: newScene.nodeNumber,
-      title: newScene.title.trim(),
-      content: newScene.content.trim(),
-      location: newScene.location.trim(),
-      characters: newScene.characters.split(',').map(c => c.trim()).filter(Boolean),
-      emotion: newScene.emotion.trim(),
-      purpose: newScene.purpose.trim()
-    });
-    setNewScene({ nodeNumber: newScene.nodeNumber + 1, title: '', content: '', location: '', characters: '', emotion: '', purpose: '' });
-    setShowAddScene(null);
-  };
-
-  // 删除场景
-  const handleDeleteScene = (chapterId: string, sceneId: string) => {
-    deleteScene(chapterId, sceneId);
-  };
-
-  // 开始编辑卷
-  const handleStartEditVolume = (volume: any) => {
-    setEditVolumeForm({ volumeNumber: volume.volumeNumber, title: volume.title, description: volume.description });
-    setEditingVolume(volume.id);
-  };
-
-  // 保存编辑卷
-  const handleSaveEditVolume = (volumeId: string) => {
-    updateVolume(volumeId, editVolumeForm);
-    setEditingVolume(null);
-  };
-
-  // 删除卷
-  const handleDeleteVolume = (volumeId: string) => {
-    if (confirm('确定要删除这个卷吗？')) {
-      deleteVolume(volumeId);
-    }
-  };
-
   // 开始编辑章节
-  const handleStartEditChapter = (chapter: any) => {
-    setEditChapterForm({
-      chapterNumber: chapter.chapterNumber,
+  const handleStartEditChapter = useCallback((chapter: { id: string; chapterIndex: number; title: string; summary?: string; volumeId?: string }) => {
+    setEditingChapterId(chapter.id);
+    setNewChapter({
+      chapterIndex: chapter.chapterIndex,
       title: chapter.title,
-      summary: chapter.summary,
-      pov: chapter.pov,
-      driver: chapter.driver,
-      conflict: chapter.conflict,
-      hook: chapter.hook
+      summary: chapter.summary || '',
+      volumeId: chapter.volumeId || ''
     });
-    setEditingChapter(chapter.id);
+    setShowAddChapter(null);
+  }, []);
+
+  // 保存编辑的章节
+  const handleSaveEditChapter = () => {
+    if (!editingChapterId || !newChapter.title.trim()) return;
+    updateChapter(editingChapterId, {
+      chapterIndex: newChapter.chapterIndex,
+      title: newChapter.title.trim(),
+      summary: newChapter.summary.trim(),
+      volumeId: newChapter.volumeId || undefined
+    });
+    setEditingChapterId(null);
+    setNewChapter({ chapterIndex: 1, title: '', summary: '', volumeId: '' });
   };
 
-  // 保存编辑章节
-  const handleSaveEditChapter = (chapterId: string) => {
-    updateChapter(chapterId, editChapterForm);
-    setEditingChapter(null);
+  // 取消编辑章节
+  const handleCancelEditChapter = () => {
+    setEditingChapterId(null);
+    setNewChapter({ chapterIndex: 1, title: '', summary: '', volumeId: '' });
   };
 
-  // 删除章节
-  const handleDeleteChapter = (volumeId: string, chapterId: string) => {
-    if (confirm('确定要删除这个章节吗？')) {
-      deleteChapter(chapterId);
+  // 快速创建卷（从章节表单调用）
+  const handleQuickCreateVolume = useCallback(async (title: string): Promise<string | null> => {
+    if (!title.trim()) return null;
+
+    const existingVolumes = getVolumes();
+    const maxIndex = existingVolumes.reduce((max, v) => Math.max(max, v.volumeIndex), 0);
+    const nextIndex = maxIndex + 1;
+
+    const result = addVolume({
+      volumeIndex: nextIndex,
+      title: title.trim(),
+      description: ''
+    });
+
+    try {
+      const parsed = JSON.parse(result);
+      return parsed.id || null;
+    } catch {
+      return null;
     }
+  }, [getVolumes, addVolume]);
+
+  // 快速创建章节（从事件表单调用）
+  const handleQuickCreateChapter = useCallback(async (title: string): Promise<string | null> => {
+    if (!title.trim()) return null;
+
+    // 自动计算下一个章节序号
+    const existingChapters = getChapters();
+    const maxIndex = existingChapters.reduce((max, c) => Math.max(max, c.chapterIndex), 0);
+    const nextIndex = maxIndex + 1;
+
+    const result = addChapter({
+      chapterIndex: nextIndex,
+      title: title.trim(),
+      summary: ''
+    });
+
+    // addChapter 返回 JSON 字符串，需要解析
+    try {
+      const parsed = JSON.parse(result);
+      return parsed.id || null;
+    } catch {
+      return null;
+    }
+  }, [getChapters, addChapter]);
+
+  const handleAddTimelineVolume = () => {
+    if (!newVolume.title.trim()) return;
+    addVolume({
+      volumeIndex: newVolume.volumeIndex,
+      title: newVolume.title.trim(),
+      description: newVolume.description.trim()
+    });
+    setNewVolume({ volumeIndex: newVolume.volumeIndex + 1, title: '', description: '' });
+    setShowAddVolume(false);
   };
 
+  // 事件表单字段变更处理（用 useCallback 缓存）
+  const handleEventFieldChange = useCallback((field: keyof EventFormData, value: any) => {
+    setNewEvent(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  // === Timeline Event Card Component (纯展示，不含编辑逻辑) ===
+  const EventCard = ({ event, showChapterInfo = false, onEdit, onDelete }: {
+    event: TimelineEvent;
+    showChapterInfo?: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+  }) => {
+    const storyLine = cachedStoryLines.find(s => s.id === event.storyLineId);
+    // 使用事件的 chapterId 直接查找章节
+    const chapter = event.chapterId ? cachedChapters.find(c => c.id === event.chapterId) : undefined;
+
+    return (
+      <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-gray-500">#{event.eventIndex}</span>
+              {event.time && (
+                <span className="text-xs px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded">
+                  {formatTimeDisplay(event.time)}
+                </span>
+              )}
+              {storyLine && (
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: storyLine.color + '30', color: storyLine.color }}>
+                  {storyLine.name}
+                </span>
+              )}
+            </div>
+            <h5 className="font-medium text-gray-200">{event.title}</h5>
+          </div>
+          <div className="flex gap-1">
+            <button
+              onClick={onEdit}
+              className="text-gray-500 hover:text-blue-400"
+              title="编辑"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={onDelete}
+              className="text-gray-500 hover:text-red-400"
+              title="删除"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        {showChapterInfo && chapter && (
+          <div className="text-xs text-gray-500 mb-2">
+            所属章节：第{chapter.chapterIndex}章「{chapter.title}」
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2 text-xs text-gray-400">
+          {event.location && <span>📍 {event.location}</span>}
+          {event.characters && event.characters.length > 0 && <span>👥 {event.characters.join(', ')}</span>}
+          {event.emotion && <span>💫 {event.emotion}</span>}
+        </div>
+
+        {event.content && (
+          <p className="text-sm text-gray-300 mt-2">{event.content}</p>
+        )}
+      </div>
+    );
+  };
+
+  // === Render ===
   return (
     <div className="h-full flex flex-col bg-[#0d1117] text-gray-200">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div className="flex items-center gap-3">
-          {level !== 'volumes' && (
-            <button
-              onClick={() => {
-                if (level === 'detail') {
-                  setLevel('chapters');
-                  setSelectedChapterId(null);
-                } else {
-                  setLevel('volumes');
-                  setSelectedVolumeId(null);
-                }
-              }}
-              className="p-1 hover:bg-gray-700 rounded"
-            >
-              <ArrowLeft size={18} />
-            </button>
-          )}
-          <BookOpen size={20} className="text-blue-400" />
-          <span className="font-semibold text-lg">大纲</span>
-          {level === 'chapters' && selectedVolume && (
-            <ChevronRight size={16} className="text-gray-500" />
-          )}
-          {level === 'chapters' && selectedVolume && (
-            <span className="text-gray-400">{selectedVolume.title}</span>
-          )}
-          {level === 'detail' && selectedChapter && (
-            <>
-              <ChevronRight size={16} className="text-gray-500" />
-              <span className="text-gray-400">第{selectedChapter.chapterNumber}章</span>
-            </>
+          <Clock size={20} className="text-blue-400" />
+          <span className="font-semibold text-lg">时间线</span>
+          {timeline && (
+            <span className="text-sm text-gray-400">({getTimeRange() || '暂无时间'})</span>
           )}
         </div>
+
         <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
           <X size={20} />
         </button>
@@ -247,610 +947,240 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       <div className="flex-1 overflow-y-auto p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
-            <span className="text-gray-500">加载中...</span>
+            <span className="text-gray-500">加载时间线...</span>
           </div>
-        ) : !outline || !outline.volumes || outline.volumes.length === 0 ? (
+        ) : !timeline ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-500">
-            <FileText size={32} className="mb-2 opacity-50" />
-            <p>暂无大纲</p>
-            <p className="text-sm mb-4">使用 Agent 添加章节大纲</p>
-            {showAddVolume ? (
-              <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700 w-80">
-                <h4 className="font-medium text-gray-300">新建卷</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500">卷号</label>
-                    <input
-                      type="number"
-                      value={newVolume.volumeNumber}
-                      onChange={(e) => setNewVolume({ ...newVolume, volumeNumber: parseInt(e.target.value) || 1 })}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-gray-500">卷名</label>
-                    <input
-                      type="text"
-                      value={newVolume.title}
-                      onChange={(e) => setNewVolume({ ...newVolume, title: e.target.value })}
-                      placeholder="卷名"
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">简介</label>
-                  <textarea
-                    value={newVolume.description}
-                    onChange={(e) => setNewVolume({ ...newVolume, description: e.target.value })}
-                    placeholder="卷简介"
-                    rows={2}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddVolume}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm"
-                  >
-                    确认
-                  </button>
-                  <button
-                    onClick={() => setShowAddVolume(false)}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm"
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAddVolume(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg"
-              >
-                <Plus size={16} />
-                <span>添加卷</span>
-              </button>
-            )}
+            <Clock size={32} className="mb-2 opacity-50" />
+            <p>时间线未初始化</p>
           </div>
-        ) : level === 'volumes' ? (
-          /* Level 1: 卷纲列表 */
-          <div className="space-y-2">
-            {/* 添加卷按钮 */}
-            <button
-              onClick={() => {
-                if (!outline && currentProjectId) {
-                  loadOutline(currentProjectId);
-                }
-                setShowAddVolume(true);
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-400 transition-colors"
-            >
-              <Plus size={16} />
-              <span>添加卷</span>
-            </button>
-
-            {/* 添加卷表单 */}
-            {showAddVolume && (
-              <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700">
-                <h4 className="font-medium text-gray-300">新建卷</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500">卷号</label>
-                    <input
-                      type="number"
-                      value={newVolume.volumeNumber}
-                      onChange={(e) => setNewVolume({ ...newVolume, volumeNumber: parseInt(e.target.value) || 1 })}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-xs text-gray-500">卷名</label>
-                    <input
-                      type="text"
-                      value={newVolume.title}
-                      onChange={(e) => setNewVolume({ ...newVolume, title: e.target.value })}
-                      placeholder="卷名"
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500">简介</label>
-                  <textarea
-                    value={newVolume.description}
-                    onChange={(e) => setNewVolume({ ...newVolume, description: e.target.value })}
-                    placeholder="卷简介"
-                    rows={2}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleAddVolume}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm"
-                  >
-                    确认
-                  </button>
-                  <button
-                    onClick={() => setShowAddVolume(false)}
-                    className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm"
-                  >
-                    取消
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {(outline.volumes || []).map((volume) => (
-              <div key={volume.id} className="border border-gray-700 rounded-lg overflow-hidden">
-                {/* 卷标题 */}
-                <div
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-750 cursor-pointer"
-                  onClick={() => toggleVolumeExpand(volume.id)}
-                >
-                  {expandedVolumes.has(volume.id) ? (
-                    <ChevronDown size={16} className="text-gray-400" />
-                  ) : (
-                    <ChevronRight size={16} className="text-gray-400" />
-                  )}
-                  <span className="font-medium">第{volume.volumeNumber}卷</span>
-                  <span className="text-gray-300">{volume.title}</span>
-                  <div className="flex items-center gap-1 ml-auto">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleStartEditVolume(volume); }}
-                      className="p-1 text-gray-500 hover:text-blue-400"
-                    >
-                      <FileText size={14} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteVolume(volume.id); }}
-                      className="p-1 text-gray-500 hover:text-red-400"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 编辑卷表单 */}
-                {editingVolume === volume.id && (
-                  <div className="p-3 bg-gray-800/80 border-t border-gray-700 space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="text-xs text-gray-500">卷号</label>
-                        <input
-                          type="number"
-                          value={editVolumeForm.volumeNumber}
-                          onChange={(e) => setEditVolumeForm({ ...editVolumeForm, volumeNumber: parseInt(e.target.value) || 1 })}
-                          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <label className="text-xs text-gray-500">卷名</label>
-                        <input
-                          type="text"
-                          value={editVolumeForm.title}
-                          onChange={(e) => setEditVolumeForm({ ...editVolumeForm, title: e.target.value })}
-                          className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500">简介</label>
-                      <textarea
-                        value={editVolumeForm.description}
-                        onChange={(e) => setEditVolumeForm({ ...editVolumeForm, description: e.target.value })}
-                        rows={2}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleSaveEditVolume(volume.id)}
-                        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm"
-                      >
-                        保存
-                      </button>
-                      <button
-                        onClick={() => setEditingVolume(null)}
-                        className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* 卷简介（展开时显示） */}
-                {expandedVolumes.has(volume.id) && volume.description && (
-                  <div className="px-3 py-2 bg-gray-800/50 text-sm text-gray-400 border-t border-gray-700">
-                    {volume.description}
-                  </div>
-                )}
-
-                {/* 章列表（展开时显示） */}
-                {expandedVolumes.has(volume.id) && (
-                  <div className="border-t border-gray-700">
-                    {/* 添加章节按钮 */}
-                    {showAddChapter === volume.id ? (
-                      <div className="p-3 space-y-2 bg-gray-800/50">
-                        <div className="grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-xs text-gray-500">章号</label>
-                            <input
-                              type="number"
-                              value={newChapter.chapterNumber}
-                              onChange={(e) => setNewChapter({ ...newChapter, chapterNumber: parseInt(e.target.value) || 1 })}
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <label className="text-xs text-gray-500">章名</label>
-                            <input
-                              type="text"
-                              value={newChapter.title}
-                              onChange={(e) => setNewChapter({ ...newChapter, title: e.target.value })}
-                              placeholder="章名"
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">概要</label>
-                          <textarea
-                            value={newChapter.summary}
-                            onChange={(e) => setNewChapter({ ...newChapter, summary: e.target.value })}
-                            placeholder="章节概要"
-                            rows={2}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAddChapter(volume.id)}
-                            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm"
-                          >
-                            确认
-                          </button>
-                          <button
-                            onClick={() => setShowAddChapter(null)}
-                            className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm"
-                          >
-                            取消
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowAddChapter(volume.id)}
-                        className="w-full flex items-center justify-center gap-1 py-2 text-gray-500 hover:text-gray-300 text-sm border-b border-gray-700/50"
-                      >
-                        <Plus size={14} />
-                        <span>添加章节</span>
-                      </button>
-                    )}
-
-                    {volume.chapters.length > 0 && volume.chapters.map((chapter) => (
-                      <div
-                        key={chapter.id}
-                        className="flex items-center gap-2 px-4 py-2 hover:bg-gray-700/50 border-b border-gray-700/50 last:border-0"
-                      >
-                        <div
-                          className="flex items-center gap-2 flex-1 cursor-pointer"
-                          onClick={() => {
-                            setSelectedVolumeId(volume.id);
-                            setSelectedChapterId(chapter.id);
-                            setLevel('detail');
-                          }}
-                        >
-                          <FileText size={14} className="text-gray-500" />
-                          <span className="text-gray-400 text-sm">第{chapter.chapterNumber}章</span>
-                          <span className="text-gray-300 flex-1 truncate">{chapter.title}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${statusColors[chapter.status]}`}>
-                            {chapter.status}
-                          </span>
-                        </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleStartEditChapter(chapter); }}
-                          className="p-1 text-gray-500 hover:text-blue-400"
-                        >
-                          <FileText size={12} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteChapter(volume.id, chapter.id); }}
-                          className="p-1 text-gray-500 hover:text-red-400"
-                        >
-                          <X size={12} />
-                        </button>
-                      </div>
-                    ))}
-
-                    {/* 编辑章节表单 */}
-                    {editingChapter && (
-                      <div className="p-3 bg-gray-800/80 border-t border-gray-700 space-y-2">
-                        <h4 className="font-medium text-gray-300 text-sm">编辑章节</h4>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-xs text-gray-500">章号</label>
-                            <input
-                              type="number"
-                              value={editChapterForm.chapterNumber}
-                              onChange={(e) => setEditChapterForm({ ...editChapterForm, chapterNumber: parseInt(e.target.value) || 1 })}
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-500">章名</label>
-                            <input
-                              type="text"
-                              value={editChapterForm.title}
-                              onChange={(e) => setEditChapterForm({ ...editChapterForm, title: e.target.value })}
-                              className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">POV</label>
-                          <input
-                            type="text"
-                            value={editChapterForm.pov}
-                            onChange={(e) => setEditChapterForm({ ...editChapterForm, pov: e.target.value })}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">概要</label>
-                          <textarea
-                            value={editChapterForm.summary}
-                            onChange={(e) => setEditChapterForm({ ...editChapterForm, summary: e.target.value })}
-                            rows={2}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">推动者</label>
-                          <input
-                            type="text"
-                            value={editChapterForm.driver}
-                            onChange={(e) => setEditChapterForm({ ...editChapterForm, driver: e.target.value })}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">冲突来源</label>
-                          <input
-                            type="text"
-                            value={editChapterForm.conflict}
-                            onChange={(e) => setEditChapterForm({ ...editChapterForm, conflict: e.target.value })}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500">章末悬念</label>
-                          <input
-                            type="text"
-                            value={editChapterForm.hook}
-                            onChange={(e) => setEditChapterForm({ ...editChapterForm, hook: e.target.value })}
-                            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleSaveEditChapter(editingChapter)}
-                            className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm"
-                          >
-                            保存
-                          </button>
-                          <button
-                            onClick={() => setEditingChapter(null)}
-                            className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm"
-                          >
-                            取消
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : level === 'detail' && selectedChapter ? (
-          /* Level 3: 章节细纲 */
+        ) : (
           <div className="space-y-4">
-            {/* 基本信息 */}
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h3 className="font-medium text-lg mb-3">第{selectedChapter.chapterNumber}章 {selectedChapter.title}</h3>
-
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500">POV：</span>
-                  <span className="text-gray-300">{selectedChapter.pov || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">状态：</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${statusColors[selectedChapter.status]}`}>
-                    {selectedChapter.status}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 章节概要 */}
-            {selectedChapter.summary && (
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-400 mb-2">章节概要</h4>
-                <p className="text-gray-300">{selectedChapter.summary}</p>
-              </div>
-            )}
-
-            {/* 推动者 */}
-            {selectedChapter.driver && (
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-400 mb-2">推动者</h4>
-                <p className="text-gray-300">{selectedChapter.driver}</p>
-              </div>
-            )}
-
-            {/* 冲突来源 */}
-            {selectedChapter.conflict && (
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-400 mb-2">冲突来源</h4>
-                <p className="text-gray-300">{selectedChapter.conflict}</p>
-              </div>
-            )}
-
-            {/* 章末悬念 */}
-            {selectedChapter.hook && (
-              <div className="bg-gray-800 rounded-lg p-4">
-                <h4 className="text-sm font-medium text-gray-400 mb-2">章末悬念</h4>
-                <p className="text-gray-300">{selectedChapter.hook}</p>
-              </div>
-            )}
-
-            {/* 场景节点列表 */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-gray-400">场景节点 ({selectedChapter.scenes?.length || 0})</h4>
-                <button
-                  onClick={() => setShowAddScene(selectedChapter.id)}
-                  className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
+            {/* Timeline Level Tabs */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setTimelineLevel('events')}
+                  className={`px-3 py-1 text-sm rounded ${
+                    timelineLevel === 'events' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
+                  }`}
                 >
-                  <Plus size={14} />
-                  <span>添加场景</span>
+                  事件
+                </button>
+                <button
+                  onClick={() => setTimelineLevel('chapters')}
+                  className={`px-3 py-1 text-sm rounded ${
+                    timelineLevel === 'chapters' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
+                  }`}
+                >
+                  章节
                 </button>
               </div>
 
-              {/* 添加场景表单 */}
-              {showAddScene === selectedChapter.id && (
-                <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs text-gray-500">节点号</label>
-                      <input
-                        type="number"
-                        value={newScene.nodeNumber}
-                        onChange={(e) => setNewScene({ ...newScene, nodeNumber: parseInt(e.target.value) || 1 })}
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500">场景标题</label>
-                      <input
-                        type="text"
-                        value={newScene.title}
-                        onChange={(e) => setNewScene({ ...newScene, title: e.target.value })}
-                        placeholder="场景标题"
-                        className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">场景地点</label>
-                    <input
-                      type="text"
-                      value={newScene.location}
-                      onChange={(e) => setNewScene({ ...newScene, location: e.target.value })}
-                      placeholder="场景地点"
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">出场角色（逗号分隔）</label>
-                    <input
-                      type="text"
-                      value={newScene.characters}
-                      onChange={(e) => setNewScene({ ...newScene, characters: e.target.value })}
-                      placeholder="角色A, 角色B"
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">情绪氛围</label>
-                    <input
-                      type="text"
-                      value={newScene.emotion}
-                      onChange={(e) => setNewScene({ ...newScene, emotion: e.target.value })}
-                      placeholder="紧张、温馨、压抑..."
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">场景内容/要点</label>
-                    <textarea
-                      value={newScene.content}
-                      onChange={(e) => setNewScene({ ...newScene, content: e.target.value })}
-                      placeholder="场景详细描述..."
-                      rows={3}
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">场景作用</label>
-                    <input
-                      type="text"
-                      value={newScene.purpose}
-                      onChange={(e) => setNewScene({ ...newScene, purpose: e.target.value })}
-                      placeholder="推动剧情、塑造人物..."
-                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAddScene(selectedChapter.id)}
-                      className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm"
-                    >
-                      确认
-                    </button>
-                    <button
-                      onClick={() => setShowAddScene(null)}
-                      className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm"
-                    >
-                      取消
-                    </button>
-                  </div>
-                </div>
+              {/* === Events Level === */}
+              {timelineLevel === 'events' && (
+                <>
+                  {/* Add Event Button */}
+              {!showAddEvent && (
+                <button
+                  onClick={() => setShowAddEvent(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-400 transition-colors"
+                >
+                  <Plus size={16} />
+                  <span>添加事件</span>
+                </button>
               )}
 
-              {/* 场景列表 */}
-              {(selectedChapter.scenes || []).map((scene) => (
-                <div key={scene.id} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <span className="text-xs text-gray-500">节点{scene.nodeNumber}</span>
-                      <h5 className="font-medium text-gray-200">{scene.title}</h5>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteScene(selectedChapter.id, scene.id)}
-                      className="text-gray-500 hover:text-red-400"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                  {scene.location && (
-                    <p className="text-xs text-gray-400 mb-1">📍 {scene.location}</p>
-                  )}
-                  {scene.characters && scene.characters.length > 0 && (
-                    <p className="text-xs text-gray-400 mb-1">👥 {scene.characters.join(', ')}</p>
-                  )}
-                  {scene.emotion && (
-                    <p className="text-xs text-gray-400 mb-1">💫 {scene.emotion}</p>
-                  )}
-                  {scene.content && (
-                    <p className="text-sm text-gray-300 mt-2">{scene.content}</p>
-                  )}
-                  {scene.purpose && (
-                    <p className="text-xs text-blue-400 mt-2">→ {scene.purpose}</p>
-                  )}
-                </div>
-              ))}
+              {showAddEvent && (
+                <EventForm
+                  formData={newEvent}
+                  storyLines={cachedStoryLines}
+                  chapters={cachedChapters}
+                  onFieldChange={handleEventFieldChange}
+                  onSubmit={handleAddTimelineEvent}
+                  onCancel={() => setShowAddEvent(false)}
+                  onQuickCreateChapter={handleQuickCreateChapter}
+                />
+              )}
 
-              {(!selectedChapter.scenes || selectedChapter.scenes.length === 0) && !showAddScene && (
-                <p className="text-center text-gray-500 text-sm py-4">暂无场景节点</p>
+              {/* Events */}
+              {(() => {
+                const events =getEvents();
+
+                if (events.length === 0 && !showAddEvent) {
+                  return (
+                    <div className="text-gray-500 text-sm text-center py-8">
+                      暂无事件，请添加事件或使用 Agent 生成时间线
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="relative">
+                    {/* Timeline Line */}
+                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-700" />
+
+                    {/* Event Count */}
+                    <div className="mb-4 ml-10 text-sm text-gray-500">
+                      共 {events.length} 个事件
+                    </div>
+
+                    {/* Events */}
+                    {events.map((event) => (
+                      <div key={event.id} className="relative pl-10 pb-4 last:pb-0">
+                        {/* Timeline Dot */}
+                        <div
+                          className="absolute left-2.5 top-1 w-3 h-3 rounded-full border-2 border-gray-900"
+                          style={{ backgroundColor: cachedStoryLines.find(s => s.id === event.storyLineId)?.color || '#4A90D9' }}
+                        />
+
+                        {/* Event Card or Edit Form */}
+                        {editingEventId === event.id ? (
+                          <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
+                            <EventForm
+                              formData={newEvent}
+                              storyLines={cachedStoryLines}
+                              chapters={cachedChapters}
+                              onFieldChange={handleEventFieldChange}
+                              onSubmit={handleSaveEditEvent}
+                              onCancel={handleCancelEditEvent}
+                              onQuickCreateChapter={handleQuickCreateChapter}
+                            />
+                          </div>
+                        ) : (
+                          <EventCard
+                            event={event}
+                            showChapterInfo
+                            onEdit={() => handleStartEditEvent(event)}
+                            onDelete={() => handleDeleteTimelineEvent(event.id)}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+                </>
+              )}
+
+              {/* === Chapters Level === */}
+              {timelineLevel === 'chapters' && (
+                <>
+                  {/* Add Chapter Button */}
+                  {!showAddChapter && !editingChapterId && (
+                    <button
+                      onClick={() => setShowAddChapter('new')}
+                      className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-400 transition-colors mb-4"
+                    >
+                      <Plus size={16} />
+                      <span>添加章节</span>
+                    </button>
+                  )}
+
+                  {/* Add/Edit Chapter Form */}
+                  {(showAddChapter || editingChapterId) && (
+                    <ChapterForm
+                      mode={editingChapterId ? 'edit' : 'add'}
+                      formData={newChapter}
+                      volumes={cachedVolumes}
+                      onFieldChange={(field, value) => setNewChapter(prev => ({ ...prev, [field]: value }))}
+                      onSubmit={editingChapterId ? handleSaveEditChapter : handleAddTimelineChapter}
+                      onCancel={editingChapterId ? handleCancelEditChapter : () => setShowAddChapter(null)}
+                      onQuickCreateVolume={handleQuickCreateVolume}
+                    />
+                  )}
+
+                  {/* Chapters grouped by Volume */}
+                  {(() => {
+                    const chapters = getChapters();
+                    const volumes = getVolumes();
+
+                    if (chapters.length === 0 && volumes.length === 0) {
+                      return (
+                        <div className="text-gray-500 text-sm text-center py-8">
+                          暂无章节，点击上方按钮添加
+                        </div>
+                      );
+                    }
+
+                    // 按卷分组
+                    const chaptersByVolume = new Map<string | undefined, typeof chapters>();
+                    chapters.forEach(ch => {
+                      const vid = ch.volumeId || undefined;
+                      if (!chaptersByVolume.has(vid)) chaptersByVolume.set(vid, []);
+                      chaptersByVolume.get(vid)!.push(ch);
+                    });
+
+                    return (
+                      <div className="space-y-4">
+                        {/* 有卷分组的章节 */}
+                        {volumes.map(volume => {
+                          const volumeChapters = chaptersByVolume.get(volume.id) || [];
+                          return (
+                            <VolumeSection
+                              key={volume.id}
+                              volume={volume}
+                              chapters={volumeChapters}
+                              editingChapterId={editingChapterId}
+                              editingVolumeId={editingVolumeId}
+                              newVolume={newVolume}
+                              onEditChapter={handleStartEditChapter}
+                              onDeleteChapter={deleteChapter}
+                              onEditVolume={(v) => {
+                                setEditingVolumeId(v.id);
+                                setNewVolume({ volumeIndex: v.volumeIndex, title: v.title, description: v.description || '' });
+                              }}
+                              onSaveVolume={() => {
+                                if (!editingVolumeId) return;
+                                updateVolume(editingVolumeId, {
+                                  volumeIndex: newVolume.volumeIndex,
+                                  title: newVolume.title.trim(),
+                                  description: newVolume.description.trim()
+                                });
+                                setEditingVolumeId(null);
+                                setNewVolume({ volumeIndex: 1, title: '', description: '' });
+                              }}
+                              onCancelVolume={() => {
+                                setEditingVolumeId(null);
+                                setNewVolume({ volumeIndex: 1, title: '', description: '' });
+                              }}
+                              onDeleteVolume={deleteVolume}
+                              newChapter={newChapter}
+                              onChapterFieldChange={(field, value) => setNewChapter(prev => ({ ...prev, [field]: value }))}
+                              onSaveChapter={handleSaveEditChapter}
+                              onCancelChapter={handleCancelEditChapter}
+                              onQuickCreateVolume={handleQuickCreateVolume}
+                              volumes={volumes}
+                            />
+                          );
+                        })}
+
+                        {/* 未分组的章节 */}
+                        {(() => {
+                          const ungrouped = chaptersByVolume.get(undefined) || [];
+                          if (ungrouped.length === 0) return null;
+                          return (
+                            <div className="space-y-2">
+                              <div className="text-sm text-gray-400 px-2">未分组章节</div>
+                              {ungrouped.map(chapter => (
+                                <ChapterCard
+                                  key={chapter.id}
+                                  chapter={chapter}
+                                  isEditing={editingChapterId === chapter.id}
+                                  onEdit={() => handleStartEditChapter(chapter)}
+                                  onDelete={() => deleteChapter(chapter.id)}
+                                />
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
+                </>
               )}
             </div>
-          </div>
-        ) : null}
+          )
+        }
       </div>
     </div>
   );

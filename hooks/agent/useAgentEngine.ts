@@ -489,7 +489,7 @@ export const useAgentEngine = ({
         error.message?.includes('Aborted');
 
       if (isUserAbort) {
-        addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now() });
+        addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now(), skipInHistory: true });
       } else {
         // 使用错误工厂创建详细的错误信息
         let errorInfo: AgentErrorInfo;

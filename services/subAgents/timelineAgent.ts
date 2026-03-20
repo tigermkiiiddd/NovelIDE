@@ -1,0 +1,514 @@
+/**
+ * 世界线时间线 SubAgent
+ *
+ * 事件优先架构：
+ * - 事件是原子单位
+ * - 章节/卷是事件的组织方式
+ */
+
+import { AIService } from '../geminiService';
+import { BaseSubAgent, SubAgentConfig, runSubAgent } from './BaseSubAgent';
+import { executeTimelineTool } from '../agent/tools/timelineTools';
+import { ToolDefinition } from '../agent/types';
+import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine } from '../../types';
+
+// ============================================
+// 在 timelineAgent 中直接定义工具（避免循环依赖）
+// ============================================
+
+const getEventsTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_getEvents',
+    description: '获取所有时间线事件列表',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        storyLineId: { type: 'string', description: '故事线ID（可选）' }
+      },
+      required: ['thinking']
+    }
+  }
+};
+
+const getEventDetailTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_getEvent',
+    description: '获取单个事件的详细信息',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        eventId: { type: 'string', description: '事件ID' }
+      },
+      required: ['thinking', 'eventId']
+    }
+  }
+};
+
+const getChaptersTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_getChapters',
+    description: '获取章节分组列表',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        volumeId: { type: 'string', description: '卷ID（可选）' }
+      },
+      required: ['thinking']
+    }
+  }
+};
+
+const getVolumesTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_getVolumes',
+    description: '获取所有卷分组列表',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' }
+      },
+      required: ['thinking']
+    }
+  }
+};
+
+const getStoryLinesTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_getStoryLines',
+    description: '获取所有故事线列表',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' }
+      },
+      required: ['thinking']
+    }
+  }
+};
+
+const batchUpdateTimelineTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_batchUpdate',
+    description: `批量操作时间线，支持：
+- 添加事件 (addEvents) - 核心操作
+- 更新事件 (updateEvents)
+- 删除事件 (deleteEvents) - 传入事件ID数组
+- 添加章节分组 (addChapters)
+- 更新章节分组 (updateChapters)
+- 删除章节分组 (deleteChapters) - 传入章节ID数组
+- 将事件加入章节 (addEventsToChapter)
+- 从章节移除事件 (removeEventsFromChapter)
+- 添加卷分组 (addVolumes)
+- 更新卷分组 (updateVolumes)
+- 删除卷分组 (deleteVolumes) - 传入卷ID数组
+- 将章节加入卷 (addChaptersToVolume)
+- 添加故事线 (addStoryLines)
+- 删除故事线 (deleteStoryLines) - 传入故事线ID数组
+
+事件格式示例：
+{
+  "eventIndex": 1,
+  "time": {"value": 8, "unit": "hour"},
+  "title": "醒来",
+  "content": "主角在新手村醒来，发现自己穿越了",
+  "location": "新手村",
+  "characters": ["主角"],
+  "emotion": "困惑"
+}
+
+时间说明：
+- time 是结构化的累加时间，类似 Jira 登记工时
+- value: 数值，unit: 单位（"hour" 或 "day"）
+- 8 hour = 第1天早晨，24 hour = 第2天凌晨，32 hour = 第2天早晨`,
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        addEvents: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              eventIndex: { type: 'number' },
+              time: {
+                type: 'object',
+                description: '结构化时间（数值+单位）',
+                properties: {
+                  value: { type: 'number', description: '时间数值' },
+                  unit: { type: 'string', enum: ['hour', 'day'], description: '时间单位' }
+                },
+                required: ['value', 'unit']
+              },
+              title: { type: 'string' },
+              content: { type: 'string' },
+              storyLineId: { type: 'string' },
+              location: { type: 'string' },
+              characters: { type: 'array', items: { type: 'string' } },
+              emotion: { type: 'string' },
+              purpose: { type: 'string', description: '场景作用/目的' },
+              relativeTime: { type: 'string', description: '相对时间描述（如"第1天 早晨"）' }
+            },
+            required: ['eventIndex', 'time', 'title', 'content']
+          },
+          description: '要添加的事件列表'
+        },
+        updateEvents: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              eventId: { type: 'string' },
+              updates: { type: 'object' }
+            },
+            required: ['eventId', 'updates']
+          },
+          description: '要更新的事件列表'
+        },
+        deleteEvents: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '要删除的事件ID列表'
+        },
+        addChapters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              chapterIndex: { type: 'number' },
+              title: { type: 'string' },
+              summary: { type: 'string' },
+              volumeId: { type: 'string' },
+              pov: { type: 'string', description: 'POV角色' },
+              driver: { type: 'string', description: '谁在推动' },
+              conflict: { type: 'string', description: '冲突来源' },
+              hook: { type: 'string', description: '章末悬念' },
+              status: { type: 'string', enum: ['draft', 'outline', 'writing', 'completed'], description: '章节状态' }
+            },
+            required: ['chapterIndex', 'title']
+          },
+          description: '要添加的章节分组列表'
+        },
+        updateChapters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              chapterId: { type: 'string' },
+              updates: { type: 'object' }
+            },
+            required: ['chapterId', 'updates']
+          },
+          description: '要更新的章节列表'
+        },
+        deleteChapters: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '要删除的章节ID列表'
+        },
+        addEventsToChapter: {
+          type: 'object',
+          properties: {
+            chapterId: { type: 'string' },
+            eventIds: { type: 'array', items: { type: 'string' } }
+          },
+          required: ['chapterId', 'eventIds'],
+          description: '将事件加入章节'
+        },
+        removeEventsFromChapter: {
+          type: 'object',
+          properties: {
+            chapterId: { type: 'string' },
+            eventIds: { type: 'array', items: { type: 'string' } }
+          },
+          required: ['chapterId', 'eventIds'],
+          description: '从章节移除事件'
+        },
+        addVolumes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              volumeIndex: { type: 'number' },
+              title: { type: 'string' },
+              description: { type: 'string' }
+            },
+            required: ['volumeIndex', 'title']
+          },
+          description: '要添加的卷分组列表'
+        },
+        updateVolumes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              volumeId: { type: 'string' },
+              updates: { type: 'object' }
+            },
+            required: ['volumeId', 'updates']
+          },
+          description: '要更新的卷列表'
+        },
+        deleteVolumes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '要删除的卷ID列表'
+        },
+        addChaptersToVolume: {
+          type: 'object',
+          properties: {
+            volumeId: { type: 'string' },
+            chapterIds: { type: 'array', items: { type: 'string' } }
+          },
+          required: ['volumeId', 'chapterIds'],
+          description: '将章节加入卷'
+        },
+        addStoryLines: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              color: { type: 'string' },
+              isMain: { type: 'boolean' }
+            },
+            required: ['name']
+          },
+          description: '要添加的故事线列表'
+        },
+        deleteStoryLines: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '要删除的故事线ID列表（不能删除主线）'
+        }
+      },
+      required: ['thinking']
+    }
+  }
+};
+
+const submitTimelineTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'timeline_submitTimeline',
+    description: '提交时间线结果（终止工具）- 必须包含详细的工作报告',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        success: { type: 'boolean', description: '是否成功' },
+        report: { type: 'string', description: '格式化的自然语言工作报告' }
+      },
+      required: ['thinking', 'success', 'report']
+    }
+  }
+};
+
+// SubAgent专用的工具列表
+const writeTools: ToolDefinition[] = [
+  batchUpdateTimelineTool,
+  getEventsTool,
+  getEventDetailTool,
+  getChaptersTool,
+  getVolumesTool,
+  getStoryLinesTool,
+  submitTimelineTool
+];
+
+// ============================================
+// SubAgent输入/输出类型
+// ============================================
+
+export interface TimelineInput {
+  userInput: string;
+  projectId: string;
+  mode: 'add' | 'update';
+  targetChapterId?: string;  // update 模式时指定
+  volumeId?: string;         // add 模式时指定添加到哪个卷
+}
+
+export interface TimelineOutput {
+  success: boolean;
+  report: string;  // 格式化的自然语言报告
+}
+
+// ============================================
+// SubAgent配置
+// ============================================
+
+const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
+  name: 'TimelineSubAgent',
+  maxLoops: 25,  // 增加循环限制以支持大量事件的分段处理
+  temperature: 0.1,  // 执行级 Agent 使用极低温度
+  tools: writeTools,
+  terminalToolName: 'timeline_submitTimeline',
+
+  getSystemPrompt: (input: TimelineInput) => `
+# 任务：结构化时间线转换
+
+## ⚠️ 重要：事件优先原则
+
+你是一个**结构化转换器**，负责将时间线内容转换为事件优先的结构。
+
+**核心概念：**
+1. **事件是原子单位** - 每个时间点发生的事是一个独立事件
+2. **章节/卷是组织方式** - 将多个事件按剧情分组
+3. **时间线是核心视图** - 按时间顺序展示所有事件
+
+**禁止事项：**
+1. 禁止脑补/创作原文没有的事件
+2. 禁止遗漏原文中明确的事件
+3. 禁止越权推测时间细节
+
+## 时间处理规则
+
+1. **相对时间格式**：使用"第X天 时间段"格式
+   - 例如：第1天 早晨、第2天 中午、第3天 晚上
+   - 如果原文没有明确时间，根据上下文推断合理的时间序号
+
+2. **事件序号 (eventIndex)**：
+   - 从1开始递增
+   - 用于排序，必须唯一
+   - 按时间顺序排列
+
+## 分段处理策略（重要）
+
+如果输入内容量大（超过 10 个事件），必须分段处理：
+
+1. **第一步**：解析所有内容，规划分段
+   - 每段处理 5-8 个事件
+   - 先创建卷和章节（如果需要）
+
+2. **第二步**：分段批量写入
+   - 调用 timeline_batchUpdate，每次添加 5-8 个事件
+   - 可以多次调用直到所有事件写入完成
+
+3. **第三步**：组织章节
+   - 创建章节分组
+   - 将事件加入对应章节
+
+4. **最后**：提交报告
+   - 确认所有内容都已写入后再提交
+
+## 事件字段说明
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| eventIndex | 是 | 事件序号（从1开始） |
+| relativeTime | 是 | 相对时间（如"第1天 早晨"） |
+| title | 是 | 事件标题 |
+| content | 是 | 事件内容/描述 |
+| location | 否 | 发生地点 |
+| characters | 否 | 出场角色列表 |
+| emotion | 否 | 情绪氛围 |
+| storyLineId | 否 | 所属故事线（默认主线） |
+
+## 章节分组字段说明
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| chapterIndex | 是 | 章节序号（从1开始） |
+| title | 是 | 章节标题 |
+| summary | 否 | 章节概要 |
+| volumeId | 否 | 所属卷ID |
+
+## 卷分组字段说明
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| volumeIndex | 是 | 卷序号（从1开始） |
+| title | 是 | 卷标题 |
+| description | 否 | 卷描述 |
+
+## 报告要求
+
+完成所有操作后，调用 timeline_submitTimeline 提交结果。
+report 参数必须是格式化的自然语言报告，格式如下：
+
+\`\`\`
+工作方式：[批量创建/增量更新/覆盖重写]
+
+输入分析：
+- 事件数量：X个
+- 章节分组：X个
+- 卷分组：X个
+- 时间跨度：第X天 ~ 第Y天
+
+分段处理：共 X 段，每段 Y 个事件
+
+创建统计：
+- 事件：X个
+- 章节分组：X个
+- 卷分组：X个
+
+更新统计：
+- 事件：X个
+- 章节：X个
+
+详细记录：
+- 创建事件：[#1] 第1天 早晨 - "醒来"
+- 创建事件：[#2] 第1天 中午 - "遇到敌人"
+- 创建章节分组：第1章「初入异界」
+- 将事件 [1,2,3] 加入章节「第1章」
+- 创建卷分组：第1卷「穿越篇」
+- 将章节 [1,2] 加入卷「第1卷」
+
+原文未提供的信息：[列出原文中缺失的字段]
+遇到的问题：[无/问题描述]
+\`\`\`
+
+必须如实记录每个操作，不要遗漏！
+`,
+
+  getInitialMessage: (input: TimelineInput) => `
+请处理以下时间线输入：
+
+${input.userInput}
+
+${input.mode === 'update' ? '目标：更新现有时间线内容' : '目标：添加新的时间线内容'}
+
+请分析输入，调用相应工具创建/更新时间线，然后提交结果。
+`,
+
+  parseTerminalResult: (args: any): TimelineOutput => {
+    return {
+      success: args.success === true,
+      report: args.report || '时间线处理完成，但未提供详细报告'
+    };
+  },
+
+  executeCustomTool: async (name: string, args: any): Promise<string> => {
+    if (name === 'timeline_submitTimeline') {
+      return JSON.stringify(args);
+    }
+    const result = await executeTimelineTool(name, args);
+    return JSON.stringify(result);
+  },
+
+  handleTextResponse: (text: string, loopCount: number): string | null => {
+    if (loopCount < 3) {
+      return `请调用 timeline_submitTimeline 工具提交结果，不要只输出文字。`;
+    }
+    return null;
+  }
+};
+
+// ============================================
+// 运行函数
+// ============================================
+
+export async function runTimelineSubAgent(
+  aiService: AIService,
+  input: TimelineInput,
+  onLog?: (msg: string) => void
+): Promise<TimelineOutput> {
+  return runSubAgent(timelineSubAgentConfig, aiService, input, {}, onLog);
+}

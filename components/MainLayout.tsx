@@ -76,7 +76,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           loadOutline(projectId);
         });
     }
-  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadOutline]);
 
   // File System State & Actions
   const { 
