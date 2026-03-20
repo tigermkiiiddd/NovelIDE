@@ -1,27 +1,52 @@
-import { create } from 'zustand';
-import { LongTermMemory, MemoryType } from '../types';
+import { ChatMessage, FileType, LongTermMemory, LongTermMemoryDraft, MemoryType } from '../types';
 import { createPersistingStore } from './createPersistingStore';
 import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
+import { useAgentStore } from './agentStore';
+import { AIService } from '../services/geminiService';
+import { useCharacterMemoryStore } from './characterMemoryStore';
+import {
+  applyMemoryEvent,
+  createMemoryMetadata,
+  normalizeMemory,
+  scoreMemoryRecall,
+  sortMemoriesForPrompt,
+  sortMemoriesForReview,
+} from '../utils/memoryIntelligence';
+import {
+  ConversationMemoryOutput,
+  MemoryCandidateAction,
+  runConversationMemoryAgent,
+} from '../services/subAgents/conversationMemoryAgent';
+import { DocumentMemoryOutput, runDocumentMemoryAgent } from '../services/subAgents/documentMemoryAgent';
 
 interface LongTermMemoryState {
   memories: LongTermMemory[];
   isLoading: boolean;
-  isInitialized: boolean; // 标记是否已加载过
-  isRefreshing: boolean; // 刷新中
+  isInitialized: boolean;
+  isRefreshing: boolean;
+  isExtracting: boolean;
+  extractionError: string | null;
 
-  // Actions
   loadMemories: () => Promise<void>;
-  loadProjectMemories: (projectId: string) => Promise<void>; // 项目加载时加载
-  ensureInitialized: () => Promise<void>; // 确保已初始化
-  refreshMemories: () => Promise<void>; // 刷新记忆
+  loadProjectMemories: (projectId: string) => Promise<void>;
+  ensureInitialized: () => Promise<void>;
+  refreshMemories: () => Promise<void>;
   setMemories: (memories: LongTermMemory[]) => void;
-  addMemory: (memory: Omit<LongTermMemory, 'id' | 'metadata'>) => void;
+  addMemory: (memory: LongTermMemoryDraft) => void;
   updateMemory: (id: string, updates: Partial<LongTermMemory>) => void;
   deleteMemory: (id: string) => void;
+  touchMemories: (ids: string[], event?: 'recall' | 'reinforce') => void;
+  triggerConversationExtraction: (
+    userMessage: ChatMessage,
+    recentMessages: ChatMessage[]
+  ) => Promise<{ added: number; updated: number; skipped: number; summary: string } | null>;
+  triggerDocumentExtraction: (
+    filePath: string,
+    content: string
+  ) => Promise<{ added: number; updated: number; skipped: number; summary: string } | null>;
 
-  // Query methods
   getById: (id: string) => LongTermMemory | undefined;
   getByType: (type: MemoryType) => LongTermMemory[];
   getByTag: (tag: string) => LongTermMemory[];
@@ -29,12 +54,203 @@ interface LongTermMemoryState {
   getByImportance: (importance: 'critical' | 'important') => LongTermMemory[];
   getRelated: (id: string) => LongTermMemory[];
   getResident: () => LongTermMemory[];
+  getReviewQueue: (limit?: number) => LongTermMemory[];
 
-  // 内部方法：同步到 JSON 文件
   _syncToJsonFile: () => Promise<void>;
 }
 
-const generateId = () => `memory-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const generateId = () => `memory-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+const documentExtractionSignatureCache = new Map<string, string>();
+
+const normalizeMemories = (memories: LongTermMemory[], now = Date.now()) =>
+  memories.map((memory) => normalizeMemory(memory, now));
+
+const dedupeStrings = (items: string[]) => Array.from(new Set(items.filter(Boolean)));
+
+const mergeMemoryDraft = (
+  existing: LongTermMemory,
+  incoming: LongTermMemoryDraft,
+  sourceRef: string,
+  evidence: string[]
+): Partial<LongTermMemory> => ({
+  ...incoming,
+  tags: dedupeStrings([...(existing.tags || []), ...(incoming.tags || [])]),
+  keywords: dedupeStrings([...(existing.keywords || []), ...(incoming.keywords || [])]),
+  relatedMemories: dedupeStrings([
+    ...(existing.relatedMemories || []),
+    ...(incoming.relatedMemories || []),
+  ]),
+  summary: incoming.summary || existing.summary,
+  content: incoming.content || existing.content,
+  importance: incoming.importance || existing.importance,
+  isResident: incoming.isResident ?? existing.isResident,
+  metadata: {
+    ...existing.metadata,
+    sourceKind: incoming.metadata?.sourceKind || existing.metadata.sourceKind || 'dialogue',
+    sourceRef,
+    evidence: dedupeStrings([...(existing.metadata.evidence || []), ...evidence]),
+  },
+});
+
+const findMemoryByName = (memories: LongTermMemory[], name: string) => {
+  const normalized = name.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return memories.find((memory) => memory.name.trim().toLowerCase() === normalized);
+};
+
+export const isDocumentMemorySourcePath = (filePath: string) => {
+  const eligiblePrefixes = ['00_', '01_', '02_', '03_'];
+  const eligibleExtension = /\.(md|txt)$/i.test(filePath);
+  const excludedNames = ['长期记忆.json', '章节分析.json', 'outline.json'];
+
+  return (
+    eligiblePrefixes.some((prefix) => filePath.startsWith(prefix)) &&
+    eligibleExtension &&
+    !excludedNames.some((name) => filePath.endsWith(name))
+  );
+};
+
+const buildDocumentEvidence = (content: string) =>
+  content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+const createDocumentSignature = (content: string) => {
+  const normalized = content.trim();
+  return `${normalized.length}:${normalized.slice(0, 180)}:${normalized.slice(-180)}`;
+};
+
+const shouldSkipLongTermMemoryDraft = (memory: LongTermMemoryDraft) => {
+  // Long-term memory is now project-level only. Character-specific knowledge
+  // should live in character archives/profiles instead of the shared memory pool.
+  return memory.type === 'character_rule';
+};
+
+export const extractCharacterNameFromMemory = (memory: Pick<LongTermMemory, 'type' | 'tags' | 'keywords' | 'name'>) => {
+  if (memory.type !== 'character_rule') return null;
+
+  const tagged = memory.tags.find((tag) => tag.startsWith('角色:') || tag.startsWith('character:'));
+  if (tagged) return tagged.split(':').slice(1).join(':').trim() || null;
+
+  const keywordTagged = memory.keywords.find((keyword) => keyword.startsWith('角色:'));
+  if (keywordTagged) return keywordTagged.split(':').slice(1).join(':').trim() || null;
+
+  const nameMatch = memory.name.match(/[\u4e00-\u9fa5A-Za-z0-9_·]{2,}/);
+  return nameMatch ? nameMatch[0] : null;
+};
+
+const applyMemoryExtractionResult = (
+  result: ConversationMemoryOutput | DocumentMemoryOutput,
+  options: {
+    sourceKind: 'dialogue' | 'document';
+    sourceRef: string;
+    evidence: string[];
+  }
+) => {
+  const store = useLongTermMemoryStore.getState();
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  const appliedIds: string[] = [];
+
+  result.actions.forEach((action: MemoryCandidateAction) => {
+    if (action.action === 'skip' || !action.memory || action.confidence < 0.55) {
+      skipped += 1;
+      return;
+    }
+
+    if (shouldSkipLongTermMemoryDraft(action.memory)) {
+      skipped += 1;
+      return;
+    }
+
+    const memoryId =
+      action.memoryId || findMemoryByName(useLongTermMemoryStore.getState().memories, action.memory.name)?.id;
+
+    if (action.action === 'update' && memoryId) {
+      const existing = useLongTermMemoryStore.getState().getById(memoryId);
+      if (!existing) {
+        skipped += 1;
+        return;
+      }
+
+      store.updateMemory(
+        memoryId,
+        mergeMemoryDraft(existing, action.memory, options.sourceRef, options.evidence)
+      );
+      store.touchMemories([memoryId], 'reinforce');
+      updated += 1;
+      appliedIds.push(memoryId);
+      return;
+    }
+
+    if (memoryId) {
+      const existing = useLongTermMemoryStore.getState().getById(memoryId);
+      if (!existing) {
+        skipped += 1;
+        return;
+      }
+
+      store.updateMemory(
+        memoryId,
+        mergeMemoryDraft(existing, action.memory, options.sourceRef, options.evidence)
+      );
+      store.touchMemories([memoryId], 'reinforce');
+      updated += 1;
+      appliedIds.push(memoryId);
+      return;
+    }
+
+    store.addMemory({
+      ...action.memory,
+      metadata: {
+        source: 'agent',
+        sourceKind: options.sourceKind,
+        sourceRef: options.sourceRef,
+        evidence: options.evidence,
+      },
+    });
+    added += 1;
+  });
+
+  return {
+    added,
+    updated,
+    skipped,
+    appliedIds,
+  };
+};
+
+const saveMemoriesToJson = async (memories: LongTermMemory[]) => {
+  const fileStore = useFileStore.getState();
+  let memoryFile = fileStore.files.find((file) => file.name === '长期记忆.json');
+
+  if (!memoryFile) {
+    const infoFolder = fileStore.files.find((file) => file.name === '00_基础信息' && file.parentId === 'root');
+    if (infoFolder) {
+      memoryFile = {
+        id: `memory-file-${Date.now()}`,
+        parentId: infoFolder.id,
+        name: '长期记忆.json',
+        type: FileType.FILE,
+        content: JSON.stringify(memories, null, 2),
+        lastModified: Date.now(),
+      };
+      fileStore.files.push(memoryFile);
+    }
+  } else {
+    memoryFile.content = JSON.stringify(memories, null, 2);
+    memoryFile.lastModified = Date.now();
+  }
+
+  const projectId = useProjectStore.getState().currentProjectId;
+  if (projectId) {
+    await dbAPI.saveFiles(projectId, [...fileStore.files]);
+  }
+};
 
 export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>(
   'longTermMemoryStore',
@@ -43,14 +259,13 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
     isLoading: false,
     isInitialized: false,
     isRefreshing: false,
+    isExtracting: false,
+    extractionError: null,
 
-    // 项目加载时加载记忆（供 MainLayout 调用）
-    loadProjectMemories: async (projectId: string) => {
-      console.log('[LongTermMemoryStore] loadProjectMemories 被调用, projectId:', projectId);
+    loadProjectMemories: async () => {
       await useLongTermMemoryStore.getState().loadMemories();
     },
 
-    // 确保已初始化（如果未初始化则自动加载）
     ensureInitialized: async () => {
       const state = useLongTermMemoryStore.getState();
       if (!state.isInitialized) {
@@ -58,221 +273,328 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
       }
     },
 
-    // 刷新记忆（重新从文件加载）
     refreshMemories: async () => {
       const state = useLongTermMemoryStore.getState();
       if (state.isRefreshing) return;
 
-      state.setState({ isRefreshing: true });
+      useLongTermMemoryStore.setState({ isRefreshing: true });
       try {
         await state.loadMemories();
       } finally {
-        state.setState({ isRefreshing: false });
+        useLongTermMemoryStore.setState({ isRefreshing: false });
       }
     },
 
     loadMemories: async () => {
+      useLongTermMemoryStore.setState({ isLoading: true });
+
       try {
-        console.log('[LongTermMemoryStore] 开始加载记忆');
-
         const fileStore = useFileStore.getState();
-        const memoryFile = fileStore.files.find(f => f.name === '长期记忆.json');
+        const memoryFile = fileStore.files.find((file) => file.name === '长期记忆.json');
 
-        if (memoryFile && memoryFile.content) {
-          try {
-            const memories = JSON.parse(memoryFile.content);
-            if (Array.isArray(memories)) {
-              // 向后兼容：为旧数据添加默认值
-              const migratedMemories = memories.map(m => ({
-                ...m,
-                isResident: m.isResident ?? false
-              }));
-              useLongTermMemoryStore.setState({ memories: migratedMemories, isInitialized: true });
-              console.log('[LongTermMemoryStore] 从 JSON 文件加载完成, 记忆数量:', migratedMemories.length);
-              return;
-            }
-          } catch (parseError) {
-            console.error('[LongTermMemoryStore] JSON 解析失败:', parseError);
+        if (memoryFile?.content) {
+          const rawMemories = JSON.parse(memoryFile.content);
+
+          if (Array.isArray(rawMemories)) {
+            useLongTermMemoryStore.setState({
+              memories: normalizeMemories(rawMemories as LongTermMemory[]),
+              isInitialized: true,
+              isLoading: false,
+            });
+            return;
           }
         }
 
-        console.log('[LongTermMemoryStore] 没有找到长期记忆数据，初始化空列表');
-        useLongTermMemoryStore.setState({ memories: [], isInitialized: true });
+        useLongTermMemoryStore.setState({
+          memories: [],
+          isInitialized: true,
+          isLoading: false,
+        });
       } catch (error) {
-        console.error('[LongTermMemoryStore] 加载失败:', error);
-        useLongTermMemoryStore.setState({ memories: [], isInitialized: true });
+        console.error('[LongTermMemoryStore] Failed to load memories', error);
+        useLongTermMemoryStore.setState({
+          memories: [],
+          isInitialized: true,
+          isLoading: false,
+        });
       }
     },
 
     setMemories: (memories) => {
-      useLongTermMemoryStore.setState({ memories });
+      useLongTermMemoryStore.setState({ memories: normalizeMemories(memories) });
     },
 
-    // 内部方法：同步到 JSON 文件
     _syncToJsonFile: async () => {
-      console.log('[LongTermMemoryStore] _syncToJsonFile 开始');
-
-      const state = useLongTermMemoryStore.getState();
-      const fileStore = useFileStore.getState();
-      const jsonContent = JSON.stringify(state.memories, null, 2);
-
-      // 查找或创建长期记忆文件
-      let memoryFile = fileStore.files.find(f => f.name === '长期记忆.json');
-
-      if (memoryFile) {
-        // 更新现有文件内容
-        memoryFile.content = jsonContent;
-        memoryFile.lastModified = Date.now();
-        console.log('[LongTermMemoryStore] 更新现有文件');
-      } else {
-        // 创建新文件
-        const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
-        if (infoFolder) {
-          memoryFile = {
-            id: `memory-file-${Date.now()}`,
-            parentId: infoFolder.id,
-            name: '长期记忆.json',
-            type: 'FILE' as const,
-            content: jsonContent,
-            lastModified: Date.now()
-          };
-          fileStore.files.push(memoryFile);
-          console.log('[LongTermMemoryStore] 创建新文件');
-        } else {
-          console.error('[LongTermMemoryStore] 未找到 00_基础信息 文件夹');
-        }
-      }
-
-      // 立即保存到数据库
-      const projectStore = useProjectStore.getState();
-      const projectId = projectStore.currentProjectId;
-
-      if (projectId) {
-        try {
-          await dbAPI.saveFiles(projectId, [...fileStore.files]);
-          console.log('[LongTermMemoryStore] ✅ 保存成功');
-        } catch (err) {
-          console.error('[LongTermMemoryStore] ❌ 保存失败:', err);
-        }
-      }
+      await saveMemoriesToJson(useLongTermMemoryStore.getState().memories);
     },
 
     addMemory: (memory) => {
-      console.log('[LongTermMemoryStore] addMemory 被调用', memory);
-      const state = useLongTermMemoryStore.getState();
-      const newMemory: LongTermMemory = {
-        ...memory,
-        id: generateId(),
-        metadata: {
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          source: memory.metadata?.source || 'agent'
-        }
-      };
-      const newMemories = [...state.memories, newMemory];
-      useLongTermMemoryStore.setState({ memories: newMemories });
-      console.log('[LongTermMemoryStore] 新状态:', newMemories.length);
-      // 立即同步到 JSON 文件
-      useLongTermMemoryStore.getState()._syncToJsonFile();
+      const now = Date.now();
+      const source = memory.metadata?.source ?? 'agent';
+
+      const nextMemory = normalizeMemory(
+        {
+          ...memory,
+          id: generateId(),
+          metadata: {
+            ...createMemoryMetadata(
+              memory.importance,
+              memory.isResident,
+              source,
+              {
+                sourceKind: memory.metadata?.sourceKind,
+                sourceRef: memory.metadata?.sourceRef,
+                evidence: memory.metadata?.evidence,
+              },
+              now
+            ),
+            ...memory.metadata,
+            updatedAt: now,
+          },
+        } as LongTermMemory,
+        now
+      );
+
+      useLongTermMemoryStore.setState((state) => ({
+        memories: [...state.memories, nextMemory],
+      }));
+
+      const characterName = extractCharacterNameFromMemory(nextMemory);
+      if (characterName) {
+        useCharacterMemoryStore.getState().upsertMemoryFromLongTerm(nextMemory, characterName);
+      }
     },
 
     updateMemory: (id, updates) => {
-      console.log('[LongTermMemoryStore] updateMemory 被调用', id, updates);
-      const state = useLongTermMemoryStore.getState();
-      const newMemories = state.memories.map((m) =>
-        m.id === id
-          ? { ...m, ...updates, metadata: { ...m.metadata, updatedAt: Date.now() } }
-          : m
-      );
-      useLongTermMemoryStore.setState({ memories: newMemories });
-      // 立即同步到 JSON 文件
-      useLongTermMemoryStore.getState()._syncToJsonFile();
+      const now = Date.now();
+
+      let updatedMemory: LongTermMemory | null = null;
+      useLongTermMemoryStore.setState((state) => ({
+        memories: state.memories.map((memory) => {
+          if (memory.id !== id) return memory;
+
+          updatedMemory = normalizeMemory(
+            {
+              ...memory,
+              ...updates,
+              metadata: {
+                ...memory.metadata,
+                ...updates.metadata,
+                updatedAt: now,
+              },
+            },
+            now
+          );
+          return updatedMemory;
+        }),
+      }));
+
+      if (updatedMemory) {
+        const characterName = extractCharacterNameFromMemory(updatedMemory);
+        if (characterName) {
+          useCharacterMemoryStore.getState().upsertMemoryFromLongTerm(updatedMemory, characterName);
+        }
+      }
     },
 
     deleteMemory: (id) => {
-      console.log('[LongTermMemoryStore] deleteMemory 被调用', id);
-      const state = useLongTermMemoryStore.getState();
-      const newMemories = state.memories.filter((m) => m.id !== id);
-      useLongTermMemoryStore.setState({ memories: newMemories });
-      // 立即同步到 JSON 文件
-      useLongTermMemoryStore.getState()._syncToJsonFile();
+      const existing = useLongTermMemoryStore.getState().getById(id);
+      useLongTermMemoryStore.setState((state) => ({
+        memories: state.memories.filter((memory) => memory.id !== id),
+      }));
+
+      if (existing) {
+        const characterName = extractCharacterNameFromMemory(existing);
+        if (characterName) {
+          useCharacterMemoryStore.getState().removeMemoryRef(id, characterName);
+        }
+      }
     },
 
-    getById: (id) => {
-      const state = useLongTermMemoryStore.getState();
-      return state.memories.find((m) => m.id === id);
+    touchMemories: (ids, event = 'recall') => {
+      if (ids.length === 0) return;
+
+      const idSet = new Set(ids);
+      const now = Date.now();
+
+      useLongTermMemoryStore.setState((state) => ({
+        memories: state.memories.map((memory) =>
+          idSet.has(memory.id) ? applyMemoryEvent(memory, event, now) : memory
+        ),
+      }));
     },
 
-    getByType: (type) => {
+    triggerConversationExtraction: async (userMessage, recentMessages) => {
       const state = useLongTermMemoryStore.getState();
-      return state.memories.filter((m) => m.type === type);
+      if (state.isExtracting) return null;
+
+      try {
+        useLongTermMemoryStore.setState({ isExtracting: true, extractionError: null });
+
+        const agentStore = useAgentStore.getState();
+        const aiConfig = agentStore.aiConfig;
+        const lightConfig = {
+          ...aiConfig,
+          modelName: aiConfig.lightweightModelName || aiConfig.modelName,
+        };
+        const aiService = new AIService(lightConfig);
+
+        const result = await runConversationMemoryAgent(
+          aiService,
+          {
+            userMessage,
+            recentMessages,
+            existingMemories: state.memories.map((memory) => ({
+              id: memory.id,
+              name: memory.name,
+              type: memory.type,
+              tags: memory.tags,
+              keywords: memory.keywords,
+              summary: memory.summary,
+              importance: memory.importance,
+              isResident: memory.isResident,
+            })),
+          },
+          (msg) => console.log(`[ConversationMemory] ${msg}`)
+        );
+
+        if (!result.shouldExtract || result.actions.length === 0) {
+          documentExtractionSignatureCache.set(filePath, signature);
+          return {
+            added: 0,
+            updated: 0,
+            skipped: result.actions.length,
+            summary: result.summary,
+          };
+        }
+
+        const applied = applyMemoryExtractionResult(result, {
+          sourceKind: 'dialogue',
+          sourceRef: userMessage.id,
+          evidence: [userMessage.text],
+        });
+
+        return {
+          added: applied.added,
+          updated: applied.updated,
+          skipped: applied.skipped,
+          summary: result.summary,
+        };
+      } catch (error: any) {
+        console.error('[LongTermMemoryStore] Conversation extraction failed', error);
+        useLongTermMemoryStore.setState({ extractionError: error?.message || '对话记忆抽取失败' });
+        return null;
+      } finally {
+        useLongTermMemoryStore.setState({ isExtracting: false });
+      }
     },
 
-    getByTag: (tag) => {
+    triggerDocumentExtraction: async (filePath, content) => {
       const state = useLongTermMemoryStore.getState();
-      return state.memories.filter((m) => m.tags.includes(tag));
+      if (state.isExtracting || !isDocumentMemorySourcePath(filePath) || !content.trim()) return null;
+
+      const signature = createDocumentSignature(content);
+      if (documentExtractionSignatureCache.get(filePath) === signature) return null;
+
+      try {
+        useLongTermMemoryStore.setState({ isExtracting: true, extractionError: null });
+
+        const agentStore = useAgentStore.getState();
+        const aiConfig = agentStore.aiConfig;
+        const lightConfig = {
+          ...aiConfig,
+          modelName: aiConfig.lightweightModelName || aiConfig.modelName,
+        };
+        const aiService = new AIService(lightConfig);
+
+        const result = await runDocumentMemoryAgent(
+          aiService,
+          {
+            filePath,
+            content,
+            existingMemories: state.memories.map((memory) => ({
+              id: memory.id,
+              name: memory.name,
+              type: memory.type,
+              tags: memory.tags,
+              keywords: memory.keywords,
+              summary: memory.summary,
+              importance: memory.importance,
+              isResident: memory.isResident,
+            })),
+          },
+          (msg) => console.log(`[DocumentMemory] ${msg}`)
+        );
+
+        if (!result.shouldExtract || result.actions.length === 0) {
+          return {
+            added: 0,
+            updated: 0,
+            skipped: result.actions.length,
+            summary: result.summary,
+          };
+        }
+
+        const applied = applyMemoryExtractionResult(result, {
+          sourceKind: 'document',
+          sourceRef: filePath,
+          evidence: buildDocumentEvidence(content),
+        });
+
+        documentExtractionSignatureCache.set(filePath, signature);
+
+        return {
+          added: applied.added,
+          updated: applied.updated,
+          skipped: applied.skipped,
+          summary: result.summary,
+        };
+      } catch (error: any) {
+        console.error('[LongTermMemoryStore] Document extraction failed', error);
+        useLongTermMemoryStore.setState({ extractionError: error?.message || '文档记忆抽取失败' });
+        return null;
+      } finally {
+        useLongTermMemoryStore.setState({ isExtracting: false });
+      }
     },
+
+    getById: (id) => useLongTermMemoryStore.getState().memories.find((memory) => memory.id === id),
+
+    getByType: (type) => useLongTermMemoryStore.getState().memories.filter((memory) => memory.type === type),
+
+    getByTag: (tag) => useLongTermMemoryStore.getState().memories.filter((memory) => memory.tags.includes(tag)),
 
     searchByKeyword: (keyword) => {
-      const state = useLongTermMemoryStore.getState();
-      const lowerKeyword = keyword.toLowerCase();
-      return state.memories.filter((m) =>
-        m.keywords.some(k => k.toLowerCase().includes(lowerKeyword)) ||
-        m.name.toLowerCase().includes(lowerKeyword) ||
-        m.summary.toLowerCase().includes(lowerKeyword) ||
-        m.content.toLowerCase().includes(lowerKeyword)
-      );
+      const now = Date.now();
+
+      return [...useLongTermMemoryStore.getState().memories]
+        .filter((memory) => scoreMemoryRecall(memory, keyword, now).lexical > 0)
+        .sort((left, right) => scoreMemoryRecall(right, keyword, now).total - scoreMemoryRecall(left, keyword, now).total);
     },
 
-    getByImportance: (importance) => {
-      const state = useLongTermMemoryStore.getState();
-      return state.memories.filter((m) => m.importance === importance);
-    },
+    getByImportance: (importance) =>
+      useLongTermMemoryStore.getState().memories.filter((memory) => memory.importance === importance),
 
     getRelated: (id) => {
       const state = useLongTermMemoryStore.getState();
-      const memory = state.memories.find((m) => m.id === id);
+      const memory = state.memories.find((item) => item.id === id);
       if (!memory) return [];
 
       const relatedIds = new Set(memory.relatedMemories);
-      return state.memories.filter((m) => relatedIds.has(m.id));
+      return state.memories.filter((item) => relatedIds.has(item.id));
     },
 
-    getResident: () => {
-      const state = useLongTermMemoryStore.getState();
-      return state.memories.filter((m) => m.isResident === true);
-    }
+    getResident: () => sortMemoriesForPrompt(useLongTermMemoryStore.getState().memories.filter((memory) => memory.isResident)),
+
+    getReviewQueue: (limit = 6) =>
+      sortMemoriesForReview(
+        useLongTermMemoryStore
+          .getState()
+          .memories.filter((memory) => memory.metadata.nextReviewAt <= Date.now() || memory.metadata.reviewCount === 0)
+      ).slice(0, limit),
   },
   async (state) => {
-    // 保存到 JSON 文件
-    const fileStore = useFileStore.getState();
-    let memoryFile = fileStore.files.find(f => f.name === '长期记忆.json');
-
-    if (!memoryFile) {
-      // 需要先找到 00_基础信息 文件夹
-      const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
-      if (infoFolder) {
-        memoryFile = {
-          id: `memory-file-${Date.now()}`,
-          parentId: infoFolder.id,
-          name: '长期记忆.json',
-          type: 'FILE' as const,
-          content: JSON.stringify(state.memories, null, 2),
-          lastModified: Date.now()
-        };
-        fileStore.files.push(memoryFile);
-      }
-    } else {
-      memoryFile.content = JSON.stringify(state.memories, null, 2);
-      memoryFile.lastModified = Date.now();
-    }
-
-    const projectStore = useProjectStore.getState();
-    const projectId = projectStore.project?.id;
-    if (projectId) {
-      await dbAPI.saveFiles(projectId, [...fileStore.files]);
-      console.log('[LongTermMemoryStore] 已保存到 JSON 文件');
-    }
+    await saveMemoriesToJson(state.memories);
   },
-  0  // 立即保存，不延迟
+  0
 );

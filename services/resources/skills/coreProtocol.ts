@@ -374,7 +374,8 @@ export const constructSystemPrompt = (
       const { useLongTermMemoryStore } = require('../../../stores/longTermMemoryStore');
       const memoryStore = useLongTermMemoryStore.getState();
       const critical = memoryStore.getByImportance('critical');
-      const resident = memoryStore.getResident();
+      const resident = memoryStore.getResident().slice(0, 8);
+      const reviewQueue = memoryStore.getReviewQueue(5);
 
       let output = '';
 
@@ -386,6 +387,14 @@ export const constructSystemPrompt = (
       if (resident.length > 0) {
         output += `\n## 🔖 常驻记忆索引\n> 共 ${resident.length} 条常驻记忆（需要时使用 recall_memory 召回完整内容）\n\n`;
         output += resident.map((m: { name: string; keywords: string[] }) => `- **${m.name}**: ${m.keywords.join(', ')}`).join('\n');
+        output += '\n';
+      }
+
+      if (reviewQueue.length > 0) {
+        output += `\n## 记忆复习队列\n> 以下记忆处于待复习窗口，遇到相关任务时优先召回或强化\n\n`;
+        output += reviewQueue
+          .map((m: { name: string; type: string; summary: string }) => `- **${m.name}** [${m.type}] ${m.summary || ''}`.trim())
+          .join('\n');
         output += '\n';
       }
 

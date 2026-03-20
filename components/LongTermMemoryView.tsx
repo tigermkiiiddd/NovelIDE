@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { LongTermMemory, MemoryType } from '../types';
 import { Plus, Trash2, Edit2, X, Save, BookOpen, Tag, AlertTriangle, PenTool, User, Globe } from 'lucide-react';
+import { getMemoryDynamicState, sortMemoriesForReview } from '../utils/memoryIntelligence';
 
 const MEMORY_TYPE_LABELS: Record<MemoryType, { label: string; icon: React.ReactNode; color: string }> = {
   setting: { label: '设定', icon: <Globe className="w-4 h-4" />, color: 'text-blue-400' },
@@ -32,6 +33,11 @@ const EMPTY_MEMORY: Omit<LongTermMemory, 'id' | 'metadata'> = {
 
 export const LongTermMemoryView: React.FC = () => {
   const { memories, addMemory, updateMemory, deleteMemory, ensureInitialized } = useLongTermMemoryStore();
+  const sortedMemories = useMemo(() => sortMemoriesForReview(memories, Date.now()), [memories]);
+  const reviewCount = useMemo(
+    () => memories.filter((memory) => getMemoryDynamicState(memory, Date.now()).isDueForReview).length,
+    [memories]
+  );
 
   // 组件挂载时确保初始化
   useEffect(() => {
@@ -306,7 +312,7 @@ export const LongTermMemoryView: React.FC = () => {
         <h2 className="text-lg font-bold flex items-center gap-2">
           <BookOpen className="w-5 h-5 text-blue-400" />
           长期记忆
-          <span className="text-sm font-normal text-gray-400">({memories.length} 条)</span>
+          <span className="text-sm font-normal text-gray-400">({memories.length} 条 / 待复习 {reviewCount})</span>
         </h2>
         <button
           onClick={handleAdd}
@@ -326,8 +332,9 @@ export const LongTermMemoryView: React.FC = () => {
         </div>
       ) : (
         <div className="p-4 space-y-3">
-          {memories.map((memory) => {
+          {sortedMemories.map((memory) => {
             const typeInfo = MEMORY_TYPE_LABELS[memory.type];
+            const dynamic = getMemoryDynamicState(memory, Date.now());
             return (
               <div
                 key={memory.id}
@@ -378,6 +385,15 @@ export const LongTermMemoryView: React.FC = () => {
                     ))}
                   </div>
                 )}
+
+                <div className="flex flex-wrap gap-2 mb-2 text-xs text-gray-300">
+                  <span className="px-2 py-1 rounded bg-gray-800/80">state: {dynamic.state}</span>
+                  <span className="px-2 py-1 rounded bg-gray-800/80">activation: {Math.round(dynamic.activation * 100)}%</span>
+                  <span className="px-2 py-1 rounded bg-gray-800/80">strength: {Math.round(dynamic.strength * 100)}%</span>
+                  <span className="px-2 py-1 rounded bg-gray-800/80">recall: {memory.metadata.recallCount}</span>
+                  <span className="px-2 py-1 rounded bg-gray-800/80">source: {memory.metadata.sourceKind || memory.metadata.source}</span>
+                  <span className="px-2 py-1 rounded bg-gray-800/80">review: {new Date(memory.metadata.nextReviewAt).toLocaleDateString('zh-CN')}</span>
+                </div>
 
                 {memory.summary && (
                   <p className="text-sm text-gray-300 mb-2">{memory.summary}</p>

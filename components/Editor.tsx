@@ -19,11 +19,13 @@ import DiffViewer from './DiffViewer';
 import { ReadingLightView } from './ReadingLightView';
 import { JsonViewer } from './JsonViewer';
 import { LongTermMemoryView } from './LongTermMemoryView';
+import { CharacterProfileView } from './CharacterProfileView';
 import { useShallow } from 'zustand/react/shallow';
 import { PendingChange, DiffSessionState, FilePatch, EditDiff, EditIncrement } from '../types';
 import { useDiffStore } from '../stores/diffStore';
 import { EditorToolbar, EditorGutter, EmptyState } from './editor';
 import EditHighlightOverlay from './editor/EditHighlightOverlay';
+import VersionHistory from './VersionHistory';
 import { computeLineDelta, detectEditedRegion, rebuildEditLineNumbers } from '../utils/editIncrement';
 import {
   FileText,
@@ -42,12 +44,16 @@ import {
   ChevronDown,
   Tag,
   BookOpen,
-  Check
+  Check,
+  History
 } from 'lucide-react';
 
 interface EditorProps {
   className?: string;
 }
+
+const CHARACTER_PROFILE_PATH_PREFIX = '\u0030\u0032_\u89d2\u8272\u6863\u6848/\u89d2\u8272\u72b6\u6001\u4e0e\u8bb0\u5fc6/';
+type ReviewPendingChange = PendingChange & { metadata?: { sourceChanges?: PendingChange[] } };
 
 const Editor: React.FC<EditorProps> = ({
   className,
@@ -138,6 +144,9 @@ const Editor: React.FC<EditorProps> = ({
   // Mobile detection
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
 
+  // Version History State
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
@@ -212,6 +221,22 @@ const Editor: React.FC<EditorProps> = ({
       metadata: { sourceChanges: fileChanges }
     };
   }, [activeFile?.id, pendingChanges]);
+
+  const reviewTargetChange = useMemo<ReviewPendingChange | null>(() => {
+    return (activePendingChange || mergedPendingChange) as ReviewPendingChange | null;
+  }, [activePendingChange, mergedPendingChange]);
+
+  const getPendingChangesForReviewTarget = useCallback((change: ReviewPendingChange | null) => {
+    if (!change) return [];
+    if (change.toolName === 'merged') {
+      return change.metadata?.sourceChanges || [];
+    }
+    return [change];
+  }, []);
+
+  const clearReviewTargetPendingChanges = useCallback((change: ReviewPendingChange | null) => {
+    getPendingChangesForReviewTarget(change).forEach(sourceChange => removePendingChange(sourceChange.id));
+  }, [getPendingChangesForReviewTarget, removePendingChange]);
 
   // 6.1 Collect all editDiffs from pending changes for the active file (for edit mode highlighting)
   const activeEditDiffs = useMemo(() => {
@@ -1041,7 +1066,7 @@ const Editor: React.FC<EditorProps> = ({
     // Handle case where diffSession doesn't exist yet
     if (!diffSession) {
       console.warn('handleAcceptHunk: diffSession not initialized, creating temporary session');
-      const targetChange = mergedPendingChange || activePendingChange;
+      const targetChange = reviewTargetChange;
       const sourceSnapshot = targetChange?.originalContent || '';
       setDiffSession({
         sourceSnapshot,
@@ -1074,7 +1099,7 @@ const Editor: React.FC<EditorProps> = ({
     // Handle case where diffSession doesn't exist yet
     if (!diffSession) {
       console.warn('handleRejectHunk: diffSession not initialized, creating temporary session');
-      const targetChange = mergedPendingChange || activePendingChange;
+      const targetChange = reviewTargetChange;
       const sourceSnapshot = targetChange?.originalContent || '';
       setDiffSession({
         sourceSnapshot,
@@ -1096,7 +1121,7 @@ const Editor: React.FC<EditorProps> = ({
       activeFileName: activeFile?.name
     });
 
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = reviewTargetChange;
     if (!targetChange) {
       console.error('handleAcceptAll: No pending change to accept');
       return;
@@ -1215,7 +1240,7 @@ const Editor: React.FC<EditorProps> = ({
     // Remove all pending changes for this file - 使用 getState() 获取最新的 files
     const currentFilesForPath = useFileStore.getState().files;
     const filePath = fileToSave ? getNodePath(fileToSave, currentFilesForPath) : targetChange.fileName;
-    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
+    const changesToRemove = getPendingChangesForReviewTarget(targetChange);
 
     console.log('Removing pending changes:', {
       filePath,
@@ -1223,7 +1248,7 @@ const Editor: React.FC<EditorProps> = ({
       changes: changesToRemove.map(c => ({ id: c.id, fileName: c.fileName }))
     });
 
-    changesToRemove.forEach(c => removePendingChange(c.id));
+    clearReviewTargetPendingChanges(targetChange);
     console.log('[handleAcceptAll] Pending changes removed');
 
     // Add system message
@@ -1302,13 +1327,13 @@ const Editor: React.FC<EditorProps> = ({
       hasActiveChange: !!activePendingChange
     });
 
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = reviewTargetChange;
 
     // 即使条件不满足，也要确保退出 diff 模式
     const cleanupAndExit = () => {
       // 清理 pending changes
       if (targetChange) {
-        removePendingChange(targetChange.id);
+        clearReviewTargetPendingChanges(targetChange);
       }
 
       // 添加系统消息
@@ -1361,17 +1386,12 @@ const Editor: React.FC<EditorProps> = ({
     // 恢复原内容
     saveFileContent(activeFile.id, originalContent);
 
-    // 清理所有相关的 pending changes
-    const filePath = getNodePath(activeFile, files);
-    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
-    changesToRemove.forEach(c => removePendingChange(c.id));
-
     cleanupAndExit();
   };
 
   const handleDismiss = () => {
     if (!activeFile) return;
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = reviewTargetChange;
     if (!targetChange) return;
 
     // Set batch flag
@@ -1381,9 +1401,7 @@ const Editor: React.FC<EditorProps> = ({
     saveFileContent(activeFile.id, computedContent);
 
     // Remove all pending changes
-    const filePath = getNodePath(activeFile, files);
-    const changesToRemove = pendingChanges.filter(c => c.fileName === filePath);
-    changesToRemove.forEach(c => removePendingChange(c.id));
+    clearReviewTargetPendingChanges(targetChange);
 
     // Add system message
     addMessage({
@@ -1406,7 +1424,7 @@ const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
     if (!diffSession || !activeFile) return;
 
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = reviewTargetChange;
     if (!targetChange) return;
 
     // Check if all hunks have been processed
@@ -1435,10 +1453,7 @@ const Editor: React.FC<EditorProps> = ({
       saveFileContent(activeFile.id, computedContent);
 
       // Remove all pending changes for this file
-      const filePath = getNodePath(activeFile, files);
-      pendingChanges
-        .filter(c => c.fileName === filePath)
-        .forEach(c => removePendingChange(c.id));
+      clearReviewTargetPendingChanges(targetChange);
 
       // Add system message
       addMessage({
@@ -1455,7 +1470,7 @@ const Editor: React.FC<EditorProps> = ({
       isApplyingBatchRef.current = false;
       completionMessageSentRef.current = null; // Reset for next session
     }
-  }, [diffSession, computedContent, activeFile]);
+  }, [diffSession, computedContent, activeFile, reviewTargetChange, clearReviewTargetPendingChanges]);
 
   // --- Search Highlight Rendering ---
   const highlightedContent = useMemo(() => {
@@ -1644,6 +1659,14 @@ const Editor: React.FC<EditorProps> = ({
       );
     }
     // 其他 JSON 文件 -> JsonViewer
+    if (filePath.startsWith(CHARACTER_PROFILE_PATH_PREFIX) && activeFile.name.endsWith('.json')) {
+      return (
+        <div className={`h-full ${className}`}>
+          <CharacterProfileView filePath={filePath} content={activeFile.content} />
+        </div>
+      );
+    }
+
     if (activeFile.name.endsWith('.json') && activeFile.content) {
       return (
         <div className={`h-full ${className}`}>
@@ -1735,6 +1758,16 @@ const Editor: React.FC<EditorProps> = ({
             <button onClick={() => handleSetMode('preview')} className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all ${internalMode === 'preview' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title="Preview Mode"><Eye size={14} /></button>
             {/* Split View - Desktop Only */}
             <button onClick={handleToggleSplit} className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}><Columns size={14} /></button>
+
+            {/* Version History */}
+            <button
+              onClick={() => setShowVersionHistory(true)}
+              disabled={!activeFileId}
+              className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="版本历史"
+            >
+              <History size={14} />
+            </button>
         </div>
       </div>
 
@@ -1815,12 +1848,12 @@ const Editor: React.FC<EditorProps> = ({
 
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-        {internalMode === 'diff' && (mergedPendingChange || activePendingChange) ? (
+        {internalMode === 'diff' && reviewTargetChange ? (
              <DiffViewer
                 originalContent={(() => {
                     // Determine correct original content based on activeFile and pendingChange
                     // This prevents comparing snapshots from different files
-                    const targetChange = mergedPendingChange || activePendingChange;
+                    const targetChange = reviewTargetChange;
 
                     if (activeFile && diffSession?.sourceSnapshot) {
                         // Active file exists - verify snapshot is from this file
@@ -1842,9 +1875,9 @@ const Editor: React.FC<EditorProps> = ({
                         return targetChange?.originalContent || '';
                     }
                 })()}
-                modifiedContent={(mergedPendingChange || activePendingChange)?.newContent || ''}
+                modifiedContent={reviewTargetChange?.newContent || ''}
                 computedContent={computedContent}
-                pendingChange={mergedPendingChange || activePendingChange!}
+                pendingChange={reviewTargetChange}
                 processedHunkIds={processedHunkIds}
                 onAcceptHunk={handleAcceptHunk}
                 onRejectHunk={handleRejectHunk}
@@ -1875,6 +1908,13 @@ const Editor: React.FC<EditorProps> = ({
             </div>
         )}
       </div>
+
+      {/* Version History Modal */}
+      <VersionHistory
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        fileId={activeFileId}
+      />
     </div>
   );
 };

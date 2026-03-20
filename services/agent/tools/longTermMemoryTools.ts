@@ -1,43 +1,72 @@
 import { ToolDefinition } from '../types';
 import { useLongTermMemoryStore } from '../../../stores/longTermMemoryStore';
 import { MemoryType } from '../../../types';
+import {
+  getMemoryDynamicState,
+  scoreMemoryRecall,
+  sortMemoriesForReview,
+} from '../../../utils/memoryIntelligence';
 
-// ===================== 召回工具 =====================
+const formatPercent = (value: number) => `${Math.round(value * 100)}%`;
+
+const formatReviewTime = (timestamp: number) =>
+  new Date(timestamp).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+const getStateLabel = (state: ReturnType<typeof getMemoryDynamicState>['state']) => {
+  switch (state) {
+    case 'active':
+      return '活跃';
+    case 'stable':
+      return '稳定';
+    case 'needs_review':
+      return '待复习';
+    default:
+      return '降温中';
+  }
+};
 
 export const recallMemoryTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'recall_memory',
-    description: '【记忆召回】根据标签、关键字或记忆名称召回长期记忆。用于获取写作规范、设定限制、风格指南、角色规则等。\n\n> 使用场景：\n> - 开始写作前，检查是否有相关设定限制\n> - 遇到新角色时，查询角色规则\n> - 不确定写作风格时，召回风格指南\n> - 需要了解已确定的规则时使用\n\n> 使用建议：\n> - 如果不确定有哪些记忆，先用 manage_memory(action=\'list\') 查看所有记忆\n> - 可以使用 memoryTypes 参数按类型过滤，提高召回精度',
+    description:
+      '【记忆召回】根据问题动态召回长期记忆。系统会综合关键字匹配、重要度、近期使用情况、记忆强度和复习窗口排序，优先返回当前最该被使用的记忆。',
     parameters: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: '自然语言描述你需要什么类型的记忆。例如："找回关于主角性格设定的记忆"'
+          description: '自然语言描述你需要什么记忆。例如："主角的底线和说话风格"。',
         },
         tags: {
           type: 'array',
           items: { type: 'string' },
-          description: '按标签过滤（可选）'
+          description: '按标签过滤（可选）。',
         },
         memoryTypes: {
           type: 'array',
-          items: { type: 'string', enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'] },
-          description: '按记忆类型过滤（可选）。可用类型：setting(不可违背的设定) / style(正文扩写风格) / restriction(绝对限制) / experience(写作经验) / character_rule(角色规则) / world_rule(世界观规则)'
+          items: {
+            type: 'string',
+            enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+          },
+          description: '按记忆类型过滤（可选）。',
         },
         limit: {
           type: 'number',
           default: 5,
-          description: '返回结果数量限制'
-        }
+          description: '返回结果数量上限。',
+        },
       },
-      required: ['query']
-    }
-  }
+      required: ['query'],
+    },
+  },
 };
 
-// 执行召回记忆
 export const executeRecallMemory = async (args: {
   query: string;
   tags?: string[];
@@ -48,133 +77,142 @@ export const executeRecallMemory = async (args: {
   await store.ensureInitialized();
 
   const { query, tags, memoryTypes, limit = 5 } = args;
+  const now = Date.now();
+
   let memories = store.memories;
 
-  // 1. 按类型过滤
   if (memoryTypes && memoryTypes.length > 0) {
-    memories = memories.filter(m => memoryTypes.includes(m.type));
+    memories = memories.filter((memory) => memoryTypes.includes(memory.type));
   }
 
-  // 2. 按标签过滤
   if (tags && tags.length > 0) {
-    memories = memories.filter(m =>
-      tags.some(tag => m.tags.includes(tag))
-    );
+    memories = memories.filter((memory) => tags.some((tag) => memory.tags.includes(tag)));
   }
 
-  // 3. 全文搜索 + 相关度计算
-  const queryLower = query.toLowerCase();
-  const scoredMemories = memories.map(m => {
-    let score = 0;
+  const ranked = memories
+    .map((memory) => {
+      const breakdown = scoreMemoryRecall(memory, query, now);
+      const dynamic = getMemoryDynamicState(memory, now);
+      return { memory, breakdown, dynamic };
+    })
+    .filter((item) => item.breakdown.total > 0)
+    .sort((left, right) => right.breakdown.total - left.breakdown.total);
 
-    // 关键词匹配（权重最高）
-    m.keywords.forEach(kw => {
-      if (kw.toLowerCase().includes(queryLower)) score += 10;
-      if (queryLower.includes(kw.toLowerCase())) score += 8;
-    });
-
-    // 标签匹配
-    m.tags.forEach(tag => {
-      if (tag.toLowerCase().includes(queryLower)) score += 5;
-      if (queryLower.includes(tag.toLowerCase())) score += 4;
-    });
-
-    // 名称匹配
-    if (m.name.toLowerCase().includes(queryLower)) score += 7;
-    if (queryLower.includes(m.name.toLowerCase())) score += 6;
-
-    // 摘要匹配
-    if (m.summary.toLowerCase().includes(queryLower)) score += 3;
-
-    // 内容匹配
-    if (m.content.toLowerCase().includes(queryLower)) score += 1;
-
-    return { memory: m, score };
-  });
-
-  // 4. 按相关度排序，过滤掉0分
-  const results = scoredMemories
-    .filter(item => item.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map(item => item.memory);
-
-  // 5. 知识图谱扩展（获取关联记忆）
-  const relatedIds = new Set<string>();
-  results.forEach(m => {
-    m.relatedMemories.forEach(id => relatedIds.add(id));
-  });
-  const related = store.memories.filter(m => relatedIds.has(m.id) && !results.find(r => r.id === m.id));
+  const results = ranked.slice(0, limit);
 
   if (results.length === 0) {
-    return `未找到匹配的记忆。建议：\n1. 使用 manage_memory(action='list') 查看所有记忆\n2. 使用 memoryTypes 参数按类型过滤`;
+    const reviewQueue = sortMemoriesForReview(store.getReviewQueue(3), now);
+    let output = `未找到与“${query}”直接匹配的记忆。建议：\n1. 使用 manage_memory(action='list') 查看所有记忆\n2. 使用 memoryTypes 缩小范围`;
+
+    if (reviewQueue.length > 0) {
+      output += '\n\n当前值得优先检查的待复习记忆：\n';
+      reviewQueue.forEach((memory) => {
+        const dynamic = getMemoryDynamicState(memory, now);
+        output += `- ${memory.name} [${memory.type}] ${getStateLabel(dynamic.state)}，下次复习：${formatReviewTime(dynamic.nextReviewAt)}\n`;
+      });
+    }
+
+    return output;
   }
 
-  let output = `找到 ${results.length} 条相关记忆：\n\n`;
-  results.forEach((m, i) => {
-    output += `### ${i + 1}. ${m.name}\n`;
-    output += `- 类型: ${m.type}\n`;
-    output += `- 标签: ${m.tags.join(', ')}\n`;
-    output += `- 关键字: ${m.keywords.join(', ')}\n`;
-    output += `- 摘要: ${m.summary}\n`;
-    output += `- 完整内容:\n${m.content}\n\n`;
+  store.touchMemories(
+    results.map((item) => item.memory.id),
+    'recall'
+  );
+
+  const relatedIds = new Set<string>();
+  results.forEach((item) => {
+    item.memory.relatedMemories.forEach((id) => relatedIds.add(id));
+  });
+
+  const related = sortMemoriesForReview(
+    store.memories.filter((memory) => relatedIds.has(memory.id) && !results.some((item) => item.memory.id === memory.id)),
+    now
+  ).slice(0, 5);
+
+  let output = `找到 ${results.length} 条动态相关记忆：\n\n`;
+
+  results.forEach((item, index) => {
+    output += `### ${index + 1}. ${item.memory.name}\n`;
+    output += `- 类型: ${item.memory.type}\n`;
+    output += `- 相关度: ${item.breakdown.total.toFixed(1)}\n`;
+    output += `- 状态: ${getStateLabel(item.dynamic.state)}\n`;
+    output += `- 激活度: ${formatPercent(item.dynamic.activation)}\n`;
+    output += `- 强度: ${formatPercent(item.dynamic.strength)}\n`;
+    output += `- 召回次数: ${item.memory.metadata.recallCount}\n`;
+    output += `- 下次复习: ${formatReviewTime(item.dynamic.nextReviewAt)}\n`;
+    output += `- 标签: ${item.memory.tags.join(', ') || '无'}\n`;
+    output += `- 关键字: ${item.memory.keywords.join(', ') || '无'}\n`;
+    output += `- 摘要: ${item.memory.summary || '无'}\n`;
+    output += `- 完整内容:\n${item.memory.content || item.memory.summary || '无'}\n\n`;
   });
 
   if (related.length > 0) {
-    output += `\n关联记忆（${related.length}条）：\n`;
-    related.forEach(m => {
-      output += `- ${m.name} [${m.type}]\n`;
+    output += '关联记忆：\n';
+    related.forEach((memory) => {
+      const dynamic = getMemoryDynamicState(memory, now);
+      output += `- ${memory.name} [${memory.type}] ${getStateLabel(dynamic.state)}\n`;
     });
   }
 
-  return output;
+  return output.trim();
 };
-
-// ===================== 管理工具 =====================
 
 export const manageMemoryTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'manage_memory',
-    description: '【记忆管理】添加、更新、删除或列出长期记忆。用于记录不可违背的设定、写作风格偏好、绝对限制等。\n\n> 使用场景：\n> - 用户明确指定"以后都不能..."、"必须遵守..."等规则时 -> 添加为 critical\n> - 用户确定写作风格或偏好时 -> 添加为 important\n> - 需要快速索引的记忆 -> 设置为常驻（isResident: true）\n> - 列出所有记忆查看当前已保存的规则\n> - 更新或删除已有记忆\n\n> 推荐工作流：\n> - 使用 recall_memory 前，先用 list 操作查看所有记忆\n> - 可以使用 memoryTypes 参数按类型过滤，例如只查看 character_rule 类型的记忆',
+    description:
+      '【记忆管理】添加、更新、删除、强化、复习或列出长期记忆。用于维护规则、偏好和写作经验，并支持主动复习队列。',
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['add', 'update', 'delete', 'list'],
-          description: '操作类型：add(添加)、update(更新)、delete(删除)、list(列出)'
+          enum: ['add', 'update', 'delete', 'list', 'review', 'reinforce'],
+          description: '操作类型。',
         },
         memoryTypes: {
           type: 'array',
-          items: { type: 'string', enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'] },
-          description: '按记忆类型过滤（仅用于list操作）。可用类型：setting(不可违背的设定) / style(正文扩写风格) / restriction(绝对限制) / experience(写作经验) / character_rule(角色规则) / world_rule(世界观规则)'
+          items: {
+            type: 'string',
+            enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+          },
+          description: '按记忆类型过滤（用于 list/review）。',
         },
         memory: {
           type: 'object',
           properties: {
             name: { type: 'string', description: '记忆名称' },
-            type: { type: 'string', enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'], description: '记忆类型：setting(不可违背的设定) / style(正文扩写风格) / restriction(绝对限制) / experience(写作经验) / character_rule(角色规则) / world_rule(世界观规则)' },
+            type: {
+              type: 'string',
+              enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+              description: '记忆类型',
+            },
             tags: { type: 'array', items: { type: 'string' }, description: '标签列表' },
-            keywords: { type: 'array', items: { type: 'string' }, description: '关键字列表（用于检索）' },
-            summary: { type: 'string', description: '摘要（50-100字，用于注入系统提示词）' },
+            keywords: { type: 'array', items: { type: 'string' }, description: '关键字列表' },
+            summary: { type: 'string', description: '摘要' },
             content: { type: 'string', description: '完整内容' },
-            importance: { type: 'string', enum: ['critical', 'important', 'normal'], description: '重要程度' },
-            isResident: { type: 'boolean', description: '是否常驻（常驻记忆会在系统提示词中显示标题和关键词）' },
-            relatedMemories: { type: 'array', items: { type: 'string' }, description: '关联记忆ID列表' }
+            importance: {
+              type: 'string',
+              enum: ['critical', 'important', 'normal'],
+              description: '重要程度',
+            },
+            isResident: { type: 'boolean', description: '是否常驻' },
+            relatedMemories: { type: 'array', items: { type: 'string' }, description: '关联记忆 ID 列表' },
           },
-          description: '记忆内容（add/update 时需要）'
+          description: '记忆内容（add/update 时需要）',
         },
-        memoryId: { type: 'string', description: '记忆ID（update/delete 时需要）' }
+        memoryId: { type: 'string', description: '记忆 ID（update/delete/reinforce 时需要）' },
+        limit: { type: 'number', description: 'review 时返回数量上限' },
       },
-      required: ['action']
-    }
-  }
+      required: ['action'],
+    },
+  },
 };
 
-// 执行记忆管理
 export const executeManageMemory = async (args: {
-  action: 'add' | 'update' | 'delete' | 'list';
+  action: 'add' | 'update' | 'delete' | 'list' | 'review' | 'reinforce';
   memoryTypes?: string[];
   memory?: {
     name: string;
@@ -188,17 +226,18 @@ export const executeManageMemory = async (args: {
     relatedMemories?: string[];
   };
   memoryId?: string;
+  limit?: number;
 }) => {
   const store = useLongTermMemoryStore.getState();
   await store.ensureInitialized();
 
-  const { action, memory, memoryId } = args;
+  const { action, memory, memoryId, limit = 5 } = args;
+  const now = Date.now();
 
   switch (action) {
     case 'add': {
-      if (!memory) {
-        return '错误：添加记忆需要提供 memory 参数';
-      }
+      if (!memory) return '错误：添加记忆需要提供 memory 参数';
+
       store.addMemory({
         name: memory.name,
         type: memory.type,
@@ -209,58 +248,97 @@ export const executeManageMemory = async (args: {
         importance: memory.importance || 'normal',
         isResident: memory.isResident ?? false,
         relatedMemories: memory.relatedMemories || [],
-        metadata: { source: 'agent' }
+        metadata: { source: 'agent' },
       });
-      return `✅ 已添加记忆：${memory.name}${memory.isResident ? ' (常驻)' : ''}`;
+
+      return `已添加记忆：${memory.name}${memory.isResident ? '（常驻）' : ''}`;
     }
 
     case 'update': {
-      if (!memoryId || !memory) {
-        return '错误：更新记忆需要提供 memoryId 和 memory 参数';
-      }
+      if (!memoryId || !memory) return '错误：更新记忆需要提供 memoryId 和 memory 参数';
       store.updateMemory(memoryId, memory);
-      return `✅ 已更新记忆：${memoryId}`;
+      return `已更新记忆：${memoryId}`;
     }
 
     case 'delete': {
-      if (!memoryId) {
-        return '错误：删除记忆需要提供 memoryId 参数';
-      }
+      if (!memoryId) return '错误：删除记忆需要提供 memoryId 参数';
       store.deleteMemory(memoryId);
-      return `✅ 已删除记忆：${memoryId}`;
+      return `已删除记忆：${memoryId}`;
+    }
+
+    case 'reinforce': {
+      if (!memoryId) return '错误：强化记忆需要提供 memoryId 参数';
+
+      const target = store.getById(memoryId);
+      if (!target) return `错误：未找到记忆 ${memoryId}`;
+
+      store.touchMemories([memoryId], 'reinforce');
+      const updated = useLongTermMemoryStore.getState().getById(memoryId);
+
+      return `已强化记忆：${target.name}\n- 新的复习间隔: ${updated?.metadata.reviewIntervalHours || target.metadata.reviewIntervalHours} 小时\n- 下次复习: ${formatReviewTime(updated?.metadata.nextReviewAt || target.metadata.nextReviewAt)}`;
+    }
+
+    case 'review': {
+      let reviewQueue = store.getReviewQueue(limit);
+
+      if (args.memoryTypes && args.memoryTypes.length > 0) {
+        reviewQueue = reviewQueue.filter((item) => args.memoryTypes!.includes(item.type));
+      }
+
+      if (reviewQueue.length === 0) {
+        return '当前没有需要优先复习的长期记忆。';
+      }
+
+      let output = `当前待复习记忆 ${reviewQueue.length} 条：\n\n`;
+      reviewQueue.forEach((item, index) => {
+        const dynamic = getMemoryDynamicState(item, now);
+        output += `### ${index + 1}. ${item.name}\n`;
+        output += `- 类型: ${item.type}\n`;
+        output += `- 状态: ${getStateLabel(dynamic.state)}\n`;
+        output += `- 激活度: ${formatPercent(dynamic.activation)}\n`;
+        output += `- 强度: ${formatPercent(dynamic.strength)}\n`;
+        output += `- 下次复习: ${formatReviewTime(dynamic.nextReviewAt)}\n`;
+        output += `- 摘要: ${item.summary || '无'}\n\n`;
+      });
+
+      return output.trim();
     }
 
     case 'list': {
       let memories = store.memories;
 
       if (args.memoryTypes && args.memoryTypes.length > 0) {
-        memories = memories.filter(m => args.memoryTypes!.includes(m.type));
+        memories = memories.filter((item) => args.memoryTypes!.includes(item.type));
       }
 
       if (memories.length === 0) {
-        return args.memoryTypes
+        return args.memoryTypes?.length
           ? `暂无 ${args.memoryTypes.join(', ')} 类型的记忆。`
           : '暂无长期记忆。';
       }
 
-      // 按类型分组显示
-      const grouped = memories.reduce((acc, m) => {
-        if (!acc[m.type]) acc[m.type] = [];
-        acc[m.type].push(m);
-        return acc;
-      }, {} as Record<string, typeof memories>);
-
-      let output = `共 ${memories.length} 条记忆：\n\n`;
-      Object.entries(grouped).forEach(([type, mems]) => {
-        output += `## ${type} (${mems.length}条)\n`;
-        mems.forEach(m => {
-          output += `- **${m.name}** [${m.importance}]${m.isResident ? ' 🔖常驻' : ''} (id: ${m.id})\n`;
-          output += `  关键字: ${m.keywords.join(', ')}\n`;
-          output += `  摘要: ${m.summary}\n\n`;
-        });
+      const grouped: Record<string, typeof memories> = {};
+      memories.forEach((item) => {
+        if (!grouped[item.type]) grouped[item.type] = [];
+        grouped[item.type].push(item);
       });
 
-      return output;
+      let output = `共 ${memories.length} 条记忆。\n当前待复习：${store.getReviewQueue(10).length} 条\n\n`;
+
+      Object.keys(grouped).forEach((type) => {
+        const items = grouped[type];
+        output += `## ${type} (${items.length}条)\n`;
+        sortMemoriesForReview(items, now).forEach((item) => {
+          const dynamic = getMemoryDynamicState(item, now);
+          output += `- ${item.name} [${item.importance}]${item.isResident ? ' [resident]' : ''} (id: ${item.id})\n`;
+          output += `  状态: ${getStateLabel(dynamic.state)} | 激活: ${formatPercent(dynamic.activation)} | 强度: ${formatPercent(dynamic.strength)}\n`;
+          output += `  召回: ${item.metadata.recallCount} 次 | 下次复习: ${formatReviewTime(item.metadata.nextReviewAt)}\n`;
+          output += `  摘要: ${item.summary || '无'}\n`;
+        });
+        output += '\n';
+      });
+
+      return output.trim();
     }
 
     default:

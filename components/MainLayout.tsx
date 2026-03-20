@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileNode } from '../types';
-import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import Editor from './Editor';
+import { LoaderCircle, Menu, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import Editor from './EditorRefactored';
 import AgentChat from './AgentChat';
 import Sidebar from './Sidebar';
 import ProjectOverview from './ProjectOverview';
@@ -18,6 +18,7 @@ import { usePlanStore } from '../stores/planStore';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useStoryOutlineStore } from '../stores/storyOutlineStore';
 import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
+import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
 import { useShallow } from 'zustand/react/shallow';
 import { generateId, getNodePath } from '../services/fileSystem';
 
@@ -63,6 +64,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const loadProjectAnalyses = useChapterAnalysisStore(state => state.loadProjectAnalyses);
   const triggerExtraction = useChapterAnalysisStore(state => state.triggerExtraction);
   const loadProjectMemories = useLongTermMemoryStore(state => state.loadProjectMemories);
+  const isMemoryExtracting = useLongTermMemoryStore(state => state.isExtracting);
+  const loadProjectCharacterProfiles = useCharacterMemoryStore(state => state.loadProjectProfiles);
   const loadOutline = useStoryOutlineStore(state => state.loadOutline);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
@@ -73,10 +76,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectMemories(projectId);
+          loadProjectCharacterProfiles(projectId);
           loadOutline(projectId);
         });
     }
-  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadOutline]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadProjectCharacterProfiles, loadOutline]);
 
   // File System State & Actions
   const { 
@@ -407,6 +411,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             >
             <MessageSquare size={24} color="white" />
             </button>
+        )}
+
+        {isMemoryExtracting && (
+          <div
+            className={`
+              pointer-events-none absolute z-20
+              ${isMobile ? 'bottom-16 left-4' : 'bottom-14 right-4'}
+            `}
+            title="正在自动整理长期记忆"
+            aria-label="正在自动整理长期记忆"
+          >
+            <div className="flex items-center justify-center rounded-full border border-cyan-400/25 bg-gray-950/78 p-2 text-cyan-300 shadow-lg shadow-black/20 backdrop-blur-sm">
+              <LoaderCircle size={16} className="animate-spin" />
+            </div>
+          </div>
         )}
       </main>
 

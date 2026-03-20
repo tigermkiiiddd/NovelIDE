@@ -9,7 +9,7 @@
  * - 手动创建版本快照
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { History, RotateCcw, Eye, Plus, Trash2, X, Clock, User, Bot, FileText } from 'lucide-react';
 import { useVersionStore, FileVersion, VersionSource } from '../stores/versionStore';
 import { useFileStore } from '../stores/fileStore';
@@ -47,10 +47,15 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
   const [selectedVersion, setSelectedVersion] = useState<FileVersion | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  const versions = useVersionStore(state => fileId ? state.getVersions(fileId) : []);
-  const restoreVersion = useVersionStore(state => state.restoreVersion);
-  const deleteVersion = useVersionStore(state => state.deleteVersion);
-  const createVersion = useVersionStore(state => state.createVersion);
+  const versionStore = useVersionStore();
+  const restoreVersion = versionStore.restoreVersion;
+  const deleteVersion = versionStore.deleteVersion;
+  const createVersion = versionStore.createVersion;
+
+  // 使用 useMemo 缓存版本列表，避免无限循环
+  const versions = useMemo(() => {
+    return fileId ? versionStore.getVersions(fileId) : [];
+  }, [fileId, versionStore]);
 
   const files = useFileStore(state => state.files);
   const saveFileContent = useFileStore(state => state.saveFileContent);

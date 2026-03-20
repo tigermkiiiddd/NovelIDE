@@ -8,6 +8,9 @@ import { useAgentTools, AgentToolsImplementation } from './agent/useAgentTools';
 import { useAgentEngine, MAX_CONTEXT_MESSAGES } from './agent/useAgentEngine';
 import { executeApprovedChange } from '../services/agent/toolRunner';
 import { usePlanStore } from '../stores/planStore';
+import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
+import { useFileStore } from '../stores/fileStore';
+import { findNodeByPath } from '../services/fileSystem';
 
 // Facade Hook
 export const useAgent = (
@@ -171,6 +174,31 @@ export const useAgent = (
     } else {
       console.log('[AutoAnalysis] ❌ 触发条件不满足');
     }
+    if (change.fileName &&
+        (change.toolName === 'createFile' || change.toolName === 'updateFile' || change.toolName === 'patchFile')) {
+      const currentFiles = useFileStore.getState().files;
+      const targetFile = findNodeByPath(currentFiles, change.fileName);
+
+      if (targetFile?.content) {
+        useLongTermMemoryStore
+          .getState()
+          .triggerDocumentExtraction(change.fileName, targetFile.content)
+          .then((extractionResult) => {
+            if (!extractionResult || extractionResult.added + extractionResult.updated === 0) return;
+
+            addMessage({
+              id: generateId(),
+              role: 'system',
+              text: `🧠 已从文档沉淀记忆：新增 ${extractionResult.added} 条，更新 ${extractionResult.updated} 条`,
+              timestamp: Date.now(),
+              metadata: { logType: 'success', extractionSummary: extractionResult.summary, filePath: change.fileName }
+            });
+          })
+          .catch((error: Error) => {
+            console.error('[DocumentMemory] approveChange extraction failed', error);
+          });
+      }
+    }
   }, [tools, addMessage, removePendingChange, setTodos, toolsHook.accessedFiles, currentSessionId, project]);
 
   const rejectChange = useCallback((change: PendingChange) => {
@@ -185,9 +213,33 @@ export const useAgent = (
 
   const sendMessage = useCallback(async (text: string) => {
     if (!currentSessionId) return;
-    addMessage({ id: generateId(), role: 'user', text, timestamp: Date.now() });
+    const userMessage = { id: generateId(), role: 'user' as const, text, timestamp: Date.now() };
+    const recentMessages = [...(currentSession?.messages || []), userMessage];
+
+    addMessage(userMessage);
+
+    setTimeout(() => {
+      useLongTermMemoryStore
+        .getState()
+        .triggerConversationExtraction(userMessage, recentMessages)
+        .then((result) => {
+          if (!result || result.added + result.updated === 0) return;
+
+          addMessage({
+            id: generateId(),
+            role: 'system',
+            text: `🧠 已自动沉淀记忆：新增 ${result.added} 条，更新 ${result.updated} 条`,
+            timestamp: Date.now(),
+            metadata: { logType: 'success', extractionSummary: result.summary },
+          });
+        })
+        .catch((error: Error) => {
+          console.error('[ConversationMemory] trigger failed', error);
+        });
+    }, 0);
+
     setTimeout(() => engine.processTurn(), 0);
-  }, [addMessage, engine, currentSessionId]);
+  }, [addMessage, currentSession?.messages, engine, currentSessionId]);
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);

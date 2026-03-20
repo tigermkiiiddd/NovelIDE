@@ -246,6 +246,58 @@ export interface CharacterState {
   changes: string[];
 }
 
+export interface CharacterStateSnapshot extends CharacterState {
+  chapterPath: string;
+  chapterTitle: string;
+  extractedAt: number;
+}
+
+export interface CharacterMemoryEntry {
+  memoryId: string;
+  name: string;
+  summary: string;
+  content: string;
+  importance: 'critical' | 'important' | 'normal';
+  keywords: string[];
+  tags: string[];
+  sourceRef?: string;
+  updatedAt: number;
+}
+
+export interface CharacterRelationship {
+  characterName: string;
+  status: string;
+  summary?: string;
+  confidence: 'high' | 'medium' | 'low';
+  source: 'state' | 'memory' | 'manual';
+  updatedAt: number;
+}
+
+export interface CharacterGoal {
+  id: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
+  status: 'active' | 'blocked' | 'completed' | 'latent';
+  source: 'state' | 'memory' | 'manual';
+  evidence?: string;
+  updatedAt: number;
+}
+
+export interface CharacterProfile {
+  id: string;
+  characterName: string;
+  aliases: string[];
+  latestState?: CharacterStateSnapshot;
+  stateHistory: CharacterStateSnapshot[];
+  memories: CharacterMemoryEntry[];
+  personaSummary?: string;
+  coreTraits: string[];
+  agencyNotes: string[];
+  goals: CharacterGoal[];
+  relationships: CharacterRelationship[];
+  updatedAt: number;
+}
+
 export interface ForeshadowingItem {
   id: string;
   content: string;
@@ -279,6 +331,25 @@ export type MemoryType =
   | 'world_rule';    // 世界观规则
 
 // 长期记忆条目
+export interface LongTermMemoryMetadata {
+  createdAt: number;
+  updatedAt: number;
+  source: 'user' | 'agent';
+  sourceKind?: 'manual' | 'dialogue' | 'document';
+  sourceRef?: string;
+  evidence?: string[];
+  lastAccessedAt: number;
+  lastRecalledAt: number;
+  lastReinforcedAt: number;
+  recallCount: number;
+  reinforceCount: number;
+  reviewCount: number;
+  activation: number;
+  strength: number;
+  reviewIntervalHours: number;
+  nextReviewAt: number;
+}
+
 export interface LongTermMemory {
   id: string;
   name: string;           // 记忆名称
@@ -290,12 +361,12 @@ export interface LongTermMemory {
   importance: 'critical' | 'important' | 'normal'; // 重要程度
   isResident: boolean;    // 常驻标记（常驻记忆会在系统提示词中显示标题和关键词）
   relatedMemories: string[]; // 关联记忆ID（知识图谱边）
-  metadata: {
-    createdAt: number;
-    updatedAt: number;
-    source: 'user' | 'agent';
-  };
+  metadata: LongTermMemoryMetadata;
 }
+
+export type LongTermMemoryDraft = Omit<LongTermMemory, 'id' | 'metadata'> & {
+  metadata?: Partial<LongTermMemoryMetadata>;
+};
 
 // --- Story Outline Types ---
 

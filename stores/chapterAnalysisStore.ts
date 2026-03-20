@@ -5,6 +5,7 @@ import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
 import { useAgentStore } from './agentStore';
 import { useProjectStore } from './projectStore';
+import { useCharacterMemoryStore } from './characterMemoryStore';
 import { AIService } from '../services/geminiService';
 import { runChapterAnalysisAgent, applyMergeActions } from '../services/subAgents/chapterAnalysisAgent';
 import { getNodePath } from '../services/fileSystem';
@@ -258,6 +259,8 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           state.addAnalysis(finalAnalysis);
           console.log('[ChapterAnalysisStore] 添加章节分析:', chapterPath);
         }
+
+        useCharacterMemoryStore.getState().upsertStateSnapshots(finalAnalysis);
 
         console.log('[ChapterAnalysisStore] 章节分析完成，最终数据:', finalAnalysis);
 
