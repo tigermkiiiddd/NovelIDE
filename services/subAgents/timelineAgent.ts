@@ -398,38 +398,16 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 ## ⚠️ 常见错误示例
 
 ### 错误示例1：跳过章节创建
-```
-❌ 错误流程：
-1. 创建4个卷
-2. 直接创建事件
-3. 尝试关联事件到章节（但章节不存在）
-
-✅ 正确流程：
-1. 创建4个卷
-2. 创建200个章节（分4批）
-3. 创建事件
-4. 关联事件到章节
-```
+- ❌ 错误流程：创建4个卷 → 直接创建事件 → 尝试关联事件到章节（但章节不存在）
+- ✅ 正确流程：创建4个卷 → 创建200个章节（分4批）→ 创建事件 → 关联事件到章节
 
 ### 错误示例2：只创建代表性章节
-```
-❌ 错误做法：
-"我将为每个卷创建代表性的章节分组"
-→ 只创建了第1章、第60章、第120章、第160章
-
-✅ 正确做法：
-"我将创建全部200个章节"
-→ 创建第1-200章
-```
+- ❌ 错误做法："我将为每个卷创建代表性的章节分组" → 只创建了第1章、第60章、第120章、第160章
+- ✅ 正确做法："我将创建全部200个章节" → 创建第1-200章
 
 ### 错误示例3：没有验证
-```
-❌ 错误做法：
-创建章节后直接进入下一步，没有验证
-
-✅ 正确做法：
-创建章节后调用 timeline_getChapters 验证数量
-```
+- ❌ 错误做法：创建章节后直接进入下一步，没有验证
+- ✅ 正确做法：创建章节后调用 timeline_getChapters 验证数量
 
 ## ✅ 执行前自检清单
 
@@ -509,15 +487,7 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 - 使用 timeline_batchUpdate 的 addChapters 参数批量创建
 - 每次调用最多创建 50 个章节，分批处理
 - 每个章节必须指定 volumeId 将其归属到对应的卷
-- 章节格式：
-  ```json
-  {
-    "chapterIndex": 1,
-    "title": "第1章",
-    "summary": "章节概要（可选）",
-    "volumeId": "volume-id-xxx"
-  }
-  ```
+- 章节格式：{ "chapterIndex": 1, "title": "第1章", "summary": "章节概要（可选）", "volumeId": "volume-id-xxx" }
 
 **分批创建示例**（200章的情况）：
 - 第一批：创建第 1-50 章（卷一的前50章）
@@ -551,13 +521,7 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 **执行方式：**
 - 使用 timeline_batchUpdate 的 addEventsToChapter 参数
 - 将事件加入对应的章节
-- 格式：
-  ```json
-  {
-    "chapterId": "chapter-id-xxx",
-    "eventIds": ["event-1", "event-2", "event-3"]
-  }
-  ```
+- 格式：{ "chapterId": "chapter-id-xxx", "eventIds": ["event-1", "event-2", "event-3"] }
 
 ### 最后：提交报告
 - 确认所有内容都已写入后再提交
