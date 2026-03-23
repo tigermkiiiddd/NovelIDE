@@ -642,7 +642,8 @@ ${input.mode === 'update' ? '目标：更新现有时间线内容' : '目标：�
 export async function runTimelineSubAgent(
   aiService: AIService,
   input: TimelineInput,
-  onLog?: (msg: string) => void
+  onLog?: (msg: string) => void,
+  signal?: AbortSignal
 ): Promise<TimelineOutput> {
-  return runSubAgent(timelineSubAgentConfig, aiService, input, {}, onLog);
+  return runSubAgent(timelineSubAgentConfig, aiService, input, {}, onLog, signal);
 }

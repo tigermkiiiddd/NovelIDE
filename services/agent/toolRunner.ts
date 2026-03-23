@@ -384,7 +384,7 @@ export const executeTool = async (
                     break;
                 // --- STORY OUTLINE TOOLS ---
                 case 'processOutlineInput':
-                    result = await executeProcessOutlineInput(args, onUiLog);
+                    result = await executeProcessOutlineInput(args, onUiLog, signal);
                     break;
                 case 'storyOutline_batchUpdate':
                 case 'storyOutline_getVolumes':
@@ -395,7 +395,7 @@ export const executeTool = async (
                     break;
                 // --- TIMELINE TOOLS ---
                 case 'processTimelineInput':
-                    result = await executeProcessTimelineInput(args, onUiLog);
+                    result = await executeProcessTimelineInput(args, onUiLog, signal);
                     break;
                 case 'timeline_batchUpdate':
                 case 'timeline_getEvents':

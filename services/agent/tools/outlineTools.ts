@@ -130,7 +130,8 @@ export const processOutlineInputTool: ToolDefinition = {
 
 export const executeProcessOutlineInput = async (
   args: any,
-  onUiLog?: (msg: string) => void
+  onUiLog?: (msg: string) => void,
+  signal?: AbortSignal
 ): Promise<string> => {
   const agentStore = useAgentStore.getState();
   const aiConfig = agentStore.aiConfig;
@@ -181,7 +182,7 @@ export const executeProcessOutlineInput = async (
         onUiLog(msg);  // 传递给 UI
       }
       console.log('[TimelineSubAgent]', msg);
-    });
+    }, signal);
 
     // 直接返回格式化的自然语言报告
     return result.report;
