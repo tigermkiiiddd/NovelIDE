@@ -365,12 +365,8 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 4. **时间线是核心视图** - 按时间顺序展示所有事件
 
 **数据模型关系：**
-```
-卷 (VolumeGroup)
-  └─ chapterIds[] → 章节 (ChapterGroup)
-       └─ eventIds[] → 事件 (TimelineEvent)
-```
-⚠️ 事件不能直接关联到卷，必须通过章节！章节是连接卷和事件的桥梁。
+- 卷 (VolumeGroup) → chapterIds[] → 章节 (ChapterGroup) → eventIds[] → 事件 (TimelineEvent)
+- ⚠️ 事件不能直接关联到卷，必须通过章节！章节是连接卷和事件的桥梁。
 
 **禁止事项：**
 1. 禁止脑补/创作原文没有的事件
