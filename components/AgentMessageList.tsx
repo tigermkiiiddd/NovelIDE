@@ -520,9 +520,9 @@ const SubAgentOutputBlock: React.FC<{
 };
 
 // --- Tool Call Block (Input Visualization) ---
-// 判断是否是大纲子Agent的工具（只有 processOutlineInput 是入口）
-const isOutlineSubAgentTool = (name: string) => {
-    return name === 'processOutlineInput';
+// 判断是否是子Agent的工具（processOutlineInput 和 processTimelineInput 是入口）
+const isSubAgentTool = (name: string) => {
+    return name === 'processOutlineInput' || name === 'processTimelineInput';
 };
 
 const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }> = ({ name, args, isDebugMode }) => {
@@ -532,8 +532,8 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
     const setActiveFileId = useFileStore(state => state.setActiveFileId);
     const [isSubAgentExpanded, setIsSubAgentExpanded] = useState(false);
 
-    // 检查是否是大纲子Agent工具
-    const isSubAgent = isOutlineSubAgentTool(name);
+    // 检查是否是子Agent工具
+    const isSubAgent = isSubAgentTool(name);
 
     // 提取文件路径并查找节点
     const filePath = restArgs.path || restArgs.oldPath;
@@ -589,7 +589,9 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
                         <ChevronRight size={14} className={`text-purple-400 transition-transform ${isSubAgentExpanded ? 'rotate-90' : ''}`} />
                         <Cpu size={14} className="text-purple-400" />
                         <span className="font-medium text-purple-300 truncate flex-1">
-                            {name === 'processOutlineInput' ? '📝 大纲子Agent执行中...' : `大纲操作: ${summary.summary}`}
+                            {name === 'processOutlineInput' ? '📝 大纲子Agent执行中...' :
+                             name === 'processTimelineInput' ? '⏱️ 时间线子Agent执行中...' :
+                             `操作: ${summary.summary}`}
                         </span>
                         <span className="text-[10px] text-purple-400 bg-purple-900/50 px-1.5 py-0.5 rounded">
                             {isSubAgentExpanded ? '收起' : '展开'}
@@ -734,12 +736,14 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             const isLast = index === messages.length - 1;
             const prevMsg = index > 0 ? messages[index-1] : null;
 
-            // 检查是否是 SubAgent (processOutlineInput 或 call_search_agent) 工具的输出
+            // 检查是否是 SubAgent (processOutlineInput、processTimelineInput 或 call_search_agent) 工具的输出
             // 注意：需要同时检查 rawParts（执行完成后）和 metadata.executingTools（执行过程中）
             const isSubAgentOutput = msg.rawParts?.some((p: any) =>
                 p.functionResponse?.name === 'processOutlineInput' ||
+                p.functionResponse?.name === 'processTimelineInput' ||
                 p.functionResponse?.name === 'call_search_agent'
             ) || msg.metadata?.executingTools === 'processOutlineInput' ||
+               msg.metadata?.executingTools === 'processTimelineInput' ||
                msg.metadata?.executingTools === 'call_search_agent';
 
             // 1. SubAgent 输出 - 使用折叠气泡显示

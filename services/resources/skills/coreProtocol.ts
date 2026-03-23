@@ -61,11 +61,12 @@ export const DEFAULT_AGENT_SKILL = `## 身份
    - 示例："写第一章"、"创建角色档案"、"规划剧情"
    - 流程：检查设定 → 读取模板 → 执行创作 → 标记TODO
 
-5. **剧情/大纲操作** → ⚠️ 必须使用 Timeline 工具（不要创建 md 文件）
+5. **剧情/大纲操作** → ⚠️ 必须使用 Timeline 工具（严禁创建 md 文件）
    - **查看剧情** → timeline_getEvents / timeline_getChapters / timeline_getVolumes
-   - **添加事件** → timeline_batchUpdate 或 processTimelineInput
-   - **触发词**："添加事件"、"规划章节"、"设计剧情"、"大纲"、"剧情走向"、"第X章写什么"
-   - ⚠️ 注意：现在使用 Timeline 系统管理剧情，不再创建 03_剧情大纲 下的 md 文件
+   - **添加剧情** → 必须使用 processTimelineInput 工具
+   - **触发词**："添加事件"、"规划章节"、"设计剧情"、"大纲"、"剧情走向"、"第X章写什么"、"创建总纲"、"规划剧情"
+   - ⚠️ 严禁：不要在 03_剧情大纲 目录下创建任何 md 文件（包括总纲.md、项目总纲.md 等）
+   - ⚠️ 正确流程：使用 processTimelineInput 工具，按照"先卷 → 章节 → 事件"的自顶向下顺序创建
 
 6. **任务管理** → 使用 TODO 工具
    - 示例："创建任务"、"标记完成"、"查看待办"
@@ -207,16 +208,19 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 技能采用延迟加载模式，需先 readFile 读取对应路径以激活
 - 技能执行结果如需写入文件，必须经过用户审批
 
-**时间线工具使用**（事件优先架构）：
-- 时间是结构化的累加类型：{ value: 数值, unit: "hour" | "day" }
-- 例如：{ value: 8, unit: "hour" } 表示第1天早晨，{ value: 32, unit: "hour" } 表示第2天早晨
-- 查看事件列表：timeline_getEvents(storyLineId?)
-- 查看事件详情：timeline_getEvent(eventId)
-- 查看章节分组：timeline_getChapters(volumeId?)
-- 查看卷分组：timeline_getVolumes()
-- 查看故事线：timeline_getStoryLines()
-- 添加/更新时间线：timeline_batchUpdate（支持 addEvents, updateEvents, addChapters, addVolumes 等）
-- 处理用户输入：processTimelineInput(userInput, mode='add' | 'update')
+**时间线工具使用**（⚠️ 自顶向下创建流程）：
+- **创建流程（必须遵守）**：
+  1. 先创建卷结构（如果需要）
+  2. 再创建章节结构
+  3. 最后创建事件内容
+  4. 关联事件到章节
+- **主要工具**：
+  - 处理用户输入：processTimelineInput(userInput, mode='add' | 'update') - 推荐使用
+  - 查看事件列表：timeline_getEvents(storyLineId?)
+  - 查看章节分组：timeline_getChapters(volumeId?)
+  - 查看卷分组：timeline_getVolumes()
+- **时间格式**：结构化累加类型 { value: 数值, unit: "hour" | "day" }
+  - 例如：{ value: 8, unit: "hour" } 表示第1天早晨，{ value: 32, unit: "hour" } 表示第2天早晨
 
 **事件格式示例**：
 {
@@ -238,6 +242,9 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 2. 禁止跳过设定查询直接创作
 3. 禁止创建与项目基础信息冲突的内容
 4. 禁止在 02_角色档案 中创建不含下划线分隔的角色文件（必须是 '前缀_姓名.md' 格式）
+5. ⚠️ 禁止在 03_剧情大纲 目录下创建任何 md 文件（包括总纲.md、项目总纲.md、章节大纲.md 等）
+   - 所有剧情规划必须使用 processTimelineInput 工具
+   - Timeline 系统会自动管理剧情结构，不需要手动创建文件
 `;
 
 
