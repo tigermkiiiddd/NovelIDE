@@ -595,6 +595,22 @@ export const executeTimelineTool = async (
       if (args.addChapters && Array.isArray(args.addChapters)) {
         for (const c of args.addChapters) {
           try {
+            // ⚠️ 校验1：如果指定了 volumeId，必须确保卷存在
+            if (c.volumeId) {
+              const volume = store.getVolume(c.volumeId);
+              if (!volume) {
+                results.errors.push({
+                  type: 'addChapter',
+                  data: c,
+                  error: `❌ 卷 ${c.volumeId} 不存在。请先使用 addVolumes 创建卷，然后再创建章节。`
+                });
+                continue;
+              }
+            } else {
+              // ⚠️ 校验2：如果没有指定 volumeId，给出警告
+              console.warn(`[Timeline] 章节 ${c.title} 没有指定 volumeId，这可能导致数据结构不完整`);
+            }
+
             const id = store.addChapter(c);
             results.addedChapters.push({ ...c, id });
           } catch (err: any) {
@@ -630,8 +646,30 @@ export const executeTimelineTool = async (
       // 7. 将事件加入章节
       if (args.addEventsToChapter) {
         try {
-          store.addEventsToChapter(args.addEventsToChapter.chapterId, args.addEventsToChapter.eventIds);
-          results.addedEventsToChapter = args.addEventsToChapter;
+          const { chapterId, eventIds } = args.addEventsToChapter;
+
+          // ⚠️ 校验1：章节必须存在
+          const chapter = store.getChapter(chapterId);
+          if (!chapter) {
+            results.errors.push({
+              type: 'addEventsToChapter',
+              data: args.addEventsToChapter,
+              error: `❌ 章节 ${chapterId} 不存在。请先使用 addChapters 创建章节，然后再关联事件。正确流程：1.创建卷 → 2.创建章节 → 3.创建事件 → 4.关联事件到章节`
+            });
+          } else {
+            // ⚠️ 校验2：所有事件必须存在
+            const missingEvents = eventIds.filter(id => !store.getEvent(id));
+            if (missingEvents.length > 0) {
+              results.errors.push({
+                type: 'addEventsToChapter',
+                data: args.addEventsToChapter,
+                error: `❌ 事件 ${missingEvents.join(', ')} 不存在。请先使用 addEvents 创建这些事件。`
+              });
+            } else {
+              store.addEventsToChapter(chapterId, eventIds);
+              results.addedEventsToChapter = args.addEventsToChapter;
+            }
+          }
         } catch (err: any) {
           results.errors.push({ type: 'addEventsToChapter', data: args.addEventsToChapter, error: err.message });
         }
@@ -686,8 +724,30 @@ export const executeTimelineTool = async (
       // 12. 将章节加入卷
       if (args.addChaptersToVolume) {
         try {
-          store.addChaptersToVolume(args.addChaptersToVolume.volumeId, args.addChaptersToVolume.chapterIds);
-          results.addedChaptersToVolume = args.addChaptersToVolume;
+          const { volumeId, chapterIds } = args.addChaptersToVolume;
+
+          // ⚠️ 校验1：卷必须存在
+          const volume = store.getVolume(volumeId);
+          if (!volume) {
+            results.errors.push({
+              type: 'addChaptersToVolume',
+              data: args.addChaptersToVolume,
+              error: `❌ 卷 ${volumeId} 不存在。请先使用 addVolumes 创建卷。`
+            });
+          } else {
+            // ⚠️ 校验2：所有章节必须存在
+            const missingChapters = chapterIds.filter(id => !store.getChapter(id));
+            if (missingChapters.length > 0) {
+              results.errors.push({
+                type: 'addChaptersToVolume',
+                data: args.addChaptersToVolume,
+                error: `❌ 章节 ${missingChapters.join(', ')} 不存在。请先使用 addChapters 创建这些章节。正确流程：1.创建卷 → 2.创建章节（指定volumeId）`
+              });
+            } else {
+              store.addChaptersToVolume(volumeId, chapterIds);
+              results.addedChaptersToVolume = args.addChaptersToVolume;
+            }
+          }
         } catch (err: any) {
           results.errors.push({ type: 'addChaptersToVolume', data: args.addChaptersToVolume, error: err.message });
         }
@@ -717,8 +777,48 @@ export const executeTimelineTool = async (
         }
       }
 
+      // ⚠️ 数据完整性警告
+      const warnings: string[] = [];
+
+      // 警告1：孤立事件
+      if (results.addedEvents.length > 0) {
+        const orphanEvents = results.addedEvents.filter((e: any) => !e.chapterId);
+        if (orphanEvents.length > 0) {
+          warnings.push(`⚠️ 发现 ${orphanEvents.length} 个孤立事件（未关联到章节）`);
+          warnings.push(`   → 这些事件无法正确归属到卷，请使用 addEventsToChapter 关联它们`);
+        }
+      }
+
+      // 警告2：创建了卷但没有创建章节
+      if (results.addedVolumes.length > 0 && results.addedChapters.length === 0) {
+        warnings.push(`⚠️ 创建了 ${results.addedVolumes.length} 个卷但没有创建章节`);
+        warnings.push(`   → 章节是连接卷和事件的桥梁，请立即创建章节`);
+        warnings.push(`   → 正确流程：1.创建卷 → 2.创建章节 → 3.创建事件 → 4.关联事件到章节`);
+      }
+
+      // 警告3：创建了事件但没有创建章节
+      if (results.addedEvents.length > 0 && results.addedChapters.length === 0) {
+        // 检查是否已有章节存在
+        const existingChapters = store.getChapters();
+        if (existingChapters.length === 0) {
+          warnings.push(`⚠️ 创建了 ${results.addedEvents.length} 个事件但没有章节`);
+          warnings.push(`   → 事件必须关联到章节才能归属到卷`);
+          warnings.push(`   → 你跳过了"创建章节"这一步，请立即补充创建章节`);
+        }
+      }
+
+      // 警告4：章节没有指定 volumeId
+      if (results.addedChapters.length > 0) {
+        const orphanChapters = results.addedChapters.filter((c: any) => !c.volumeId);
+        if (orphanChapters.length > 0) {
+          warnings.push(`⚠️ 发现 ${orphanChapters.length} 个章节没有指定 volumeId`);
+          warnings.push(`   → 这些章节无法归属到卷，请在创建章节时指定 volumeId`);
+        }
+      }
+
       return JSON.stringify({
         success: results.errors.length === 0,
+        warnings: warnings.length > 0 ? warnings : undefined,
         ...results
       });
     }
