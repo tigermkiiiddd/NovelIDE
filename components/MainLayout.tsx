@@ -73,9 +73,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   useEffect(() => {
     if (projectId) {
         // 先加载文件，等完成后再加载章节分析、长期记忆和大纲
+        loadProjectMemories(projectId);
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
-          loadProjectMemories(projectId);
           loadProjectCharacterProfiles(projectId);
           loadOutline(projectId);
         });

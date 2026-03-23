@@ -1,4 +1,4 @@
-import { ChatMessage, FileType, LongTermMemory, LongTermMemoryDraft, MemoryType } from '../types';
+import { ChatMessage, FileNode, FileType, LongTermMemory, LongTermMemoryDraft, MemoryType } from '../types';
 import { createPersistingStore } from './createPersistingStore';
 import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
@@ -23,15 +23,16 @@ import { DocumentMemoryOutput, runDocumentMemoryAgent } from '../services/subAge
 
 interface LongTermMemoryState {
   memories: LongTermMemory[];
+  currentProjectId: string | null;
   isLoading: boolean;
   isInitialized: boolean;
   isRefreshing: boolean;
   isExtracting: boolean;
   extractionError: string | null;
 
-  loadMemories: () => Promise<void>;
+  loadMemories: (projectId?: string) => Promise<void>;
   loadProjectMemories: (projectId: string) => Promise<void>;
-  ensureInitialized: () => Promise<void>;
+  ensureInitialized: (projectId?: string) => Promise<void>;
   refreshMemories: () => Promise<void>;
   setMemories: (memories: LongTermMemory[]) => void;
   addMemory: (memory: LongTermMemoryDraft) => void;
@@ -61,6 +62,8 @@ interface LongTermMemoryState {
 
 const generateId = () => `memory-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 const documentExtractionSignatureCache = new Map<string, string>();
+const MEMORY_FILE_NAME = '闀挎湡璁板繂.json';
+const MEMORY_INFO_FOLDER_NAME = '00_鍩虹淇℃伅';
 
 const normalizeMemories = (memories: LongTermMemory[], now = Date.now()) =>
   memories.map((memory) => normalizeMemory(memory, now));
@@ -126,6 +129,36 @@ const shouldSkipLongTermMemoryDraft = (memory: LongTermMemoryDraft) => {
   // Long-term memory is now project-level only. Character-specific knowledge
   // should live in character archives/profiles instead of the shared memory pool.
   return memory.type === 'character_rule';
+};
+
+const resolveActiveProjectId = () =>
+  useProjectStore.getState().currentProjectId || useFileStore.getState().currentProjectId || null;
+
+const buildDocumentExtractionCacheKey = (projectId: string, filePath: string) => `${projectId}::${filePath}`;
+
+const upsertMemoryFile = (files: FileNode[], memories: LongTermMemory[]) => {
+  const nextFiles = files.map((file) => ({ ...file }));
+  let memoryFile = nextFiles.find((file) => file.name === MEMORY_FILE_NAME);
+
+  if (!memoryFile) {
+    const infoFolder = nextFiles.find((file) => file.name === MEMORY_INFO_FOLDER_NAME && file.parentId === 'root');
+    if (!infoFolder) return nextFiles;
+
+    memoryFile = {
+      id: `memory-file-${Date.now()}`,
+      parentId: infoFolder.id,
+      name: MEMORY_FILE_NAME,
+      type: FileType.FILE,
+      content: JSON.stringify(memories, null, 2),
+      lastModified: Date.now(),
+    };
+    nextFiles.push(memoryFile);
+    return nextFiles;
+  }
+
+  memoryFile.content = JSON.stringify(memories, null, 2);
+  memoryFile.lastModified = Date.now();
+  return nextFiles;
 };
 
 export const extractCharacterNameFromMemory = (memory: Pick<LongTermMemory, 'type' | 'tags' | 'keywords' | 'name'>) => {
@@ -224,7 +257,7 @@ const applyMemoryExtractionResult = (
   };
 };
 
-const saveMemoriesToJson = async (memories: LongTermMemory[]) => {
+const legacySaveMemoriesToJson = async (memories: LongTermMemory[], _projectId?: string | null) => {
   const fileStore = useFileStore.getState();
   let memoryFile = fileStore.files.find((file) => file.name === '长期记忆.json');
 
@@ -246,9 +279,78 @@ const saveMemoriesToJson = async (memories: LongTermMemory[]) => {
     memoryFile.lastModified = Date.now();
   }
 
-  const projectId = useProjectStore.getState().currentProjectId;
-  if (projectId) {
-    await dbAPI.saveFiles(projectId, [...fileStore.files]);
+  const activeProjectId = useProjectStore.getState().currentProjectId;
+  if (activeProjectId) {
+    await dbAPI.saveFiles(activeProjectId, [...fileStore.files]);
+  }
+};
+
+const saveMemoriesToJson = async (memories: LongTermMemory[], projectId?: string | null) => {
+  void legacySaveMemoriesToJson;
+
+  const targetProjectId = projectId ?? useLongTermMemoryStore.getState().currentProjectId ?? resolveActiveProjectId();
+  if (!targetProjectId) return;
+
+  const fileStore = useFileStore.getState();
+  const sourceFiles =
+    fileStore.currentProjectId === targetProjectId
+      ? fileStore.files
+      : (await Promise.resolve(dbAPI.getFiles(targetProjectId)).catch(() => [])) || [];
+
+  const nextFiles = upsertMemoryFile(sourceFiles, memories);
+
+  if (fileStore.currentProjectId === targetProjectId) {
+    useFileStore.setState({ files: nextFiles });
+  }
+
+  await dbAPI.saveFiles(targetProjectId, nextFiles);
+};
+
+const loadMemoriesForProject = async (projectId: string) => {
+  useLongTermMemoryStore.setState({
+    isLoading: true,
+    currentProjectId: projectId,
+  });
+
+  try {
+    const fileStore = useFileStore.getState();
+    const files =
+      fileStore.currentProjectId === projectId
+        ? fileStore.files
+        : (await Promise.resolve(dbAPI.getFiles(projectId)).catch(() => [])) || [];
+    const memoryFile = files.find((file) => file.name === MEMORY_FILE_NAME);
+
+    if (memoryFile?.content) {
+      const rawMemories = JSON.parse(memoryFile.content);
+
+      if (Array.isArray(rawMemories)) {
+        if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
+        useLongTermMemoryStore.setState({
+          memories: normalizeMemories(rawMemories as LongTermMemory[]),
+          currentProjectId: projectId,
+          isInitialized: true,
+          isLoading: false,
+        });
+        return;
+      }
+    }
+
+    if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
+    useLongTermMemoryStore.setState({
+      memories: [],
+      currentProjectId: projectId,
+      isInitialized: true,
+      isLoading: false,
+    });
+  } catch (error) {
+    console.error('[LongTermMemoryStore] Failed to load memories', error);
+    if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
+    useLongTermMemoryStore.setState({
+      memories: [],
+      currentProjectId: projectId,
+      isInitialized: true,
+      isLoading: false,
+    });
   }
 };
 
@@ -256,20 +358,45 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
   'longTermMemoryStore',
   {
     memories: [],
+    currentProjectId: null,
     isLoading: false,
     isInitialized: false,
     isRefreshing: false,
     isExtracting: false,
     extractionError: null,
 
-    loadProjectMemories: async () => {
-      await useLongTermMemoryStore.getState().loadMemories();
+    loadProjectMemories: async (projectId) => {
+      const state = useLongTermMemoryStore.getState();
+      if (state.currentProjectId !== projectId) {
+        useLongTermMemoryStore.setState({
+          currentProjectId: projectId,
+          memories: [],
+          isInitialized: false,
+          isLoading: true,
+          extractionError: null,
+        });
+      }
+
+      await useLongTermMemoryStore.getState().loadMemories(projectId);
     },
 
-    ensureInitialized: async () => {
+    ensureInitialized: async (projectId) => {
+      const activeProjectId = projectId ?? resolveActiveProjectId();
       const state = useLongTermMemoryStore.getState();
-      if (!state.isInitialized) {
-        await state.loadMemories();
+      if (!activeProjectId) {
+        if (state.currentProjectId !== null || state.memories.length > 0 || !state.isInitialized) {
+          useLongTermMemoryStore.setState({
+            memories: [],
+            currentProjectId: null,
+            isInitialized: true,
+            isLoading: false,
+          });
+        }
+        return;
+      }
+
+      if (!state.isInitialized || state.currentProjectId !== activeProjectId) {
+        await state.loadProjectMemories(activeProjectId);
       }
     },
 
@@ -279,14 +406,32 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
 
       useLongTermMemoryStore.setState({ isRefreshing: true });
       try {
-        await state.loadMemories();
+        await state.loadMemories(state.currentProjectId ?? resolveActiveProjectId() ?? undefined);
       } finally {
         useLongTermMemoryStore.setState({ isRefreshing: false });
       }
     },
 
-    loadMemories: async () => {
-      useLongTermMemoryStore.setState({ isLoading: true });
+    loadMemories: async (projectId) => {
+      const targetProjectId = projectId ?? useLongTermMemoryStore.getState().currentProjectId ?? resolveActiveProjectId();
+
+      if (!targetProjectId) {
+        useLongTermMemoryStore.setState({
+          memories: [],
+          currentProjectId: null,
+          isInitialized: true,
+          isLoading: false,
+        });
+        return;
+      }
+
+      await loadMemoriesForProject(targetProjectId);
+      return;
+
+      useLongTermMemoryStore.setState({
+        isLoading: true,
+        currentProjectId: targetProjectId,
+      });
 
       try {
         const fileStore = useFileStore.getState();
@@ -325,7 +470,8 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
     },
 
     _syncToJsonFile: async () => {
-      await saveMemoriesToJson(useLongTermMemoryStore.getState().memories);
+      const state = useLongTermMemoryStore.getState();
+      await saveMemoriesToJson(state.memories, state.currentProjectId);
     },
 
     addMemory: (memory) => {
@@ -427,6 +573,8 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
     triggerConversationExtraction: async (userMessage, recentMessages) => {
       const state = useLongTermMemoryStore.getState();
       if (state.isExtracting) return null;
+      const projectId = state.currentProjectId ?? resolveActiveProjectId();
+      if (!projectId) return null;
 
       try {
         useLongTermMemoryStore.setState({ isExtracting: true, extractionError: null });
@@ -459,13 +607,17 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
         );
 
         if (!result.shouldExtract || result.actions.length === 0) {
-          documentExtractionSignatureCache.set(filePath, signature);
           return {
             added: 0,
             updated: 0,
             skipped: result.actions.length,
             summary: result.summary,
           };
+        }
+
+        if (useLongTermMemoryStore.getState().currentProjectId !== projectId) {
+          console.warn('[LongTermMemoryStore] Discarded conversation extraction after project switch', projectId);
+          return null;
         }
 
         const applied = applyMemoryExtractionResult(result, {
@@ -492,9 +644,12 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
     triggerDocumentExtraction: async (filePath, content) => {
       const state = useLongTermMemoryStore.getState();
       if (state.isExtracting || !isDocumentMemorySourcePath(filePath) || !content.trim()) return null;
+      const projectId = state.currentProjectId ?? resolveActiveProjectId();
+      if (!projectId) return null;
 
       const signature = createDocumentSignature(content);
-      if (documentExtractionSignatureCache.get(filePath) === signature) return null;
+      const cacheKey = buildDocumentExtractionCacheKey(projectId, filePath);
+      if (documentExtractionSignatureCache.get(cacheKey) === signature) return null;
 
       try {
         useLongTermMemoryStore.setState({ isExtracting: true, extractionError: null });
@@ -535,13 +690,18 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
           };
         }
 
+        if (useLongTermMemoryStore.getState().currentProjectId !== projectId) {
+          console.warn('[LongTermMemoryStore] Discarded document extraction after project switch', projectId, filePath);
+          return null;
+        }
+
         const applied = applyMemoryExtractionResult(result, {
           sourceKind: 'document',
           sourceRef: filePath,
           evidence: buildDocumentEvidence(content),
         });
 
-        documentExtractionSignatureCache.set(filePath, signature);
+        documentExtractionSignatureCache.set(cacheKey, signature);
 
         return {
           added: applied.added,
@@ -594,7 +754,8 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
       ).slice(0, limit),
   },
   async (state) => {
-    await saveMemoriesToJson(state.memories);
+    if (!state.isInitialized || !state.currentProjectId) return;
+    await saveMemoriesToJson(state.memories, state.currentProjectId);
   },
   0
 );

@@ -23,7 +23,8 @@ import {
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
   SKILL_HUMANIZER_STYLE,
-  SKILL_EXPECTATION_MANAGER
+  SKILL_EXPECTATION_MANAGER,
+  SKILL_CONSTRAINT_LAYERED_DESIGN
 } from '../../services/templates';
 
 // 内联模板（用于世界线记录和伏笔记录）
@@ -186,6 +187,7 @@ export class FileService {
     ensureFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW);
     ensureFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE);
     ensureFile('技能_期待感管理.md', subskillFolder.id, SKILL_EXPECTATION_MANAGER);
+    ensureFile('技能_分层约束设计.md', subskillFolder.id, SKILL_CONSTRAINT_LAYERED_DESIGN);
 
     // 7. 确保 00_基础信息 文件夹存在
     const infoFolder = ensureFolder('00_基础信息', 'root');

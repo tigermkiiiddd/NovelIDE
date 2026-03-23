@@ -372,7 +372,15 @@ export const constructSystemPrompt = (
       // 延迟导入避免循环依赖
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { useLongTermMemoryStore } = require('../../../stores/longTermMemoryStore');
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { useProjectStore } = require('../../../stores/projectStore');
       const memoryStore = useLongTermMemoryStore.getState();
+      const currentProjectId = useProjectStore.getState().currentProjectId;
+
+      if (memoryStore.currentProjectId !== currentProjectId) {
+        return '';
+      }
+
       const critical = memoryStore.getByImportance('critical');
       const resident = memoryStore.getResident().slice(0, 8);
       const reviewQueue = memoryStore.getReviewQueue(5);

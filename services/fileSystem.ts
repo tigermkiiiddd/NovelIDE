@@ -9,7 +9,8 @@ import {
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
-  SKILL_HUMANIZER_STYLE
+  SKILL_HUMANIZER_STYLE,
+  SKILL_CONSTRAINT_LAYERED_DESIGN
 } from './templates';
 
 // 生成唯一ID
@@ -139,6 +140,7 @@ export const createInitialFileSystem = (): FileNode[] => {
     createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
     createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
     createFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE),
+    createFile('技能_分层约束设计.md', subskillFolder.id, SKILL_CONSTRAINT_LAYERED_DESIGN),
 
     // --- 99_创作规范 (Templates & Guides) ---
     createFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE),

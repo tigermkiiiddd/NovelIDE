@@ -56,8 +56,7 @@ export const allTools: ToolDefinition[] = [
   ...readTools,
   ...writeTools,
   manageTodosTool,
-  recallMemoryTool,
-  manageMemoryTool,
+  // recallMemoryTool 和 manageMemoryTool 已经在 readTools 和 writeTools 中
   // callSearchAgentTool,  // 已屏蔽
   // managePlanNoteTool,  // 已移除
   // thinkingTool  // 已移除
