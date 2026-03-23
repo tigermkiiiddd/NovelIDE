@@ -594,10 +594,36 @@ export const executeTimelineTool = async (
 
       // 4. 添加章节
       if (args.addChapters && Array.isArray(args.addChapters)) {
-        for (const c of args.addChapters) {
-          try {
-            // ⚠️ 校验1：如果指定了 volumeId，必须确保卷存在
-            if (c.volumeId) {
+        // ⚠️ 校验0：章节数量上限
+        if (args.addChapters.length > 50) {
+          results.errors.push({
+            type: 'addChapter',
+            data: null,
+            error: `❌ 单次最多创建 50 个章节，当前传入 ${args.addChapters.length} 个。请分批调用。`
+          });
+        } else {
+          for (const c of args.addChapters) {
+            try {
+              // ⚠️ 校验1：summary 必填
+              if (!c.summary || c.summary.trim() === '') {
+                results.errors.push({
+                  type: 'addChapter',
+                  data: c,
+                  error: `❌ 章节「${c.title}」缺少 summary（剧情概要）。每个章节必须填写剧情概要，不能留空。`
+                });
+                continue;
+              }
+
+              // ⚠️ 校验2：volumeId 必填且卷必须存在
+              if (!c.volumeId) {
+                results.errors.push({
+                  type: 'addChapter',
+                  data: c,
+                  error: `❌ 章节「${c.title}」缺少 volumeId。每个章节必须指定所属卷。`
+                });
+                continue;
+              }
+
               const volume = store.getVolume(c.volumeId);
               if (!volume) {
                 results.errors.push({
@@ -607,15 +633,12 @@ export const executeTimelineTool = async (
                 });
                 continue;
               }
-            } else {
-              // ⚠️ 校验2：如果没有指定 volumeId，给出警告
-              console.warn(`[Timeline] 章节 ${c.title} 没有指定 volumeId，这可能导致数据结构不完整`);
-            }
 
-            const id = store.addChapter(c);
-            results.addedChapters.push({ ...c, id });
-          } catch (err: any) {
-            results.errors.push({ type: 'addChapter', data: c, error: err.message });
+              const id = store.addChapter(c);
+              results.addedChapters.push({ ...c, id });
+            } catch (err: any) {
+              results.errors.push({ type: 'addChapter', data: c, error: err.message });
+            }
           }
         }
       }
@@ -690,6 +713,16 @@ export const executeTimelineTool = async (
       if (args.addVolumes && Array.isArray(args.addVolumes)) {
         for (const v of args.addVolumes) {
           try {
+            // ⚠️ 校验：description 必填
+            if (!v.description || v.description.trim() === '') {
+              results.errors.push({
+                type: 'addVolume',
+                data: v,
+                error: `❌ 卷「${v.title}」缺少 description（剧情概述）。每个卷必须填写剧情概述，不能留空。`
+              });
+              continue;
+            }
+
             const id = store.addVolume(v);
             results.addedVolumes.push({ ...v, id });
           } catch (err: any) {

@@ -185,15 +185,15 @@ const batchUpdateTimelineTool: ToolDefinition = {
             properties: {
               chapterIndex: { type: 'number' },
               title: { type: 'string' },
-              summary: { type: 'string' },
-              volumeId: { type: 'string' },
+              summary: { type: 'string', description: '章节剧情概要（必填，描述该章主要剧情）' },
+              volumeId: { type: 'string', description: '所属卷ID（必填）' },
               pov: { type: 'string', description: 'POV角色' },
               driver: { type: 'string', description: '谁在推动' },
               conflict: { type: 'string', description: '冲突来源' },
               hook: { type: 'string', description: '章末悬念' },
               status: { type: 'string', enum: ['draft', 'outline', 'writing', 'completed'], description: '章节状态' }
             },
-            required: ['chapterIndex', 'title']
+            required: ['chapterIndex', 'title', 'summary', 'volumeId']
           },
           description: '要添加的章节分组列表'
         },
@@ -239,9 +239,9 @@ const batchUpdateTimelineTool: ToolDefinition = {
             properties: {
               volumeIndex: { type: 'number' },
               title: { type: 'string' },
-              description: { type: 'string' }
+              description: { type: 'string', description: '卷的剧情概述（必填，描述该卷整体剧情走向）' }
             },
-            required: ['volumeIndex', 'title']
+            required: ['volumeIndex', 'title', 'description']
           },
           description: '要添加的卷分组列表'
         },
@@ -482,12 +482,15 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 - ⚠️ **必须创建所有章节，不能只创建"代表性章节"或"关键章节"**
 - ⚠️ 如果用户提到"200章"，必须创建全部200个章节
 - ⚠️ 章节是连接卷和事件的桥梁，缺少章节会导致数据结构断裂
+- ⚠️ **每个章节必须填写 summary（章节剧情概要）**，不能留空
+- ⚠️ **最多创建 500 个章节**，超过此数量请拒绝并提示用户
 
 **执行方式：**
 - 使用 timeline_batchUpdate 的 addChapters 参数批量创建
 - 每次调用最多创建 50 个章节，分批处理
 - 每个章节必须指定 volumeId 将其归属到对应的卷
-- 章节格式：{ "chapterIndex": 1, "title": "第1章", "summary": "章节概要（可选）", "volumeId": "volume-id-xxx" }
+- 每个章节必须填写 summary（剧情概要），描述该章的主要剧情内容
+- 章节格式：{ "chapterIndex": 1, "title": "第1章", "summary": "章节剧情概要（必填）", "volumeId": "volume-id-xxx" }
 
 **分批创建示例**（200章的情况）：
 - 第一批：创建第 1-50 章（卷一的前50章）
@@ -551,8 +554,8 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 |------|------|------|
 | chapterIndex | 是 | 章节序号（从1开始） |
 | title | 是 | 章节标题 |
-| summary | 否 | 章节概要 |
-| volumeId | 否 | 所属卷ID |
+| summary | 是 | ⚠️ 章节剧情概要（必须描述该章的主要剧情内容，不能留空） |
+| volumeId | 是 | 所属卷ID（必须指定） |
 
 ## 卷分组字段说明
 
@@ -560,7 +563,7 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 |------|------|------|
 | volumeIndex | 是 | 卷序号（从1开始） |
 | title | 是 | 卷标题 |
-| description | 否 | 卷描述 |
+| description | 是 | ⚠️ 卷的剧情概述（必须描述该卷的整体剧情走向，不能留空） |
 
 ## 报告要求
 
