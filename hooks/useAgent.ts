@@ -92,7 +92,8 @@ export const useAgent = (
                        aiConfig.baseUrl?.includes('generativelanguage.googleapis.com');
       const limit = isGemini ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
-      const sysPrompt = constructSystemPrompt(files, project, activeFile, todos);
+      const longTermMemories = useLongTermMemoryStore.getState().memories;
+      const sysPrompt = constructSystemPrompt(files, project, activeFile, todos, undefined, undefined, longTermMemories);
       const msgs = currentSession?.messages || [];
       const msgsText = msgs.reduce((acc, m) => {
           let content = m.text;

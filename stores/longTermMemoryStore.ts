@@ -62,8 +62,8 @@ interface LongTermMemoryState {
 
 const generateId = () => `memory-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 const documentExtractionSignatureCache = new Map<string, string>();
-const MEMORY_FILE_NAME = '闀挎湡璁板繂.json';
-const MEMORY_INFO_FOLDER_NAME = '00_鍩虹淇℃伅';
+const MEMORY_FILE_NAME = '长期记忆.json';
+const MEMORY_INFO_FOLDER_NAME = '00_基础信息';
 
 const normalizeMemories = (memories: LongTermMemory[], now = Date.now()) =>
   memories.map((memory) => normalizeMemory(memory, now));

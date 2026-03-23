@@ -445,6 +445,13 @@ export const dbAPI = {
     try {
       console.log('[dbAPI.getVersions] 开始读取, projectId:', projectId);
       const db = await initDB();
+
+      // 检查 versions 表是否存在，如果不存在则返回空数组
+      if (!db.objectStoreNames.contains('versions')) {
+        console.warn('[dbAPI.getVersions] versions 表不存在，返回空数组');
+        return [];
+      }
+
       const result = await db.get('versions', `versions-${projectId}`);
       console.log('[dbAPI.getVersions] 读取结果:', result ? `找到 ${result.length} 个版本` : '无数据');
       return result;
@@ -457,6 +464,13 @@ export const dbAPI = {
   saveVersions: async (projectId: string, versions: FileVersion[]) => {
     console.log('[dbAPI.saveVersions] 开始保存, projectId:', projectId, '版本数量:', versions.length);
     const db = await initDB();
+
+    // 检查 versions 表是否存在，如果不存在则跳过保存
+    if (!db.objectStoreNames.contains('versions')) {
+      console.warn('[dbAPI.saveVersions] versions 表不存在，跳过保存');
+      return;
+    }
+
     await db.put('versions', versions, `versions-${projectId}`);
     console.log('[dbAPI.saveVersions] 保存完成');
   },
@@ -464,6 +478,13 @@ export const dbAPI = {
   deleteVersions: async (projectId: string) => {
     try {
       const db = await initDB();
+
+      // 检查 versions 表是否存在
+      if (!db.objectStoreNames.contains('versions')) {
+        console.warn('[dbAPI.deleteVersions] versions 表不存在，跳过删除');
+        return;
+      }
+
       await db.delete('versions', `versions-${projectId}`);
       console.log('[Persistence] Deleted versions for project:', projectId);
     } catch (error) {

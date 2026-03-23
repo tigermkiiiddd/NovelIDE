@@ -277,8 +277,9 @@ export const constructSystemPrompt = (
   project: ProjectMeta | undefined,
   activeFile: FileNode | null,
   todos: TodoItem[],
-  messages?: any[],  // 会话消息历史
-  planMode?: boolean  // Plan 模式开关
+  messages?: any[],
+  planMode?: boolean,
+  longTermMemories?: any[]  // 长期记忆数据
 ): string => {
   // --- 1. 变量组装 (Variable Assembly) ---
   const skillFolder = files.find(f => f.name === '98_技能配置');
@@ -393,49 +394,43 @@ export const constructSystemPrompt = (
 
   // Long Term Memory (长期记忆)
   const getLongTermMemorySection = () => {
-    try {
-      // 延迟导入避免循环依赖
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { useLongTermMemoryStore } = require('../../../stores/longTermMemoryStore');
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { useProjectStore } = require('../../../stores/projectStore');
-      const memoryStore = useLongTermMemoryStore.getState();
-      const currentProjectId = useProjectStore.getState().currentProjectId;
-
-      if (memoryStore.currentProjectId !== currentProjectId) {
-        return '';
-      }
-
-      const critical = memoryStore.getByImportance('critical');
-      const resident = memoryStore.getResident().slice(0, 8);
-      const reviewQueue = memoryStore.getReviewQueue(5);
-
-      let output = '';
-
-      if (critical.length > 0) {
-        output += `## 📚 长期记忆（必须遵守）\n> 共 ${critical.length} 条关键记忆\n\n`;
-        output += critical.map((m: { name: string; type: string; tags: string[]; keywords: string[]; summary: string }) => `### ${m.name}\n- 类型: ${m.type}\n- 标签: ${m.tags.join(', ')}\n- 关键字: ${m.keywords.join(', ')}\n- 摘要: ${m.summary}\n`).join('\n');
-      }
-
-      if (resident.length > 0) {
-        output += `\n## 🔖 常驻记忆索引\n> 共 ${resident.length} 条常驻记忆（需要时使用 recall_memory 召回完整内容）\n\n`;
-        output += resident.map((m: { name: string; keywords: string[] }) => `- **${m.name}**: ${m.keywords.join(', ')}`).join('\n');
-        output += '\n';
-      }
-
-      if (reviewQueue.length > 0) {
-        output += `\n## 记忆复习队列\n> 以下记忆处于待复习窗口，遇到相关任务时优先召回或强化\n\n`;
-        output += reviewQueue
-          .map((m: { name: string; type: string; summary: string }) => `- **${m.name}** [${m.type}] ${m.summary || ''}`.trim())
-          .join('\n');
-        output += '\n';
-      }
-
-      return output;
-    } catch (e) {
-      // 可能在非 React 上下文中调用，或循环依赖
+    if (!longTermMemories || longTermMemories.length === 0) {
       return '';
     }
+
+    const critical = longTermMemories.filter((m: any) => m.importance === 'critical');
+    const resident = longTermMemories.filter((m: any) => m.isResident).slice(0, 8);
+    const now = Date.now();
+    const reviewQueue = longTermMemories
+      .filter((m: any) => m.metadata?.nextReviewAt <= now || m.metadata?.reviewCount === 0)
+      .slice(0, 5);
+
+    let output = '';
+
+    if (critical.length > 0) {
+      output += `## 📚 长期记忆（必须遵守）\n> 共 ${critical.length} 条关键记忆\n\n`;
+      output += critical.map((m: any) => `### ${m.name}\n- 类型: ${m.type}\n- 标签: ${m.tags?.join(', ') || '无'}\n- 关键字: ${m.keywords?.join(', ') || '无'}\n- 摘要: ${m.summary}\n`).join('\n');
+    }
+
+    if (resident.length > 0) {
+      output += `\n## 🔖 常驻记忆索引\n> 共 ${resident.length} 条常驻记忆（需要时使用 recall_memory 召回完整内容）\n\n`;
+      output += resident.map((m: any) => `- **${m.name}**: ${m.keywords?.join(', ') || '无关键字'}`).join('\n');
+      output += '\n';
+    }
+
+    if (reviewQueue.length > 0) {
+      output += `\n## 📝 记忆复习队列\n> 以下记忆处于待复习窗口，遇到相关任务时优先召回或强化\n\n`;
+      output += reviewQueue
+        .map((m: any) => `- **${m.name}** [${m.type}] ${m.summary || ''}`.trim())
+        .join('\n');
+      output += '\n';
+    }
+
+    if (output === '' && longTermMemories.length > 0) {
+      output = `\n## 💡 长期记忆提示\n> 当前有 ${longTermMemories.length} 条记忆，但没有标记为 critical 或 resident。使用 manage_memory 或 recall_memory 工具查看和管理。\n`;
+    }
+
+    return output;
   };
 
   // --- 3. 最终组装 (Final Assembly) ---
