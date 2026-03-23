@@ -366,6 +366,31 @@ export const constructSystemPrompt = (
 
   const templateList = getTemplateListSection();
 
+  // Character Profiles Summary (角色档案摘要 - 轻量级注入)
+  const getCharacterProfilesSection = () => {
+    const characterFolder = files.find(f => f.name === '02_角色档案' && f.parentId === 'root');
+    if (!characterFolder) return '';
+
+    const characterFiles = files.filter(f =>
+      f.parentId === characterFolder.id &&
+      f.type === FileType.FILE &&
+      f.name.includes('_') // 符合 '前缀_姓名.md' 格式
+    );
+
+    if (characterFiles.length === 0) return '';
+
+    const profiles = characterFiles.map(f => {
+      const meta = f.metadata || {};
+      const summary = meta.summarys?.[0] || '暂无简介';
+      const tags = meta.tags?.length > 0 ? meta.tags.slice(0, 5).join(', ') : '无标签';
+      const characterName = f.name.replace('.md', '');
+
+      return `- **${characterName}**: ${summary} [${tags}]`;
+    }).join('\n');
+
+    return `\n## 👥 角色档案索引\n> 共 ${characterFiles.length} 个角色（需要详细信息时使用 readFile 查看完整档案）\n\n${profiles}\n`;
+  };
+
   // Long Term Memory (长期记忆)
   const getLongTermMemorySection = () => {
     try {
@@ -419,6 +444,7 @@ export const constructSystemPrompt = (
   const skillListSection = emergentSkillsData !== "(无额外技能)"
     ? `**可用技能库 (Lazy Load)**:\n${emergentSkillsData}`
     : "";
+  const characterProfilesSection = getCharacterProfilesSection();
   const longTermMemorySection = getLongTermMemorySection();
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
     .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
@@ -431,6 +457,7 @@ export const constructSystemPrompt = (
 
   return `
 ${processedAgentInstruction}
+${characterProfilesSection}
 ${longTermMemorySection}
 `;
 };
