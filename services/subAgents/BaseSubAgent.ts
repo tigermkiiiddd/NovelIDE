@@ -11,6 +11,9 @@ export interface SubAgentConfig<TInput, TOutput> {
   /** 最大循环次数 */
   maxLoops: number;
 
+  /** 滑动窗口：保留最近 N 轮工具调用对（默认 10） */
+  maxHistoryPairs?: number;
+
   /** 工具列表 */
   tools: ToolDefinition[];
 
@@ -41,6 +44,46 @@ export interface SubAgentConfig<TInput, TOutput> {
  */
 export class BaseSubAgent<TInput, TOutput> {
   constructor(private config: SubAgentConfig<TInput, TOutput>) {}
+
+  /**
+   * 滑动窗口裁剪：保留 history[0]（原始输入）+ 最近 N 轮 pair
+   * 被裁剪的 pair 生成摘要插入到 history[0] 之后
+   */
+  private trimHistory(history: any[], onLog?: (msg: string) => void): void {
+    const maxPairs = this.config.maxHistoryPairs ?? 10;
+    const pairsStart = 1; // history[0] 是原始输入，永远保留
+    const pairsCount = Math.floor((history.length - pairsStart) / 2);
+
+    if (pairsCount <= maxPairs) return;
+
+    const pairsToRemove = pairsCount - maxPairs;
+    const messagesToRemove = pairsToRemove * 2;
+
+    // 提取被裁剪 pair 中的工具调用名称作为摘要
+    const removedMessages = history.slice(pairsStart, pairsStart + messagesToRemove);
+    const toolCalls: string[] = [];
+    for (const msg of removedMessages) {
+      if (msg.role === 'model') {
+        for (const part of msg.parts || []) {
+          if (part.functionCall) {
+            toolCalls.push(`- ${part.functionCall.name}`);
+          }
+        }
+      }
+    }
+
+    const summary = `[上下文窗口裁剪] 已裁剪 ${pairsToRemove} 轮历史操作：\n${toolCalls.join('\n')}\n以上操作已成功执行，请基于当前状态继续任务。`;
+
+    // 执行裁剪：移除旧 pair，插入摘要
+    history.splice(pairsStart, messagesToRemove, {
+      role: 'user',
+      parts: [{ text: summary }]
+    });
+
+    if (onLog) {
+      onLog(`✂️ [${this.config.name}] 上下文裁剪：移除 ${pairsToRemove} 轮旧历史，保留最近 ${maxPairs} 轮`);
+    }
+  }
 
   async run(
     aiService: AIService,
@@ -73,6 +116,9 @@ export class BaseSubAgent<TInput, TOutput> {
       }
 
       loopCount++;
+
+      // 滑动窗口裁剪（在 LLM 调用前执行）
+      this.trimHistory(history, onLog);
 
       // 调用AI（使用 SubAgent 专用温度，默认 0.2）
       const response = await aiService.sendMessage(
