@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { LongTermMemory, MemoryType } from '../types';
-import { Plus, Trash2, Edit2, X, Save, BookOpen, Tag, AlertTriangle, PenTool, User, Globe } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Save, BookOpen, Tag, AlertTriangle, PenTool, Globe, List, Network } from 'lucide-react';
 import { getMemoryDynamicState, sortMemoriesForReview } from '../utils/memoryIntelligence';
+import { MemoryGraphView } from './MemoryGraphView';
 
 const MEMORY_TYPE_LABELS: Record<MemoryType, { label: string; icon: React.ReactNode; color: string }> = {
   setting: { label: '设定', icon: <Globe className="w-4 h-4" />, color: 'text-blue-400' },
   style: { label: '风格', icon: <PenTool className="w-4 h-4" />, color: 'text-purple-400' },
   restriction: { label: '限制', icon: <AlertTriangle className="w-4 h-4" />, color: 'text-red-400' },
   experience: { label: '经验', icon: <BookOpen className="w-4 h-4" />, color: 'text-green-400' },
-  character_rule: { label: '角色规则', icon: <User className="w-4 h-4" />, color: 'text-yellow-400' },
   world_rule: { label: '世界观', icon: <Globe className="w-4 h-4" />, color: 'text-cyan-400' }
 };
 
@@ -49,6 +49,7 @@ export const LongTermMemoryView: React.FC = () => {
   const [formData, setFormData] = useState<Omit<LongTermMemory, 'id' | 'metadata'>>(EMPTY_MEMORY);
   const [tagInput, setTagInput] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'graph'>('list');
 
   const handleAdd = () => {
     setEditMode('add');
@@ -314,17 +315,52 @@ export const LongTermMemoryView: React.FC = () => {
           长期记忆
           <span className="text-sm font-normal text-gray-400">({memories.length} 条 / 待复习 {reviewCount})</span>
         </h2>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm"
-        >
-          <Plus className="w-4 h-4" />
-          添加记忆
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 视图切换 */}
+          <div className="flex bg-gray-700 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center gap-1 px-3 py-1 rounded text-sm transition-colors ${
+                viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+              }`}
+              title="列表视图"
+            >
+              <List className="w-4 h-4" />
+              列表
+            </button>
+            <button
+              onClick={() => setViewMode('graph')}
+              className={`flex items-center gap-1 px-3 py-1 rounded text-sm transition-colors ${
+                viewMode === 'graph' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'
+              }`}
+              title="图谱视图"
+            >
+              <Network className="w-4 h-4" />
+              图谱
+            </button>
+          </div>
+          <button
+            onClick={handleAdd}
+            className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+          >
+            <Plus className="w-4 h-4" />
+            添加记忆
+          </button>
+        </div>
       </div>
 
-      {/* 记忆列表 */}
-      {memories.length === 0 ? (
+      {/* 记忆列表或图谱 */}
+      {viewMode === 'graph' ? (
+        <div className="h-[calc(100%-60px)]">
+          <MemoryGraphView
+            onSelectMemory={(memory) => {
+              // 可选：点击图谱节点时跳转到编辑
+              handleEdit(memory);
+            }}
+            className="h-full"
+          />
+        </div>
+      ) : memories.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64 text-gray-500">
           <BookOpen className="w-12 h-12 mb-4 opacity-50" />
           <p>暂无长期记忆</p>

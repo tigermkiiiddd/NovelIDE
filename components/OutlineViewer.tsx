@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  X, Clock, Plus, Pencil, ChevronDown, ChevronRight
+  X, Clock, Plus, Pencil, ChevronDown, ChevronRight, GripVertical
 } from 'lucide-react';
 import { useWorldTimelineStore, formatTimeDisplay } from '../stores/worldTimelineStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -409,30 +409,67 @@ interface EventCardProps {
   showChapterInfo?: boolean;
   onEdit: (eventId: string) => void;
   onDelete: (eventId: string) => void;
+  // Drag props
+  isDragging?: boolean;
+  isDragOver?: boolean;
+  onDragStart: (e: React.DragEvent, eventId: string) => void;
+  onDragEnd: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent, eventId: string) => void;
+  onDrop: (e: React.DragEvent, targetEventId: string) => void;
 }
 
-const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInfo, showChapterInfo, onEdit, onDelete }: EventCardProps) => {
+const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInfo, showChapterInfo, onEdit, onDelete, isDragging, isDragOver, onDragStart, onDragEnd, onDragOver, onDrop }: EventCardProps) => {
   const handleEdit = useCallback(() => onEdit(event.id), [event.id, onEdit]);
   const handleDelete = useCallback(() => onDelete(event.id), [event.id, onDelete]);
 
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    onDragStart(e, event.id);
+  }, [event.id, onDragStart]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    onDragOver(e, event.id);
+  }, [event.id, onDragOver]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    onDrop(e, event.id);
+  }, [event.id, onDrop]);
+
   return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+    <div
+      className={`bg-gray-800 rounded-lg p-4 border ${
+        isDragOver ? 'border-blue-500 border-2 bg-blue-900/20' : 'border-gray-700'
+      } ${isDragging ? 'opacity-50' : ''} transition-colors cursor-default`}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <div className="flex items-start justify-between mb-2">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs text-gray-500">#{event.eventIndex}</span>
-            {event.cumulativeTime && (
-              <span className="text-xs px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded">
-                {formatTimeDisplay(event.cumulativeTime)}
-              </span>
-            )}
-            {storyLineName && (
-              <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: storyLineColor + '30', color: storyLineColor }}>
-                {storyLineName}
-              </span>
-            )}
+        <div className="flex items-start gap-2 flex-1">
+          {/* Drag Handle */}
+          <div
+            className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing pt-0.5"
+            title="拖动排序"
+          >
+            <GripVertical size={16} />
           </div>
-          <h5 className="font-medium text-gray-200">{event.title}</h5>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-gray-500">#{event.eventIndex}</span>
+              {event.cumulativeTime && (
+                <span className="text-xs px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded">
+                  {formatTimeDisplay(event.cumulativeTime)}
+                </span>
+              )}
+              {storyLineName && (
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: storyLineColor + '30', color: storyLineColor }}>
+                  {storyLineName}
+                </span>
+              )}
+            </div>
+            <h5 className="font-medium text-gray-200">{event.title}</h5>
+          </div>
         </div>
         <div className="flex gap-1">
           <button
@@ -453,19 +490,19 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
       </div>
 
       {showChapterInfo && chapterInfo && (
-        <div className="text-xs text-gray-500 mb-2">
+        <div className="text-xs text-gray-500 mb-2 ml-6">
           所属章节：第{chapterInfo.chapterIndex}章「{chapterInfo.title}」
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 text-xs text-gray-400">
+      <div className="flex flex-wrap gap-2 text-xs text-gray-400 ml-6">
         {event.location && <span>📍 {event.location}</span>}
         {event.characters && event.characters.length > 0 && <span>👥 {event.characters.join(', ')}</span>}
         {event.emotion && <span>💫 {event.emotion}</span>}
       </div>
 
       {event.content && (
-        <p className="text-sm text-gray-300 mt-2">{event.content}</p>
+        <p className="text-sm text-gray-300 mt-2 ml-6">{event.content}</p>
       )}
     </div>
   );
@@ -662,7 +699,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const getStoryLines = useWorldTimelineStore(state => state.getStoryLines);
   const getTimeRange = useWorldTimelineStore(state => state.getTimeRange);
   const addChaptersToVolume = useWorldTimelineStore(state => state.addChaptersToVolume);
+  const moveEvent = useWorldTimelineStore(state => state.moveEvent);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
+
+  // Drag state
+  const [draggedEventId, setDraggedEventId] = useState<string | null>(null);
+  const [dragOverEventId, setDragOverEventId] = useState<string | null>(null);
 
   // 缓存数据，避免每次渲染返回新数组
   // 使用具体的数组引用作为依赖，避免整个 timeline 对象变化触发重新计算
@@ -794,6 +836,45 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       chapterId: ''
     });
   };
+
+  // === Drag Handlers ===
+  const handleDragStart = useCallback((e: React.DragEvent, eventId: string) => {
+    setDraggedEventId(eventId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', eventId);
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedEventId(null);
+    setDragOverEventId(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, eventId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (eventId !== dragOverEventId) {
+      setDragOverEventId(eventId);
+    }
+  }, [dragOverEventId]);
+
+  const handleDrop = useCallback((e: React.DragEvent, targetEventId: string) => {
+    e.preventDefault();
+    if (!draggedEventId || draggedEventId === targetEventId) {
+      setDraggedEventId(null);
+      setDragOverEventId(null);
+      return;
+    }
+
+    // 获取目标事件的位置
+    const events = getEvents();
+    const targetIndex = events.findIndex(ev => ev.id === targetEventId);
+    if (targetIndex !== -1) {
+      moveEvent(draggedEventId, targetIndex);
+    }
+
+    setDraggedEventId(null);
+    setDragOverEventId(null);
+  }, [draggedEventId, getEvents, moveEvent]);
 
   const handleAddTimelineChapter = () => {
     if (!newChapter.title.trim()) {
@@ -1068,6 +1149,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                               showChapterInfo
                               onEdit={handleEventEdit}
                               onDelete={handleDeleteTimelineEvent}
+                              isDragging={draggedEventId === event.id}
+                              isDragOver={dragOverEventId === event.id && draggedEventId !== event.id}
+                              onDragStart={handleDragStart}
+                              onDragEnd={handleDragEnd}
+                              onDragOver={handleDragOver}
+                              onDrop={handleDrop}
                             />
                           )}
                         </div>

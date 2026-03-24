@@ -3,17 +3,28 @@
  * @description 对话记忆提取 Agent - 包装 MemoryDecisionAgent 用于对话场景
  */
 
-import { ChatMessage, LongTermMemory, LongTermMemoryDraft, MemoryType, MemoryEdge } from '../../types';
+import { ChatMessage, LongTermMemory, LongTermMemoryDraft, MemoryType, MemoryEdge, MemoryEdgeType } from '../../types';
 import { AIService } from '../geminiService';
 import { runMemoryDecisionAgent, MemoryDecisionOutput } from './memoryDecisionAgent';
 
-// 保持向后兼容的接口
+// 边链接信息
+export interface MemoryLink {
+  to: string;
+  type: MemoryEdgeType;
+}
+
+// 扩展支持边的操作
 export interface MemoryCandidateAction {
-  action: 'add' | 'update' | 'skip';
+  action: 'add' | 'update' | 'link' | 'skip';
   memoryId?: string;
   confidence: number;
   reason: string;
   memory?: LongTermMemoryDraft;
+  // 边相关
+  links?: MemoryLink[];          // add 时的边链接
+  from?: string;                 // link 操作的源
+  to?: string;                   // link 操作的目标
+  edgeType?: MemoryEdgeType;     // link 操作的边类型
 }
 
 export interface ConversationMemoryInput {
@@ -62,6 +73,8 @@ const convertOperationsToActions = (operations: MemoryDecisionOutput['operations
           confidence: 0.8,
           reason: '新增记忆节点',
           memory: op.memory,
+          // 保留边链接信息
+          links: op.links?.map(l => ({ to: l.to, type: l.type })),
         };
       case 'update':
         return {
@@ -81,9 +94,12 @@ const convertOperationsToActions = (operations: MemoryDecisionOutput['operations
         };
       case 'link':
         return {
-          action: 'skip' as const,
-          confidence: 0.5,
+          action: 'link' as const,
+          confidence: 0.8,
           reason: `建立关联: ${op.from} -> ${op.to} (${op.type})`,
+          from: op.from,
+          to: op.to,
+          edgeType: op.type,
         };
       case 'skip':
       default:

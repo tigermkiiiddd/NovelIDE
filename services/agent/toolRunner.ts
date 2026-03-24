@@ -5,8 +5,7 @@ import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
 import { formatThinkingResult } from './tools/thinkingTools';
 import { executeRecallMemory, executeManageMemory } from './tools/longTermMemoryTools';
-import { executeStoryOutlineTool, executeProcessOutlineInput } from './tools/outlineTools';
-import { executeTimelineTool, executeProcessTimelineInput } from './tools/timelineTools';
+import { executeOutlineTool, executeProcessOutlineInput } from './tools/timelineTools';
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
@@ -218,7 +217,7 @@ export const executeTool = async (
     }
 
     // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
-    if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput' && name !== 'processTimelineInput') {
+    if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput') {
         onUiLog(`${startLog}`);
     }
 
@@ -421,29 +420,19 @@ export const executeTool = async (
                 case 'manage_memory':
                     result = await executeManageMemory(args);
                     break;
-                // --- STORY OUTLINE TOOLS ---
+                // --- OUTLINE TOOLS ---
                 case 'processOutlineInput':
                     result = await executeProcessOutlineInput(args, onUiLog, signal);
                     break;
-                case 'storyOutline_batchUpdate':
-                case 'storyOutline_getVolumes':
-                case 'storyOutline_getChapters':
-                case 'storyOutline_getChapter':
-                case 'storyOutline_addScene':
-                    result = await executeStoryOutlineTool(name, args);
-                    break;
-                // --- TIMELINE TOOLS ---
-                case 'processTimelineInput':
-                    result = await executeProcessTimelineInput(args, onUiLog, signal);
-                    break;
-                case 'timeline_batchUpdate':
-                case 'timeline_getEvents':
-                case 'timeline_getEvent':
-                case 'timeline_getChapters':
-                case 'timeline_getVolumes':
-                case 'timeline_getStoryLines':
-                case 'timeline_getTimeRange':
-                    result = await executeTimelineTool(name, args);
+                case 'outline_getEvents':
+                case 'outline_getChapters':
+                case 'outline_getVolumes':
+                case 'outline_getStoryLines':
+                case 'outline_manageVolumes':
+                case 'outline_manageChapters':
+                case 'outline_manageEvents':
+                case 'outline_manageStoryLines':
+                    result = await executeOutlineTool(name, args);
                     break;
                 default:
                     result = `Error: Unknown tool ${name}`;
@@ -451,7 +440,7 @@ export const executeTool = async (
         }
         
         // Log Completion (Append to the start log) - Except for SubAgent which handles its own internal logging
-        if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput' && name !== 'processTimelineInput') {
+        if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput') {
             // Truncate output for UI performance if it's too massive (the full result is still returned to the Agent)
             const MAX_UI_LENGTH = 1000;
             let displayResult = result;

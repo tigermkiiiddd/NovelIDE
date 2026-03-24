@@ -92,7 +92,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const pendingApprovalsCount = pendingChanges.length;
 
   const handleReviewClick = (change: PendingChange) => {
-      // Navigate to the file - inline diff is already shown in edit mode
+      // Navigate to the file
       if (change.fileId) {
           setActiveFileId(change.fileId);
       } else {
@@ -101,6 +101,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
               setActiveFileId(node.id);
           }
       }
+
+      // Set reviewing change ID to trigger DiffViewer
+      setReviewingChangeId(change.id);
 
       // On mobile, close chat to see editor
       if (isMobile) {

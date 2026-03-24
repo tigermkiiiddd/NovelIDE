@@ -36,7 +36,7 @@ interface LongTermMemoryState {
   ensureInitialized: (projectId?: string) => Promise<void>;
   refreshMemories: () => Promise<void>;
   setMemories: (memories: LongTermMemory[]) => void;
-  addMemory: (memory: LongTermMemoryDraft) => void;
+  addMemory: (memory: LongTermMemoryDraft) => LongTermMemory;  // 返回创建的记忆
   updateMemory: (id: string, updates: Partial<LongTermMemory>) => void;
   deleteMemory: (id: string) => void;
   touchMemories: (ids: string[], event?: 'recall' | 'reinforce') => void;
@@ -195,10 +195,27 @@ const applyMemoryExtractionResult = (
   let added = 0;
   let updated = 0;
   let skipped = 0;
+  let linked = 0;
 
   const appliedIds: string[] = [];
+  const newMemoryIds: string[] = [];  // 新创建的记忆 ID，用于后续创建边
 
   result.actions.forEach((action: MemoryCandidateAction) => {
+    // 处理 link 操作
+    if (action.action === 'link') {
+      if (action.from && action.to && action.edgeType) {
+        const fromExists = store.memories.some(m => m.id === action.from);
+        const toExists = store.memories.some(m => m.id === action.to);
+        if (fromExists && toExists) {
+          store.addEdge(action.from, action.to, action.edgeType);
+          linked += 1;
+        } else {
+          skipped += 1;
+        }
+      }
+      return;
+    }
+
     if (action.action === 'skip' || !action.memory || action.confidence < 0.55) {
       skipped += 1;
       return;
@@ -246,7 +263,8 @@ const applyMemoryExtractionResult = (
       return;
     }
 
-    store.addMemory({
+    // 添加新记忆
+    const newMemory = store.addMemory({
       ...action.memory,
       metadata: {
         source: 'agent',
@@ -256,13 +274,31 @@ const applyMemoryExtractionResult = (
       },
     });
     added += 1;
+
+    // 记录新记忆 ID，用于后续创建边
+    if (newMemory?.id) {
+      newMemoryIds.push(newMemory.id);
+    }
+
+    // 处理 add 操作中的 links
+    if (action.links && Array.isArray(action.links)) {
+      action.links.forEach(link => {
+        const toExists = store.memories.some(m => m.id === link.to);
+        if (toExists && newMemory?.id) {
+          store.addEdge(newMemory.id, link.to, link.type);
+          linked += 1;
+        }
+      });
+    }
   });
 
   return {
     added,
     updated,
     skipped,
+    linked,
     appliedIds,
+    newMemoryIds,
   };
 };
 
@@ -542,6 +578,8 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
       if (characterName) {
         useCharacterMemoryStore.getState().upsertMemoryFromLongTerm(nextMemory, characterName);
       }
+
+      return nextMemory;  // 返回创建的记忆
     },
 
     updateMemory: (id, updates) => {

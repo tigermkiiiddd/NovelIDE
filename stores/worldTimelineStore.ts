@@ -226,23 +226,23 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         const fileStore = useFileStore.getState();
         const projectStore = useProjectStore.getState();
 
-        // 查找 03_世界线 目录，不存在则创建
-        let timelineFolder = fileStore.files.find(f => f.name === '03_世界线' && f.parentId === 'root');
+        // 查找 03_剧情大纲 目录，不存在则创建
+        let timelineFolder = fileStore.files.find(f => f.name === '03_剧情大纲' && f.parentId === 'root');
 
         if (!timelineFolder) {
-          console.log('[WorldTimelineStore] 创建 03_世界线 目录');
+          console.log('[WorldTimelineStore] 创建 03_剧情大纲 目录');
           timelineFolder = {
-            id: `folder-worldline-${Date.now()}`,
+            id: `folder-outline-${Date.now()}`,
             parentId: 'root',
-            name: '03_世界线',
+            name: '03_剧情大纲',
             type: FileType.FOLDER,
             lastModified: Date.now()
           };
           fileStore.files.push(timelineFolder);
         }
 
-        // 查找 timeline.json 文件
-        const timelineFile = fileStore.files.find(f => f.name === 'timeline.json' && f.parentId === timelineFolder.id);
+        // 查找 outline.json 文件
+        const timelineFile = fileStore.files.find(f => f.name === 'outline.json' && f.parentId === timelineFolder.id);
 
         if (timelineFile && timelineFile.content) {
           try {
@@ -284,9 +284,9 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
           timelineFile.lastModified = Date.now();
         } else {
           const newFile = {
-            id: `timeline-${Date.now()}`,
+            id: `outline-${Date.now()}`,
             parentId: timelineFolder.id,
-            name: 'timeline.json',
+            name: 'outline.json',
             type: FileType.FILE,
             content: jsonContent,
             lastModified: Date.now()
@@ -447,7 +447,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
     // === Chapter Operations ===
     addChapter: (chapterData) => {
       const state = useWorldTimelineStore.getState();
-      if (!state.timeline) return JSON.stringify({ id: '', error: '时间线未初始化' });
+      if (!state.timeline) return JSON.stringify({ id: '', chapterIndex: 0, error: '时间线未初始化' });
 
       // 自动分配 chapterIndex：当前最大值 + 1
       const maxIndex = state.timeline.chapters.length > 0
@@ -468,8 +468,8 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       };
 
       useWorldTimelineStore.setState({ timeline: newTimeline });
-      console.log('[WorldTimelineStore] 添加章节:', newChapter.title);
-      return JSON.stringify({ id: newChapter.id });
+      console.log('[WorldTimelineStore] 添加章节:', newChapter.title, 'chapterIndex:', newChapter.chapterIndex);
+      return JSON.stringify({ id: newChapter.id, chapterIndex: newChapter.chapterIndex });
     },
 
     updateChapter: (chapterId: string, updates: Partial<ChapterGroup>) => {
@@ -592,17 +592,16 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       const state = useWorldTimelineStore.getState();
       if (!state.timeline) return JSON.stringify({ id: '', error: '时间线未初始化' });
 
-      // 检查是否已存在相同卷号的卷
-      const existingVolume = state.timeline.volumes.find(v => v.volumeIndex === volumeData.volumeIndex);
-      if (existingVolume) {
-        console.log('[WorldTimelineStore] 卷已存在，返回现有ID:', existingVolume.id);
-        return JSON.stringify({ id: existingVolume.id, existing: true });
-      }
+      // 自动分配 volumeIndex：当前最大值 + 1
+      const maxIndex = state.timeline.volumes.length > 0
+        ? Math.max(...state.timeline.volumes.map(v => v.volumeIndex))
+        : 0;
 
       const newVolume: VolumeGroup = {
         id: generateId(),
         chapterIds: [],
-        ...volumeData
+        ...volumeData,
+        volumeIndex: maxIndex + 1  // 始终自动分配
       };
 
       const newTimeline: WorldTimeline = {
@@ -612,8 +611,8 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       };
 
       useWorldTimelineStore.setState({ timeline: newTimeline });
-      console.log('[WorldTimelineStore] 添加卷:', newVolume.title);
-      return JSON.stringify({ id: newVolume.id });
+      console.log('[WorldTimelineStore] 添加卷:', newVolume.title, 'volumeIndex:', newVolume.volumeIndex);
+      return JSON.stringify({ id: newVolume.id, volumeIndex: newVolume.volumeIndex });
     },
 
     updateVolume: (volumeId: string, updates: Partial<VolumeGroup>) => {
@@ -810,7 +809,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
     }
   },
   async (state) => {
-    // 保存到 03_世界线/timeline.json
+    // 保存到 03_剧情大纲/outline.json
     console.log('[WorldTimelineStore] 开始保存, events:', state.timeline?.events?.length);
     const fileStore = useFileStore.getState();
     const projectStore = useProjectStore.getState();
@@ -822,35 +821,35 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       return;
     }
 
-    // 查找 03_世界线 目录
-    const timelineFolder = fileStore.files.find(f => f.name === '03_世界线' && f.parentId === 'root');
+    // 查找 03_剧情大纲 目录
+    const timelineFolder = fileStore.files.find(f => f.name === '03_剧情大纲' && f.parentId === 'root');
 
     if (!timelineFolder) {
-      console.warn('[WorldTimelineStore] 未找到 03_世界线 目录');
+      console.warn('[WorldTimelineStore] 未找到 03_剧情大纲 目录');
       return;
     }
 
-    // 查找或创建 timeline.json 文件
-    let timelineFile = fileStore.files.find(f => f.name === 'timeline.json' && f.parentId === timelineFolder.id);
+    // 查找或创建 outline.json 文件
+    let timelineFile = fileStore.files.find(f => f.name === 'outline.json' && f.parentId === timelineFolder.id);
 
     const jsonContent = JSON.stringify(state.timeline, null, 2);
 
     if (timelineFile) {
       timelineFile.content = jsonContent;
       timelineFile.lastModified = Date.now();
-      console.log('[WorldTimelineStore] 更新 timeline.json');
+      console.log('[WorldTimelineStore] 更新 outline.json');
     } else {
       const { FileType } = await import('../types');
       timelineFile = {
-        id: `timeline-${Date.now()}`,
+        id: `outline-${Date.now()}`,
         parentId: timelineFolder.id,
-        name: 'timeline.json',
+        name: 'outline.json',
         type: FileType.FILE,
         content: jsonContent,
         lastModified: Date.now()
       };
       fileStore.files.push(timelineFile);
-      console.log('[WorldTimelineStore] 创建 timeline.json 文件');
+      console.log('[WorldTimelineStore] 创建 outline.json 文件');
     }
 
     // 保存到数据库

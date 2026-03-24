@@ -277,22 +277,20 @@ tags: ["技能", "大纲"]
 ### 工具调用流程
 
 1. **查看现有结构**
-   - 先调用 timeline_getVolumes() 查看卷结构
-   - 再调用 timeline_getChapters(volumeId) 查看章节
-   - 最后调用 timeline_getEvents(chapterId) 查看事件
+   - 先调用 outline_getVolumes() 查看卷结构
+   - 再调用 outline_getChapters(volumeIndex) 查看章节
+   - 最后调用 outline_getEvents(chapterIndex) 查看事件
 
 2. **添加新内容**
-   - 使用 processTimelineInput(userInput, 'add') 处理用户的剧情描述
-   - 或使用 timeline_batchUpdate 精确控制添加
+   - 使用 processOutlineInput(userInput, 'add') 处理用户的剧情描述
 
 3. **更新现有内容**
-   - 使用 processTimelineInput(userInput, 'update') 处理修改
-   - 或使用 timeline_batchUpdate 中的 updateEvents
+   - 使用 processOutlineInput(userInput, 'update') 处理修改
 
 ### 事件格式
 \`\`\`
 {
-  "time": { "value": 8, "unit": "hour" },
+  "duration": { "value": 8, "unit": "hour" },
   "title": "事件标题",
   "content": "事件详细描述",
   "location": "发生地点",
@@ -305,11 +303,11 @@ tags: ["技能", "大纲"]
 
 **添加一卷**：
 \`\`\`
-processTimelineInput("添加第一卷：觉醒篇", 'add')
+processOutlineInput("添加第一卷：觉醒篇", 'add')
 \`\`\`
 
 **添加章节事件**：
 \`\`\`
-processTimelineInput("第一章：主角在新手村醒来，发现自己穿越了，决定先探索周围环境", 'add')
+processOutlineInput("第一章：主角在新手村醒来，发现自己穿越了，决定先探索周围环境", 'add')
 \`\`\`
 `;

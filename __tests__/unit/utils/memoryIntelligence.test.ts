@@ -19,7 +19,7 @@ const createMemory = (overrides: Partial<LongTermMemory> = {}): LongTermMemory =
   return {
     id: overrides.id || 'memory-1',
     name: overrides.name || '主角原则',
-    type: overrides.type || 'character_rule',
+    type: overrides.type || 'setting',
     tags: overrides.tags || ['主角'],
     keywords: overrides.keywords || ['底线', '原则'],
     summary: overrides.summary || '主角不会主动背叛同伴。',

@@ -1,26 +1,19 @@
 
-import { listFilesTool, readFileTool, searchFilesTool } from './fileReadTools';
+import { listFilesTool, readFileTool } from './fileReadTools';
 import { createFileTool, updateFileTool, patchFileTool, renameFileTool, deleteFileTool } from './fileWriteTools';
 import { updateProjectMetaTool } from './projectTools';
 import { manageTodosTool } from './todoTools';
-import { callSearchAgentTool } from './subAgentTools';
-import { managePlanNoteTool, createManagePlanNoteTool } from './planTools';
-import { thinkingTool } from './thinkingTools';
 import { recallMemoryTool, manageMemoryTool } from './longTermMemoryTools';
-import { processOutlineInputTool } from './outlineTools';
 import {
   getEventsTool,
-  getEventDetailTool,
   getChaptersTool,
   getVolumesTool,
   getStoryLinesTool,
-  getTimeRangeTool,
-  batchUpdateTimelineTool,
-  processTimelineInputTool
-} from './timelineTools';
+  processOutlineInputTool
+} from '../toolDefinitions/timeline';
 import { ToolDefinition } from '../types';
 
-// 读取工具（统一使用 Timeline 系统）
+// 主 Agent 可用的工具
 const readTools: ToolDefinition[] = [
   listFilesTool,
   readFileTool,
@@ -28,13 +21,9 @@ const readTools: ToolDefinition[] = [
   getVolumesTool,
   getChaptersTool,
   getEventsTool,
-  getEventDetailTool,
-  getStoryLinesTool,
-  getTimeRangeTool
+  getStoryLinesTool
 ];
 
-// 写入工具
-// 注意：写入操作通过 SubAgent 调用，不直接暴露给主 Agent
 const writeTools: ToolDefinition[] = [
   createFileTool,
   updateFileTool,
@@ -43,41 +32,16 @@ const writeTools: ToolDefinition[] = [
   deleteFileTool,
   updateProjectMetaTool,
   manageMemoryTool,
-  processOutlineInputTool,  // 已合并到 Timeline SubAgent
-  processTimelineInputTool
+  // ⚠️ outline 写入通过 SubAgent，主 Agent 只能调用 processOutlineInput
+  processOutlineInputTool
 ];
 
-// 注意：searchFilesTool 虽然被导入（因为 fileReadTools 导出需要），
-// 但不再包含在 allTools 数组中。
-// thinkingTool 已被移除
-// callSearchAgentTool 已被移除，不再提供给 Agent 使用
-// managePlanNoteTool 已被移除
-export const allTools: ToolDefinition[] = [
-  ...readTools,
-  ...writeTools,
-  manageTodosTool,
-  // recallMemoryTool 和 manageMemoryTool 已经在 readTools 和 writeTools 中
-  // callSearchAgentTool,  // 已屏蔽
-  // managePlanNoteTool,  // 已移除
-  // thinkingTool  // 已移除
-];
+export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool];
 
-/**
- * 根据模式获取可用工具
- * @param planMode - 是否处于 Plan 模式（已废弃，保留参数以兼容）
- * @returns 可用工具列表
- */
-export const getToolsForMode = (planMode: boolean): ToolDefinition[] => {
-  // Plan 模式已移除，统一返回所有工具
-  return allTools;
-};
+export const getToolsForMode = (planMode: boolean): ToolDefinition[] => allTools;
 
 export * from './fileReadTools';
 export * from './fileWriteTools';
 export * from './projectTools';
 export * from './todoTools';
-export * from './subAgentTools';
-export * from './planTools';
-export * from './thinkingTools';
-export * from './outlineTools';
 export * from './timelineTools';
