@@ -23,7 +23,7 @@ type TimelineLevel = 'events' | 'chapters' | 'volumes';
 // 事件表单数据类型
 interface EventFormData {
   timeValue: number;
-  timeUnit: 'hour' | 'day';
+  timeUnit: 'minute' | 'hour' | 'day';
   title: string;
   content: string;
   location: string;
@@ -85,9 +85,10 @@ const EventForm = React.memo(({
           <label className="text-xs text-gray-500">单位</label>
           <select
             value={formData.timeUnit}
-            onChange={(e) => onFieldChange('timeUnit', e.target.value as 'hour' | 'day')}
+            onChange={(e) => onFieldChange('timeUnit', e.target.value as 'minute' | 'hour' | 'day')}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           >
+            <option value="minute">分钟</option>
             <option value="hour">小时</option>
             <option value="day">天</option>
           </select>
@@ -670,7 +671,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEvent, setNewEvent] = useState({
     timeValue: 8,
-    timeUnit: 'hour' as 'hour' | 'day',
+    timeUnit: 'hour' as 'minute' | 'hour' | 'day',
     title: '',
     content: '',
     location: '',

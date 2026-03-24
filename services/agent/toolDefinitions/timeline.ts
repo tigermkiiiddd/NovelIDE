@@ -218,7 +218,7 @@ export const manageEventsTool: ToolDefinition = {
                 type: 'object',
                 properties: {
                   value: { type: 'number' },
-                  unit: { type: 'string', enum: ['hour', 'day'] }
+                  unit: { type: 'string', enum: ['minute', 'hour', 'day'] }
                 },
                 required: ['value', 'unit']
               },

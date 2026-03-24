@@ -75,17 +75,30 @@ const generateId = () => `timeline-${Date.now()}-${Math.random().toString(36).su
  */
 export function toHours(time: QuantizedTime | undefined): number {
   if (!time) return 0;
-  return time.unit === 'day' ? time.value * 24 : time.value;
+  switch (time.unit) {
+    case 'minute': return time.value / 60;
+    case 'hour': return time.value;
+    case 'day': return time.value * 24;
+    default: return time.value;
+  }
 }
 
 /**
  * 小时数转结构化时间
  */
 export function fromHours(totalHours: number): QuantizedTime {
+  // 优先用天
   if (totalHours >= 24 && totalHours % 24 === 0) {
     return { value: totalHours / 24, unit: 'day' };
   }
-  return { value: totalHours, unit: 'hour' };
+  // 小于1小时用分钟
+  if (totalHours < 1 && totalHours > 0) {
+    const minutes = Math.round(totalHours * 60);
+    if (minutes > 0) {
+      return { value: minutes, unit: 'minute' };
+    }
+  }
+  return { value: Math.round(totalHours * 10) / 10, unit: 'hour' };
 }
 
 /**
