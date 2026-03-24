@@ -224,7 +224,6 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 
 **事件格式示例**：
 {
-  "eventIndex": 1,
   "time": { "value": 8, "unit": "hour" },
   "title": "醒来",
   "content": "主角在新手村醒来",

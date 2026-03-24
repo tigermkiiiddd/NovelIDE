@@ -7,7 +7,7 @@ import { formatThinkingResult } from './tools/thinkingTools';
 import { executeRecallMemory, executeManageMemory } from './tools/longTermMemoryTools';
 import { executeStoryOutlineTool, executeProcessOutlineInput } from './tools/outlineTools';
 import { executeTimelineTool, executeProcessTimelineInput } from './tools/timelineTools';
-import { applyPatchInMemory } from '../../utils/diffUtils';
+import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
 import { BatchEdit } from '../../stores/fileStore';
@@ -103,6 +103,41 @@ const generateEditDiffs = (originalContent: string, edits: BatchEdit[], changeId
             status: 'pending' as const
         };
     });
+};
+
+/**
+ * Generate EditDiffs from whole-file comparison (for updateFile/createFile).
+ * Uses line diff + hunk grouping to create granular EditDiff objects.
+ */
+const generateEditDiffsFromComparison = (originalContent: string, newContent: string, changeId: string): EditDiff[] => {
+    const rawLines = computeLineDiff(originalContent, newContent);
+    const hunks = groupDiffIntoHunks(rawLines, 3);
+
+    return hunks
+        .filter(hunk => hunk.type === 'change')
+        .map((hunk, index) => {
+            // Extract original and modified segments from hunk lines
+            const originalLines = hunk.lines
+                .filter(l => l.type === 'remove' || l.type === 'equal')
+                .map(l => l.content);
+            const modifiedLines = hunk.lines
+                .filter(l => l.type === 'add' || l.type === 'equal')
+                .map(l => l.content);
+
+            // Only include the changed lines (not context)
+            const removedLines = hunk.lines.filter(l => l.type === 'remove').map(l => l.content);
+            const addedLines = hunk.lines.filter(l => l.type === 'add').map(l => l.content);
+
+            return {
+                id: `edit_${changeId}_${index}`,
+                editIndex: index,
+                startLine: hunk.startLineOriginal,
+                endLine: hunk.endLineOriginal,
+                originalSegment: removedLines.join('\n'),
+                modifiedSegment: addedLines.join('\n'),
+                status: 'pending' as const
+            };
+        });
 };
 
 // Define the interface for the raw tools provided by useAgent/App
@@ -283,8 +318,12 @@ export const executeTool = async (
                 newContent,
                 timestamp: Date.now(),
                 description: `${description}\n${args.thinking ? `思考: ${args.thinking}` : ''}`,
-                // Generate editDiffs for patchFile operations
-                editDiffs: name === 'patchFile' ? generateEditDiffs(baseContent, args.edits, changeId) : undefined
+                // Generate editDiffs for all write operations
+                editDiffs: name === 'patchFile'
+                    ? generateEditDiffs(baseContent, args.edits, changeId)
+                    : (name === 'updateFile' || name === 'createFile') && originalContent !== null && newContent !== null
+                        ? generateEditDiffsFromComparison(originalContent, newContent, changeId)
+                        : undefined
             };
 
             return {

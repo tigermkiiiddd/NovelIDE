@@ -92,28 +92,15 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const pendingApprovalsCount = pendingChanges.length;
 
   const handleReviewClick = (change: PendingChange) => {
-      // 优先使用 fileId，fallback 到路径查找
+      // Navigate to the file - inline diff is already shown in edit mode
       if (change.fileId) {
           setActiveFileId(change.fileId);
       } else {
           const node = findNodeByPath(files, change.fileName);
           if (node) {
               setActiveFileId(node.id);
-          } else {
-              // For createFile: file doesn't exist yet, clear activeFileId
-              // For deleteFile/updateFile/patchFile: file should exist, if not found,
-              // still set reviewingChangeId so DiffViewer can use pendingChange.originalContent
-              if (change.toolName === 'createFile') {
-                  setActiveFileId(null);
-              }
-              // For other operations, don't change activeFileId if file not found
-              // The DiffViewer will use pendingChange.originalContent as fallback
           }
       }
-
-      // Explicitly set the change ID being reviewed.
-      // The Editor will detect this and show DiffViewer even if activeFile is null.
-      setReviewingChangeId(change.id);
 
       // On mobile, close chat to see editor
       if (isMobile) {

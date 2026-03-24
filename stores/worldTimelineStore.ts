@@ -33,13 +33,13 @@ interface WorldTimelineState {
   setTimeline: (timeline: WorldTimeline) => void;
 
   // === Event Operations ===
-  addEvent: (event: Omit<TimelineEvent, 'id'>) => string;
+  addEvent: (event: Omit<TimelineEvent, 'id' | 'eventIndex'>) => string;
   updateEvent: (eventId: string, updates: Partial<TimelineEvent>) => void;
   deleteEvent: (eventId: string) => void;
   moveEvent: (eventId: string, newIndex: number) => void;
 
   // === Chapter Operations ===
-  addChapter: (chapter: Omit<ChapterGroup, 'id' | 'eventIds'>) => string;
+  addChapter: (chapter: Omit<ChapterGroup, 'id' | 'eventIds' | 'chapterIndex'>) => string;
   updateChapter: (chapterId: string, updates: Partial<ChapterGroup>) => void;
   deleteChapter: (chapterId: string) => void;
   addEventsToChapter: (chapterId: string, eventIds: string[]) => void;
@@ -164,7 +164,7 @@ function calculateChapterTimeRange(
 ): string {
   const chapterEvents = events.filter(e => chapter.eventIds.includes(e.id));
   if (chapterEvents.length === 0) return '';
-  return calculateTimeRange(chapterEvents.map(e => e.relativeTime));
+  return calculateTimeRangeDisplay(chapterEvents);
 }
 
 /**
@@ -179,7 +179,7 @@ function calculateVolumeTimeRange(
   const allEventIds = volumeChapters.flatMap(c => c.eventIds);
   const volumeEvents = events.filter(e => allEventIds.includes(e.id));
   if (volumeEvents.length === 0) return '';
-  return calculateTimeRange(volumeEvents.map(e => e.relativeTime));
+  return calculateTimeRangeDisplay(volumeEvents);
 }
 
 // === Default Main StoryLine ===
@@ -226,8 +226,22 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         if (timelineFile && timelineFile.content) {
           try {
             const timeline = JSON.parse(timelineFile.content) as WorldTimeline;
+
+            // 修复不连续的 eventIndex 和 chapterIndex
+            timeline.events = timeline.events
+              .sort((a, b) => {
+                const timeCompare = compareTime(a.time, b.time);
+                if (timeCompare !== 0) return timeCompare;
+                return a.eventIndex - b.eventIndex;
+              })
+              .map((e, i) => ({ ...e, eventIndex: i }));
+
+            timeline.chapters = timeline.chapters
+              .sort((a, b) => a.chapterIndex - b.chapterIndex)
+              .map((c, i) => ({ ...c, chapterIndex: i + 1 }));
+
             useWorldTimelineStore.setState({ timeline, isLoading: false });
-            console.log('[WorldTimelineStore] 加载完成');
+            console.log('[WorldTimelineStore] 加载完成，已修复索引连续性');
             return;
           } catch (parseError) {
             console.error('[WorldTimelineStore] JSON解析失败:', parseError);
@@ -288,7 +302,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
 
       const newEvent: TimelineEvent = {
         id: generateId(),
-        eventIndex: eventData.eventIndex || 0,
+        eventIndex: 0, // 占位，排序后统一编号
         time: eventData.time || { value: 0, unit: 'hour' },
         title: eventData.title,
         content: eventData.content || '',
@@ -297,7 +311,6 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         characters: eventData.characters,
         emotion: eventData.emotion,
         chapterId: eventData.chapterId,
-        // 合并自 SceneNode 的新字段
         purpose: eventData.purpose,
         relativeTime: eventData.relativeTime
       };
@@ -308,14 +321,16 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         newEvent.storyLineId = mainStoryLine?.id || DEFAULT_STORYLINE.id;
       }
 
-      // 按时间排序
+      // 按时间排序并重新编号
+      const sortedEvents = [...state.timeline.events, newEvent].sort((a, b) => {
+        const timeCompare = compareTime(a.time, b.time);
+        if (timeCompare !== 0) return timeCompare;
+        return a.eventIndex - b.eventIndex;
+      }).map((e, i) => ({ ...e, eventIndex: i }));
+
       const newTimeline: WorldTimeline = {
         ...state.timeline,
-        events: [...state.timeline.events, newEvent].sort((a, b) => {
-          const timeCompare = compareTime(a.time, b.time);
-          if (timeCompare !== 0) return timeCompare;
-          return a.eventIndex - b.eventIndex;
-        }),
+        events: sortedEvents,
         lastModified: Date.now()
       };
 
@@ -337,7 +352,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         const timeCompare = compareTime(a.time, b.time);
         if (timeCompare !== 0) return timeCompare;
         return a.eventIndex - b.eventIndex;
-      });
+      }).map((e, i) => ({ ...e, eventIndex: i }));  // 排序后重新编号
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
@@ -360,13 +375,15 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         eventIds: c.eventIds.filter(id => id !== eventId)
       }));
 
-      const newEvents = state.timeline.events.filter(e => e.id !== eventId);
+      const newEvents = state.timeline.events
+        .filter(e => e.id !== eventId)
+        .map((e, i) => ({ ...e, eventIndex: i }));  // 重新编号
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
         events: newEvents,
         chapters: newChapters,
-        totalTimeRange: calculateTimeRange(newEvents.map(e => e.relativeTime)),
+        totalTimeRange: calculateTimeRangeDisplay(newEvents),
         lastModified: Date.now()
       };
 
@@ -409,22 +426,21 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       const state = useWorldTimelineStore.getState();
       if (!state.timeline) return JSON.stringify({ id: '', error: '时间线未初始化' });
 
-      // 检查是否已存在相同章节号的章节
-      const existingChapter = state.timeline.chapters.find(c => c.chapterIndex === chapterData.chapterIndex);
-      if (existingChapter) {
-        console.log('[WorldTimelineStore] 章节已存在，返回现有ID:', existingChapter.id);
-        return JSON.stringify({ id: existingChapter.id, existing: true });
-      }
+      // 自动分配 chapterIndex：当前最大值 + 1
+      const maxIndex = state.timeline.chapters.length > 0
+        ? Math.max(...state.timeline.chapters.map(c => c.chapterIndex))
+        : 0;
 
       const newChapter: ChapterGroup = {
         id: generateId(),
         eventIds: [],
-        ...chapterData
+        ...chapterData,
+        chapterIndex: maxIndex + 1  // 始终自动分配，忽略传入值
       };
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
-        chapters: [...state.timeline.chapters, newChapter].sort((a, b) => a.chapterIndex - b.chapterIndex),
+        chapters: [...state.timeline.chapters, newChapter],
         lastModified: Date.now()
       };
 
@@ -437,9 +453,11 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       const state = useWorldTimelineStore.getState();
       if (!state.timeline) return;
 
+      // 更新后重新排序并编号（1-based）
       const newChapters = state.timeline.chapters.map(c =>
         c.id === chapterId ? { ...c, ...updates } : c
-      );
+      ).sort((a, b) => a.chapterIndex - b.chapterIndex)
+       .map((c, i) => ({ ...c, chapterIndex: i + 1 }));
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
@@ -461,7 +479,9 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         chapterIds: v.chapterIds.filter(id => id !== chapterId)
       }));
 
-      const newChapters = state.timeline.chapters.filter(c => c.id !== chapterId);
+      const newChapters = state.timeline.chapters
+        .filter(c => c.id !== chapterId)
+        .map((c, i) => ({ ...c, chapterIndex: i + 1 }));  // 删除后重新编号（1-based）
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
@@ -816,5 +836,5 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
     await dbAPI.saveFiles(projectId, [...fileStore.files]);
     console.log('[WorldTimelineStore] 已保存时间线数据');
   },
-  0  // 立即保存
+  1000  // 1秒防抖保存
 );

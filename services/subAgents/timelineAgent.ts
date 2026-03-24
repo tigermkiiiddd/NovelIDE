@@ -25,7 +25,7 @@ const getEventsTool: ToolDefinition = {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        chapterId: { type: 'string', description: '章节ID（按章节筛选事件）' },
+        chapterIndex: { type: 'number', description: '章节序号（按章节筛选事件）' },
         fromIndex: { type: 'number', description: '起始事件序号（含）' },
         toIndex: { type: 'number', description: '结束事件序号（含）' }
       },
@@ -108,7 +108,7 @@ const batchUpdateTimelineTool: ToolDefinition = {
 - 删除事件 (deleteEvents) - 传入事件ID数组
 - 添加章节分组 (addChapters)
 - 更新章节分组 (updateChapters)
-- 删除章节分组 (deleteChapters) - 传入章节ID数组
+- 删除章节分组 (deleteChapters) - 传入章节序号数组
 - 将事件加入章节 (addEventsToChapter)
 - 从章节移除事件 (removeEventsFromChapter)
 - 添加卷分组 (addVolumes)
@@ -120,7 +120,6 @@ const batchUpdateTimelineTool: ToolDefinition = {
 
 事件格式示例：
 {
-  "eventIndex": 1,
   "time": {"value": 8, "unit": "hour"},
   "title": "醒来",
   "content": "主角在新手村醒来，发现自己穿越了",
@@ -128,6 +127,8 @@ const batchUpdateTimelineTool: ToolDefinition = {
   "characters": ["主角"],
   "emotion": "困惑"
 }
+
+注意：eventIndex 和 chapterIndex 由系统自动管理，新增时无需指定。
 
 时间说明：
 - time 是结构化的累加时间，类似 Jira 登记工时
@@ -161,7 +162,7 @@ const batchUpdateTimelineTool: ToolDefinition = {
               purpose: { type: 'string', description: '场景作用/目的' },
               relativeTime: { type: 'string', description: '相对时间描述（如"第1天 早晨"）' }
             },
-            required: ['eventIndex', 'time', 'title', 'content']
+            required: ['time', 'title', 'content']
           },
           description: '要添加的事件列表'
         },
@@ -197,7 +198,7 @@ const batchUpdateTimelineTool: ToolDefinition = {
               hook: { type: 'string', description: '章末悬念' },
               status: { type: 'string', enum: ['draft', 'outline', 'writing', 'completed'], description: '章节状态' }
             },
-            required: ['chapterIndex', 'title', 'summary', 'volumeId']
+            required: ['title', 'summary', 'volumeId']
           },
           description: '要添加的章节分组列表'
         },
@@ -206,34 +207,34 @@ const batchUpdateTimelineTool: ToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              chapterId: { type: 'string' },
+              chapterIndex: { type: 'number', description: '章节序号' },
               updates: { type: 'object' }
             },
-            required: ['chapterId', 'updates']
+            required: ['chapterIndex', 'updates']
           },
           description: '要更新的章节列表'
         },
         deleteChapters: {
           type: 'array',
-          items: { type: 'string' },
-          description: '要删除的章节ID列表'
+          items: { type: 'number' },
+          description: '要删除的章节序号列表'
         },
         addEventsToChapter: {
           type: 'object',
           properties: {
-            chapterId: { type: 'string' },
+            chapterIndex: { type: 'number', description: '章节序号' },
             eventIds: { type: 'array', items: { type: 'string' } }
           },
-          required: ['chapterId', 'eventIds'],
+          required: ['chapterIndex', 'eventIds'],
           description: '将事件加入章节'
         },
         removeEventsFromChapter: {
           type: 'object',
           properties: {
-            chapterId: { type: 'string' },
+            chapterIndex: { type: 'number', description: '章节序号' },
             eventIds: { type: 'array', items: { type: 'string' } }
           },
-          required: ['chapterId', 'eventIds'],
+          required: ['chapterIndex', 'eventIds'],
           description: '从章节移除事件'
         },
         addVolumes: {
@@ -270,9 +271,9 @@ const batchUpdateTimelineTool: ToolDefinition = {
           type: 'object',
           properties: {
             volumeId: { type: 'string' },
-            chapterIds: { type: 'array', items: { type: 'string' } }
+            chapterIndexes: { type: 'array', items: { type: 'number' }, description: '章节序号列表' }
           },
-          required: ['volumeId', 'chapterIds'],
+          required: ['volumeId', 'chapterIndexes'],
           description: '将章节加入卷'
         },
         addStoryLines: {
@@ -369,8 +370,9 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 4. **时间线是核心视图** - 按时间顺序展示所有事件
 
 **数据模型关系：**
-- 卷 (VolumeGroup) → chapterIds[] → 章节 (ChapterGroup) → eventIds[] → 事件 (TimelineEvent)
+- 卷 (VolumeGroup) → 章节 (ChapterGroup) → eventIds[] → 事件 (TimelineEvent)
 - ⚠️ 事件不能直接关联到卷，必须通过章节！章节是连接卷和事件的桥梁。
+- ⚠️ 所有操作都使用 chapterIndex（章节序号）来引用章节，不需要查询章节ID。
 
 **禁止事项：**
 1. 禁止脑补/创作原文没有的事件
@@ -389,11 +391,11 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 
 3. ❌ **禁止创建孤立的事件**
    - 每个事件必须关联到章节
-   - 不允许事件没有 chapterId
+   - 不允许事件没有关联章节
 
 4. ❌ **禁止创建孤立的卷**
    - 每个卷必须包含章节
-   - 不允许卷的 chapterIds 为空
+   - 不允许卷没有包含章节
 
 5. ❌ **禁止在章节创建完成前创建事件**
    - 必须严格按照流程顺序执行
@@ -494,7 +496,7 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 - 每次调用最多创建 20 个章节，分批处理
 - 每个章节必须指定 volumeId 将其归属到对应的卷
 - 每个章节必须填写 summary（剧情概要），描述该章的主要剧情内容
-- 章节格式：{ "chapterIndex": 1, "title": "觉醒之夜", "summary": "章节剧情概要（必填）", "volumeId": "volume-id-xxx" }
+- 章节格式：{ "chapterIndex": 1, "title": "觉醒之夜", "summary": "章节剧情概要（必填）", "volumeId": "volume-id" }
 - ⚠️ title 必须是具体的剧情名称（如「觉醒之夜」「暗流涌动」），禁止使用「第1章」「第二章」这类纯序号
 
 **分批创建示例**（200章的情况）：
@@ -524,12 +526,13 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 
 **重要说明：**
 - ⚠️ 每个事件都必须关联到章节
-- ⚠️ 不允许存在孤立事件（没有 chapterId）
+- ⚠️ 不允许存在孤立事件（未关联到章节）
 
 **执行方式：**
 - 使用 timeline_batchUpdate 的 addEventsToChapter 参数
 - 将事件加入对应的章节
-- 格式：{ "chapterId": "chapter-id-xxx", "eventIds": ["event-1", "event-2", "event-3"] }
+- 格式：{ "chapterIndex": 1, "eventIds": ["event-1", "event-2", "event-3"] }
+- ⚠️ 直接使用章节序号，不需要查询章节ID
 
 ### 最后：提交报告
 - 确认所有内容都已写入后再提交
@@ -560,7 +563,7 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 | chapterIndex | 是 | 章节序号（从1开始） |
 | title | 是 | 章节标题 |
 | summary | 是 | ⚠️ 章节剧情概要（必须描述该章的主要剧情内容，不能留空） |
-| volumeId | 是 | 所属卷ID（必须指定） |
+| volumeId | 是 | 所属卷ID |
 
 ## 卷分组字段说明
 

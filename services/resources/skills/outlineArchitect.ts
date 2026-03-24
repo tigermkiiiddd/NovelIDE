@@ -292,7 +292,6 @@ tags: ["技能", "大纲"]
 ### 事件格式
 \`\`\`
 {
-  "eventIndex": 1,
   "time": { "value": 8, "unit": "hour" },
   "title": "事件标题",
   "content": "事件详细描述",

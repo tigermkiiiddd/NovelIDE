@@ -27,14 +27,14 @@ export const getEventsTool: ToolDefinition = {
   function: {
     name: 'timeline_getEvents',
     description: `获取时间线事件列表。支持按章节筛选或按事件序号范围查询。
-- 按章节查询：传入 chapterId，返回该章节下的所有事件
+- 按章节查询：传入 chapterIndex，返回该章节下的所有事件
 - 按范围查询：传入 fromIndex 和 toIndex，返回序号范围内的事件
 - 不传参数：返回全部事件`,
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        chapterId: { type: 'string', description: '章节ID（按章节筛选事件）' },
+        chapterIndex: { type: 'number', description: '章节序号（按章节筛选事件）' },
         fromIndex: { type: 'number', description: '起始事件序号（含）' },
         toIndex: { type: 'number', description: '结束事件序号（含）' }
       },
@@ -157,7 +157,7 @@ export const batchUpdateTimelineTool: ToolDefinition = {
 - 删除事件 (deleteEvents) - 传入事件ID数组
 - 添加章节分组 (addChapters)
 - 更新章节分组 (updateChapters)
-- 删除章节分组 (deleteChapters) - 传入章节ID数组
+- 删除章节分组 (deleteChapters) - 传入章节序号数组
 - 将事件加入章节 (addEventsToChapter)
 - 从章节移除事件 (removeEventsFromChapter)
 - 添加卷分组 (addVolumes)
@@ -170,17 +170,19 @@ export const batchUpdateTimelineTool: ToolDefinition = {
 混合操作示例：
 {
   "addEvents": [
-    {"eventIndex": 1, "time": {"value": 8, "unit": "hour"}, "title": "醒来", "content": "..."},
-    {"eventIndex": 2, "time": {"value": 12, "unit": "hour"}, "title": "遇到敌人", "content": "..."}
+    {"time": {"value": 8, "unit": "hour"}, "title": "醒来", "content": "..."},
+    {"time": {"value": 12, "unit": "hour"}, "title": "遇到敌人", "content": "..."}
   ],
   "addChapters": [
-    {"chapterIndex": 1, "title": "第一章", "summary": "..."}
+    {"title": "第一章", "summary": "..."}
   ],
   "addEventsToChapter": {
-    "chapterId": "xxx",
+    "chapterIndex": 1,
     "eventIds": ["event-id-1", "event-id-2"]
   }
 }
+
+注意：eventIndex 和 chapterIndex 由系统自动管理，新增时无需指定。
 
 时间说明：
 - time 是结构化的累加时间，类似 Jira 登记工时
@@ -212,11 +214,11 @@ export const batchUpdateTimelineTool: ToolDefinition = {
               location: { type: 'string', description: '地点（可选）' },
               characters: { type: 'array', items: { type: 'string' }, description: '出场角色（可选）' },
               emotion: { type: 'string', description: '情绪氛围（可选）' },
-              chapterId: { type: 'string', description: '所属章节ID（可选）' },
+              chapterIndex: { type: 'number', description: '所属章节序号（可选）' },
               purpose: { type: 'string', description: '场景作用/目的（可选）' },
               relativeTime: { type: 'string', description: '相对时间描述（可选，如"第1天 早晨"）' }
             },
-            required: ['eventIndex', 'time', 'title', 'content']
+            required: ['time', 'title', 'content']
           },
           description: '要添加的事件列表'
         },
@@ -252,7 +254,7 @@ export const batchUpdateTimelineTool: ToolDefinition = {
               hook: { type: 'string', description: '章末悬念（可选）' },
               status: { type: 'string', enum: ['draft', 'outline', 'writing', 'completed'], description: '章节状态（可选）' }
             },
-            required: ['chapterIndex', 'title']
+            required: ['title']
           },
           description: '要添加的章节分组列表'
         },
@@ -261,34 +263,34 @@ export const batchUpdateTimelineTool: ToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              chapterId: { type: 'string' },
+              chapterIndex: { type: 'number', description: '章节序号' },
               updates: { type: 'object' }
             },
-            required: ['chapterId', 'updates']
+            required: ['chapterIndex', 'updates']
           },
           description: '要更新的章节列表'
         },
         deleteChapters: {
           type: 'array',
-          items: { type: 'string' },
-          description: '要删除的章节ID列表'
+          items: { type: 'number' },
+          description: '要删除的章节序号列表'
         },
         addEventsToChapter: {
           type: 'object',
           properties: {
-            chapterId: { type: 'string' },
+            chapterIndex: { type: 'number', description: '章节序号' },
             eventIds: { type: 'array', items: { type: 'string' } }
           },
-          required: ['chapterId', 'eventIds'],
+          required: ['chapterIndex', 'eventIds'],
           description: '将事件加入章节'
         },
         removeEventsFromChapter: {
           type: 'object',
           properties: {
-            chapterId: { type: 'string' },
+            chapterIndex: { type: 'number', description: '章节序号' },
             eventIds: { type: 'array', items: { type: 'string' } }
           },
-          required: ['chapterId', 'eventIds'],
+          required: ['chapterIndex', 'eventIds'],
           description: '从章节移除事件'
         },
         addVolumes: {
@@ -325,9 +327,9 @@ export const batchUpdateTimelineTool: ToolDefinition = {
           type: 'object',
           properties: {
             volumeId: { type: 'string' },
-            chapterIds: { type: 'array', items: { type: 'string' } }
+            chapterIndexes: { type: 'array', items: { type: 'number' }, description: '章节序号列表' }
           },
-          required: ['volumeId', 'chapterIds'],
+          required: ['volumeId', 'chapterIndexes'],
           description: '将章节加入卷'
         },
         addStoryLines: {
@@ -459,6 +461,13 @@ export const executeProcessTimelineInput = async (
   }
 };
 
+// 通过 chapterIndex 查找章节
+const findChapterByIndex = (store: ReturnType<typeof useWorldTimelineStore.getState>, chapterIndex: number): { id: string } | null => {
+  const chapters = store.getChapters();
+  const chapter = chapters.find(c => c.chapterIndex === chapterIndex);
+  return chapter || null;
+};
+
 // 执行时间线工具（读取/写入）
 export const executeTimelineTool = async (
   toolName: string,
@@ -479,16 +488,20 @@ export const executeTimelineTool = async (
 
   switch (toolName) {
     case 'timeline_getEvents': {
-      const { chapterId, fromIndex, toIndex } = args;
+      const { chapterIndex, fromIndex, toIndex } = args;
       let events = store.getEvents();
 
       // 按章节筛选
-      if (chapterId) {
-        const chapter = store.getChapter(chapterId);
+      if (chapterIndex !== undefined) {
+        const chapter = findChapterByIndex(store, chapterIndex);
         if (!chapter) {
-          return JSON.stringify({ error: `章节 ${chapterId} 不存在` });
+          return JSON.stringify({ error: `章节序号 ${chapterIndex} 不存在` });
         }
-        const eventIdSet = new Set(chapter.eventIds);
+        const fullChapter = store.getChapter(chapter.id);
+        if (!fullChapter) {
+          return JSON.stringify({ error: `章节序号 ${chapterIndex} 不存在` });
+        }
+        const eventIdSet = new Set(fullChapter.eventIds);
         events = events.filter(e => eventIdSet.has(e.id));
       }
 
@@ -499,6 +512,10 @@ export const executeTimelineTool = async (
         events = events.filter(e => e.eventIndex >= from && e.eventIndex <= to);
       }
 
+      // 构建 chapterId → chapterIndex 映射
+      const allChapters = store.getChapters();
+      const chapterIdToIndex = new Map(allChapters.map(c => [c.id, c.chapterIndex]));
+
       return JSON.stringify({
         total: events.length,
         events: events.map((e: TimelineEvent) => ({
@@ -507,7 +524,7 @@ export const executeTimelineTool = async (
           time: e.time,
           title: e.title,
           content: e.content.substring(0, 100) + (e.content.length > 100 ? '...' : ''),
-          chapterId: e.chapterId,
+          chapterIndex: e.chapterId ? chapterIdToIndex.get(e.chapterId) : undefined,
           location: e.location,
           characters: e.characters,
           emotion: e.emotion,
@@ -599,7 +616,17 @@ export const executeTimelineTool = async (
       if (args.addEvents && Array.isArray(args.addEvents)) {
         for (const e of args.addEvents) {
           try {
-            const id = store.addEvent(e);
+            // 如果传了 chapterIndex，转换为 chapterId
+            const eventData = { ...e };
+            if (eventData.chapterIndex !== undefined) {
+              const chapter = findChapterByIndex(store, eventData.chapterIndex);
+              if (chapter) {
+                eventData.chapterId = chapter.id;
+              }
+              delete eventData.chapterIndex;
+            }
+            delete eventData.eventIndex;  // eventIndex 由 store 自动管理
+            const id = store.addEvent(eventData);
             results.addedEvents.push({ ...e, id });
           } catch (err: any) {
             results.errors.push({ type: 'addEvent', data: e, error: err.message });
@@ -673,7 +700,9 @@ export const executeTimelineTool = async (
                 continue;
               }
 
-              const id = store.addChapter(c);
+              const chapterData = { ...c };
+              delete chapterData.chapterIndex;  // chapterIndex 由 store 自动管理
+              const id = store.addChapter(chapterData);
               results.addedChapters.push({ ...c, id });
             } catch (err: any) {
               results.errors.push({ type: 'addChapter', data: c, error: err.message });
@@ -686,7 +715,12 @@ export const executeTimelineTool = async (
       if (args.updateChapters && Array.isArray(args.updateChapters)) {
         for (const u of args.updateChapters) {
           try {
-            store.updateChapter(u.chapterId, u.updates);
+            const chapter = findChapterByIndex(store, u.chapterIndex);
+            if (!chapter) {
+              results.errors.push({ type: 'updateChapter', data: u, error: `❌ 章节序号 ${u.chapterIndex} 不存在` });
+              continue;
+            }
+            store.updateChapter(chapter.id, u.updates);
             results.updatedChapters.push(u);
           } catch (err: any) {
             results.errors.push({ type: 'updateChapter', data: u, error: err.message });
@@ -696,12 +730,17 @@ export const executeTimelineTool = async (
 
       // 6. 删除章节
       if (args.deleteChapters && Array.isArray(args.deleteChapters)) {
-        for (const chapterId of args.deleteChapters) {
+        for (const chapterIdx of args.deleteChapters) {
           try {
-            store.deleteChapter(chapterId);
-            results.deletedChapters.push(chapterId);
+            const chapter = findChapterByIndex(store, chapterIdx);
+            if (!chapter) {
+              results.errors.push({ type: 'deleteChapter', data: chapterIdx, error: `❌ 章节序号 ${chapterIdx} 不存在` });
+              continue;
+            }
+            store.deleteChapter(chapter.id);
+            results.deletedChapters.push(chapterIdx);
           } catch (err: any) {
-            results.errors.push({ type: 'deleteChapter', data: chapterId, error: err.message });
+            results.errors.push({ type: 'deleteChapter', data: chapterIdx, error: err.message });
           }
         }
       }
@@ -709,15 +748,15 @@ export const executeTimelineTool = async (
       // 7. 将事件加入章节
       if (args.addEventsToChapter) {
         try {
-          const { chapterId, eventIds } = args.addEventsToChapter;
+          const { chapterIndex: cIdx, eventIds } = args.addEventsToChapter;
 
           // ⚠️ 校验1：章节必须存在
-          const chapter = store.getChapter(chapterId);
+          const chapter = findChapterByIndex(store, cIdx);
           if (!chapter) {
             results.errors.push({
               type: 'addEventsToChapter',
               data: args.addEventsToChapter,
-              error: `❌ 章节 ${chapterId} 不存在。请先使用 addChapters 创建章节，然后再关联事件。正确流程：1.创建卷 → 2.创建章节 → 3.创建事件 → 4.关联事件到章节`
+              error: `❌ 章节序号 ${cIdx} 不存在。请先使用 addChapters 创建章节，然后再关联事件。正确流程：1.创建卷 → 2.创建章节 → 3.创建事件 → 4.关联事件到章节`
             });
           } else {
             // ⚠️ 校验2：所有事件必须存在
@@ -729,7 +768,7 @@ export const executeTimelineTool = async (
                 error: `❌ 事件 ${missingEvents.join(', ')} 不存在。请先使用 addEvents 创建这些事件。`
               });
             } else {
-              store.addEventsToChapter(chapterId, eventIds);
+              store.addEventsToChapter(chapter.id, eventIds);
               results.addedEventsToChapter = args.addEventsToChapter;
             }
           }
@@ -741,8 +780,13 @@ export const executeTimelineTool = async (
       // 8. 从章节移除事件
       if (args.removeEventsFromChapter) {
         try {
-          store.removeEventsFromChapter(args.removeEventsFromChapter.chapterId, args.removeEventsFromChapter.eventIds);
-          results.removedEventsFromChapter = args.removeEventsFromChapter;
+          const chapter = findChapterByIndex(store, args.removeEventsFromChapter.chapterIndex);
+          if (!chapter) {
+            results.errors.push({ type: 'removeEventsFromChapter', data: args.removeEventsFromChapter, error: `❌ 章节序号 ${args.removeEventsFromChapter.chapterIndex} 不存在` });
+          } else {
+            store.removeEventsFromChapter(chapter.id, args.removeEventsFromChapter.eventIds);
+            results.removedEventsFromChapter = args.removeEventsFromChapter;
+          }
         } catch (err: any) {
           results.errors.push({ type: 'removeEventsFromChapter', data: args.removeEventsFromChapter, error: err.message });
         }
@@ -797,7 +841,7 @@ export const executeTimelineTool = async (
       // 12. 将章节加入卷
       if (args.addChaptersToVolume) {
         try {
-          const { volumeId, chapterIds } = args.addChaptersToVolume;
+          const { volumeId, chapterIndexes } = args.addChaptersToVolume;
 
           // ⚠️ 校验1：卷必须存在
           const volume = store.getVolume(volumeId);
@@ -808,13 +852,22 @@ export const executeTimelineTool = async (
               error: `❌ 卷 ${volumeId} 不存在。请先使用 addVolumes 创建卷。`
             });
           } else {
-            // ⚠️ 校验2：所有章节必须存在
-            const missingChapters = chapterIds.filter(id => !store.getChapter(id));
-            if (missingChapters.length > 0) {
+            // 将 chapterIndexes 转换为 chapterIds
+            const chapterIds: string[] = [];
+            const missingIndexes: number[] = [];
+            for (const idx of chapterIndexes) {
+              const chapter = findChapterByIndex(store, idx);
+              if (chapter) {
+                chapterIds.push(chapter.id);
+              } else {
+                missingIndexes.push(idx);
+              }
+            }
+            if (missingIndexes.length > 0) {
               results.errors.push({
                 type: 'addChaptersToVolume',
                 data: args.addChaptersToVolume,
-                error: `❌ 章节 ${missingChapters.join(', ')} 不存在。请先使用 addChapters 创建这些章节。正确流程：1.创建卷 → 2.创建章节（指定volumeId）`
+                error: `❌ 章节序号 ${missingIndexes.join(', ')} 不存在。请先使用 addChapters 创建这些章节。`
               });
             } else {
               store.addChaptersToVolume(volumeId, chapterIds);
@@ -855,7 +908,7 @@ export const executeTimelineTool = async (
 
       // 警告1：孤立事件
       if (results.addedEvents.length > 0) {
-        const orphanEvents = results.addedEvents.filter((e: any) => !e.chapterId);
+        const orphanEvents = results.addedEvents.filter((e: any) => e.chapterIndex === undefined);
         if (orphanEvents.length > 0) {
           warnings.push(`⚠️ 发现 ${orphanEvents.length} 个孤立事件（未关联到章节）`);
           warnings.push(`   → 这些事件无法正确归属到卷，请使用 addEventsToChapter 关联它们`);
