@@ -6,6 +6,7 @@ import { AIService } from '../geminiService';
 import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
 import { executeOutlineTool } from '../agent/tools/timelineTools';
 import { ToolDefinition } from '../agent/types';
+import { SKILL_CONSTRAINT_LAYERED_DESIGN } from '../resources/agentSkill';
 
 import {
   getEventsTool,
@@ -74,6 +75,12 @@ const outlineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput, Timel
 
 你是一个**结构化转换器**，负责将内容转换为结构化大纲。
 
+## 📐 大纲设计技巧
+
+${SKILL_CONSTRAINT_LAYERED_DESIGN}
+
+---
+
 ## 📊 现有数据（重要！不要重复创建）
 
 ${context ? `
@@ -124,8 +131,9 @@ ${context.volumeSummaries.map(v => `  - volumeIndex=${v.volumeIndex}「${v.title
 outline_manageVolumes({
   add: [{ title: "第一卷", description: "..." }]
 })
+// 返回: { success: true, added: [{ title: "第一卷", volumeIndex: 1 }] }
 \`\`\`
-⚠️ 创建后调用 outline_getVolumes 验证
+✅ 直接通过返回值判断成功，volumeIndex 已自动分配
 
 ### 第二步：创建章节（⚠️ 最关键，不得跳过）
 \`\`\`
@@ -135,31 +143,29 @@ outline_manageChapters({
     { title: "暗流涌动", summary: "描述该章主要剧情", volumeIndex: 1 }
   ]
 })
+// 返回: { success: true, added: [{ title: "觉醒之夜", chapterIndex: 1 }, ...] }
 \`\`\`
 - ⚠️ 必须创建所有章节，不能只创建代表性章节
 - ⚠️ title 必须是具体名称（如「觉醒之夜」），禁止用「第1章」
 - ⚠️ summary 必填，描述该章主要剧情
 - ⚠️ 每批最多 20 章，分批处理
-- ⚠️ 创建后调用 outline_getChapters 验证数量
+- ✅ 直接通过返回值判断成功，chapterIndex 已自动分配
 
 ### 第三步：创建事件
 \`\`\`
 outline_manageEvents({
   add: [
-    { timestamp: { day: 1, hour: 8 }, title: "醒来", content: "...", chapterIndex: 1 },
-    { timestamp: { day: 1, hour: 10 }, title: "遇到敌人", content: "...", chapterIndex: 1 }
+    { timestamp: { day: 1, hour: 8 }, title: "醒来", content: "..." },
+    { timestamp: { day: 1, hour: 10 }, title: "遇到敌人", content: "..." }
   ]
 })
+// 返回: { success: true, added: [{ title: "醒来", eventIndex: 0 }, ...] }
 \`\`\`
 - timestamp 是绝对时间戳：{ day: 第几天, hour: 小时 }
 - hour 支持 0-23，可以是小数（如 8.5 = 8:30）
 - 事件按时间戳自动排序
-- 通过 chapterIndex 关联事件到章节
-- 每段处理 5-8 个事件
-
-### 第四步：验证关联
-- 调用 outline_getEvents 确认所有事件都有 chapterIndex
-- 没有关联的事件需要补充
+- chapterIndex 可选，不填则创建孤立事件（之后可手动关联）
+- ✅ 直接通过返回值判断成功
 
 ### 最后：提交报告
 \`\`\`
@@ -169,37 +175,22 @@ outline_submitOutline({
 })
 \`\`\`
 
-## 📋 执行中检查点
+## ⚡ 执行原则
 
-### 检查点1：卷创建完成后
-- [ ] 调用 outline_getVolumes 验证
-- [ ] 确认卷数量正确
-
-### 检查点2：章节创建完成后
-- [ ] 调用 outline_getChapters 验证
-- [ ] 确认章节总数与预期一致
-- [ ] 如果数量不对，立即补充创建
-
-### 检查点3：事件创建完成后
-- [ ] 确认所有事件都已创建
-- [ ] 确认所有事件都有 chapterIndex
+1. **只看返回值 success: true/false** - 不需要调用 read 工具验证
+2. **index 由系统自动分配** - 返回值中的 index 只用于报告，不需要记录或验证
+3. **事件可选关联章节** - 创建事件时 chapterIndex 可选，之后再关联
+4. **出错才重试** - 只有返回 error 时才分析原因，不要主动检查
 
 ## 报告格式
 
 \`\`\`
-工作方式：[批量创建/增量更新]
-
 创建统计：
 - 卷：X个
-- 章节：X个（预期X个）
+- 章节：X个
 - 事件：X个
 
-详细记录：
-- 创建卷：volumeIndex=1「第一卷」
-- 创建章节：chapterIndex=1「觉醒之夜」→ volumeIndex=1
-- 创建事件：eventIndex=0「醒来」→ chapterIndex=1
-
-遇到的问题：[无/问题描述]
+简要说明创建的内容即可，不需要记录每个 index。
 \`\`\`
 `,
 

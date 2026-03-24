@@ -16,7 +16,6 @@ import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
 import { usePlanStore } from '../stores/planStore';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
-import { useStoryOutlineStore } from '../stores/storyOutlineStore';
 import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -66,21 +65,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const loadProjectMemories = useLongTermMemoryStore(state => state.loadProjectMemories);
   const isMemoryExtracting = useLongTermMemoryStore(state => state.isExtracting);
   const loadProjectCharacterProfiles = useCharacterMemoryStore(state => state.loadProjectProfiles);
-  const loadOutline = useStoryOutlineStore(state => state.loadOutline);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
   // Initialize Files and Chapter Analyses when Project Changes
   useEffect(() => {
     if (projectId) {
-        // 先加载文件，等完成后再加载章节分析、长期记忆和大纲
+        // 先加载文件，等完成后再加载章节分析、长期记忆
         loadProjectMemories(projectId);
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectCharacterProfiles(projectId);
-          loadOutline(projectId);
         });
     }
-  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadProjectCharacterProfiles, loadOutline]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadProjectCharacterProfiles]);
 
   // File System State & Actions
   const { 

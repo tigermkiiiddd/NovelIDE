@@ -377,11 +377,15 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
             console.log('[WorldTimelineStore] 加载完成，已重建事件映射');
             return;
           } catch (parseError) {
-            console.error('[WorldTimelineStore] JSON解析失败:', parseError);
+            // 解析失败：文件可能损坏，不要覆盖！保持原文件，只记录错误
+            console.error('[WorldTimelineStore] JSON解析失败，文件可能损坏，保留原文件不覆盖:', parseError);
+            console.error('[WorldTimelineStore] 损坏的文件内容前100字符:', timelineFile.content.substring(0, 100));
+            useWorldTimelineStore.setState({ timeline: null, isLoading: false });
+            return;
           }
         }
 
-        // 没有时间线数据，创建空的并保存到文件
+        // 文件不存在或内容为空，才创建新时间线
         const emptyTimeline: WorldTimeline = {
           id: generateId(),
           projectId,
