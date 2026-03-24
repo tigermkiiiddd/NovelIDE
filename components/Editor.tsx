@@ -56,7 +56,15 @@ const Editor: React.FC<EditorProps> = ({
   const fileStore = useFileStore();
   const { files, activeFileId, saveFileContent, createFile, deleteFile, virtualFile } = fileStore;
   // Support virtual files for createFile preview
-  const activeFile = files.find(f => f.id === activeFileId) || (virtualFile?.id === activeFileId ? virtualFile : undefined);
+  const isVirtualFile = virtualFile?.id === activeFileId;
+  const activeFile = files.find(f => f.id === activeFileId) || (isVirtualFile ? virtualFile : undefined);
+
+  // Wrapper for saveFileContent that skips virtual files
+  const safeSaveFileContent = useCallback((id: string, content: string) => {
+    if (!isVirtualFile) {
+      saveFileContent(id, content);
+    }
+  }, [isVirtualFile, saveFileContent]);
 
   // 2. Agent Store (for pending changes)
   const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId, setReviewingChangeId } = useAgentStore();
@@ -200,7 +208,7 @@ const Editor: React.FC<EditorProps> = ({
           const newContent = lines.join('\n');
 
           setContent(newContent);
-          saveFileContent(activeFile.id, newContent);
+          safeSaveFileContent(activeFile.id, newContent);
         }
       }
 
@@ -242,7 +250,7 @@ const Editor: React.FC<EditorProps> = ({
           .catch((err: Error) => { addMessage({ id: Math.random().toString(), role: 'system', text: `⚠️ 章节分析失败: ${err.message}`, timestamp: Date.now(), metadata: { logType: 'error' } }); });
       }
     }
-  }, [activeEditDiffs, processedEditIds, activeFile, content, editIncrements, addMessage, pendingChanges, removePendingChange, saveFileContent, setContent, files]);
+  }, [activeEditDiffs, processedEditIds, activeFile, content, editIncrements, addMessage, pendingChanges, removePendingChange, safeSaveFileContent, setContent, files]);
 
   // 6.4 Handler for accepting all pending edits
   // Content already applied - just clear all markers
@@ -258,7 +266,7 @@ const Editor: React.FC<EditorProps> = ({
     setProcessedEditIds(prev => [...prev, ...pendingEdits.map(e => e.id)]);
 
     // Save current content (it's already the new content)
-    saveFileContent(activeFile.id, content);
+    safeSaveFileContent(activeFile.id, content);
 
     // Clean up pending changes
     const filePath = getNodePath(activeFile, files);
@@ -277,7 +285,7 @@ const Editor: React.FC<EditorProps> = ({
         .then(() => { addMessage({ id: Math.random().toString(), role: 'system', text: `✅ 章节分析完成: ${filePath}`, timestamp: Date.now(), metadata: { logType: 'success' } }); })
         .catch((err: Error) => { addMessage({ id: Math.random().toString(), role: 'system', text: `⚠️ 章节分析失败: ${err.message}`, timestamp: Date.now(), metadata: { logType: 'error' } }); });
     }
-  }, [activeFile, activeEditDiffs, processedEditIds, content, saveFileContent, pendingChanges, removePendingChange, addMessage, files]);
+  }, [activeFile, activeEditDiffs, processedEditIds, content, safeSaveFileContent, pendingChanges, removePendingChange, addMessage, files]);
 
   // 6.5 Handler for rejecting all pending edits
   // Revert ALL change regions to their original content
@@ -308,7 +316,7 @@ const Editor: React.FC<EditorProps> = ({
 
     const newContent = lines.join('\n');
     setContent(newContent);
-    saveFileContent(activeFile.id, newContent);
+    safeSaveFileContent(activeFile.id, newContent);
 
     // Mark all as processed
     setProcessedEditIds(prev => [...prev, ...pendingEdits.map(e => e.id)]);
@@ -319,7 +327,7 @@ const Editor: React.FC<EditorProps> = ({
     changesToRemove.forEach(c => removePendingChange(c.id));
 
     addMessage({ id: Math.random().toString(), role: 'system', text: `❌ 已拒绝全部 ${pendingEdits.length} 个变更`, timestamp: Date.now(), metadata: { logType: 'info' } });
-  }, [activeFile, activeEditDiffs, processedEditIds, editIncrements, content, setContent, saveFileContent, pendingChanges, removePendingChange, addMessage, files]);
+  }, [activeFile, activeEditDiffs, processedEditIds, editIncrements, content, setContent, safeSaveFileContent, pendingChanges, removePendingChange, addMessage, files]);
 
   // 6.6 Auto-apply pending changes to editor content
   // When new editDiffs arrive, apply modifiedSegments to the textarea
@@ -361,7 +369,7 @@ const Editor: React.FC<EditorProps> = ({
     const newContent = lines.join('\n');
     isApplyingBatchRef.current = true;
     setContent(newContent);
-    saveFileContent(activeFile.id, newContent);
+    safeSaveFileContent(activeFile.id, newContent);
     isApplyingBatchRef.current = false;
 
     // Mark these changes as applied
@@ -527,7 +535,7 @@ const Editor: React.FC<EditorProps> = ({
     setContent(newText);
     setIsDirty(true);
     if (activeFile) {
-        saveFileContent(activeFile.id, newText);
+        safeSaveFileContent(activeFile.id, newText);
     }
     updateCursorStats(e.target);
   };
@@ -594,14 +602,14 @@ const Editor: React.FC<EditorProps> = ({
           if (listMatch) {
               const fullPrefix = listMatch[0]; 
               const whitespace = listMatch[1]; 
-              const marker = listMatch[2];     
+              const marker = listMatch[2];
               const textAfterPrefix = lineContent.substring(fullPrefix.length);
-              
+
               if (!textAfterPrefix.trim()) {
                   e.preventDefault();
                   const newVal = val.substring(0, lineStartPos) + val.substring(end);
                   setContent(newVal);
-                  if (activeFile) saveFileContent(activeFile.id, newVal);
+                  if (activeFile) safeSaveFileContent(activeFile.id, newVal);
                   setTimeout(() => { if(textareaRef.current) textareaRef.current.selectionStart = textareaRef.current.selectionEnd = lineStartPos; }, 0);
               } else {
                   e.preventDefault();
@@ -614,7 +622,7 @@ const Editor: React.FC<EditorProps> = ({
                   const insertion = `\n${nextPrefix}`;
                   const newVal = val.substring(0, start) + insertion + val.substring(end);
                   setContent(newVal);
-                  if (activeFile) saveFileContent(activeFile.id, newVal);
+                  if (activeFile) safeSaveFileContent(activeFile.id, newVal);
                   setTimeout(() => { if(textareaRef.current) textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + insertion.length; }, 0);
               }
           }
