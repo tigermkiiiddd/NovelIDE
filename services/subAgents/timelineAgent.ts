@@ -20,12 +20,14 @@ const getEventsTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'timeline_getEvents',
-    description: '获取所有时间线事件列表',
+    description: '获取时间线事件列表。支持按章节筛选或按事件序号范围查询。',
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        storyLineId: { type: 'string', description: '故事线ID（可选）' }
+        chapterId: { type: 'string', description: '章节ID（按章节筛选事件）' },
+        fromIndex: { type: 'number', description: '起始事件序号（含）' },
+        toIndex: { type: 'number', description: '结束事件序号（含）' }
       },
       required: ['thinking']
     }
@@ -52,12 +54,14 @@ const getChaptersTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'timeline_getChapters',
-    description: '获取章节分组列表',
+    description: '获取章节分组列表。支持按卷筛选或按章节序号范围查询。',
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        volumeId: { type: 'string', description: '卷ID（可选）' }
+        volumeId: { type: 'string', description: '卷ID（按卷筛选）' },
+        fromIndex: { type: 'number', description: '起始章节序号（含）' },
+        toIndex: { type: 'number', description: '结束章节序号（含）' }
       },
       required: ['thinking']
     }

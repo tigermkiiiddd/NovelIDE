@@ -20,19 +20,23 @@ import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine } from '../../../ty
 // ============================================
 
 /**
- * Level 1: 获取所有事件列表
+ * Level 1: 获取事件列表（支持按章节筛选和 index 范围）
  */
 export const getEventsTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'timeline_getEvents',
-    description: `获取所有时间线事件列表。可按故事线筛选。
-返回每个事件的：序号、时间、标题、内容、所属章节。`,
+    description: `获取时间线事件列表。支持按章节筛选或按事件序号范围查询。
+- 按章节查询：传入 chapterId，返回该章节下的所有事件
+- 按范围查询：传入 fromIndex 和 toIndex，返回序号范围内的事件
+- 不传参数：返回全部事件`,
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        storyLineId: { type: 'string', description: '故事线ID（可选，不填返回全部）' }
+        chapterId: { type: 'string', description: '章节ID（按章节筛选事件）' },
+        fromIndex: { type: 'number', description: '起始事件序号（含）' },
+        toIndex: { type: 'number', description: '结束事件序号（含）' }
       },
       required: ['thinking']
     }
@@ -59,18 +63,23 @@ export const getEventDetailTool: ToolDefinition = {
 };
 
 /**
- * Level 3: 获取章节列表
+ * Level 3: 获取章节列表（支持按卷筛选和 index 范围）
  */
 export const getChaptersTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'timeline_getChapters',
-    description: `获取章节分组列表。可按卷筛选。`,
+    description: `获取章节分组列表。支持按卷筛选或按章节序号范围查询。
+- 按卷查询：传入 volumeId
+- 按范围查询：传入 fromIndex 和 toIndex
+- 不传参数：返回全部章节`,
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        volumeId: { type: 'string', description: '卷ID（可选）' }
+        volumeId: { type: 'string', description: '卷ID（按卷筛选）' },
+        fromIndex: { type: 'number', description: '起始章节序号（含）' },
+        toIndex: { type: 'number', description: '结束章节序号（含）' }
       },
       required: ['thinking']
     }
@@ -470,19 +479,39 @@ export const executeTimelineTool = async (
 
   switch (toolName) {
     case 'timeline_getEvents': {
-      const { storyLineId } = args;
-      const events = store.getEvents(storyLineId);
+      const { chapterId, fromIndex, toIndex } = args;
+      let events = store.getEvents();
+
+      // 按章节筛选
+      if (chapterId) {
+        const chapter = store.getChapter(chapterId);
+        if (!chapter) {
+          return JSON.stringify({ error: `章节 ${chapterId} 不存在` });
+        }
+        const eventIdSet = new Set(chapter.eventIds);
+        events = events.filter(e => eventIdSet.has(e.id));
+      }
+
+      // 按 eventIndex 范围筛选
+      if (fromIndex !== undefined || toIndex !== undefined) {
+        const from = fromIndex ?? 0;
+        const to = toIndex ?? Infinity;
+        events = events.filter(e => e.eventIndex >= from && e.eventIndex <= to);
+      }
+
       return JSON.stringify({
+        total: events.length,
         events: events.map((e: TimelineEvent) => ({
           id: e.id,
           eventIndex: e.eventIndex,
-          time: e.time,  // 结构化时间 { value, unit }
+          time: e.time,
           title: e.title,
           content: e.content.substring(0, 100) + (e.content.length > 100 ? '...' : ''),
           chapterId: e.chapterId,
           location: e.location,
           characters: e.characters,
-          emotion: e.emotion
+          emotion: e.emotion,
+          relativeTime: e.relativeTime
         }))
       });
     }
@@ -494,9 +523,18 @@ export const executeTimelineTool = async (
     }
 
     case 'timeline_getChapters': {
-      const { volumeId } = args;
-      const chapters = store.getChapters(volumeId);
+      const { volumeId, fromIndex, toIndex } = args;
+      let chapters = store.getChapters(volumeId);
+
+      // 按 chapterIndex 范围筛选
+      if (fromIndex !== undefined || toIndex !== undefined) {
+        const from = fromIndex ?? 0;
+        const to = toIndex ?? Infinity;
+        chapters = chapters.filter(c => c.chapterIndex >= from && c.chapterIndex <= to);
+      }
+
       return JSON.stringify({
+        total: chapters.length,
         chapters: chapters.map((c: ChapterGroup) => ({
           id: c.id,
           chapterIndex: c.chapterIndex,
@@ -504,6 +542,7 @@ export const executeTimelineTool = async (
           summary: c.summary,
           timeRange: c.timeRange,
           volumeId: c.volumeId,
+          eventIds: c.eventIds,
           eventCount: c.eventIds.length
         }))
       });
