@@ -188,7 +188,7 @@ const batchUpdateTimelineTool: ToolDefinition = {
             type: 'object',
             properties: {
               chapterIndex: { type: 'number' },
-              title: { type: 'string' },
+              title: { type: 'string', description: '章节标题（必须是具体剧情名称如「觉醒之夜」，禁止用「第1章」纯序号）' },
               summary: { type: 'string', description: '章节剧情概要（必填，描述该章主要剧情）' },
               volumeId: { type: 'string', description: '所属卷ID（必填）' },
               pov: { type: 'string', description: 'POV角色' },
@@ -491,16 +491,17 @@ const timelineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput> = {
 
 **执行方式：**
 - 使用 timeline_batchUpdate 的 addChapters 参数批量创建
-- 每次调用最多创建 50 个章节，分批处理
+- 每次调用最多创建 20 个章节，分批处理
 - 每个章节必须指定 volumeId 将其归属到对应的卷
 - 每个章节必须填写 summary（剧情概要），描述该章的主要剧情内容
-- 章节格式：{ "chapterIndex": 1, "title": "第1章", "summary": "章节剧情概要（必填）", "volumeId": "volume-id-xxx" }
+- 章节格式：{ "chapterIndex": 1, "title": "觉醒之夜", "summary": "章节剧情概要（必填）", "volumeId": "volume-id-xxx" }
+- ⚠️ title 必须是具体的剧情名称（如「觉醒之夜」「暗流涌动」），禁止使用「第1章」「第二章」这类纯序号
 
 **分批创建示例**（200章的情况）：
-- 第一批：创建第 1-50 章（卷一的前50章）
-- 第二批：创建第 51-100 章（卷一的后10章 + 卷二的前40章）
-- 第三批：创建第 101-150 章（卷二的后20章 + 卷三的前30章）
-- 第四批：创建第 151-200 章（卷三的后10章 + 卷四的全部40章）
+- 每批 20 章，共需 10 批
+- 第一批：创建第 1-20 章
+- 第二批：创建第 21-40 章
+- ...以此类推
 
 **验证要求：**
 - 创建完成后，必须调用 timeline_getChapters 验证章节数量

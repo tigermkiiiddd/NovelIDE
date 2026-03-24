@@ -634,11 +634,11 @@ export const executeTimelineTool = async (
       // 4. 添加章节
       if (args.addChapters && Array.isArray(args.addChapters)) {
         // ⚠️ 校验0：章节数量上限
-        if (args.addChapters.length > 50) {
+        if (args.addChapters.length > 20) {
           results.errors.push({
             type: 'addChapter',
             data: null,
-            error: `❌ 单次最多创建 50 个章节，当前传入 ${args.addChapters.length} 个。请分批调用。`
+            error: `❌ 单次最多创建 20 个章节，当前传入 ${args.addChapters.length} 个。请分批调用。`
           });
         } else {
           for (const c of args.addChapters) {
