@@ -367,6 +367,63 @@ export type LongTermMemoryDraft = Omit<LongTermMemory, 'id' | 'metadata'> & {
   metadata?: Partial<LongTermMemoryMetadata>;
 };
 
+// --- Memory Graph Types ---
+
+// 记忆图谱边类型
+export type MemoryEdgeType =
+  | 'extends'      // 扩展：新记忆扩展旧记忆
+  | 'refines'      // 细化：更精确的规则
+  | 'conflicts'    // 冲突：需要人工确认
+  | 'relates_to';  // 关联：一般关联
+
+// 记忆图谱边
+export interface MemoryEdge {
+  id: string;
+  from: string;            // 源节点 ID
+  to: string;              // 目标节点 ID
+  type: MemoryEdgeType;    // 关系类型
+  createdAt: number;
+}
+
+// 图谱操作类型
+export type GraphOperationAction = 'add' | 'update' | 'merge' | 'link' | 'unlink' | 'skip';
+
+export interface GraphOperation {
+  action: GraphOperationAction;
+  // add 操作
+  memory?: LongTermMemoryDraft;
+  links?: { to: string; type: MemoryEdgeType }[];
+  // update 操作
+  memoryId?: string;
+  changes?: Partial<LongTermMemoryDraft>;
+  // merge 操作
+  memoryIds?: string[];
+  mergedMemory?: LongTermMemoryDraft;
+  // link/unlink 操作
+  from?: string;
+  to?: string;
+  type?: MemoryEdgeType;
+  // skip 操作
+  reason?: string;
+}
+
+// 记忆图谱节点（轻量级，用于展示）
+export interface MemoryNode {
+  id: string;
+  name: string;
+  type: MemoryType;
+  keywords: string[];
+  summary: string;
+  importance: 'critical' | 'important' | 'normal';
+}
+
+// 记忆元数据统计
+export interface MemoryMetadataStats {
+  types: { type: MemoryType; count: number }[];
+  keywords: { keyword: string; count: number }[];
+  tags: { tag: string; count: number }[];
+}
+
 // --- Story Outline Types ---
 
 export type OutlineStatus = 'draft' | 'outline' | 'writing' | 'completed';

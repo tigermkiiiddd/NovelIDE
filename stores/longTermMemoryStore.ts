@@ -1,4 +1,4 @@
-import { ChatMessage, FileNode, FileType, LongTermMemory, LongTermMemoryDraft, MemoryType } from '../types';
+import { ChatMessage, FileNode, FileType, LongTermMemory, LongTermMemoryDraft, MemoryEdge, MemoryType } from '../types';
 import { createPersistingStore } from './createPersistingStore';
 import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
@@ -23,6 +23,7 @@ import { DocumentMemoryOutput, runDocumentMemoryAgent } from '../services/subAge
 
 interface LongTermMemoryState {
   memories: LongTermMemory[];
+  edges: MemoryEdge[];  // 记忆图谱边
   currentProjectId: string | null;
   isLoading: boolean;
   isInitialized: boolean;
@@ -47,6 +48,11 @@ interface LongTermMemoryState {
     filePath: string,
     content: string
   ) => Promise<{ added: number; updated: number; skipped: number; summary: string } | null>;
+
+  // 图谱相关方法
+  addEdge: (from: string, to: string, type: import('../types').MemoryEdgeType) => void;
+  removeEdge: (edgeId: string) => void;
+  getEdgesForMemory: (memoryId: string) => MemoryEdge[];
 
   getById: (id: string) => LongTermMemory | undefined;
   getByType: (type: MemoryType) => LongTermMemory[];
@@ -125,10 +131,10 @@ const createDocumentSignature = (content: string) => {
   return `${normalized.length}:${normalized.slice(0, 180)}:${normalized.slice(-180)}`;
 };
 
-const shouldSkipLongTermMemoryDraft = (memory: LongTermMemoryDraft) => {
-  // Long-term memory is now project-level only. Character-specific knowledge
-  // should live in character archives/profiles instead of the shared memory pool.
-  return memory.type === 'character_rule';
+const shouldSkipLongTermMemoryDraft = (_memory: LongTermMemoryDraft) => {
+  // No memory types are currently skipped.
+  // Character-specific knowledge should live in character archives/profiles.
+  return false;
 };
 
 const resolveActiveProjectId = () =>
@@ -136,9 +142,19 @@ const resolveActiveProjectId = () =>
 
 const buildDocumentExtractionCacheKey = (projectId: string, filePath: string) => `${projectId}::${filePath}`;
 
-const upsertMemoryFile = (files: FileNode[], memories: LongTermMemory[]) => {
+interface MemoryFileData {
+  memories: LongTermMemory[];
+  edges: MemoryEdge[];
+  version: number;
+}
+
+const upsertMemoryFile = (files: FileNode[], memories: LongTermMemory[], data?: MemoryFileData) => {
   const nextFiles = files.map((file) => ({ ...file }));
   let memoryFile = nextFiles.find((file) => file.name === MEMORY_FILE_NAME);
+
+  const content = data
+    ? JSON.stringify(data, null, 2)
+    : JSON.stringify({ memories, edges: [], version: 2 }, null, 2);
 
   if (!memoryFile) {
     const infoFolder = nextFiles.find((file) => file.name === MEMORY_INFO_FOLDER_NAME && file.parentId === 'root');
@@ -149,29 +165,22 @@ const upsertMemoryFile = (files: FileNode[], memories: LongTermMemory[]) => {
       parentId: infoFolder.id,
       name: MEMORY_FILE_NAME,
       type: FileType.FILE,
-      content: JSON.stringify(memories, null, 2),
+      content,
       lastModified: Date.now(),
     };
     nextFiles.push(memoryFile);
     return nextFiles;
   }
 
-  memoryFile.content = JSON.stringify(memories, null, 2);
+  memoryFile.content = content;
   memoryFile.lastModified = Date.now();
   return nextFiles;
 };
 
-export const extractCharacterNameFromMemory = (memory: Pick<LongTermMemory, 'type' | 'tags' | 'keywords' | 'name'>) => {
-  if (memory.type !== 'character_rule') return null;
-
-  const tagged = memory.tags.find((tag) => tag.startsWith('角色:') || tag.startsWith('character:'));
-  if (tagged) return tagged.split(':').slice(1).join(':').trim() || null;
-
-  const keywordTagged = memory.keywords.find((keyword) => keyword.startsWith('角色:'));
-  if (keywordTagged) return keywordTagged.split(':').slice(1).join(':').trim() || null;
-
-  const nameMatch = memory.name.match(/[\u4e00-\u9fa5A-Za-z0-9_·]{2,}/);
-  return nameMatch ? nameMatch[0] : null;
+export const extractCharacterNameFromMemory = (_memory: Pick<LongTermMemory, 'type' | 'tags' | 'keywords' | 'name'>) => {
+  // Character-specific knowledge now lives in character archives/profiles
+  // instead of the shared memory pool. This function is deprecated.
+  return null;
 };
 
 const applyMemoryExtractionResult = (
@@ -285,7 +294,7 @@ const legacySaveMemoriesToJson = async (memories: LongTermMemory[], _projectId?:
   }
 };
 
-const saveMemoriesToJson = async (memories: LongTermMemory[], projectId?: string | null) => {
+const saveMemoriesToJson = async (memories: LongTermMemory[], edges: MemoryEdge[], projectId?: string | null) => {
   void legacySaveMemoriesToJson;
 
   const targetProjectId = projectId ?? useLongTermMemoryStore.getState().currentProjectId ?? resolveActiveProjectId();
@@ -297,7 +306,14 @@ const saveMemoriesToJson = async (memories: LongTermMemory[], projectId?: string
       ? fileStore.files
       : (await Promise.resolve(dbAPI.getFiles(targetProjectId)).catch(() => [])) || [];
 
-  const nextFiles = upsertMemoryFile(sourceFiles, memories);
+  // 保存为对象格式，包含 memories 和 edges
+  const memoryData = {
+    memories,
+    edges,
+    version: 2,
+  };
+
+  const nextFiles = upsertMemoryFile(sourceFiles, memories, memoryData);
 
   if (fileStore.currentProjectId === targetProjectId) {
     useFileStore.setState({ files: nextFiles });
@@ -321,23 +337,38 @@ const loadMemoriesForProject = async (projectId: string) => {
     const memoryFile = files.find((file) => file.name === MEMORY_FILE_NAME);
 
     if (memoryFile?.content) {
-      const rawMemories = JSON.parse(memoryFile.content);
+      const rawData = JSON.parse(memoryFile.content);
 
-      if (Array.isArray(rawMemories)) {
-        if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
-        useLongTermMemoryStore.setState({
-          memories: normalizeMemories(rawMemories as LongTermMemory[]),
-          currentProjectId: projectId,
-          isInitialized: true,
-          isLoading: false,
-        });
-        return;
+      // 向后兼容：支持旧格式（数组）和新格式（对象）
+      let memories: LongTermMemory[];
+      let edges: MemoryEdge[] = [];
+
+      if (Array.isArray(rawData)) {
+        // 旧格式：直接是 memories 数组
+        memories = normalizeMemories(rawData as LongTermMemory[]);
+      } else if (rawData && typeof rawData === 'object') {
+        // 新格式：{ memories, edges, version }
+        memories = normalizeMemories(rawData.memories || []);
+        edges = rawData.edges || [];
+      } else {
+        memories = [];
       }
+
+      if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
+      useLongTermMemoryStore.setState({
+        memories,
+        edges,
+        currentProjectId: projectId,
+        isInitialized: true,
+        isLoading: false,
+      });
+      return;
     }
 
     if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
     useLongTermMemoryStore.setState({
       memories: [],
+      edges: [],
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
@@ -347,6 +378,7 @@ const loadMemoriesForProject = async (projectId: string) => {
     if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
     useLongTermMemoryStore.setState({
       memories: [],
+      edges: [],
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
@@ -358,6 +390,7 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
   'longTermMemoryStore',
   {
     memories: [],
+    edges: [],  // 记忆图谱边
     currentProjectId: null,
     isLoading: false,
     isInitialized: false,
@@ -752,10 +785,49 @@ export const useLongTermMemoryStore = createPersistingStore<LongTermMemoryState>
           .getState()
           .memories.filter((memory) => memory.metadata.nextReviewAt <= Date.now() || memory.metadata.reviewCount === 0)
       ).slice(0, limit),
+
+    // 图谱边操作
+    addEdge: (from, to, type) => {
+      const state = useLongTermMemoryStore.getState();
+      // 验证节点存在
+      const fromExists = state.memories.some((m) => m.id === from);
+      const toExists = state.memories.some((m) => m.id === to);
+      if (!fromExists || !toExists) return;
+
+      // 检查是否已存在相同的边
+      const existingEdge = state.edges.find(
+        (e) => e.from === from && e.to === to && e.type === type
+      );
+      if (existingEdge) return;
+
+      const newEdge: MemoryEdge = {
+        id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        from,
+        to,
+        type,
+        createdAt: Date.now(),
+      };
+
+      useLongTermMemoryStore.setState({
+        edges: [...state.edges, newEdge],
+      });
+    },
+
+    removeEdge: (edgeId) => {
+      const state = useLongTermMemoryStore.getState();
+      useLongTermMemoryStore.setState({
+        edges: state.edges.filter((e) => e.id !== edgeId),
+      });
+    },
+
+    getEdgesForMemory: (memoryId) => {
+      const state = useLongTermMemoryStore.getState();
+      return state.edges.filter((e) => e.from === memoryId || e.to === memoryId);
+    },
   },
   async (state) => {
     if (!state.isInitialized || !state.currentProjectId) return;
-    await saveMemoriesToJson(state.memories, state.currentProjectId);
+    await saveMemoriesToJson(state.memories, state.edges, state.currentProjectId);
   },
   0
 );

@@ -1,8 +1,13 @@
-import { ChatMessage, LongTermMemory, LongTermMemoryDraft, MemoryType } from '../../types';
-import { AIService } from '../geminiService';
-import { ToolDefinition } from '../agent/types';
-import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
+/**
+ * @file conversationMemoryAgent.ts
+ * @description 对话记忆提取 Agent - 包装 MemoryDecisionAgent 用于对话场景
+ */
 
+import { ChatMessage, LongTermMemory, LongTermMemoryDraft, MemoryType, MemoryEdge } from '../../types';
+import { AIService } from '../geminiService';
+import { runMemoryDecisionAgent, MemoryDecisionOutput } from './memoryDecisionAgent';
+
+// 保持向后兼容的接口
 export interface MemoryCandidateAction {
   action: 'add' | 'update' | 'skip';
   memoryId?: string;
@@ -23,157 +28,130 @@ export interface ConversationMemoryOutput {
   actions: MemoryCandidateAction[];
 }
 
-const submitConversationMemoryTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'submit_conversation_memory',
-    description: '提交这轮对话的长期记忆提案。[TERMINAL TOOL]',
-    parameters: {
-      type: 'object',
-      properties: {
-        thinking: { type: 'string', description: '简要说明你的判断依据。' },
-        shouldExtract: { type: 'boolean', description: '这轮对话是否包含应该沉淀为长期记忆的信息。' },
-        summary: { type: 'string', description: '对这次抽取的简要总结。' },
-        actions: {
-          type: 'array',
-          description: '记忆操作列表。没有可沉淀信息时返回空数组。',
-          items: {
-            type: 'object',
-            properties: {
-              action: { type: 'string', enum: ['add', 'update', 'skip'], description: '操作类型。' },
-              memoryId: { type: 'string', description: '若更新已有记忆，提供已有记忆 ID。' },
-              confidence: { type: 'number', description: '0-1 之间的置信度。' },
-              reason: { type: 'string', description: '为什么要新增、更新或跳过。' },
-              memory: {
-                type: 'object',
-                properties: {
-                  name: { type: 'string' },
-                  type: {
-                    type: 'string',
-                    enum: ['setting', 'style', 'restriction', 'experience', 'world_rule'],
-                  },
-                  tags: { type: 'array', items: { type: 'string' } },
-                  keywords: { type: 'array', items: { type: 'string' } },
-                  summary: { type: 'string' },
-                  content: { type: 'string' },
-                  importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
-                  isResident: { type: 'boolean' },
-                  relatedMemories: { type: 'array', items: { type: 'string' } },
-                },
-              },
-            },
-            required: ['action', 'confidence', 'reason'],
-          },
-        },
-      },
-      required: ['thinking', 'shouldExtract', 'summary', 'actions'],
-    },
-  },
+/**
+ * 将对话输入转换为决策输入内容
+ */
+const buildDialogContent = (input: ConversationMemoryInput): string => {
+  const parts: string[] = [];
+
+  // 添加最近对话上下文
+  if (input.recentMessages.length > 0) {
+    parts.push('## 最近对话上下文');
+    parts.push(input.recentMessages.slice(-8).map((msg, i) =>
+      `${i + 1}. [${msg.role}] ${msg.text}`
+    ).join('\n'));
+    parts.push('');
+  }
+
+  // 添加当前用户消息
+  parts.push('## 当前用户消息');
+  parts.push(input.userMessage.text);
+
+  return parts.join('\n');
+}
+
+/**
+ * 将 GraphOperation 转换为 MemoryCandidateAction
+ */
+const convertOperationsToActions = (operations: MemoryDecisionOutput['operations']): MemoryCandidateAction[] => {
+  return operations.map((op) => {
+    switch (op.action) {
+      case 'add':
+        return {
+          action: 'add' as const,
+          confidence: 0.8,
+          reason: '新增记忆节点',
+          memory: op.memory,
+        };
+      case 'update':
+        return {
+          action: 'update' as const,
+          memoryId: op.memoryId,
+          confidence: 0.8,
+          reason: '更新现有记忆',
+          memory: op.changes as LongTermMemoryDraft,
+        };
+      case 'merge':
+        return {
+          action: 'update' as const,  // merge 映射为 update 第一个记忆
+          memoryId: op.memoryIds?.[0],
+          confidence: 0.9,
+          reason: '合并重复记忆',
+          memory: op.mergedMemory,
+        };
+      case 'link':
+        return {
+          action: 'skip' as const,
+          confidence: 0.5,
+          reason: `建立关联: ${op.from} -> ${op.to} (${op.type})`,
+        };
+      case 'skip':
+      default:
+        return {
+          action: 'skip' as const,
+          confidence: 0,
+          reason: op.reason || '跳过',
+        };
+    }
+  });
 };
 
-const conversationMemoryConfig: SubAgentConfig<ConversationMemoryInput, ConversationMemoryOutput> = {
-  name: 'ConversationMemoryAgent',
-  maxLoops: 4,
-  temperature: 0.1,
-  tools: [submitConversationMemoryTool],
-  terminalToolName: 'submit_conversation_memory',
-
-  getSystemPrompt: (input) => `
-你是一个【对话长期记忆抽取器】。你的职责不是回答用户，而是判断这轮用户输入里有没有应该沉淀为长期记忆的信息。
-
-## 只提取这些内容
-1. 稳定偏好：例如”以后都用第一人称””不要紫色 UI””偏好短句”
-2. 硬性约束：例如”不能改这个设定””必须遵守某个规则”
-3. 长期设定：世界规则、项目规则、文风规则
-4. 可复用经验：用户明确确认的方法论、写作经验、工作偏好
-
-## ⚠️ 禁止提取角色相关内容
-- **严禁**将角色描述、性格、背景、关系、口吻、底线等角色信息存入长期记忆
-- 角色档案应通过 02_角色档案 目录下的文件进行管理，不属于长期记忆系统
-- 即使对话中提到角色相关内容，也**不要**创建任何 type 包含角色规则的记忆
-
-## 不要提取这些内容
-1. 一次性任务：例如”现在帮我写这一段”
-2. 临时闲聊
-3. 没有稳定性的短期需求
-4. 已经被现有记忆完整覆盖、且本轮没有新增信息的内容
-5. 任何角色相关的设定、描述、性格、关系
-
-## 判断原则
-- 宁缺毋滥，只保留长期有效的信息
-- 如果与现有记忆高度重合，优先 update，不要 add 重复项
-- 只有特别关键、必须始终注入系统上下文的信息，才设置 isResident=true
-- 只有绝对不能违背的信息，才设置 importance=critical
-
-## 记忆类型定义
-- setting: 项目稳定设定
-- style: 文风与表达偏好
-- restriction: 硬限制与禁令
-- experience: 方法论与经验
-- world_rule: 世界观或系统规则
-
-## 当前用户消息
-${input.userMessage.text}
-
-## 最近对话上下文
-${input.recentMessages.slice(-8).map((message, index) => `${index + 1}. [${message.role}] ${message.text}`).join('\n')}
-
-## 已有长期记忆
-${input.existingMemories.length > 0
-    ? input.existingMemories
-        .map(
-          (memory) =>
-            `- (${memory.id}) ${memory.name} [${memory.type}] [${memory.importance}] resident=${memory.isResident} | 关键词: ${memory.keywords.join(', ')} | 摘要: ${memory.summary}`
-        )
-        .join('\n')
-    : '(暂无已有长期记忆)'}
-
-输出要求：
-- 最多返回 3 个 action
-- 如果没有值得记录的内容，shouldExtract=false 且 actions=[]
-- memory.summary 要短，memory.content 要完整
-- 只能调用 submit_conversation_memory 工具，不要输出普通文本
-`,
-
-  getInitialMessage: () => '请分析这轮用户输入是否应沉淀为长期记忆，并提交结构化结果。',
-
-  parseTerminalResult: (args) => {
-    const actions: MemoryCandidateAction[] = (args.actions || []).map((action: any) => ({
-      action: action.action || 'skip',
-      memoryId: action.memoryId,
-      confidence: typeof action.confidence === 'number' ? action.confidence : 0,
-      reason: action.reason || '',
-      memory: action.memory
-        ? {
-            name: action.memory.name || '',
-            type: (action.memory.type || 'experience') as MemoryType,
-            tags: action.memory.tags || [],
-            keywords: action.memory.keywords || [],
-            summary: action.memory.summary || '',
-            content: action.memory.content || '',
-            importance: action.memory.importance || 'normal',
-            isResident: action.memory.isResident ?? false,
-            relatedMemories: action.memory.relatedMemories || [],
-          }
-        : undefined,
-    }));
-
-    return {
-      shouldExtract: Boolean(args.shouldExtract),
-      summary: args.summary || '',
-      actions,
-    };
-  },
-
-  handleTextResponse: () => '请直接调用 submit_conversation_memory 提交结构化结果，不要输出普通文本。',
-};
-
+/**
+ * 运行对话记忆提取
+ * 内部调用 MemoryDecisionAgent
+ */
 export async function runConversationMemoryAgent(
   aiService: AIService,
   input: ConversationMemoryInput,
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<ConversationMemoryOutput> {
-  const agent = new BaseSubAgent(conversationMemoryConfig);
-  return agent.run(aiService, input, undefined, onLog, signal);
+  // 构建决策输入
+  const content = buildDialogContent(input);
+
+  // 将 Pick 类型转换为完整类型（补充默认值）
+  const fullMemories: LongTermMemory[] = input.existingMemories.map((m) => ({
+    ...m,
+    content: '',
+    relatedMemories: [],
+    metadata: {
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      source: 'user' as const,
+      lastAccessedAt: Date.now(),
+      lastRecalledAt: Date.now(),
+      lastReinforcedAt: Date.now(),
+      recallCount: 0,
+      reinforceCount: 0,
+      reviewCount: 0,
+      activation: 0.5,
+      strength: 0.5,
+      reviewIntervalHours: 168,
+      nextReviewAt: Date.now() + 168 * 60 * 60 * 1000,
+    },
+  }));
+
+  // 调用决策 Agent
+  const result = await runMemoryDecisionAgent(
+    aiService,
+    {
+      content,
+      source: 'dialogue',
+      sourceRef: `对话-${new Date(input.userMessage.timestamp).toLocaleString()}`,
+      existingMemories: fullMemories,
+      existingEdges: [],  // 暂时没有边信息
+    },
+    onLog,
+    signal
+  );
+
+  // 转换结果格式
+  return {
+    shouldExtract: result.shouldExtract,
+    summary: result.summary,
+    actions: convertOperationsToActions(result.operations),
+  };
 }
+
+// 导出类型供其他模块使用
+export type { MemoryDecisionOutput };

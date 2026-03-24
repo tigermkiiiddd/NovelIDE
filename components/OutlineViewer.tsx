@@ -697,7 +697,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     if (!timeline) return;
 
     addEvent({
-      time: {
+      duration: {
         value: newEvent.timeValue,
         unit: newEvent.timeUnit
       },
@@ -754,7 +754,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const handleSaveEditEvent = () => {
     if (!editingEventId || !newEvent.title.trim()) return;
     updateEvent(editingEventId, {
-      time: {
+      duration: {
         value: newEvent.timeValue,
         unit: newEvent.timeUnit
       },
