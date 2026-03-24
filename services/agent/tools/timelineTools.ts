@@ -139,6 +139,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         total: events.length,
         events: events.map((e: TimelineEvent) => ({
           eventIndex: e.eventIndex,
+          timestamp: e.timestamp,
           duration: e.duration,
           cumulativeTime: e.cumulativeTime,
           title: e.title,
@@ -154,11 +155,17 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
     case 'outline_getChapters': {
       const { volumeIndex, fromIndex, toIndex } = args;
       let chapters = store.getChapters();
+      const totalBeforeFilter = chapters.length;
 
       if (volumeIndex !== undefined) {
         const volume = findVolumeByIndex(volumeIndex);
         if (volume) chapters = chapters.filter(c => c.volumeId === volume.id);
       }
+
+      // 最多返回 40 条
+      const MAX_CHAPTERS = 40;
+      let truncated = false;
+      let remaining = 0;
 
       if (fromIndex !== undefined || toIndex !== undefined) {
         const from = fromIndex ?? 0;
@@ -166,10 +173,16 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         chapters = chapters.filter(c => c.chapterIndex >= from && c.chapterIndex <= to);
       }
 
+      if (chapters.length > MAX_CHAPTERS) {
+        remaining = chapters.length - MAX_CHAPTERS;
+        chapters = chapters.slice(0, MAX_CHAPTERS);
+        truncated = true;
+      }
+
       const volumes = store.getVolumes();
       const volumeIdToIndex = new Map(volumes.map(v => [v.id, v.volumeIndex]));
 
-      return JSON.stringify({
+      const result: any = {
         total: chapters.length,
         chapters: chapters.map((c: ChapterGroup) => ({
           chapterIndex: c.chapterIndex,
@@ -178,7 +191,15 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           volumeIndex: c.volumeId ? volumeIdToIndex.get(c.volumeId) : undefined,
           eventCount: c.eventIds.length
         }))
-      });
+      };
+
+      if (truncated) {
+        result.truncated = true;
+        result.remaining = remaining;
+        result.hint = `还有 ${remaining} 条章节未返回，请使用 fromIndex/toIndex 获取后续章节`;
+      }
+
+      return JSON.stringify(result);
     }
 
     case 'outline_getVolumes': {

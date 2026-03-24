@@ -210,6 +210,11 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 技能执行结果如需写入文件，必须经过用户审批
 
 **时间线工具使用**（⚠️ 自顶向下创建流程）：
+- **⚠️ 细纲 = 事件（Events），不是章节（Chapters）**
+  - outline_getChapters 只返回章节分组信息（标题、摘要、事件数量）
+  - 了解章节内的**细纲/事件详情**，必须使用 outline_getEvents(chapterIndex=章节序号)
+  - 禁止用 outline_getChapters 来"了解细纲"
+
 - **创建流程（必须遵守）**：
   1. 先创建卷结构（如果需要）
   2. 再创建章节结构

@@ -34,16 +34,21 @@ export const getChaptersTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'outline_getChapters',
-    description: `获取章节列表。
+    description: `获取章节分组列表（不含事件详情）。每次最多返回 40 条。
+
+⚠️ 此工具只返回章节的标题、摘要、事件数量，不包含事件内容。
+如需了解章节内的**细纲/事件详情**，请使用 outline_getEvents(chapterIndex)。
+
+参数：
 - volumeIndex: 按卷筛选
-- fromIndex/toIndex: 按范围筛选`,
+- fromIndex/toIndex: 按范围筛选（强烈建议使用）`,
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
         volumeIndex: { type: 'number' },
-        fromIndex: { type: 'number' },
-        toIndex: { type: 'number' }
+        fromIndex: { type: 'number', description: '起始章节索引（包含）' },
+        toIndex: { type: 'number', description: '结束章节索引（包含）' }
       },
       required: ['thinking']
     }
