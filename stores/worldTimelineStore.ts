@@ -355,9 +355,26 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       // 重新编号所有事件
       newEvents = newEvents.map((e, i) => ({ ...e, eventIndex: i }));
 
+      let newChapters = state.timeline.chapters;
+
+      // ⚠️ 关键：如果指定了 chapterId，自动把事件加入章节的 eventIds
+      if (eventData.chapterId) {
+        newChapters = state.timeline.chapters.map(c => {
+          if (c.id === eventData.chapterId) {
+            return {
+              ...c,
+              eventIds: [...c.eventIds, newEvent.id],
+              timeRange: calculateChapterTimeRange({ ...c, eventIds: [...c.eventIds, newEvent.id] }, newEvents)
+            };
+          }
+          return c;
+        });
+      }
+
       const newTimeline: WorldTimeline = {
         ...state.timeline,
         events: newEvents,
+        chapters: newChapters,
         lastModified: Date.now()
       };
 
@@ -365,7 +382,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       newTimeline.totalTimeRange = calculateTimeRangeDisplay(newTimeline.events);
 
       useWorldTimelineStore.setState({ timeline: newTimeline });
-      console.log('[WorldTimelineStore] 添加事件:', newEvent.title, 'index:', newEvent.eventIndex);
+      console.log('[WorldTimelineStore] 添加事件:', newEvent.title, 'index:', newEvent.eventIndex, 'chapterId:', eventData.chapterId);
       return JSON.stringify({ id: newEvent.id, eventIndex: newEvent.eventIndex });
     },
 
@@ -373,19 +390,47 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       const state = useWorldTimelineStore.getState();
       if (!state.timeline) return;
 
+      const oldEvent = state.timeline.events.find(e => e.id === eventId);
       const newEvents = state.timeline.events.map(e =>
         e.id === eventId ? { ...e, ...updates } : e
       );
 
+      let newChapters = state.timeline.chapters;
+
+      // ⚠️ 如果更新了 chapterId，需要同步更新章节的 eventIds
+      if (updates.chapterId !== undefined && oldEvent) {
+        const oldChapterId = oldEvent.chapterId;
+        const newChapterId = updates.chapterId;
+
+        newChapters = state.timeline.chapters.map(c => {
+          // 从旧章节移除
+          if (c.id === oldChapterId) {
+            return {
+              ...c,
+              eventIds: c.eventIds.filter(id => id !== eventId)
+            };
+          }
+          // 加入新章节
+          if (c.id === newChapterId) {
+            return {
+              ...c,
+              eventIds: [...c.eventIds, eventId]
+            };
+          }
+          return c;
+        });
+      }
+
       const newTimeline: WorldTimeline = {
         ...state.timeline,
         events: newEvents,
+        chapters: newChapters,
         totalTimeRange: calculateTimeRangeDisplay(newEvents),
         lastModified: Date.now()
       };
 
       useWorldTimelineStore.setState({ timeline: newTimeline });
-      console.log('[WorldTimelineStore] 更新事件:', eventId);
+      console.log('[WorldTimelineStore] 更新事件:', eventId, 'updates:', updates);
     },
 
     deleteEvent: (eventId: string) => {

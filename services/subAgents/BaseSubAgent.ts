@@ -4,7 +4,7 @@ import { ToolDefinition } from '../agent/types';
 /**
  * 子Agent配置接口
  */
-export interface SubAgentConfig<TInput, TOutput> {
+export interface SubAgentConfig<TInput, TOutput, TContext = any> {
   /** 子Agent名称（用于日志） */
   name: string;
 
@@ -20,8 +20,8 @@ export interface SubAgentConfig<TInput, TOutput> {
   /** 终止工具名称 */
   terminalToolName: string;
 
-  /** 系统提示生成器 */
-  getSystemPrompt: (input: TInput) => string;
+  /** 系统提示生成器（支持 context 参数） */
+  getSystemPrompt: (input: TInput, context?: TContext) => string;
 
   /** 初始用户消息生成器 */
   getInitialMessage: (input: TInput) => string;
@@ -30,7 +30,7 @@ export interface SubAgentConfig<TInput, TOutput> {
   parseTerminalResult: (args: any) => TOutput;
 
   /** 可选：自定义工具执行器（用于非终止工具） */
-  executeCustomTool?: (name: string, args: any, context: any) => Promise<string>;
+  executeCustomTool?: (name: string, args: any, context?: TContext) => Promise<string>;
 
   /** 可选：文本响应处理器（当LLM只返回文本时） */
   handleTextResponse?: (text: string, loopCount: number) => string | null;
@@ -42,8 +42,8 @@ export interface SubAgentConfig<TInput, TOutput> {
 /**
  * 通用子Agent执行器
  */
-export class BaseSubAgent<TInput, TOutput> {
-  constructor(private config: SubAgentConfig<TInput, TOutput>) {}
+export class BaseSubAgent<TInput, TOutput, TContext = any> {
+  constructor(private config: SubAgentConfig<TInput, TOutput, TContext>) {}
 
   /**
    * 滑动窗口裁剪：保留 history[0]（原始输入）+ 最近 N 轮 pair
@@ -88,15 +88,15 @@ export class BaseSubAgent<TInput, TOutput> {
   async run(
     aiService: AIService,
     input: TInput,
-    context?: any,
+    context?: TContext,
     onLog?: (msg: string) => void,
     signal?: AbortSignal
   ): Promise<TOutput> {
     const history: any[] = [];
     let loopCount = 0;
 
-    // 构建系统提示
-    const systemPrompt = this.config.getSystemPrompt(input);
+    // 构建系统提示（传递 context）
+    const systemPrompt = this.config.getSystemPrompt(input, context);
 
     // 初始用户消息
     const initialMessage = this.config.getInitialMessage(input);
@@ -225,11 +225,11 @@ export class BaseSubAgent<TInput, TOutput> {
 /**
  * 便捷函数：创建并运行子Agent
  */
-export async function runSubAgent<TInput, TOutput>(
-  config: SubAgentConfig<TInput, TOutput>,
+export async function runSubAgent<TInput, TOutput, TContext = any>(
+  config: SubAgentConfig<TInput, TOutput, TContext>,
   aiService: AIService,
   input: TInput,
-  context?: any,
+  context?: TContext,
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<TOutput> {
