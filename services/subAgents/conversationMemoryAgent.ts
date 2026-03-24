@@ -50,7 +50,7 @@ const submitConversationMemoryTool: ToolDefinition = {
                   name: { type: 'string' },
                   type: {
                     type: 'string',
-                    enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+                    enum: ['setting', 'style', 'restriction', 'experience', 'world_rule'],
                   },
                   tags: { type: 'array', items: { type: 'string' } },
                   keywords: { type: 'array', items: { type: 'string' } },
@@ -82,35 +82,34 @@ const conversationMemoryConfig: SubAgentConfig<ConversationMemoryInput, Conversa
 你是一个【对话长期记忆抽取器】。你的职责不是回答用户，而是判断这轮用户输入里有没有应该沉淀为长期记忆的信息。
 
 ## 只提取这些内容
-1. 稳定偏好：例如“以后都用第一人称”“不要紫色 UI”“偏好短句”
-2. 硬性约束：例如“不能改这个设定”“必须遵守某个规则”
-3. 长期设定：人物规则、世界规则、项目规则、文风规则
+1. 稳定偏好：例如”以后都用第一人称””不要紫色 UI””偏好短句”
+2. 硬性约束：例如”不能改这个设定””必须遵守某个规则”
+3. 长期设定：世界规则、项目规则、文风规则
 4. 可复用经验：用户明确确认的方法论、写作经验、工作偏好
 
+## ⚠️ 禁止提取角色相关内容
+- **严禁**将角色描述、性格、背景、关系、口吻、底线等角色信息存入长期记忆
+- 角色档案应通过 02_角色档案 目录下的文件进行管理，不属于长期记忆系统
+- 即使对话中提到角色相关内容，也**不要**创建任何 type 包含角色规则的记忆
+
 ## 不要提取这些内容
-1. 一次性任务：例如“现在帮我写这一段”
+1. 一次性任务：例如”现在帮我写这一段”
 2. 临时闲聊
 3. 没有稳定性的短期需求
 4. 已经被现有记忆完整覆盖、且本轮没有新增信息的内容
+5. 任何角色相关的设定、描述、性格、关系
 
 ## 判断原则
 - 宁缺毋滥，只保留长期有效的信息
 - 如果与现有记忆高度重合，优先 update，不要 add 重复项
 - 只有特别关键、必须始终注入系统上下文的信息，才设置 isResident=true
 - 只有绝对不能违背的信息，才设置 importance=critical
-- 如果 type=character_rule，tags 里必须包含 "角色:角色名"
-- 如果 type=character_rule，尽量补充结构化标签：
-  - "特质:..."
-  - "目标:..."
-  - "关系:对方角色:关系状态"
-  - "动机:..."
 
 ## 记忆类型定义
 - setting: 项目稳定设定
 - style: 文风与表达偏好
 - restriction: 硬限制与禁令
 - experience: 方法论与经验
-- character_rule: 角色行为/口吻/底线规则
 - world_rule: 世界观或系统规则
 
 ## 当前用户消息

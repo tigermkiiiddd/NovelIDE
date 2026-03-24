@@ -42,7 +42,7 @@ const submitDocumentMemoryTool: ToolDefinition = {
                   name: { type: 'string' },
                   type: {
                     type: 'string',
-                    enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+                    enum: ['setting', 'style', 'restriction', 'experience', 'world_rule'],
                   },
                   tags: { type: 'array', items: { type: 'string' } },
                   keywords: { type: 'array', items: { type: 'string' } },
@@ -87,27 +87,26 @@ ${inferDocumentKind(input.filePath)}
 
 ## 只提取这些内容
 1. 世界规则、系统规则、修炼规则、魔法规则
-2. 角色稳定属性、口吻、禁忌、底线、目标
-3. 项目级硬约束、写作规则、风格规则
-4. 重要设定事实与不可违背信息
+2. 项目级硬约束、写作规则、风格规则
+3. 重要设定事实与不可违背信息
+
+## ⚠️ 禁止提取角色相关内容
+- **严禁**将角色描述、性格、背景、关系、口吻、底线、目标等角色信息存入长期记忆
+- 角色档案（02_角色档案/）的内容应通过文件系统管理，不属于长期记忆系统
+- 即使文档中包含角色相关内容，也**不要**创建任何角色规则的记忆
 
 ## 不要提取这些内容
 1. 模板空白部分
 2. 重复的章节摘要
 3. 一次性创作草稿
 4. 还不稳定的猜测、待定项、占位文本
+5. 任何角色相关的设定、描述、性格、关系
 
 ## 操作规则
 - 高度重复已有记忆时优先 update
 - 只有系统必须常驻参考的信息才设置 isResident=true
 - 只有绝对不能违背的规则才设置 importance=critical
 - 最多返回 6 个 action
-- 如果 type=character_rule，tags 里必须包含 "角色:角色名"
-- 如果 type=character_rule，尽量补充结构化标签：
-  - "特质:..."
-  - "目标:..."
-  - "关系:对方角色:关系状态"
-  - "动机:..."
 
 ## 已有长期记忆
 ${input.existingMemories.length > 0

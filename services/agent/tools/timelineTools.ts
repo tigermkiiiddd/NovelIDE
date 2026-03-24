@@ -170,8 +170,8 @@ export const batchUpdateTimelineTool: ToolDefinition = {
 混合操作示例：
 {
   "addEvents": [
-    {"time": {"value": 8, "unit": "hour"}, "title": "醒来", "content": "..."},
-    {"time": {"value": 12, "unit": "hour"}, "title": "遇到敌人", "content": "..."}
+    {"duration": {"value": 1, "unit": "hour"}, "title": "醒来", "content": "..."},
+    {"duration": {"value": 2, "unit": "hour"}, "title": "遇到敌人", "content": "..."}
   ],
   "addChapters": [
     {"title": "第一章", "summary": "..."}
@@ -182,13 +182,14 @@ export const batchUpdateTimelineTool: ToolDefinition = {
   }
 }
 
-注意：eventIndex 和 chapterIndex 由系统自动管理，新增时无需指定。
+注意：eventIndex 由系统自动管理。新事件默认追加到最后，可通过 insertAtIndex 参数指定插入位置。
 
-时间说明：
-- time 是结构化的累加时间，类似 Jira 登记工时
+时间说明（累加模式）：
+- duration 是该事件的持续时间，类似 Jira 工时
 - value: 数值，unit: 单位（"hour" 或 "day"）
+- 累计时间自动计算：前面所有事件的 duration 之和
 - UI 会自动计算显示文本（如 "第1天 早晨"）
-- 8 hour = 第1天早晨，24 hour = 第2天凌晨，32 hour = 第2天早晨`,
+- 示例：事件A 3分钟 + 事件B 10分钟 + 事件C 1小时 = 事件C结束时累计1小时13分钟`,
     parameters: {
       type: 'object',
       properties: {
@@ -198,10 +199,9 @@ export const batchUpdateTimelineTool: ToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              eventIndex: { type: 'number', description: '事件序号（用于排序）' },
-              time: {
+              duration: {
                 type: 'object',
-                description: '结构化时间（数值+单位）',
+                description: '持续时间（数值+单位）',
                 properties: {
                   value: { type: 'number', description: '时间数值' },
                   unit: { type: 'string', enum: ['hour', 'day'], description: '时间单位' }
@@ -210,17 +210,17 @@ export const batchUpdateTimelineTool: ToolDefinition = {
               },
               title: { type: 'string', description: '事件标题' },
               content: { type: 'string', description: '事件内容' },
+              insertAtIndex: { type: 'number', description: '插入位置（可选，不指定则追加到最后）' },
               storyLineId: { type: 'string', description: '故事线ID（可选）' },
               location: { type: 'string', description: '地点（可选）' },
               characters: { type: 'array', items: { type: 'string' }, description: '出场角色（可选）' },
               emotion: { type: 'string', description: '情绪氛围（可选）' },
               chapterIndex: { type: 'number', description: '所属章节序号（可选）' },
-              purpose: { type: 'string', description: '场景作用/目的（可选）' },
-              relativeTime: { type: 'string', description: '相对时间描述（可选，如"第1天 早晨"）' }
+              purpose: { type: 'string', description: '场景作用/目的（可选）' }
             },
-            required: ['time', 'title', 'content']
+            required: ['duration', 'title', 'content']
           },
-          description: '要添加的事件列表'
+          description: '要添加的事件列表。默认追加到最后，可通过 insertAtIndex 指定插入位置'
         },
         updateEvents: {
           type: 'array',
@@ -521,14 +521,14 @@ export const executeTimelineTool = async (
         events: events.map((e: TimelineEvent) => ({
           id: e.id,
           eventIndex: e.eventIndex,
-          time: e.time,
+          duration: e.duration,
+          cumulativeTime: e.cumulativeTime,
           title: e.title,
           content: e.content.substring(0, 100) + (e.content.length > 100 ? '...' : ''),
           chapterIndex: e.chapterId ? chapterIdToIndex.get(e.chapterId) : undefined,
           location: e.location,
           characters: e.characters,
-          emotion: e.emotion,
-          relativeTime: e.relativeTime
+          emotion: e.emotion
         }))
       });
     }

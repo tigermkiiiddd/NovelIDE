@@ -52,7 +52,7 @@ export const recallMemoryTool: ToolDefinition = {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+            enum: ['setting', 'style', 'restriction', 'experience', 'world_rule'],
           },
           description: '按记忆类型过滤（可选）。',
         },
@@ -163,7 +163,7 @@ export const manageMemoryTool: ToolDefinition = {
   function: {
     name: 'manage_memory',
     description:
-      '【记忆管理】添加、更新、删除、强化、复习或列出长期记忆。用于维护规则、偏好和写作经验，并支持主动复习队列。',
+      '【记忆管理】添加、更新、删除、强化、复习或列出长期记忆。用于维护写作规范、风格偏好、通用约束等元知识。⚠️ 禁止保存角色相关内容（角色描述、性格、背景、关系等），角色档案应通过 02_角色档案 目录管理。',
     parameters: {
       type: 'object',
       properties: {
@@ -176,7 +176,7 @@ export const manageMemoryTool: ToolDefinition = {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+            enum: ['setting', 'style', 'restriction', 'experience', 'world_rule'],
           },
           description: '按记忆类型过滤（用于 list/review）。',
         },
@@ -186,7 +186,7 @@ export const manageMemoryTool: ToolDefinition = {
             name: { type: 'string', description: '记忆名称' },
             type: {
               type: 'string',
-              enum: ['setting', 'style', 'restriction', 'experience', 'character_rule', 'world_rule'],
+              enum: ['setting', 'style', 'restriction', 'experience', 'world_rule'],
               description: '记忆类型',
             },
             tags: { type: 'array', items: { type: 'string' }, description: '标签列表' },

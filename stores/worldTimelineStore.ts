@@ -33,7 +33,7 @@ interface WorldTimelineState {
   setTimeline: (timeline: WorldTimeline) => void;
 
   // === Event Operations ===
-  addEvent: (event: Omit<TimelineEvent, 'id' | 'eventIndex'>) => string;
+  addEvent: (event: Omit<TimelineEvent, 'id' | 'eventIndex'> & { insertAtIndex?: number }) => string;
   updateEvent: (eventId: string, updates: Partial<TimelineEvent>) => void;
   deleteEvent: (eventId: string) => void;
   moveEvent: (eventId: string, newIndex: number) => void;
@@ -71,7 +71,7 @@ const generateId = () => `timeline-${Date.now()}-${Math.random().toString(36).su
 // === Time Utilities ===
 
 /**
- * 将结构化时间转换为小时数（用于排序和比较）
+ * 将结构化时间转换为小时数（用于累加计算）
  */
 export function toHours(time: QuantizedTime | undefined): number {
   if (!time) return 0;
@@ -79,10 +79,36 @@ export function toHours(time: QuantizedTime | undefined): number {
 }
 
 /**
- * 比较两个时间
+ * 小时数转结构化时间
  */
-export function compareTime(a: QuantizedTime | undefined, b: QuantizedTime | undefined): number {
-  return toHours(a) - toHours(b);
+export function fromHours(totalHours: number): QuantizedTime {
+  if (totalHours >= 24 && totalHours % 24 === 0) {
+    return { value: totalHours / 24, unit: 'day' };
+  }
+  return { value: totalHours, unit: 'hour' };
+}
+
+/**
+ * 计算事件的累计时间（从开始到该事件结束）
+ * 累计时间 = 前面所有事件的 duration 之和 + 自己的 duration
+ */
+export function calculateCumulativeTime(events: TimelineEvent[], eventIndex: number): QuantizedTime {
+  let totalHours = 0;
+  for (let i = 0; i <= eventIndex && i < events.length; i++) {
+    totalHours += toHours(events[i].duration);
+  }
+  return fromHours(totalHours);
+}
+
+/**
+ * 为所有事件计算并填充累计时间
+ */
+export function enrichEventsWithCumulativeTime(events: TimelineEvent[]): TimelineEvent[] {
+  let cumulativeHours = 0;
+  return events.map(e => {
+    cumulativeHours += toHours(e.duration);
+    return { ...e, cumulativeTime: fromHours(cumulativeHours) };
+  });
 }
 
 /**
@@ -110,21 +136,16 @@ export function formatTimeDisplay(time: QuantizedTime | undefined): string {
 }
 
 /**
- * 计算时间范围显示
+ * 计算时间范围显示（基于累加时间）
  */
 export function calculateTimeRangeDisplay(events: TimelineEvent[]): string {
   if (events.length === 0) return '';
 
-  const hours = events.map(e => toHours(e.time)).filter(h => h > 0);
-  if (hours.length === 0) return '';
+  // 计算所有 duration 的累加值
+  const totalHours = events.reduce((sum, e) => sum + toHours(e.duration), 0);
+  if (totalHours === 0) return '';
 
-  const minHours = Math.min(...hours);
-  const maxHours = Math.max(...hours);
-
-  if (minHours === maxHours) {
-    return formatTimeDisplay({ value: minHours, unit: 'hour' });
-  }
-  return `${formatTimeDisplay({ value: minHours, unit: 'hour' })} ~ ${formatTimeDisplay({ value: maxHours, unit: 'hour' })}`;
+  return formatTimeDisplay({ value: totalHours, unit: 'hour' });
 }
 
 // === Time Range Calculation Utilities (Legacy) ===
@@ -227,13 +248,9 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
           try {
             const timeline = JSON.parse(timelineFile.content) as WorldTimeline;
 
-            // 修复不连续的 eventIndex 和 chapterIndex
+            // 修复不连续的 eventIndex 和 chapterIndex（按 eventIndex 排序）
             timeline.events = timeline.events
-              .sort((a, b) => {
-                const timeCompare = compareTime(a.time, b.time);
-                if (timeCompare !== 0) return timeCompare;
-                return a.eventIndex - b.eventIndex;
-              })
+              .sort((a, b) => a.eventIndex - b.eventIndex)
               .map((e, i) => ({ ...e, eventIndex: i }));
 
             timeline.chapters = timeline.chapters
@@ -302,8 +319,8 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
 
       const newEvent: TimelineEvent = {
         id: generateId(),
-        eventIndex: 0, // 占位，排序后统一编号
-        time: eventData.time || { value: 0, unit: 'hour' },
+        eventIndex: 0, // 占位，后面重新编号
+        duration: eventData.duration || { value: 1, unit: 'hour' },
         title: eventData.title,
         content: eventData.content || '',
         storyLineId: eventData.storyLineId || DEFAULT_STORYLINE.id,
@@ -311,8 +328,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         characters: eventData.characters,
         emotion: eventData.emotion,
         chapterId: eventData.chapterId,
-        purpose: eventData.purpose,
-        relativeTime: eventData.relativeTime
+        purpose: eventData.purpose
       };
 
       // 如果没有指定 storyLineId，使用主线
@@ -321,16 +337,27 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         newEvent.storyLineId = mainStoryLine?.id || DEFAULT_STORYLINE.id;
       }
 
-      // 按时间排序并重新编号
-      const sortedEvents = [...state.timeline.events, newEvent].sort((a, b) => {
-        const timeCompare = compareTime(a.time, b.time);
-        if (timeCompare !== 0) return timeCompare;
-        return a.eventIndex - b.eventIndex;
-      }).map((e, i) => ({ ...e, eventIndex: i }));
+      let newEvents: TimelineEvent[];
+
+      // 支持插入到指定位置
+      if (eventData.insertAtIndex !== undefined && eventData.insertAtIndex >= 0) {
+        const insertIndex = Math.min(eventData.insertAtIndex, state.timeline.events.length);
+        newEvents = [
+          ...state.timeline.events.slice(0, insertIndex),
+          newEvent,
+          ...state.timeline.events.slice(insertIndex)
+        ];
+      } else {
+        // 默认追加到最后
+        newEvents = [...state.timeline.events, newEvent];
+      }
+
+      // 重新编号所有事件
+      newEvents = newEvents.map((e, i) => ({ ...e, eventIndex: i }));
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
-        events: sortedEvents,
+        events: newEvents,
         lastModified: Date.now()
       };
 
@@ -338,8 +365,8 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       newTimeline.totalTimeRange = calculateTimeRangeDisplay(newTimeline.events);
 
       useWorldTimelineStore.setState({ timeline: newTimeline });
-      console.log('[WorldTimelineStore] 添加事件:', newEvent.title);
-      return JSON.stringify({ id: newEvent.id });
+      console.log('[WorldTimelineStore] 添加事件:', newEvent.title, 'index:', newEvent.eventIndex);
+      return JSON.stringify({ id: newEvent.id, eventIndex: newEvent.eventIndex });
     },
 
     updateEvent: (eventId: string, updates: Partial<TimelineEvent>) => {
@@ -348,11 +375,7 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
 
       const newEvents = state.timeline.events.map(e =>
         e.id === eventId ? { ...e, ...updates } : e
-      ).sort((a, b) => {
-        const timeCompare = compareTime(a.time, b.time);
-        if (timeCompare !== 0) return timeCompare;
-        return a.eventIndex - b.eventIndex;
-      }).map((e, i) => ({ ...e, eventIndex: i }));  // 排序后重新编号
+      );
 
       const newTimeline: WorldTimeline = {
         ...state.timeline,
@@ -745,12 +768,10 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
         ? state.timeline.events.filter(e => e.storyLineId === storyLineId)
         : state.timeline.events;
 
-      // 按时间排序返回
-      return events.sort((a, b) => {
-        const timeCompare = compareTime(a.time, b.time);
-        if (timeCompare !== 0) return timeCompare;
-        return a.eventIndex - b.eventIndex;
-      });
+      // 按 eventIndex 排序并计算累计时间
+      return enrichEventsWithCumulativeTime(
+        events.sort((a, b) => a.eventIndex - b.eventIndex)
+      );
     },
 
     getEvent: (eventId: string) => {

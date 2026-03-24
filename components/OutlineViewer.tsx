@@ -421,9 +421,9 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs text-gray-500">#{event.eventIndex}</span>
-            {event.time && (
+            {event.cumulativeTime && (
               <span className="text-xs px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded">
-                {formatTimeDisplay(event.time)}
+                {formatTimeDisplay(event.cumulativeTime)}
               </span>
             )}
             {storyLineName && (
@@ -730,8 +730,8 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const handleStartEditEvent = useCallback((event: TimelineEvent) => {
     setEditingEventId(event.id);
     setNewEvent({
-      timeValue: event.time?.value || 0,
-      timeUnit: event.time?.unit || 'hour',
+      timeValue: event.duration?.value || 1,
+      timeUnit: event.duration?.unit || 'hour',
       title: event.title,
       content: event.content,
       location: event.location || '',
