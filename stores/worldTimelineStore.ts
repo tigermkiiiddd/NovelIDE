@@ -258,6 +258,33 @@ export function assignEventIndexes(events: TimelineEvent[]): TimelineEvent[] {
 }
 
 /**
+ * 重建章节的事件映射关系（根据事件的 chapterId 重建章节的 eventIds）
+ * 用于修复旧数据中映射不一致的问题
+ */
+function rebuildChapterEventMappings(
+  events: TimelineEvent[],
+  chapters: ChapterGroup[]
+): ChapterGroup[] {
+  // 按章节 ID 分组事件
+  const eventsByChapterId = new Map<string, string[]>();
+
+  for (const event of events) {
+    if (event.chapterId) {
+      if (!eventsByChapterId.has(event.chapterId)) {
+        eventsByChapterId.set(event.chapterId, []);
+      }
+      eventsByChapterId.get(event.chapterId)!.push(event.id);
+    }
+  }
+
+  // 重建章节的 eventIds
+  return chapters.map(chapter => ({
+    ...chapter,
+    eventIds: eventsByChapterId.get(chapter.id) || []
+  }));
+}
+
+/**
  * 计算章节时间范围（基于事件时间戳）
  */
 function calculateChapterTimeRange(
@@ -337,8 +364,17 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
               .sort((a, b) => a.chapterIndex - b.chapterIndex)
               .map((c, i) => ({ ...c, chapterIndex: i + 1 }));
 
+            // ⚠️ 重建章节的事件映射关系（修复旧数据）
+            timeline.chapters = rebuildChapterEventMappings(timeline.events, timeline.chapters);
+
+            // 更新章节时间范围
+            timeline.chapters = timeline.chapters.map(c => ({
+              ...c,
+              timeRange: calculateChapterTimeRange(c, timeline.events)
+            }));
+
             useWorldTimelineStore.setState({ timeline, isLoading: false });
-            console.log('[WorldTimelineStore] 加载完成，按时间戳排序');
+            console.log('[WorldTimelineStore] 加载完成，已重建事件映射');
             return;
           } catch (parseError) {
             console.error('[WorldTimelineStore] JSON解析失败:', parseError);
