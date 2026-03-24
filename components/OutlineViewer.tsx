@@ -5,14 +5,13 @@
  * 层级结构：事件 → 章节 → 卷
  */
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X, Clock, Plus, Pencil, ChevronDown, ChevronRight
 } from 'lucide-react';
-import { VariableSizeList as List } from 'react-window';
 import { useWorldTimelineStore, formatTimeDisplay } from '../stores/worldTimelineStore';
 import { useProjectStore } from '../stores/projectStore';
-import { TimelineEvent, TimelineChapter, TimelineVolume, StoryLine } from '../types';
+import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine } from '../types';
 
 interface OutlineViewerProps {
   isOpen: boolean;
@@ -408,11 +407,14 @@ interface EventCardProps {
   storyLineName?: string;
   chapterInfo?: { chapterIndex: number; title: string } | null;
   showChapterInfo?: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
+  onEdit: (eventId: string) => void;
+  onDelete: (eventId: string) => void;
 }
 
 const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInfo, showChapterInfo, onEdit, onDelete }: EventCardProps) => {
+  const handleEdit = useCallback(() => onEdit(event.id), [event.id, onEdit]);
+  const handleDelete = useCallback(() => onDelete(event.id), [event.id, onDelete]);
+
   return (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
       <div className="flex items-start justify-between mb-2">
@@ -434,14 +436,14 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
         </div>
         <div className="flex gap-1">
           <button
-            onClick={onEdit}
+            onClick={handleEdit}
             className="text-gray-500 hover:text-blue-400"
             title="编辑"
           >
             <Pencil size={14} />
           </button>
           <button
-            onClick={onDelete}
+            onClick={handleDelete}
             className="text-gray-500 hover:text-red-400"
             title="删除"
           >
@@ -663,17 +665,18 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
   // 缓存数据，避免每次渲染返回新数组
+  // 使用具体的数组引用作为依赖，避免整个 timeline 对象变化触发重新计算
   const cachedChapters = useMemo(() => {
-    return timeline ? getChapters() : [];
-  }, [timeline]);
+    return timeline?.chapters ? getChapters() : [];
+  }, [timeline?.chapters]);
 
   const cachedVolumes = useMemo(() => {
-    return timeline ? getVolumes() : [];
-  }, [timeline]);
+    return timeline?.volumes ? getVolumes() : [];
+  }, [timeline?.volumes]);
 
   const cachedStoryLines = useMemo(() => {
-    return timeline ? getStoryLines() : [];
-  }, [timeline]);
+    return timeline?.storyLines ? getStoryLines() : [];
+  }, [timeline?.storyLines]);
 
   // 加载时间线数据
   useEffect(() => {
@@ -720,11 +723,11 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     setShowAddEvent(false);
   };
 
-  const handleDeleteTimelineEvent = (eventId: string) => {
+  const handleDeleteTimelineEvent = useCallback((eventId: string) => {
     deleteEvent(eventId);
-  };
+  }, [deleteEvent]);
 
-  const handleStartEditEvent = (event: TimelineEvent) => {
+  const handleStartEditEvent = useCallback((event: TimelineEvent) => {
     setEditingEventId(event.id);
     setNewEvent({
       timeValue: event.time?.value || 0,
@@ -738,7 +741,15 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       chapterId: event.chapterId || ''
     });
     setShowAddEvent(false);
-  };
+  }, []);
+
+  // 稳定的编辑回调 - 供 EventCard 使用
+  const handleEventEdit = useCallback((eventId: string) => {
+    const events = getEvents();
+    const event = events.find(e => e.id === eventId);
+    if (!event) return;
+    handleStartEditEvent(event);
+  }, [getEvents, handleStartEditEvent]);
 
   const handleSaveEditEvent = () => {
     if (!editingEventId || !newEvent.title.trim()) return;
@@ -898,12 +909,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
   // === Performance: Map lookups for O(1) access ===
   const storyLineMap = useMemo(() =>
-    new Map(cachedStoryLines.map(s => [s.id, s])),
+    new Map<string, StoryLine>(cachedStoryLines.map(s => [s.id, s])),
     [cachedStoryLines]
   );
 
   const chapterMap = useMemo(() =>
-    new Map(cachedChapters.map(c => [c.id, c])),
+    new Map<string, ChapterGroup>(cachedChapters.map(c => [c.id, c])),
     [cachedChapters]
   );
 
@@ -916,7 +927,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
   // === Performance: Memoize chaptersByVolume grouping ===
   const chaptersByVolume = useMemo(() => {
-    const map = new Map<string | undefined, typeof cachedChaptersList>();
+    const map = new Map<string | undefined, ChapterGroup[]>();
     cachedChaptersList.forEach(ch => {
       const vid = ch.volumeId || undefined;
       if (!map.has(vid)) map.set(vid, []);
@@ -924,19 +935,6 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     });
     return map;
   }, [cachedChaptersList]);
-
-  // Virtual list ref for resetting cache when events change
-  const listRef = useRef<List>(null);
-
-  // Estimate item height for virtual list
-  const getEventItemSize = useCallback((index: number) => {
-    const event = cachedEvents[index];
-    if (!event) return 100;
-    const baseHeight = 80;
-    const contentHeight = event.content ? Math.ceil(event.content.length / 50) * 20 : 0;
-    const charsHeight = event.characters?.length ? 20 : 0;
-    return baseHeight + contentHeight + charsHeight;
-  }, [cachedEvents]);
 
   // === Render ===
   return (
@@ -1017,9 +1015,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
               {/* Events */}
               {(() => {
-                const events =getEvents();
-
-                if (events.length === 0 && !showAddEvent) {
+                if (cachedEvents.length === 0 && !showAddEvent) {
                   return (
                     <div className="text-gray-500 text-sm text-center py-8">
                       暂无事件，请添加事件或使用 Agent 生成时间线
@@ -1034,41 +1030,49 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
                     {/* Event Count */}
                     <div className="mb-4 ml-10 text-sm text-gray-500">
-                      共 {events.length} 个事件
+                      共 {cachedEvents.length} 个事件
                     </div>
 
-                    {/* Events */}
-                    {events.map((event) => (
-                      <div key={event.id} className="relative pl-10 pb-4 last:pb-0">
-                        {/* Timeline Dot */}
-                        <div
-                          className="absolute left-2.5 top-1 w-3 h-3 rounded-full border-2 border-gray-900"
-                          style={{ backgroundColor: cachedStoryLines.find(s => s.id === event.storyLineId)?.color || '#4A90D9' }}
-                        />
+                    {/* Events - using optimized EventCard with Map lookups */}
+                    {cachedEvents.map((event) => {
+                      const storyLine = storyLineMap.get(event.storyLineId);
+                      const chapter = event.chapterId ? chapterMap.get(event.chapterId) : null;
 
-                        {/* Event Card or Edit Form */}
-                        {editingEventId === event.id ? (
-                          <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
-                            <EventForm
-                              formData={newEvent}
-                              storyLines={cachedStoryLines}
-                              chapters={cachedChapters}
-                              onFieldChange={handleEventFieldChange}
-                              onSubmit={handleSaveEditEvent}
-                              onCancel={handleCancelEditEvent}
-                              onQuickCreateChapter={handleQuickCreateChapter}
-                            />
-                          </div>
-                        ) : (
-                          <EventCard
-                            event={event}
-                            showChapterInfo
-                            onEdit={() => handleStartEditEvent(event)}
-                            onDelete={() => handleDeleteTimelineEvent(event.id)}
+                      return (
+                        <div key={event.id} className="relative pl-10 pb-4 last:pb-0">
+                          {/* Timeline Dot */}
+                          <div
+                            className="absolute left-2.5 top-1 w-3 h-3 rounded-full border-2 border-gray-900"
+                            style={{ backgroundColor: storyLine?.color || '#4A90D9' }}
                           />
-                        )}
-                      </div>
-                    ))}
+
+                          {/* Event Card or Edit Form */}
+                          {editingEventId === event.id ? (
+                            <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
+                              <EventForm
+                                formData={newEvent}
+                                storyLines={cachedStoryLines}
+                                chapters={cachedChapters}
+                                onFieldChange={handleEventFieldChange}
+                                onSubmit={handleSaveEditEvent}
+                                onCancel={handleCancelEditEvent}
+                                onQuickCreateChapter={handleQuickCreateChapter}
+                              />
+                            </div>
+                          ) : (
+                            <EventCard
+                              event={event}
+                              storyLineColor={storyLine?.color || '#4A90D9'}
+                              storyLineName={storyLine?.name}
+                              chapterInfo={chapter ? { chapterIndex: chapter.chapterIndex, title: chapter.title } : null}
+                              showChapterInfo
+                              onEdit={handleEventEdit}
+                              onDelete={handleDeleteTimelineEvent}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })()}
@@ -1104,10 +1108,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
                   {/* Chapters grouped by Volume */}
                   {(() => {
-                    const chapters = getChapters();
-                    const volumes = getVolumes();
-
-                    if (chapters.length === 0 && volumes.length === 0) {
+                    if (cachedChaptersList.length === 0 && cachedVolumesList.length === 0) {
                       return (
                         <div className="text-gray-500 text-sm text-center py-8">
                           暂无章节，点击上方按钮添加
@@ -1115,18 +1116,10 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                       );
                     }
 
-                    // 按卷分组
-                    const chaptersByVolume = new Map<string | undefined, typeof chapters>();
-                    chapters.forEach(ch => {
-                      const vid = ch.volumeId || undefined;
-                      if (!chaptersByVolume.has(vid)) chaptersByVolume.set(vid, []);
-                      chaptersByVolume.get(vid)!.push(ch);
-                    });
-
                     return (
                       <div className="space-y-4">
                         {/* 有卷分组的章节 */}
-                        {volumes.map(volume => {
+                        {cachedVolumesList.map(volume => {
                           const volumeChapters = chaptersByVolume.get(volume.id) || [];
                           return (
                             <VolumeSection
@@ -1162,7 +1155,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                               onSaveChapter={handleSaveEditChapter}
                               onCancelChapter={handleCancelEditChapter}
                               onQuickCreateVolume={handleQuickCreateVolume}
-                              volumes={volumes}
+                              volumes={cachedVolumesList}
                             />
                           );
                         })}
