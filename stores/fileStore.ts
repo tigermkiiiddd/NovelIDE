@@ -21,10 +21,12 @@ interface FileState {
   files: FileNode[];
   activeFileId: string | null;
   currentProjectId: string | null; // Track current project to avoid coupling
+  virtualFile: FileNode | null; // Virtual file for previewing pending changes (createFile)
 
   // Actions
   loadFiles: (projectId: string) => Promise<void>;
   setActiveFileId: (id: string | null) => void;
+  setVirtualFile: (file: FileNode | null) => void;
 
   // CRUD (Path-based)
   createFile: (path: string, content: string) => string;
@@ -48,6 +50,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   files: [],
   activeFileId: null,
   currentProjectId: null,
+  virtualFile: null,
 
   loadFiles: async (projectId: string) => {
     let loadedFiles: FileNode[] | undefined;
@@ -114,6 +117,8 @@ export const useFileStore = create<FileState>((set, get) => ({
   },
 
   setActiveFileId: (id) => set({ activeFileId: id }),
+
+  setVirtualFile: (file) => set({ virtualFile: file, activeFileId: file?.id || null }),
 
   _saveToDB: () => {
       const { files, currentProjectId } = get();

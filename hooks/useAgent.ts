@@ -122,6 +122,11 @@ export const useAgent = (
     const result = executeApprovedChange(change, fullActions);
     removePendingChange(change.id);
 
+    // Clear virtual file if this was a createFile operation
+    if (change.toolName === 'createFile') {
+      useFileStore.getState().setVirtualFile(null);
+    }
+
     addMessage({
         id: generateId(), role: 'system',
         text: `✅ User Approved: ${change.description}\nResult: ${result}`, timestamp: Date.now()
@@ -204,9 +209,15 @@ export const useAgent = (
 
   const rejectChange = useCallback((change: PendingChange) => {
       removePendingChange(change.id);
-      addMessage({ 
-          id: generateId(), role: 'system', 
-          text: `❌ User Rejected: ${change.description}`, timestamp: Date.now() 
+
+      // Clear virtual file if this was a createFile operation
+      if (change.toolName === 'createFile') {
+        useFileStore.getState().setVirtualFile(null);
+      }
+
+      addMessage({
+          id: generateId(), role: 'system',
+          text: `❌ User Rejected: ${change.description}`, timestamp: Date.now()
       });
   }, [addMessage, removePendingChange]);
 

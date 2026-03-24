@@ -194,17 +194,18 @@ export const manageEventsTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'outline_manageEvents',
-    description: `管理事件。支持四种操作：
-- add: 添加事件（index 自动分配，可指定 chapterIndex 关联）
-- update: 更新事件（用 eventIndex 定位，改 chapterIndex 即可移动关联）
+    description: `管理事件。支持三种操作：
+- add: 添加事件（按时间戳排序，可指定 chapterIndex 关联）
+- update: 更新事件（用 eventIndex 定位，改时间戳或章节）
 - delete: 删除事件（用 eventIndex 定位）
-- move: 移动事件位置
+
+时间戳格式：{ "day": 1, "hour": 8 } 表示第1天8点
+事件按时间戳自动排序。
 
 示例：
-{ "add": [{ "duration": { "value": 1, "unit": "hour" }, "title": "醒来", "content": "...", "chapterIndex": 1 }] }
-{ "update": { "eventIndex": 0, "chapterIndex": 2 } }
-{ "delete": [0, 1, 2] }
-{ "move": { "eventIndex": 5, "newIndex": 0 } }`,
+{ "add": [{ "timestamp": { "day": 1, "hour": 8 }, "title": "醒来", "content": "...", "chapterIndex": 1 }] }
+{ "update": { "eventIndex": 0, "timestamp": { "day": 1, "hour": 10 } } }
+{ "delete": [0, 1, 2] }`,
     parameters: {
       type: 'object',
       properties: {
@@ -214,13 +215,14 @@ export const manageEventsTool: ToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              duration: {
+              timestamp: {
                 type: 'object',
+                description: '事件发生的时间戳',
                 properties: {
-                  value: { type: 'number' },
-                  unit: { type: 'string', enum: ['minute', 'hour', 'day'] }
+                  day: { type: 'number', description: '第几天（从1开始）' },
+                  hour: { type: 'number', description: '小时（0-23，支持小数如8.5）' }
                 },
-                required: ['value', 'unit']
+                required: ['day', 'hour']
               },
               title: { type: 'string' },
               content: { type: 'string' },
@@ -230,16 +232,22 @@ export const manageEventsTool: ToolDefinition = {
               emotion: { type: 'string' },
               purpose: { type: 'string' }
             },
-            required: ['duration', 'title', 'content']
+            required: ['timestamp', 'title', 'content']
           }
         },
         update: {
           type: 'object',
           properties: {
             eventIndex: { type: 'number' },
+            timestamp: {
+              type: 'object',
+              properties: {
+                day: { type: 'number' },
+                hour: { type: 'number' }
+              }
+            },
             title: { type: 'string' },
             content: { type: 'string' },
-            duration: { type: 'object', properties: { value: { type: 'number' }, unit: { type: 'string' } } },
             chapterIndex: { type: 'number', description: '改章节关联' },
             location: { type: 'string' },
             characters: { type: 'array', items: { type: 'string' } },
@@ -252,14 +260,6 @@ export const manageEventsTool: ToolDefinition = {
           type: 'array',
           items: { type: 'number' },
           description: '要删除的 eventIndex 列表'
-        },
-        move: {
-          type: 'object',
-          properties: {
-            eventIndex: { type: 'number' },
-            newIndex: { type: 'number' }
-          },
-          required: ['eventIndex', 'newIndex']
         }
       },
       required: ['thinking']

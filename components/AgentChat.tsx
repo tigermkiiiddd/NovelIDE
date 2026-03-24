@@ -9,7 +9,8 @@ import MemoryDebugPanel from './MemoryDebugPanel';
 import { useFileStore } from '../stores/fileStore';
 import { useAgentStore } from '../stores/agentStore'; // Import AgentStore
 import { useUiStore } from '../stores/uiStore';
-import { findNodeByPath } from '../services/fileSystem';
+import { findNodeByPath, generateId } from '../services/fileSystem';
+import { FileType } from '../types';
 import { useAgent } from '../hooks/useAgent'; // Note: AgentChat receives hooks props, but we need types
 import { downloadChatSession } from '../utils/exportUtils';
 
@@ -81,6 +82,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
 
   // Use file store to navigate
   const setActiveFileId = useFileStore(state => state.setActiveFileId);
+  const setVirtualFile = useFileStore(state => state.setVirtualFile);
   // Use agent store to set reviewing change
   const setReviewingChangeId = useAgentStore(state => state.setReviewingChangeId);
   // Debug mode
@@ -99,6 +101,19 @@ const AgentChat: React.FC<AgentChatProps> = ({
           const node = findNodeByPath(files, change.fileName);
           if (node) {
               setActiveFileId(node.id);
+          } else if (change.toolName === 'createFile' && change.newContent !== null) {
+              // For createFile operations, create a virtual file for preview
+              const fileName = change.fileName.split('/').pop() || 'New File';
+              const virtualFile: FileNode = {
+                  id: `virtual_${change.id}`,
+                  parentId: 'root',
+                  name: fileName,
+                  type: FileType.FILE,
+                  content: change.newContent,
+                  metadata: {},
+                  lastModified: Date.now()
+              };
+              setVirtualFile(virtualFile);
           }
       }
 

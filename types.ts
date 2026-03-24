@@ -474,10 +474,16 @@ export interface StoryOutline {
 
 // --- World Timeline Types (Event-First Architecture) ---
 
-// 时间单位
+// 故事时间戳（绝对时间）
+export interface StoryTimeStamp {
+  day: number;        // 第几天（从1开始）
+  hour: number;       // 小时（0-23，支持小数如 8.5）
+}
+
+// 时间单位（用于持续时间）
 export type TimeUnit = 'hour' | 'day';
 
-// 结构化时间（用户输入 + 存储）
+// 结构化时间（持续时间）
 export interface QuantizedTime {
   value: number;        // 数值
   unit: TimeUnit;       // 单位：hour 或 day
@@ -494,8 +500,9 @@ export interface StoryLine {
 // 时间线事件（原子单位）- 合并自 storyOutline 的 SceneNode
 export interface TimelineEvent {
   id: string;
-  eventIndex: number;          // 序号（用于排序，新事件自动追加到最后）
-  duration: QuantizedTime;     // 持续时间（数值 + 单位）
+  eventIndex: number;          // 序号（用于显示，按时间戳自动排序）
+  timestamp: StoryTimeStamp;   // 开始时间（绝对时间戳）
+  duration: QuantizedTime;     // 持续时间
   title: string;
   content: string;
   storyLineId: string;         // 所属故事线（默认主线）
@@ -508,9 +515,6 @@ export interface TimelineEvent {
 
   // 合并自 SceneNode 的属性
   purpose?: string;            // 场景作用/目的
-
-  // 计算属性（不存储，由前端计算）
-  cumulativeTime?: QuantizedTime;  // 累计时间（从开始到本事件结束）
 }
 
 // 章节分组（事件的容器）- 合并自 storyOutline 的 ChapterOutline

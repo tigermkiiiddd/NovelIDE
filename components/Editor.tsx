@@ -54,8 +54,9 @@ const Editor: React.FC<EditorProps> = ({
 }) => {
   // 1. Core Stores
   const fileStore = useFileStore();
-  const { files, activeFileId, saveFileContent, createFile, deleteFile } = fileStore;
-  const activeFile = files.find(f => f.id === activeFileId);
+  const { files, activeFileId, saveFileContent, createFile, deleteFile, virtualFile } = fileStore;
+  // Support virtual files for createFile preview
+  const activeFile = files.find(f => f.id === activeFileId) || (virtualFile?.id === activeFileId ? virtualFile : undefined);
 
   // 2. Agent Store (for pending changes)
   const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId, setReviewingChangeId } = useAgentStore();

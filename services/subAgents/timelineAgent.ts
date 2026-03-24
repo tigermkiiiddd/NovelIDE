@@ -146,11 +146,14 @@ outline_manageChapters({
 \`\`\`
 outline_manageEvents({
   add: [
-    { duration: { value: 1, unit: "hour" }, title: "醒来", content: "...", chapterIndex: 1 },
-    { duration: { value: 2, unit: "hour" }, title: "遇到敌人", content: "...", chapterIndex: 1 }
+    { timestamp: { day: 1, hour: 8 }, title: "醒来", content: "...", chapterIndex: 1 },
+    { timestamp: { day: 1, hour: 10 }, title: "遇到敌人", content: "...", chapterIndex: 1 }
   ]
 })
 \`\`\`
+- timestamp 是绝对时间戳：{ day: 第几天, hour: 小时 }
+- hour 支持 0-23，可以是小数（如 8.5 = 8:30）
+- 事件按时间戳自动排序
 - 通过 chapterIndex 关联事件到章节
 - 每段处理 5-8 个事件
 

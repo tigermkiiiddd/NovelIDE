@@ -9,7 +9,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X, Clock, Plus, Pencil, ChevronDown, ChevronRight, GripVertical
 } from 'lucide-react';
-import { useWorldTimelineStore, formatTimeDisplay } from '../stores/worldTimelineStore';
+import { useWorldTimelineStore, formatTimeDisplay, formatTimeRangeDisplay } from '../stores/worldTimelineStore';
 import { useProjectStore } from '../stores/projectStore';
 import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine } from '../types';
 
@@ -22,8 +22,12 @@ type TimelineLevel = 'events' | 'chapters' | 'volumes';
 
 // 事件表单数据类型
 interface EventFormData {
-  timeValue: number;
-  timeUnit: 'minute' | 'hour' | 'day';
+  // 时间戳（开始时间）
+  day: number;          // 第几天
+  hour: number;         // 小时（0-23，支持小数）
+  // 持续时间
+  durationValue: number;
+  durationUnit: 'hour' | 'day';
   title: string;
   content: string;
   location: string;
@@ -51,30 +55,83 @@ const EventForm = React.memo(({
   onCancel: () => void;
   onQuickCreateChapter?: (title: string) => Promise<string | null>; // 返回新章节ID
 }) => {
-  const previewTime = formatTimeDisplay({ value: formData.timeValue, unit: formData.timeUnit });
+  const previewTime = formatTimeDisplay({ day: formData.day, hour: formData.hour });
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickCreateTitle, setQuickCreateTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700">
-      {/* 时间输入：数值 + 单位 */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* 时间戳输入：天 + 小时 */}
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <div>
-          <label className="text-xs text-gray-500">时间数值</label>
+          <label className="text-xs text-gray-500">第几天</label>
           <input
             type="number"
-            min="0"
+            min="1"
             step="1"
-            value={formData.timeValue}
+            value={formData.day}
             onChange={(e) => {
               const val = e.target.value;
               if (val === '') {
-                onFieldChange('timeValue', 0);
+                onFieldChange('day', 1);
               } else {
                 const num = parseInt(val);
+                if (!isNaN(num) && num >= 1) {
+                  onFieldChange('day', num);
+                }
+              }
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">开始小时</label>
+          <input
+            type="number"
+            min="0"
+            max="23.5"
+            step="0.5"
+            value={formData.hour}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '') {
+                onFieldChange('hour', 0);
+              } else {
+                const num = parseFloat(val);
+                if (!isNaN(num) && num >= 0 && num <= 23.5) {
+                  onFieldChange('hour', num);
+                }
+              }
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">时间显示</label>
+          <div className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-blue-300">
+            {previewTime}
+          </div>
+        </div>
+      </div>
+
+      {/* 持续时间输入 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <label className="text-xs text-gray-500">持续时长</label>
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            value={formData.durationValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '') {
+                onFieldChange('durationValue', 0);
+              } else {
+                const num = parseFloat(val);
                 if (!isNaN(num) && num >= 0) {
-                  onFieldChange('timeValue', num);
+                  onFieldChange('durationValue', num);
                 }
               }
             }}
@@ -84,22 +141,22 @@ const EventForm = React.memo(({
         <div>
           <label className="text-xs text-gray-500">单位</label>
           <select
-            value={formData.timeUnit}
-            onChange={(e) => onFieldChange('timeUnit', e.target.value as 'minute' | 'hour' | 'day')}
+            value={formData.durationUnit}
+            onChange={(e) => onFieldChange('durationUnit', e.target.value as 'hour' | 'day')}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           >
-            <option value="minute">分钟</option>
             <option value="hour">小时</option>
             <option value="day">天</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500">显示预览</label>
-          <div className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-blue-300">
-            {previewTime}
+          <label className="text-xs text-gray-500">说明</label>
+          <div className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-400 flex items-center">
+            {formData.durationValue}{formData.durationUnit === 'hour' ? '小时' : '天'}
           </div>
         </div>
       </div>
+
       <div>
         <label className="text-xs text-gray-500">事件标题</label>
         <input
@@ -458,9 +515,9 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs text-gray-500">#{event.eventIndex}</span>
-              {event.cumulativeTime && (
+              {event.timestamp && (
                 <span className="text-xs px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded">
-                  {formatTimeDisplay(event.cumulativeTime)}
+                  {formatTimeRangeDisplay(event.timestamp, event.duration)}
                 </span>
               )}
               {storyLineName && (
@@ -670,8 +727,10 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   // Event form states
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newEvent, setNewEvent] = useState({
-    timeValue: 8,
-    timeUnit: 'hour' as 'minute' | 'hour' | 'day',
+    day: 1,
+    hour: 8,
+    durationValue: 1,
+    durationUnit: 'hour' as 'hour' | 'day',
     title: '',
     content: '',
     location: '',
@@ -740,9 +799,13 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     if (!timeline) return;
 
     addEvent({
+      timestamp: {
+        day: newEvent.day,
+        hour: newEvent.hour
+      },
       duration: {
-        value: newEvent.timeValue,
-        unit: newEvent.timeUnit
+        value: newEvent.durationValue,
+        unit: newEvent.durationUnit
       },
       title: newEvent.title.trim(),
       content: newEvent.content.trim(),
@@ -752,9 +815,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       storyLineId: newEvent.storyLineId || undefined,
       chapterId: newEvent.chapterId || undefined
     });
+    // 重置表单，保持时间设置
     setNewEvent({
-      timeValue: newEvent.timeValue + (newEvent.timeUnit === 'hour' ? 4 : 1),
-      timeUnit: newEvent.timeUnit,
+      day: newEvent.day,
+      hour: newEvent.hour + 1 > 23 ? 8 : newEvent.hour + 1,
+      durationValue: newEvent.durationValue,
+      durationUnit: newEvent.durationUnit,
       title: '',
       content: '',
       location: '',
@@ -773,8 +839,10 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const handleStartEditEvent = useCallback((event: TimelineEvent) => {
     setEditingEventId(event.id);
     setNewEvent({
-      timeValue: event.duration?.value || 1,
-      timeUnit: event.duration?.unit || 'hour',
+      day: event.timestamp?.day || 1,
+      hour: event.timestamp?.hour || 8,
+      durationValue: event.duration?.value || 1,
+      durationUnit: event.duration?.unit || 'hour',
       title: event.title,
       content: event.content,
       location: event.location || '',
@@ -797,9 +865,13 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const handleSaveEditEvent = () => {
     if (!editingEventId || !newEvent.title.trim()) return;
     updateEvent(editingEventId, {
+      timestamp: {
+        day: newEvent.day,
+        hour: newEvent.hour
+      },
       duration: {
-        value: newEvent.timeValue,
-        unit: newEvent.timeUnit
+        value: newEvent.durationValue,
+        unit: newEvent.durationUnit
       },
       title: newEvent.title.trim(),
       content: newEvent.content.trim(),
@@ -811,8 +883,10 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     });
     setEditingEventId(null);
     setNewEvent({
-      timeValue: 8,
-      timeUnit: 'hour',
+      day: 1,
+      hour: 8,
+      durationValue: 1,
+      durationUnit: 'hour',
       title: '',
       content: '',
       location: '',
@@ -826,8 +900,10 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const handleCancelEditEvent = () => {
     setEditingEventId(null);
     setNewEvent({
-      timeValue: 8,
-      timeUnit: 'hour',
+      day: 1,
+      hour: 8,
+      durationValue: 1,
+      durationUnit: 'hour',
       title: '',
       content: '',
       location: '',
