@@ -17,6 +17,13 @@ import {
   getStoryLinesTool,
   processOutlineInputTool
 } from '../toolDefinitions/timeline';
+import {
+  initCharacterProfileTool,
+  updateCharacterProfileTool,
+  getCharacterProfileTool,
+  manageSubCategoryTool,
+  archiveEntryTool,
+} from './characterProfileTools';
 import { ToolDefinition } from '../types';
 
 // 主 Agent 可用的工具
@@ -29,7 +36,8 @@ const readTools: ToolDefinition[] = [
   getVolumesTool,
   getChaptersTool,
   getEventsTool,
-  getStoryLinesTool
+  getStoryLinesTool,
+  getCharacterProfileTool,
 ];
 
 const writeTools: ToolDefinition[] = [
@@ -42,7 +50,12 @@ const writeTools: ToolDefinition[] = [
   manageKnowledgeTool,
   linkKnowledgeTool,
   // ⚠️ outline 写入通过 SubAgent，主 Agent 只能调用 processOutlineInput
-  processOutlineInputTool
+  processOutlineInputTool,
+  // 角色档案工具
+  initCharacterProfileTool,
+  updateCharacterProfileTool,
+  manageSubCategoryTool,
+  archiveEntryTool,
 ];
 
 export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool];
@@ -55,3 +68,4 @@ export * from './projectTools';
 export * from './todoTools';
 export * from './knowledgeGraphTools';
 export * from './timelineTools';
+export * from './characterProfileTools';

@@ -8,11 +8,12 @@
  * 重构后: ~400 行
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useEditor } from '../hooks/editor/useEditor';
+import { useCharacterProfileActions } from '../hooks/useCharacterProfileActions';
 import { getNodePath } from '../services/fileSystem';
 import { FileNode } from '../types';
 import DiffViewer from './DiffViewer';
@@ -39,7 +40,10 @@ import {
   Tag,
   BookOpen,
   Check,
-  History
+  History,
+  UserPlus,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 
 interface EditorProps {
@@ -47,9 +51,12 @@ interface EditorProps {
 }
 
 const CHARACTER_PROFILE_PATH_PREFIX = '\u0030\u0032_\u89d2\u8272\u6863\u6848/\u89d2\u8272\u72b6\u6001\u4e0e\u8bb0\u5fc6/';
+const CHARACTER_CARD_FOLDER = '\u0030\u0032_\u89d2\u8272\u6863\u6848';
+const DRAFT_FOLDER = '\u0030\u0035_\u6b63\u6587\u8349\u7a3f';
 
 const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
   const editor = useEditor({ className });
+  const profileActions = useCharacterProfileActions();
 
   const {
     activeFile,
@@ -111,6 +118,62 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
     handleAcceptAllEdits,
     handleRejectAllEdits
   } = diff;
+
+  // ==================== File Path Detection (must be before any early returns) ====================
+  const filePath = useMemo(() => {
+    if (!activeFile) return '';
+    return getNodePath(activeFile, editor.fileStore.files).replace(/\\/g, '/');
+  }, [activeFile, editor.fileStore.files]);
+
+  // 判断是否是角色卡 Markdown 文档
+  const isCharacterCard = useMemo(() => {
+    if (!filePath) return false;
+    return filePath.startsWith(CHARACTER_CARD_FOLDER + '/') &&
+           filePath.endsWith('.md') &&
+           !filePath.includes('/角色状态与记忆/');
+  }, [filePath]);
+
+  // 判断是否是正文草稿
+  const isDraftFile = useMemo(() => {
+    if (!filePath) return false;
+    return filePath.startsWith(DRAFT_FOLDER + '/') && filePath.endsWith('.md');
+  }, [filePath]);
+
+  // 提取章节引用
+  const chapterRef = useMemo(() => {
+    if (!isDraftFile || !activeFile) return '';
+    return activeFile.name.replace(/\.md$/i, '');
+  }, [isDraftFile, activeFile]);
+
+  // 处理初始化角色档案（如果已存在则重新初始化）
+  const handleInitializeProfile = useCallback(async () => {
+    if (!activeFile || !isCharacterCard) return;
+
+    // 直接使用强制重新初始化，会自动处理已存在的情况
+    const success = await profileActions.forceReinitialize(
+      filePath,
+      activeFile.content || ''
+    );
+
+    if (success) {
+      console.log('角色档案初始化成功');
+    }
+  }, [activeFile, isCharacterCard, filePath, profileActions]);
+
+  // 处理更新相关角色
+  const handleUpdateCharacters = useCallback(async () => {
+    if (!activeFile || !isDraftFile) return;
+
+    const success = await profileActions.updateFromChapter(
+      filePath,
+      activeFile.content || '',
+      chapterRef
+    );
+
+    if (success) {
+      console.log('角色档案更新成功');
+    }
+  }, [activeFile, isDraftFile, filePath, chapterRef, profileActions]);
 
   // ==================== Search Highlight ====================
   const highlightedContent = useMemo(() => {
@@ -407,6 +470,38 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
           <button onClick={handleToggleSplit} className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}>
             <Columns size={14} />
           </button>
+
+          {/* Initialize Character Profile - Only for character card files */}
+          {isCharacterCard && (
+            <button
+              onClick={handleInitializeProfile}
+              disabled={profileActions.isInitializing}
+              className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-emerald-400 hover:text-white hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="初始化角色档案"
+            >
+              {profileActions.isInitializing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <UserPlus size={14} />
+              )}
+            </button>
+          )}
+
+          {/* Update Characters - Only for draft files */}
+          {isDraftFile && (
+            <button
+              onClick={handleUpdateCharacters}
+              disabled={profileActions.isUpdating}
+              className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-amber-400 hover:text-white hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="更新相关角色档案"
+            >
+              {profileActions.isUpdating ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+            </button>
+          )}
 
           {/* Version History */}
           <button

@@ -1,9 +1,12 @@
 import {
-  CharacterGoal,
-  CharacterMemoryEntry,
-  CharacterProfile,
-  CharacterRelationship,
-  CharacterStateSnapshot,
+  CharacterCategoryName,
+  CharacterCategoryType,
+  CharacterProfileV2,
+  CharacterProfileUpdateRequest,
+  CharacterProfileInitRequest,
+  OverwriteEntry,
+  AccumulateEntry,
+  CHARACTER_CATEGORIES,
   ChapterAnalysis,
   FileType,
   LongTermMemory,
@@ -14,11 +17,18 @@ import { useProjectStore } from './projectStore';
 import { dbAPI } from '../services/persistence';
 
 interface CharacterMemoryState {
-  profiles: CharacterProfile[];
+  profiles: CharacterProfileV2[];
   isInitialized: boolean;
   loadProfiles: () => Promise<void>;
   loadProjectProfiles: (projectId: string) => Promise<void>;
-  getByName: (characterName: string) => CharacterProfile | undefined;
+  getByName: (characterName: string) => CharacterProfileV2 | undefined;
+  initializeProfile: (request: CharacterProfileInitRequest) => CharacterProfileV2;
+  updateProfile: (request: CharacterProfileUpdateRequest) => void;
+  deleteProfile: (characterName: string) => void;
+  archiveEntry: (characterName: string, category: CharacterCategoryName, subCategory: string, entryIndex?: number) => void;
+  unarchiveEntry: (characterName: string, category: CharacterCategoryName, subCategory: string, entryIndex: number) => void;
+  addSubCategory: (characterName: string, category: CharacterCategoryName, subCategory: string) => void;
+  removeSubCategory: (characterName: string, category: CharacterCategoryName, subCategory: string) => void;
   upsertStateSnapshots: (analysis: ChapterAnalysis) => void;
   upsertMemoryFromLongTerm: (memory: LongTermMemory, characterName: string) => void;
   removeMemoryRef: (memoryId: string, characterName: string) => void;
@@ -28,256 +38,80 @@ interface CharacterMemoryState {
 const CHARACTER_ROOT_FOLDER = '\u0030\u0032_\u89d2\u8272\u6863\u6848';
 const PROFILE_FOLDER = '\u89d2\u8272\u72b6\u6001\u4e0e\u8bb0\u5fc6';
 
-const GOAL_HINT_REGEX = /目标|想要|希望|计划|决定|打算|准备|试图|必须|立志|誓要|追查|寻找|保护|复仇|夺回|阻止|查明|完成|赢得|逃离|拯救|成为|守住|调查/;
-const HIGH_PRIORITY_REGEX = /必须|誓要|立志|绝不|一定|务必/;
-const BLOCKED_GOAL_REGEX = /受阻|失败|无法|未能|卡住|被迫|中断/;
-const COMPLETED_GOAL_REGEX = /完成|成功|达成|实现|解决|做到/;
-
 const normalizeName = (name: string) => name.trim().toLowerCase();
 const makeProfileId = (characterName: string) =>
-  `character-${normalizeName(characterName).replace(/[^\w\u4e00-\u9fa5]+/g, '-')}`;
-const makeStableId = (prefix: string, value: string) =>
-  `${prefix}-${normalizeName(value).replace(/[^\w\u4e00-\u9fa5]+/g, '-') || 'item'}`;
+  `char-${normalizeName(characterName).replace(/[^\w\u4e00-\u9fa5]+/g, '-')}`;
 
-const uniqueStrings = (values: string[]) =>
-  values
-    .map((value) => value.trim())
-    .filter(Boolean)
-    .filter((value, index, array) => array.findIndex((item) => normalizeName(item) === normalizeName(value)) === index);
+const isOverwriteCategory = (categoryName: string): boolean =>
+  CHARACTER_CATEGORIES[categoryName as CharacterCategoryName] === '覆盖';
 
-const parseTagValue = (tag: string, prefixes: string[]) => {
-  const matchedPrefix = prefixes.find((prefix) => tag.startsWith(prefix));
-  if (!matchedPrefix) return undefined;
-  return tag.slice(matchedPrefix.length).trim();
+const isAccumulateCategory = (categoryName: string): boolean =>
+  CHARACTER_CATEGORIES[categoryName as CharacterCategoryName] === '累加';
+
+// 创建空分类结构
+const createEmptyCategories = (): CharacterProfileV2['categories'] => {
+  const categories: CharacterProfileV2['categories'] = {};
+
+  (Object.keys(CHARACTER_CATEGORIES) as CharacterCategoryName[]).forEach((name) => {
+    categories[name] = {
+      type: CHARACTER_CATEGORIES[name],
+      subCategories: {},
+    };
+  });
+
+  return categories;
 };
 
-const inferGoalPriority = (description: string): CharacterGoal['priority'] => {
-  if (HIGH_PRIORITY_REGEX.test(description)) return 'high';
-  if (/计划|决定|准备|追查|保护|调查|寻找/.test(description)) return 'medium';
-  return 'low';
-};
-
-const inferGoalStatus = (description: string): CharacterGoal['status'] => {
-  if (COMPLETED_GOAL_REGEX.test(description)) return 'completed';
-  if (BLOCKED_GOAL_REGEX.test(description)) return 'blocked';
-  if (/也许|可能|似乎|隐约/.test(description)) return 'latent';
-  return 'active';
-};
-
-const makeGoal = (
-  description: string,
-  source: CharacterGoal['source'],
-  updatedAt: number,
-  evidence?: string
-): CharacterGoal => ({
-  id: makeStableId('goal', description),
-  description: description.trim(),
-  priority: inferGoalPriority(description),
-  status: inferGoalStatus(description),
-  source,
-  evidence,
-  updatedAt,
+// 创建空档案
+const createEmptyProfile = (characterName: string, baseProfilePath?: string): CharacterProfileV2 => ({
+  characterId: makeProfileId(characterName),
+  characterName: characterName.trim(),
+  baseProfilePath,
+  categories: createEmptyCategories(),
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
 });
 
-const extractTraitsFromMemory = (memory: CharacterMemoryEntry) =>
-  uniqueStrings(
-    memory.tags.flatMap((tag) => {
-      const value = parseTagValue(tag, ['特质:', '人设:', '性格:', '标签:']);
-      return value ? value.split(/[、,，/]/).map((item) => item.trim()) : [];
-    })
-  );
+// 规范化档案（确保所有分类存在）
+const normalizeProfile = (rawProfile: Partial<CharacterProfileV2> & { characterName?: string }): CharacterProfileV2 => {
+  const characterName = rawProfile.characterName?.trim() || '未命名角色';
+  const now = Date.now();
 
-const extractAgencyNotesFromMemory = (memory: CharacterMemoryEntry) =>
-  uniqueStrings(
-    [
-      ...memory.tags.flatMap((tag) => {
-        const value = parseTagValue(tag, ['动机:', '驱动:', '原则:', '执念:']);
-        return value ? [value] : [];
-      }),
-      ...memory.keywords.filter((keyword) => /目标|原则|底线|执念|动机/.test(keyword)),
-    ]
-  );
-
-const extractGoalsFromState = (snapshot?: CharacterStateSnapshot) => {
-  if (!snapshot) return [] as CharacterGoal[];
-
-  return snapshot.changes
-    .filter((change) => GOAL_HINT_REGEX.test(change))
-    .map((change) => makeGoal(change, 'state', snapshot.extractedAt, `${snapshot.chapterTitle}: ${change}`));
-};
-
-const extractGoalsFromMemory = (memory: CharacterMemoryEntry) => {
-  const fromTags = memory.tags.flatMap((tag) => {
-    const value = parseTagValue(tag, ['目标:', '追求:', '执念:']);
-    return value ? [makeGoal(value, 'memory', memory.updatedAt, memory.summary)] : [];
-  });
-
-  const fromSummary = GOAL_HINT_REGEX.test(memory.summary)
-    ? [makeGoal(memory.summary, 'memory', memory.updatedAt, memory.summary)]
-    : [];
-
-  return [...fromTags, ...fromSummary];
-};
-
-const extractRelationshipsFromStateHistory = (history: CharacterStateSnapshot[]) => {
-  const relationshipMap = new Map<string, CharacterRelationship>();
-
-  [...history]
-    .sort((left, right) => left.extractedAt - right.extractedAt)
-    .forEach((snapshot) => {
-      snapshot.relationships?.forEach((relationship) => {
-        const key = normalizeName(relationship.with);
-        relationshipMap.set(key, {
-          characterName: relationship.with,
-          status: relationship.status,
-          summary: `${snapshot.chapterTitle}: ${relationship.status}`,
-          confidence: 'high',
-          source: 'state',
-          updatedAt: snapshot.extractedAt,
-        });
-      });
+  // 确保所有预设分类存在
+  const categories = createEmptyCategories();
+  if (rawProfile.categories) {
+    Object.entries(rawProfile.categories).forEach(([catName, catData]) => {
+      if (categories[catName]) {
+        categories[catName] = {
+          type: catData.type || CHARACTER_CATEGORIES[catName as CharacterCategoryName],
+          subCategories: catData.subCategories || {},
+        };
+      }
     });
-
-  return Array.from(relationshipMap.values());
-};
-
-const extractRelationshipsFromMemory = (memory: CharacterMemoryEntry) =>
-  memory.tags.flatMap((tag) => {
-    const value = parseTagValue(tag, ['关系:']);
-    if (!value) return [];
-
-    const [characterName, status = memory.summary] = value.split(':').map((part) => part.trim());
-    if (!characterName) return [];
-
-    return [
-      {
-        characterName,
-        status: status || '相关',
-        summary: memory.summary,
-        confidence: 'medium' as const,
-        source: 'memory' as const,
-        updatedAt: memory.updatedAt,
-      },
-    ];
-  });
-
-const mergeGoals = (existingGoals: CharacterGoal[], derivedGoals: CharacterGoal[]) => {
-  const goalMap = new Map<string, CharacterGoal>();
-
-  existingGoals.forEach((goal) => {
-    goalMap.set(normalizeName(goal.description), goal);
-  });
-
-  derivedGoals.forEach((goal) => {
-    const key = normalizeName(goal.description);
-    const existing = goalMap.get(key);
-
-    if (!existing || existing.source !== 'manual') {
-      goalMap.set(key, goal);
-    }
-  });
-
-  const priorityRank: Record<CharacterGoal['priority'], number> = { high: 0, medium: 1, low: 2 };
-  const statusRank: Record<CharacterGoal['status'], number> = {
-    active: 0,
-    latent: 1,
-    blocked: 2,
-    completed: 3,
-  };
-
-  return Array.from(goalMap.values()).sort((left, right) => {
-    const priorityDiff = priorityRank[left.priority] - priorityRank[right.priority];
-    if (priorityDiff !== 0) return priorityDiff;
-
-    const statusDiff = statusRank[left.status] - statusRank[right.status];
-    if (statusDiff !== 0) return statusDiff;
-
-    return right.updatedAt - left.updatedAt;
-  });
-};
-
-const mergeRelationships = (existingRelationships: CharacterRelationship[], derivedRelationships: CharacterRelationship[]) => {
-  const relationshipMap = new Map<string, CharacterRelationship>();
-
-  existingRelationships.forEach((relationship) => {
-    relationshipMap.set(normalizeName(relationship.characterName), relationship);
-  });
-
-  derivedRelationships.forEach((relationship) => {
-    const key = normalizeName(relationship.characterName);
-    const existing = relationshipMap.get(key);
-
-    if (!existing || existing.source !== 'manual') {
-      relationshipMap.set(key, relationship);
-    }
-  });
-
-  return Array.from(relationshipMap.values()).sort((left, right) => right.updatedAt - left.updatedAt);
-};
-
-const derivePersonaSummary = (profile: CharacterProfile) => {
-  if (profile.personaSummary?.trim()) return profile.personaSummary.trim();
-  if (profile.latestState?.stateDescription?.trim()) return profile.latestState.stateDescription.trim();
-
-  const memorySummary = profile.memories.find((memory) => memory.summary.trim());
-  return memorySummary?.summary.trim();
-};
-
-const deriveProfileInsights = (profile: CharacterProfile): CharacterProfile => {
-  const latestState = profile.stateHistory.length > 0 ? profile.stateHistory[profile.stateHistory.length - 1] : profile.latestState;
-  const derivedTraits = profile.memories.flatMap(extractTraitsFromMemory);
-  const derivedAgencyNotes = [
-    ...(latestState?.changes ?? []),
-    ...profile.memories.flatMap(extractAgencyNotesFromMemory),
-  ];
-  const derivedGoals = [
-    ...extractGoalsFromState(latestState),
-    ...profile.memories.flatMap(extractGoalsFromMemory),
-  ];
-  const derivedRelationships = [
-    ...extractRelationshipsFromStateHistory(profile.stateHistory),
-    ...profile.memories.flatMap(extractRelationshipsFromMemory),
-  ];
+  }
 
   return {
-    ...profile,
-    latestState,
-    personaSummary: derivePersonaSummary(profile),
-    coreTraits: uniqueStrings([...profile.coreTraits, ...derivedTraits]).slice(0, 12),
-    agencyNotes: uniqueStrings([...profile.agencyNotes, ...derivedAgencyNotes]).slice(0, 12),
-    goals: mergeGoals(profile.goals, derivedGoals),
-    relationships: mergeRelationships(profile.relationships, derivedRelationships),
-  };
-};
-
-const normalizeProfile = (rawProfile: Partial<CharacterProfile> & { characterName?: string }): CharacterProfile => {
-  const characterName = rawProfile.characterName?.trim() || '未命名角色';
-  const profile: CharacterProfile = {
-    id: rawProfile.id || makeProfileId(characterName),
+    characterId: rawProfile.characterId || makeProfileId(characterName),
     characterName,
-    aliases: Array.isArray(rawProfile.aliases) ? rawProfile.aliases.filter(Boolean) : [],
-    latestState: rawProfile.latestState,
-    stateHistory: Array.isArray(rawProfile.stateHistory) ? rawProfile.stateHistory : [],
-    memories: Array.isArray(rawProfile.memories) ? rawProfile.memories : [],
-    personaSummary: typeof rawProfile.personaSummary === 'string' ? rawProfile.personaSummary : undefined,
-    coreTraits: Array.isArray(rawProfile.coreTraits) ? rawProfile.coreTraits.filter(Boolean) : [],
-    agencyNotes: Array.isArray(rawProfile.agencyNotes) ? rawProfile.agencyNotes.filter(Boolean) : [],
-    goals: Array.isArray(rawProfile.goals) ? rawProfile.goals.filter(Boolean) : [],
-    relationships: Array.isArray(rawProfile.relationships) ? rawProfile.relationships.filter(Boolean) : [],
-    updatedAt: typeof rawProfile.updatedAt === 'number' ? rawProfile.updatedAt : Date.now(),
+    baseProfilePath: rawProfile.baseProfilePath,
+    categories,
+    createdAt: rawProfile.createdAt || now,
+    updatedAt: rawProfile.updatedAt || now,
   };
-
-  profile.stateHistory = [...profile.stateHistory].sort((left, right) => left.extractedAt - right.extractedAt);
-  return deriveProfileInsights(profile);
 };
 
+// 确保档案文件夹存在
 const ensureProfileFolder = () => {
   const fileStore = useFileStore.getState();
   const characterFolder = fileStore.files.find((file) => file.name === CHARACTER_ROOT_FOLDER && file.parentId === 'root');
-  if (!characterFolder) return null;
+  if (!characterFolder) {
+    console.log('[CharacterMemoryStore] 未找到角色档案根目录:', CHARACTER_ROOT_FOLDER);
+    return null;
+  }
 
   let profileFolder = fileStore.files.find((file) => file.name === PROFILE_FOLDER && file.parentId === characterFolder.id);
   if (!profileFolder) {
+    console.log('[CharacterMemoryStore] 创建档案子目录:', PROFILE_FOLDER);
     profileFolder = {
       id: `character-memory-folder-${Date.now()}`,
       parentId: characterFolder.id,
@@ -291,9 +125,14 @@ const ensureProfileFolder = () => {
   return profileFolder;
 };
 
-const saveProfilesToFiles = async (profiles: CharacterProfile[]) => {
+// 保存档案到文件
+const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
+  console.log('[CharacterMemoryStore] 开始保存档案，数量:', profiles.length);
   const folder = ensureProfileFolder();
-  if (!folder) return;
+  if (!folder) {
+    console.log('[CharacterMemoryStore] 无法获取档案文件夹，跳过保存');
+    return;
+  }
 
   const fileStore = useFileStore.getState();
   const existingFiles = fileStore.files.filter((file) => file.parentId === folder.id && file.type === FileType.FILE);
@@ -306,13 +145,14 @@ const saveProfilesToFiles = async (profiles: CharacterProfile[]) => {
     const target = existingFiles.find((file) => file.name === fileName);
 
     seen.add(fileName);
+    console.log('[CharacterMemoryStore] 保存档案文件:', fileName, '字节数:', content.length);
 
     if (target) {
       target.content = content;
       target.lastModified = Date.now();
     } else {
       fileStore.files.push({
-        id: `character-memory-${Date.now()}-${profile.id}`,
+        id: `character-memory-${Date.now()}-${profile.characterId}`,
         parentId: folder.id,
         name: fileName,
         type: FileType.FILE,
@@ -322,6 +162,7 @@ const saveProfilesToFiles = async (profiles: CharacterProfile[]) => {
     }
   });
 
+  // 删除不在列表中的文件
   existingFiles
     .filter((file) => !seen.has(file.name))
     .forEach((file) => {
@@ -332,36 +173,26 @@ const saveProfilesToFiles = async (profiles: CharacterProfile[]) => {
     });
 
   const projectId = useProjectStore.getState().currentProjectId;
+  console.log('[CharacterMemoryStore] 当前项目ID:', projectId);
   if (projectId) {
     await dbAPI.saveFiles(projectId, [...fileStore.files]);
+    console.log('[CharacterMemoryStore] 已保存到 IndexedDB');
   }
 };
 
-const createEmptyProfile = (characterName: string): CharacterProfile =>
-  normalizeProfile({
-    id: makeProfileId(characterName),
-    characterName,
-    aliases: [],
-    latestState: undefined,
-    stateHistory: [],
-    memories: [],
-    personaSummary: undefined,
-    coreTraits: [],
-    agencyNotes: [],
-    goals: [],
-    relationships: [],
-    updatedAt: Date.now(),
-  });
-
+// 更新或创建档案
 const upsertProfile = (
-  profiles: CharacterProfile[],
+  profiles: CharacterProfileV2[],
   characterName: string,
-  updater: (profile: CharacterProfile) => CharacterProfile
-) => {
-  const index = profiles.findIndex((profile) => normalizeName(profile.characterName) === normalizeName(characterName));
+  updater: (profile: CharacterProfileV2) => CharacterProfileV2
+): CharacterProfileV2[] => {
+  const index = profiles.findIndex(
+    (profile) => normalizeName(profile.characterName) === normalizeName(characterName)
+  );
 
   if (index === -1) {
-    return [...profiles, normalizeProfile(updater(createEmptyProfile(characterName)))];
+    const newProfile = updater(createEmptyProfile(characterName));
+    return [...profiles, normalizeProfile(newProfile)];
   }
 
   const nextProfiles = [...profiles];
@@ -388,12 +219,12 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
         .filter((file) => file.parentId === folder.id && file.type === FileType.FILE && file.content)
         .map((file) => {
           try {
-            return normalizeProfile(JSON.parse(file.content!) as CharacterProfile);
+            return normalizeProfile(JSON.parse(file.content!) as CharacterProfileV2);
           } catch {
             return null;
           }
         })
-        .filter(Boolean) as CharacterProfile[];
+        .filter(Boolean) as CharacterProfileV2[];
 
       useCharacterMemoryStore.setState({ profiles, isInitialized: true });
     },
@@ -407,92 +238,395 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
         .getState()
         .profiles.find((profile) => normalizeName(profile.characterName) === normalizeName(characterName)),
 
-    upsertStateSnapshots: (analysis) => {
-      useCharacterMemoryStore.setState((state) => ({
-        profiles: analysis.characterStates.reduce((profiles, rawState) => {
-          const snapshot: CharacterStateSnapshot = {
-            ...rawState,
-            chapterPath: analysis.chapterPath,
-            chapterTitle: analysis.chapterTitle,
-            extractedAt: analysis.extractedAt,
-          };
+    // 初始化角色档案（AI生成小分类）
+    initializeProfile: (request: CharacterProfileInitRequest) => {
+      const { characterName, baseProfilePath, initialSubCategories, initialValues } = request;
+      console.log('[CharacterMemoryStore] initializeProfile 被调用');
+      console.log('[CharacterMemoryStore] 角色名:', characterName);
+      console.log('[CharacterMemoryStore] 小分类数量:', initialSubCategories ? Object.keys(initialSubCategories).length : 0);
+      console.log('[CharacterMemoryStore] 初始值数量:', initialValues?.length || 0);
 
-          return upsertProfile(profiles, snapshot.characterName, (profile) => {
-            const existingIndex = profile.stateHistory.findIndex(
-              (item) =>
-                item.chapterPath === snapshot.chapterPath &&
-                normalizeName(item.characterName) === normalizeName(snapshot.characterName)
-            );
+      const now = Date.now();
+      const chapterRef = '初始设定';
 
-            const stateHistory = [...profile.stateHistory];
-            if (existingIndex >= 0) {
-              stateHistory[existingIndex] = snapshot;
+      const profile = createEmptyProfile(characterName, baseProfilePath);
+
+      // 应用AI生成的小分类
+      if (initialSubCategories) {
+        (Object.entries(initialSubCategories) as [CharacterCategoryName, string[] | undefined][]).forEach(
+          ([categoryName, subCategories]) => {
+            if (subCategories && profile.categories[categoryName]) {
+              subCategories.forEach((subCat) => {
+                if (isOverwriteCategory(categoryName)) {
+                  // 覆盖型：初始化空值
+                  profile.categories[categoryName].subCategories[subCat] = {
+                    value: '',
+                    chapterRef: '',
+                    updatedAt: now,
+                  };
+                } else {
+                  // 累加型：初始化空数组
+                  profile.categories[categoryName].subCategories[subCat] = [];
+                }
+              });
+            }
+          }
+        );
+      }
+
+      // 应用AI提取的初始值
+      if (initialValues && initialValues.length > 0) {
+        let appliedCount = 0;
+        initialValues.forEach(({ category, subCategory, value }) => {
+          if (!profile.categories[category]) {
+            console.log('[CharacterMemoryStore] 跳过无效分类:', category);
+            return;
+          }
+
+          // 确保小分类存在
+          if (!profile.categories[category].subCategories[subCategory]) {
+            if (isOverwriteCategory(category)) {
+              profile.categories[category].subCategories[subCategory] = {
+                value: '',
+                chapterRef: '',
+                updatedAt: now,
+              };
             } else {
-              stateHistory.push(snapshot);
+              profile.categories[category].subCategories[subCategory] = [];
+            }
+          }
+
+          // 将 value 转换为存储格式（保持结构化对象）
+          let storedValue: string | SkillValue | AttributeValue;
+          if (typeof value === 'object' && value !== null) {
+            // 结构化值：直接保持对象格式
+            const v = value as any;
+            if ('quality' in v && ('description' in v || 'unlockCondition' in v)) {
+              // 技能格式 {quality, description, unlockCondition}
+              storedValue = {
+                quality: v.quality,
+                description: v.description || '',
+                unlockCondition: v.unlockCondition || '',
+              } as SkillValue;
+              console.log('[CharacterMemoryStore] 技能结构化值:', subCategory, JSON.stringify(storedValue));
+            } else if ('level' in v && 'description' in v) {
+              // 属性格式 {level, description}
+              storedValue = {
+                level: v.level,
+                description: v.description,
+              } as AttributeValue;
+              console.log('[CharacterMemoryStore] 属性结构化值:', subCategory, JSON.stringify(storedValue));
+            } else {
+              // 其他对象格式，JSON序列化
+              storedValue = JSON.stringify(value);
+              console.log('[CharacterMemoryStore] 其他对象值:', subCategory, storedValue);
+            }
+          } else {
+            storedValue = String(value);
+            console.log('[CharacterMemoryStore] 字符串值:', subCategory, String(storedValue).substring(0, 50));
+          }
+
+          if (isOverwriteCategory(category)) {
+            // 覆盖型：设置值
+            profile.categories[category].subCategories[subCategory] = {
+              value: storedValue,
+              chapterRef,
+              updatedAt: now,
+            };
+            appliedCount++;
+          } else {
+            // 累加型：添加初始记录
+            (profile.categories[category].subCategories[subCategory] as AccumulateEntry[]).push({
+              value: storedValue,
+              chapterRef,
+              updatedAt: now,
+              archived: false,
+            });
+            appliedCount++;
+          }
+        });
+        console.log('[CharacterMemoryStore] 应用了', appliedCount, '个初始值');
+      }
+
+      console.log('[CharacterMemoryStore] 更新 state，角色:', profile.characterName);
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: upsertProfile(state.profiles, characterName, () => profile),
+      }));
+
+      console.log('[CharacterMemoryStore] 当前 profiles 数量:', useCharacterMemoryStore.getState().profiles.length);
+      return profile;
+    },
+
+    // 更新档案条目
+    updateProfile: (request: CharacterProfileUpdateRequest) => {
+      const { characterName, chapterRef, updates } = request;
+
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: upsertProfile(state.profiles, characterName, (profile) => {
+          const now = Date.now();
+
+          updates.forEach(({ category, subCategory, value, action }) => {
+            if (!profile.categories[category]) return;
+
+            if (isOverwriteCategory(category)) {
+              // 覆盖型：直接替换
+              profile.categories[category].subCategories[subCategory] = {
+                value,
+                chapterRef,
+                updatedAt: now,
+              };
+            } else {
+              // 累加型：更新或追加
+              const entries = profile.categories[category].subCategories[subCategory] as AccumulateEntry[];
+
+              if (action === 'add' || !entries || entries.length === 0) {
+                // 新增条目
+                if (!profile.categories[category].subCategories[subCategory]) {
+                  profile.categories[category].subCategories[subCategory] = [];
+                }
+                (profile.categories[category].subCategories[subCategory] as AccumulateEntry[]).push({
+                  value,
+                  chapterRef,
+                  updatedAt: now,
+                  archived: false,
+                });
+              } else {
+                // 更新最后一个未归档条目，或追加新条目
+                const lastActiveIndex = entries.findIndex((e) => !e.archived);
+                if (lastActiveIndex >= 0) {
+                  entries[lastActiveIndex] = {
+                    ...entries[lastActiveIndex],
+                    value,
+                    chapterRef,
+                    updatedAt: now,
+                  };
+                } else {
+                  entries.push({
+                    value,
+                    chapterRef,
+                    updatedAt: now,
+                    archived: false,
+                  });
+                }
+              }
+            }
+          });
+
+          return { ...profile, updatedAt: now };
+        }),
+      }));
+    },
+
+    // 删除角色档案
+    deleteProfile: (characterName) => {
+      console.log('[CharacterMemoryStore] 删除档案:', characterName);
+      useCharacterMemoryStore.setState((state) => {
+        const newProfiles = state.profiles.filter(
+          (profile) => normalizeName(profile.characterName) !== normalizeName(characterName)
+        );
+        console.log('[CharacterMemoryStore] 删除后剩余档案数量:', newProfiles.length);
+        return { profiles: newProfiles };
+      });
+    },
+
+    // 归档条目
+    archiveEntry: (characterName, category, subCategory, entryIndex) => {
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: upsertProfile(state.profiles, characterName, (profile) => {
+          if (!isAccumulateCategory(category)) return profile;
+
+          const entries = profile.categories[category]?.subCategories[subCategory] as AccumulateEntry[] | undefined;
+          if (!entries) return profile;
+
+          const now = Date.now();
+          if (entryIndex !== undefined && entries[entryIndex]) {
+            entries[entryIndex].archived = true;
+            entries[entryIndex].updatedAt = now;
+          } else {
+            // 归档最后一个未归档条目
+            const lastActive = entries.filter((e) => !e.archived).pop();
+            if (lastActive) {
+              lastActive.archived = true;
+              lastActive.updatedAt = now;
+            }
+          }
+
+          return { ...profile, updatedAt: now };
+        }),
+      }));
+    },
+
+    // 取消归档
+    unarchiveEntry: (characterName, category, subCategory, entryIndex) => {
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: upsertProfile(state.profiles, characterName, (profile) => {
+          if (!isAccumulateCategory(category)) return profile;
+
+          const entries = profile.categories[category]?.subCategories[subCategory] as AccumulateEntry[] | undefined;
+          if (!entries || !entries[entryIndex]) return profile;
+
+          entries[entryIndex].archived = false;
+          entries[entryIndex].updatedAt = Date.now();
+
+          return { ...profile, updatedAt: Date.now() };
+        }),
+      }));
+    },
+
+    // 添加小分类
+    addSubCategory: (characterName, category, subCategory) => {
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: upsertProfile(state.profiles, characterName, (profile) => {
+          if (!profile.categories[category]) return profile;
+
+          const now = Date.now();
+          if (!profile.categories[category].subCategories[subCategory]) {
+            if (isOverwriteCategory(category)) {
+              profile.categories[category].subCategories[subCategory] = {
+                value: '',
+                chapterRef: '',
+                updatedAt: now,
+              };
+            } else {
+              profile.categories[category].subCategories[subCategory] = [];
+            }
+          }
+
+          return { ...profile, updatedAt: now };
+        }),
+      }));
+    },
+
+    // 删除小分类
+    removeSubCategory: (characterName, category, subCategory) => {
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: upsertProfile(state.profiles, characterName, (profile) => {
+          if (!profile.categories[category]) return profile;
+
+          delete profile.categories[category].subCategories[subCategory];
+          return { ...profile, updatedAt: Date.now() };
+        }),
+      }));
+    },
+
+    // 从章节分析更新状态快照
+    upsertStateSnapshots: (analysis) => {
+      const chapterRef = analysis.chapterTitle || analysis.chapterPath;
+
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: analysis.characterStates.reduce((profiles, charState) => {
+          return upsertProfile(profiles, charState.characterName, (profile) => {
+            const now = Date.now();
+
+            // 更新位置（状态分类）
+            if (charState.location) {
+              profile.categories['状态'].subCategories['位置'] = {
+                value: charState.location,
+                chapterRef,
+                updatedAt: now,
+              };
             }
 
-            stateHistory.sort((left, right) => left.extractedAt - right.extractedAt);
+            // 更新情绪（状态分类）
+            if (charState.emotionalState) {
+              profile.categories['状态'].subCategories['情绪'] = {
+                value: charState.emotionalState,
+                chapterRef,
+                updatedAt: now,
+              };
+            }
 
-            return {
-              ...profile,
-              latestState: stateHistory[stateHistory.length - 1],
-              stateHistory,
-              updatedAt: Date.now(),
-            };
+            // 更新关系
+            charState.relationships?.forEach((rel) => {
+              const entries = profile.categories['关系'].subCategories[rel.with] as AccumulateEntry[] | undefined;
+              if (entries) {
+                entries.push({
+                  value: rel.status,
+                  chapterRef,
+                  updatedAt: now,
+                  archived: false,
+                });
+              } else {
+                profile.categories['关系'].subCategories[rel.with] = [{
+                  value: rel.status,
+                  chapterRef,
+                  updatedAt: now,
+                  archived: false,
+                }];
+              }
+            });
+
+            // 记录变化作为经历
+            charState.changes?.forEach((change) => {
+              const entries = profile.categories['经历'].subCategories['事件'] as AccumulateEntry[] | undefined;
+              if (entries) {
+                entries.push({
+                  value: change,
+                  chapterRef,
+                  updatedAt: now,
+                  archived: false,
+                });
+              } else {
+                profile.categories['经历'].subCategories['事件'] = [{
+                  value: change,
+                  chapterRef,
+                  updatedAt: now,
+                  archived: false,
+                }];
+              }
+            });
+
+            return { ...profile, updatedAt: now };
           });
         }, state.profiles),
       }));
     },
 
+    // 从长期记忆添加记忆条目
     upsertMemoryFromLongTerm: (memory, characterName) => {
-      const entry: CharacterMemoryEntry = {
-        memoryId: memory.id,
-        name: memory.name,
-        summary: memory.summary,
-        content: memory.content,
-        importance: memory.importance,
-        keywords: memory.keywords,
-        tags: memory.tags,
-        sourceRef: memory.metadata.sourceRef,
-        updatedAt: memory.metadata.updatedAt,
-      };
-
       useCharacterMemoryStore.setState((state) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
-          const memories = [...profile.memories];
-          const index = memories.findIndex((item) => item.memoryId === memory.id);
+          const now = Date.now();
+          const entries = profile.categories['记忆'].subCategories['重要信息'] as AccumulateEntry[] | undefined;
 
-          if (index >= 0) {
-            memories[index] = entry;
+          const newEntry: AccumulateEntry = {
+            value: memory.summary,
+            chapterRef: memory.metadata.sourceRef || '',
+            updatedAt: now,
+            archived: false,
+          };
+
+          if (entries) {
+            // 检查是否已存在相同记忆
+            const existingIndex = entries.findIndex(
+              (e) => e.value === memory.summary || e.chapterRef === memory.id
+            );
+            if (existingIndex >= 0) {
+              entries[existingIndex] = newEntry;
+            } else {
+              entries.push(newEntry);
+            }
           } else {
-            memories.push(entry);
+            profile.categories['记忆'].subCategories['重要信息'] = [newEntry];
           }
 
-          memories.sort((left, right) => right.updatedAt - left.updatedAt);
-
-          return {
-            ...profile,
-            memories,
-            updatedAt: Date.now(),
-          };
+          return { ...profile, updatedAt: now };
         }),
       }));
     },
 
+    // 移除记忆引用
     removeMemoryRef: (memoryId, characterName) => {
       useCharacterMemoryStore.setState((state) => ({
-        profiles: state.profiles.map((profile) => {
-          if (normalizeName(profile.characterName) !== normalizeName(characterName)) {
-            return profile;
+        profiles: upsertProfile(state.profiles, characterName, (profile) => {
+          const entries = profile.categories['记忆'].subCategories['重要信息'] as AccumulateEntry[] | undefined;
+          if (entries) {
+            const index = entries.findIndex((e) => e.chapterRef === memoryId);
+            if (index >= 0) {
+              entries.splice(index, 1);
+            }
           }
-
-          return normalizeProfile({
-            ...profile,
-            memories: profile.memories.filter((item) => item.memoryId !== memoryId),
-            goals: profile.goals.filter((goal) => goal.source === 'manual'),
-            relationships: profile.relationships.filter((relationship) => relationship.source === 'manual'),
-            updatedAt: Date.now(),
-          });
+          return { ...profile, updatedAt: Date.now() };
         }),
       }));
     },

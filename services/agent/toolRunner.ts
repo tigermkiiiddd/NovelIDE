@@ -12,6 +12,13 @@ import {
   executeListReviewQueue,
 } from './tools/knowledgeGraphTools';
 import { executeOutlineTool, executeProcessOutlineInput } from './tools/timelineTools';
+import {
+  executeInitCharacterProfile,
+  executeUpdateCharacterProfile,
+  executeGetCharacterProfile,
+  executeManageSubCategory,
+  executeArchiveEntry,
+} from './tools/characterProfileTools';
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
@@ -571,6 +578,22 @@ export const executeTool = async (
                     break;
                 case 'list_review_queue':
                     result = await executeListReviewQueue(args);
+                    break;
+                // --- CHARACTER PROFILE TOOLS ---
+                case 'init_character_profile':
+                    result = await executeInitCharacterProfile(args);
+                    break;
+                case 'update_character_profile':
+                    result = await executeUpdateCharacterProfile(args);
+                    break;
+                case 'get_character_profile':
+                    result = await executeGetCharacterProfile(args);
+                    break;
+                case 'manage_sub_category':
+                    result = await executeManageSubCategory(args);
+                    break;
+                case 'archive_entry':
+                    result = await executeArchiveEntry(args);
                     break;
                 // --- OUTLINE TOOLS ---
                 case 'processOutlineInput':

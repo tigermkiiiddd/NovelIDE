@@ -694,3 +694,106 @@ export interface WorldTimeline {
 
   lastModified: number;
 }
+
+// ============================================
+// 角色档案 V2 类型（分类体系）
+// ============================================
+
+// 大分类类型
+export type CharacterCategoryType = '覆盖' | '累加';
+
+// 预设大分类名称
+export type CharacterCategoryName = '状态' | '属性' | '目标' | '技能' | '关系' | '经历' | '记忆';
+
+// 技能结构化值
+export interface SkillValue {
+  quality: '未掌握' | '入门' | '熟练' | '精通' | '大师';
+  description: string;      // 技能描述
+  unlockCondition: string;   // 解锁/提升条件
+}
+
+// 属性结构化值
+export interface AttributeValue {
+  level: string;            // 等级 S/A/B/C/D 或数值
+  description: string;      // 描述
+}
+
+// 结构化值联合类型
+export type StructuredValue = SkillValue | AttributeValue;
+
+// 值类型：可以是字符串或结构化对象
+export type EntryValue = string | StructuredValue;
+
+// 覆盖型条目
+export interface OverwriteEntry {
+  value: EntryValue;
+  chapterRef: string;          // 来源章节
+  updatedAt: number;
+}
+
+// 累加型条目
+export interface AccumulateEntry {
+  value: EntryValue;
+  chapterRef: string;
+  updatedAt: number;
+  archived?: boolean;          // 归档标记
+}
+
+// 分类结构
+export interface CharacterCategory {
+  type: CharacterCategoryType;
+  subCategories: {
+    [subCategoryName: string]: OverwriteEntry | AccumulateEntry[];
+  };
+}
+
+// 角色档案 V2
+export interface CharacterProfileV2 {
+  characterId: string;
+  characterName: string;
+  baseProfilePath?: string;    // 关联的基础设定文档路径
+
+  categories: {
+    [categoryName: string]: CharacterCategory;
+  };
+
+  createdAt: number;
+  updatedAt: number;
+}
+
+// 预设大分类配置
+export const CHARACTER_CATEGORIES: Record<CharacterCategoryName, CharacterCategoryType> = {
+  '状态': '覆盖',
+  '属性': '覆盖',
+  '目标': '覆盖',
+  '技能': '覆盖',
+  '关系': '累加',
+  '经历': '累加',
+  '记忆': '累加',
+};
+
+// AI 更新条目请求
+export interface CharacterProfileUpdateRequest {
+  characterName: string;
+  chapterRef: string;
+  updates: {
+    category: CharacterCategoryName;
+    subCategory: string;
+    value: EntryValue;  // 支持字符串或结构化值
+    action: 'update' | 'add';  // update=更新现有, add=新增条目
+  }[];
+}
+
+// 初始化角色档案请求
+export interface CharacterProfileInitRequest {
+  characterName: string;
+  baseProfilePath?: string;
+  initialSubCategories?: {
+    [categoryName in CharacterCategoryName]?: string[];
+  };
+  initialValues?: {
+    category: CharacterCategoryName;
+    subCategory: string;
+    value: EntryValue;  // 支持字符串或结构化值
+  }[];
+}
