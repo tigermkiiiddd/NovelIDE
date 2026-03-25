@@ -113,13 +113,20 @@ export const DEFAULT_AGENT_SKILL = `## 身份
      其中 \`characters\` 字段列出本章所有登场角色，不可省略。
 6. **正文字数达标** - 必须保证正文内容达到单章字数目标({{WORDS_PER_CHAPTER}}字/章)，单次输出不足时可多次续写追加
 
-**6. 长期记忆（写作规范）**：
-> - 查看记忆：不确定有哪些记忆时，使用 manage_memory(action='list') 查看所有记忆；可以使用 memoryTypes 参数按类型过滤
-> - 召回记忆：使用 recall_memory 工具召回相关记忆，支持按关键字、标签、类型搜索，自动按相关度排序
-> - 保存规则：用户明确指定"以后都不能..."、"必须遵守..."等规则时 -> 使用 manage_memory 添加为 critical；确定写作风格或偏好时 -> 添加为 important
-> - 常驻索引：系统提示词中的"🔖 常驻记忆索引"部分列出了常驻记忆的标题和关键词，可以快速参考
-> - 自动遵守：importance=critical 的记忆会自动注入系统提示词，必须遵守
-> - ⚠️ **禁止保存角色相关记忆**：长期记忆系统仅用于存储写作规范、风格偏好、通用约束等元知识。**严禁**将角色描述、性格、背景、关系等具体角色信息存入长期记忆。角色档案应通过 02_角色档案 目录下的文件进行管理。
+**7. 知识图谱（创作规范）**：
+> - 查询知识：使用 query_knowledge 工具查询相关知识节点
+> - 管理知识：使用 manage_knowledge 工具添加/更新/删除知识节点
+> - 关联知识：使用 link_knowledge 工具建立知识节点之间的关系
+> - 强化记忆：使用 manage_knowledge(action='reinforce') 强化重要知识
+> - 复习队列：使用 list_review_queue 获取待复习的知识节点
+>
+> **分类体系**：
+> - **设定**：世界设定、剧情设定、物品设定、场景设定等
+> - **规则**：创作规则、叙事规则、角色规则等
+> - **禁止**：禁止词汇、禁止情节、禁止写法等
+> - **风格**：叙事风格、对话风格、描写风格等
+>
+> ⚠️ **禁止保存角色相关知识**：知识图谱仅用于存储创作规范、风格偏好、通用约束等元知识。**严禁**将角色描述、性格、背景、关系等具体角色信息存入知识图谱。角色档案应通过 02_角色档案 目录下的文件进行管理。
 
 ═══════════════════════════════════
 ## 五、工具使用规则
@@ -299,7 +306,7 @@ export const constructSystemPrompt = (
   todos: TodoItem[],
   messages?: any[],
   planMode?: boolean,
-  longTermMemories?: any[]  // 长期记忆数据
+  knowledgeNodes?: any[]  // 知识图谱数据
 ): string => {
   // --- 1. 变量组装 (Variable Assembly) ---
   const skillFolder = files.find(f => f.name === '98_技能配置');
@@ -412,42 +419,42 @@ export const constructSystemPrompt = (
     return `\n## 👥 角色档案索引\n> 共 ${characterFiles.length} 个角色（需要详细信息时使用 readFile 查看完整档案）\n\n${profiles}\n`;
   };
 
-  // Long Term Memory (长期记忆)
-  const getLongTermMemorySection = () => {
-    if (!longTermMemories || longTermMemories.length === 0) {
+  // Knowledge Graph (知识图谱)
+  const getKnowledgeGraphSection = () => {
+    if (!knowledgeNodes || knowledgeNodes.length === 0) {
       return '';
     }
 
-    const critical = longTermMemories.filter((m: any) => m.importance === 'critical');
-    const resident = longTermMemories.filter((m: any) => m.isResident).slice(0, 8);
+    const critical = knowledgeNodes.filter((n: any) => n.importance === 'critical');
+    const important = knowledgeNodes.filter((n: any) => n.importance === 'important').slice(0, 5);
     const now = Date.now();
-    const reviewQueue = longTermMemories
-      .filter((m: any) => m.metadata?.nextReviewAt <= now || m.metadata?.reviewCount === 0)
+    const reviewQueue = knowledgeNodes
+      .filter((n: any) => n.metadata?.nextReviewAt <= now)
       .slice(0, 5);
 
     let output = '';
 
     if (critical.length > 0) {
-      output += `## 📚 长期记忆（必须遵守）\n> 共 ${critical.length} 条关键记忆\n\n`;
-      output += critical.map((m: any) => `### ${m.name}\n- 类型: ${m.type}\n- 标签: ${m.tags?.join(', ') || '无'}\n- 关键字: ${m.keywords?.join(', ') || '无'}\n- 摘要: ${m.summary}\n`).join('\n');
+      output += `## 📚 关键知识（必须遵守）\n> 共 ${critical.length} 条关键知识\n\n`;
+      output += critical.map((n: any) => `### ${n.name}\n- 分类: ${n.category}/${n.subCategory}\n- 标签: ${n.tags?.join(', ') || '无'}\n- 摘要: ${n.summary}\n`).join('\n');
     }
 
-    if (resident.length > 0) {
-      output += `\n## 🔖 常驻记忆索引\n> 共 ${resident.length} 条常驻记忆（需要时使用 recall_memory 召回完整内容）\n\n`;
-      output += resident.map((m: any) => `- **${m.name}**: ${m.keywords?.join(', ') || '无关键字'}`).join('\n');
+    if (important.length > 0) {
+      output += `\n## 🔖 重要知识索引\n> 共 ${important.length} 条重要知识（需要时使用 query_knowledge 查询详情）\n\n`;
+      output += important.map((n: any) => `- **${n.name}**: ${n.summary}`).join('\n');
       output += '\n';
     }
 
     if (reviewQueue.length > 0) {
-      output += `\n## 📝 记忆复习队列\n> 以下记忆处于待复习窗口，遇到相关任务时优先召回或强化\n\n`;
+      output += `\n## 📝 知识复习队列\n> 以下知识处于待复习窗口，遇到相关任务时优先强化\n\n`;
       output += reviewQueue
-        .map((m: any) => `- **${m.name}** [${m.type}] ${m.summary || ''}`.trim())
+        .map((n: any) => `- **${n.name}** [${n.category}] ${n.summary || ''}`.trim())
         .join('\n');
       output += '\n';
     }
 
-    if (output === '' && longTermMemories.length > 0) {
-      output = `\n## 💡 长期记忆提示\n> 当前有 ${longTermMemories.length} 条记忆，但没有标记为 critical 或 resident。使用 manage_memory 或 recall_memory 工具查看和管理。\n`;
+    if (output === '' && knowledgeNodes.length > 0) {
+      output = `\n## 💡 知识图谱提示\n> 当前有 ${knowledgeNodes.length} 条知识，但没有标记为 critical 或 important。使用 query_knowledge 或 manage_knowledge 工具查看和管理。\n`;
     }
 
     return output;
@@ -460,7 +467,7 @@ export const constructSystemPrompt = (
     ? `**可用技能库 (Lazy Load)**:\n${emergentSkillsData}`
     : "";
   const characterProfilesSection = getCharacterProfilesSection();
-  const longTermMemorySection = getLongTermMemorySection();
+  const knowledgeGraphSection = getKnowledgeGraphSection();
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
     .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
     .replace(/\{\{PENDING_TODOS\}\}/g, pendingTodos)
@@ -473,6 +480,6 @@ export const constructSystemPrompt = (
   return `
 ${processedAgentInstruction}
 ${characterProfilesSection}
-${longTermMemorySection}
+${knowledgeGraphSection}
 `;
 };

@@ -8,7 +8,7 @@ import { useAgentTools, AgentToolsImplementation } from './agent/useAgentTools';
 import { useAgentEngine, MAX_CONTEXT_MESSAGES } from './agent/useAgentEngine';
 import { executeApprovedChange } from '../services/agent/toolRunner';
 import { usePlanStore } from '../stores/planStore';
-import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
+import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useFileStore } from '../stores/fileStore';
 import { findNodeByPath } from '../services/fileSystem';
 
@@ -92,8 +92,8 @@ export const useAgent = (
                        aiConfig.baseUrl?.includes('generativelanguage.googleapis.com');
       const limit = isGemini ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
-      const longTermMemories = useLongTermMemoryStore.getState().memories;
-      const sysPrompt = constructSystemPrompt(files, project, activeFile, todos, undefined, undefined, longTermMemories);
+      const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
+      const sysPrompt = constructSystemPrompt(files, project, activeFile, todos, undefined, undefined, knowledgeNodes);
       const msgs = currentSession?.messages || [];
       const msgsText = msgs.reduce((acc, m) => {
           let content = m.text;
@@ -180,31 +180,16 @@ export const useAgent = (
     } else {
       console.log('[AutoAnalysis] ❌ 触发条件不满足');
     }
-    if (change.fileName &&
-        (change.toolName === 'createFile' || change.toolName === 'updateFile' || change.toolName === 'patchFile')) {
-      const currentFiles = useFileStore.getState().files;
-      const targetFile = findNodeByPath(currentFiles, change.fileName);
+    // TODO: 知识图谱自动提取功能待实现
+    // if (change.fileName &&
+    //     (change.toolName === 'createFile' || change.toolName === 'updateFile' || change.toolName === 'patchFile')) {
+    //   const currentFiles = useFileStore.getState().files;
+    //   const targetFile = findNodeByPath(currentFiles, change.fileName);
 
-      if (targetFile?.content) {
-        useLongTermMemoryStore
-          .getState()
-          .triggerDocumentExtraction(change.fileName, targetFile.content)
-          .then((extractionResult) => {
-            if (!extractionResult || extractionResult.added + extractionResult.updated === 0) return;
-
-            addMessage({
-              id: generateId(),
-              role: 'system',
-              text: `🧠 已从文档沉淀记忆：新增 ${extractionResult.added} 条，更新 ${extractionResult.updated} 条`,
-              timestamp: Date.now(),
-              metadata: { logType: 'success', extractionSummary: extractionResult.summary, filePath: change.fileName }
-            });
-          })
-          .catch((error: Error) => {
-            console.error('[DocumentMemory] approveChange extraction failed', error);
-          });
-      }
-    }
+    //   if (targetFile?.content) {
+    //     // 知识图谱自动提取功能待实现
+    //   }
+    // }
   }, [tools, addMessage, removePendingChange, setTodos, toolsHook.accessedFiles, currentSessionId, project]);
 
   const rejectChange = useCallback((change: PendingChange) => {
@@ -230,25 +215,26 @@ export const useAgent = (
 
     addMessage(userMessage);
 
-    setTimeout(() => {
-      useLongTermMemoryStore
-        .getState()
-        .triggerConversationExtraction(userMessage, recentMessages)
-        .then((result) => {
-          if (!result || result.added + result.updated === 0) return;
-
-          addMessage({
-            id: generateId(),
-            role: 'system',
-            text: `🧠 已自动沉淀记忆：新增 ${result.added} 条，更新 ${result.updated} 条`,
-            timestamp: Date.now(),
-            metadata: { logType: 'success', extractionSummary: result.summary },
-          });
-        })
-        .catch((error: Error) => {
-          console.error('[ConversationMemory] trigger failed', error);
-        });
-    }, 0);
+    // TODO: 知识图谱自动提取功能待实现
+    // setTimeout(() => {
+    //   useKnowledgeGraphStore
+    //     .getState()
+    //     .triggerConversationExtraction(userMessage, recentMessages)
+    //     .then((result) => {
+    //       if (!result || result.added + result.updated === 0) return;
+    //
+    //       addMessage({
+    //         id: generateId(),
+    //         role: 'system',
+    //         text: `🧠 已自动沉淀记忆：新增 ${result.added} 条，更新 ${result.updated} 条`,
+    //         timestamp: Date.now(),
+    //         metadata: { logType: 'success', extractionSummary: result.summary },
+    //       });
+    //     })
+    //     .catch((error: Error) => {
+    //       console.error('[ConversationMemory] trigger failed', error);
+    //     });
+    // }, 0);
 
     setTimeout(() => engine.processTurn(), 0);
   }, [addMessage, currentSession?.messages, engine, currentSessionId]);

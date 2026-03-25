@@ -4,7 +4,13 @@ import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
 import { formatThinkingResult } from './tools/thinkingTools';
-import { executeRecallMemory, executeManageMemory } from './tools/longTermMemoryTools';
+import {
+  executeQueryKnowledge,
+  executeManageKnowledge,
+  executeLinkKnowledge,
+  executeListKnowledgeMetadata,
+  executeListReviewQueue,
+} from './tools/knowledgeGraphTools';
 import { executeOutlineTool, executeProcessOutlineInput } from './tools/timelineTools';
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
@@ -550,12 +556,21 @@ export const executeTool = async (
                 case 'updateProjectMeta':
                     result = actions.updateProjectMeta(args);
                     break;
-                // --- LONG TERM MEMORY TOOLS ---
-                case 'recall_memory':
-                    result = await executeRecallMemory(args);
+                // --- KNOWLEDGE GRAPH TOOLS ---
+                case 'query_knowledge':
+                    result = await executeQueryKnowledge(args);
                     break;
-                case 'manage_memory':
-                    result = await executeManageMemory(args);
+                case 'manage_knowledge':
+                    result = await executeManageKnowledge(args);
+                    break;
+                case 'link_knowledge':
+                    result = await executeLinkKnowledge(args);
+                    break;
+                case 'list_knowledge_metadata':
+                    result = await executeListKnowledgeMetadata();
+                    break;
+                case 'list_review_queue':
+                    result = await executeListReviewQueue(args);
                     break;
                 // --- OUTLINE TOOLS ---
                 case 'processOutlineInput':

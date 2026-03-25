@@ -3,7 +3,13 @@ import { listFilesTool, readFileTool } from './fileReadTools';
 import { createFileTool, updateFileTool, patchFileTool, renameFileTool, deleteFileTool } from './fileWriteTools';
 import { updateProjectMetaTool } from './projectTools';
 import { manageTodosTool } from './todoTools';
-import { recallMemoryTool, manageMemoryTool } from './longTermMemoryTools';
+import {
+  queryKnowledgeTool,
+  manageKnowledgeTool,
+  linkKnowledgeTool,
+  listKnowledgeMetadataTool,
+  listReviewQueueTool,
+} from './knowledgeGraphTools';
 import {
   getEventsTool,
   getChaptersTool,
@@ -17,7 +23,9 @@ import { ToolDefinition } from '../types';
 const readTools: ToolDefinition[] = [
   listFilesTool,
   readFileTool,
-  recallMemoryTool,
+  queryKnowledgeTool,
+  listKnowledgeMetadataTool,
+  listReviewQueueTool,
   getVolumesTool,
   getChaptersTool,
   getEventsTool,
@@ -31,7 +39,8 @@ const writeTools: ToolDefinition[] = [
   renameFileTool,
   deleteFileTool,
   updateProjectMetaTool,
-  manageMemoryTool,
+  manageKnowledgeTool,
+  linkKnowledgeTool,
   // ⚠️ outline 写入通过 SubAgent，主 Agent 只能调用 processOutlineInput
   processOutlineInputTool
 ];
@@ -44,4 +53,5 @@ export * from './fileReadTools';
 export * from './fileWriteTools';
 export * from './projectTools';
 export * from './todoTools';
+export * from './knowledgeGraphTools';
 export * from './timelineTools';

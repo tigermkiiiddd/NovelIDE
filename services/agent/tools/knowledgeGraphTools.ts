@@ -1,6 +1,6 @@
 /**
  * @file knowledgeGraphTools.ts
- * @description 知识图谱 AI 工具 - 三级分类 + Tag系统
+ * @description 知识图谱 AI 工具 - 三级分类 + Tag系统 + 记忆智能
  */
 
 import { ToolDefinition } from '../types';
@@ -14,6 +14,10 @@ import {
   KnowledgeEdgeType,
   DEFAULT_SUB_CATEGORIES,
 } from '../../../types';
+import {
+  scoreKnowledgeNodeRecall,
+  sortKnowledgeNodesForReview,
+} from '../../../utils/knowledgeIntelligence';
 
 // ============================================
 // 工具定义
@@ -39,6 +43,11 @@ export const queryKnowledgeTool: ToolDefinition = {
 2. 按二级分类过滤
 3. 按标签过滤
 4. 按关键词搜索
+
+## 排序策略
+- **relevance**: 按相关性排序（默认）
+- **activation**: 按激活度排序（优先返回常用知识）
+- **review_urgency**: 按复习紧急度排序（优先返回需要复习的知识）
 `,
     parameters: {
       type: 'object',
@@ -61,6 +70,12 @@ export const queryKnowledgeTool: ToolDefinition = {
           items: { type: 'string' },
           description: '按标签过滤（可选）',
         },
+        sortBy: {
+          type: 'string',
+          enum: ['relevance', 'activation', 'review_urgency'],
+          default: 'relevance',
+          description: '排序策略',
+        },
         limit: {
           type: 'number',
           default: 10,
@@ -78,7 +93,7 @@ export const manageKnowledgeTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'manage_knowledge',
-    description: `【知识管理】添加、更新或删除知识节点。
+    description: `【知识管理】添加、更新、删除知识节点，或强化/复习已有知识。
 
 ## 知识节点要求
 - **名称**: 简短明确，≤20字
@@ -91,13 +106,17 @@ export const manageKnowledgeTool: ToolDefinition = {
 
 ## 二级分类（可扩展）
 遵循命名规则：2-10个汉字，格式如「魔法设定」「战斗规则」等
+
+## 记忆智能操作
+- **reinforce**: 强化知识（提高激活度和强度，延长复习间隔）
+- **review**: 标记已复习（更新复习时间）
 `,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['add', 'update', 'delete'],
+          enum: ['add', 'update', 'delete', 'reinforce', 'review'],
           description: '操作类型',
         },
         // add 操作
@@ -147,7 +166,7 @@ export const manageKnowledgeTool: ToolDefinition = {
           },
           required: ['category', 'subCategory', 'name', 'summary'],
         },
-        // update/delete 操作
+        // update/delete/reinforce/review 操作
         nodeId: {
           type: 'string',
           description: '知识节点ID',
@@ -236,6 +255,39 @@ export const listKnowledgeMetadataTool: ToolDefinition = {
   },
 };
 
+/**
+ * 获取复习队列
+ */
+export const listReviewQueueTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'list_review_queue',
+    description: `【复习队列】获取待复习的知识节点列表。
+
+## 记忆智能算法
+基于间隔重复算法，返回需要复习的知识节点：
+- 激活度衰减的节点
+- 到达复习时间的节点
+- 优先返回紧急度最高的节点
+
+## 用途
+- 定期复习重要知识
+- 保持长期记忆
+- 强化关键设定和规则
+`,
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          default: 5,
+          description: '返回结果数量上限',
+        },
+      },
+    },
+  },
+};
+
 // ============================================
 // 执行函数
 // ============================================
@@ -245,12 +297,13 @@ export const executeQueryKnowledge = async (args: {
   category?: KnowledgeCategory;
   subCategory?: string;
   tags?: string[];
+  sortBy?: 'relevance' | 'activation' | 'review_urgency';
   limit?: number;
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { query, category, subCategory, tags, limit = 10 } = args;
+  const { query, category, subCategory, tags, sortBy = 'relevance', limit = 10 } = args;
 
   let nodes = store.nodes;
 
@@ -272,19 +325,36 @@ export const executeQueryKnowledge = async (args: {
   // 按关键词搜索
   if (query) {
     const q = query.toLowerCase();
-    nodes = nodes
-      .filter(
-        (n) =>
-          n.name.toLowerCase().includes(q) ||
-          n.summary.toLowerCase().includes(q) ||
-          n.tags.some((t) => t.toLowerCase().includes(q)) ||
-          (n.topic && n.topic.toLowerCase().includes(q))
-      )
-      .map((n) => ({
-        ...n,
-        score: calculateRelevanceScore(n, q),
-      }))
-      .sort((a, b) => (b as any).score - (a as any).score);
+    nodes = nodes.filter(
+      (n) =>
+        n.name.toLowerCase().includes(q) ||
+        n.summary.toLowerCase().includes(q) ||
+        n.tags.some((t) => t.toLowerCase().includes(q)) ||
+        (n.topic && n.topic.toLowerCase().includes(q))
+    );
+  }
+
+  // 排序
+  const now = Date.now();
+  switch (sortBy) {
+    case 'activation':
+      nodes = nodes.sort((a, b) => {
+        const scoreA = scoreKnowledgeNodeRecall(a, query || a.name, now);
+        const scoreB = scoreKnowledgeNodeRecall(b, query || b.name, now);
+        return scoreB.activation - scoreA.activation;
+      });
+      break;
+    case 'review_urgency':
+      nodes = sortKnowledgeNodesForReview(nodes, now);
+      break;
+    default:
+      if (query) {
+        nodes = nodes
+          .map((n) => ({ node: n, score: scoreKnowledgeNodeRecall(n, query, now) }))
+          .sort((a, b) => b.score.total - a.score.total)
+          .map((item) => item.node);
+      }
+      break;
   }
 
   const results = nodes.slice(0, limit);
@@ -305,24 +375,8 @@ export const executeQueryKnowledge = async (args: {
   });
 };
 
-function calculateRelevanceScore(node: KnowledgeNode, query: string): number {
-  let score = 0;
-  const q = query.toLowerCase();
-
-  if (node.name.toLowerCase().includes(q)) score += 3;
-  if (node.summary.toLowerCase().includes(q)) score += 2;
-  if (node.tags.some((t) => t.toLowerCase().includes(q))) score += 1;
-  if (node.topic && node.topic.toLowerCase().includes(q)) score += 1;
-
-  // 重要度加权
-  if (node.importance === 'critical') score *= 1.5;
-  else if (node.importance === 'important') score *= 1.2;
-
-  return score;
-}
-
 export const executeManageKnowledge = async (args: {
-  action: 'add' | 'update' | 'delete';
+  action: 'add' | 'update' | 'delete' | 'reinforce' | 'review';
   node?: KnowledgeNodeDraft;
   nodeId?: string;
   updates?: Partial<KnowledgeNode>;
@@ -396,6 +450,48 @@ export const executeManageKnowledge = async (args: {
       return JSON.stringify({ success: true });
     }
 
+    case 'reinforce': {
+      if (!nodeId) {
+        return JSON.stringify({ success: false, error: '缺少节点ID' });
+      }
+
+      const updatedNode = store.reinforceNode(nodeId);
+      if (!updatedNode) {
+        return JSON.stringify({ success: false, error: '节点不存在' });
+      }
+
+      return JSON.stringify({
+        success: true,
+        message: `知识「${updatedNode.name}」已强化`,
+        metadata: updatedNode.metadata ? {
+          activation: updatedNode.metadata.activation.toFixed(2),
+          strength: updatedNode.metadata.strength.toFixed(2),
+          nextReviewAt: new Date(updatedNode.metadata.nextReviewAt).toISOString(),
+        } : undefined,
+      });
+    }
+
+    case 'review': {
+      if (!nodeId) {
+        return JSON.stringify({ success: false, error: '缺少节点ID' });
+      }
+
+      // review 操作等同于 reinforce，但语义上表示"复习完成"
+      const updatedNode = store.reinforceNode(nodeId);
+      if (!updatedNode) {
+        return JSON.stringify({ success: false, error: '节点不存在' });
+      }
+
+      return JSON.stringify({
+        success: true,
+        message: `知识「${updatedNode.name}」复习完成`,
+        metadata: updatedNode.metadata ? {
+          reviewCount: updatedNode.metadata.reviewCount,
+          nextReviewAt: new Date(updatedNode.metadata.nextReviewAt).toISOString(),
+        } : undefined,
+      });
+    }
+
     default:
       return JSON.stringify({ success: false, error: '未知操作类型' });
   }
@@ -458,6 +554,39 @@ export const executeListKnowledgeMetadata = async () => {
   });
 };
 
+export const executeListReviewQueue = async (args: { limit?: number } = {}) => {
+  const store = useKnowledgeGraphStore.getState();
+  await store.ensureInitialized();
+
+  const { limit = 5 } = args;
+  const reviewQueue = store.getReviewQueue();
+  const results = reviewQueue.slice(0, limit);
+
+  return JSON.stringify({
+    success: true,
+    count: results.length,
+    totalDue: reviewQueue.length,
+    nodes: results.map((n) => {
+      const dynamicState = store.getNodeDynamicState(n.id);
+      return {
+        id: n.id,
+        name: n.name,
+        category: n.category,
+        subCategory: n.subCategory,
+        summary: n.summary,
+        importance: n.importance,
+        dynamicState: dynamicState ? {
+          activation: dynamicState.activation.toFixed(2),
+          strength: dynamicState.strength.toFixed(2),
+          reviewUrgency: dynamicState.reviewUrgency.toFixed(2),
+          isDueForReview: dynamicState.isDueForReview,
+          state: dynamicState.state,
+        } : null,
+      };
+    }),
+  });
+};
+
 // ============================================
 // 导出
 // ============================================
@@ -467,4 +596,5 @@ export const knowledgeGraphToolDefinitions = [
   manageKnowledgeTool,
   linkKnowledgeTool,
   listKnowledgeMetadataTool,
+  listReviewQueueTool,
 ];

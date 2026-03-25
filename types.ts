@@ -471,6 +471,34 @@ export const DEFAULT_SUB_CATEGORIES: Record<KnowledgeCategory, string[]> = {
 // 知识关系类型（中文）
 export type KnowledgeEdgeType = '属于' | '细化' | '依赖' | '冲突';
 
+// 知识节点元数据（支持记忆智能算法）
+export interface KnowledgeNodeMetadata {
+  // 访问统计
+  lastAccessedAt: number;
+  lastRecalledAt: number;
+  lastReinforcedAt: number;
+  recallCount: number;
+  reinforceCount: number;
+  reviewCount: number;
+  // 激活度/强度（0-1）
+  activation: number;
+  strength: number;
+  // 间隔重复
+  reviewIntervalHours: number;
+  nextReviewAt: number;
+}
+
+// 知识节点动态状态（运行时计算）
+export interface KnowledgeNodeDynamicState {
+  activation: number;
+  strength: number;
+  reviewUrgency: number;
+  isDueForReview: boolean;
+  nextReviewAt: number;
+  hoursSinceAccess: number;
+  state: 'active' | 'stable' | 'cooling' | 'needs_review';
+}
+
 // 知识节点
 export interface KnowledgeNode {
   id: string;
@@ -493,6 +521,8 @@ export interface KnowledgeNode {
     type: '对话' | '文档' | '用户';
     ref?: string;
   };
+  // 记忆智能元数据（可选，支持激活度/间隔重复算法）
+  metadata?: KnowledgeNodeMetadata;
   // 时间戳
   createdAt: number;
   updatedAt: number;

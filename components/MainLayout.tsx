@@ -17,7 +17,6 @@ import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
 import { usePlanStore } from '../stores/planStore';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
-import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -64,8 +63,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const loadFiles = useFileStore(state => state.loadFiles);
   const loadProjectAnalyses = useChapterAnalysisStore(state => state.loadProjectAnalyses);
   const triggerExtraction = useChapterAnalysisStore(state => state.triggerExtraction);
-  const loadProjectMemories = useLongTermMemoryStore(state => state.loadProjectMemories);
-  const isMemoryExtracting = useLongTermMemoryStore(state => state.isExtracting);
   const loadProjectCharacterProfiles = useCharacterMemoryStore(state => state.loadProjectProfiles);
   const ensureKnowledgeGraphInitialized = useKnowledgeGraphStore(state => state.ensureInitialized);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
@@ -73,15 +70,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   // Initialize Files and Chapter Analyses when Project Changes
   useEffect(() => {
     if (projectId) {
-        // 先加载文件，等完成后再加载章节分析、长期记忆、知识图谱
-        loadProjectMemories(projectId);
+        // 先加载文件，等完成后再加载章节分析、知识图谱
         ensureKnowledgeGraphInitialized(projectId);
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectCharacterProfiles(projectId);
         });
     }
-  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized]);
 
   // File System State & Actions
   const { 
@@ -429,21 +425,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             >
             <MessageSquare size={24} color="white" />
             </button>
-        )}
-
-        {isMemoryExtracting && (
-          <div
-            className={`
-              pointer-events-none absolute z-20
-              ${isMobile ? 'bottom-16 left-4' : 'bottom-14 right-4'}
-            `}
-            title="正在自动整理长期记忆"
-            aria-label="正在自动整理长期记忆"
-          >
-            <div className="flex items-center justify-center rounded-full border border-cyan-400/25 bg-gray-950/78 p-2 text-cyan-300 shadow-lg shadow-black/20 backdrop-blur-sm">
-              <LoaderCircle size={16} className="animate-spin" />
-            </div>
-          </div>
         )}
       </main>
 

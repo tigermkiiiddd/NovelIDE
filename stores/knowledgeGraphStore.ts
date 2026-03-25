@@ -1,9 +1,9 @@
 /**
  * @file knowledgeGraphStore.ts
- * @description 知识图谱状态管理 - 三级分类 + Tag系统
+ * @description 知识图谱状态管理 - 三级分类 + Tag系统 + 记忆智能算法
  */
 
-import { FileType, FileNode } from '../types';
+import { FileNode, KnowledgeNodeMetadata, KnowledgeNodeDynamicState } from '../types';
 import {
   KnowledgeCategory,
   KnowledgeNode,
@@ -15,6 +15,12 @@ import {
 import { create } from 'zustand';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
+import {
+  createKnowledgeNodeMetadata,
+  getKnowledgeNodeDynamicState,
+  applyKnowledgeNodeEvent,
+  scoreKnowledgeNodeRecall,
+} from '../utils/knowledgeIntelligence';
 
 // ============================================
 // 类型定义
@@ -40,6 +46,12 @@ interface KnowledgeGraphState {
   deleteNode: (id: string) => void;
   getNodeById: (id: string) => KnowledgeNode | undefined;
 
+  // 记忆智能操作
+  recallNode: (id: string) => KnowledgeNode | undefined;
+  reinforceNode: (id: string) => KnowledgeNode | undefined;
+  getReviewQueue: () => KnowledgeNode[];
+  getNodeDynamicState: (id: string) => KnowledgeNodeDynamicState | null;
+
   // 查询方法
   getNodesByCategory: (category: KnowledgeCategory) => KnowledgeNode[];
   getNodesBySubCategory: (category: KnowledgeCategory, subCategory: string) => KnowledgeNode[];
@@ -47,6 +59,7 @@ interface KnowledgeGraphState {
   getNodesByTopic: (topic: string) => KnowledgeNode[];
   getChildNodes: (parentId: string) => KnowledgeNode[];
   searchNodes: (query: string) => KnowledgeNode[];
+  searchNodesWithScore: (query: string, limit?: number) => { node: KnowledgeNode; score: number }[];
 
   // 边操作
   addEdge: (from: string, to: string, type: KnowledgeEdgeType, note?: string) => void;
@@ -110,9 +123,11 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
 
   addNode: (draft: KnowledgeNodeDraft) => {
     const now = Date.now();
+    const metadata = draft.metadata ?? createKnowledgeNodeMetadata(draft.importance);
     const newNode: KnowledgeNode = {
       ...draft,
       id: generateId(),
+      metadata,
       createdAt: now,
       updatedAt: now,
     };
@@ -161,6 +176,53 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   },
 
   // ============================================
+  // 记忆智能操作
+  // ============================================
+
+  recallNode: (id: string) => {
+    const node = get().nodes.find((n) => n.id === id);
+    if (!node) return undefined;
+
+    const updatedNode = applyKnowledgeNodeEvent(node, 'recall');
+    set((state) => ({
+      nodes: state.nodes.map((n) => (n.id === id ? updatedNode : n)),
+    }));
+    setTimeout(() => saveToFile(get()), 1000);
+    return updatedNode;
+  },
+
+  reinforceNode: (id: string) => {
+    const node = get().nodes.find((n) => n.id === id);
+    if (!node) return undefined;
+
+    const updatedNode = applyKnowledgeNodeEvent(node, 'reinforce');
+    set((state) => ({
+      nodes: state.nodes.map((n) => (n.id === id ? updatedNode : n)),
+    }));
+    setTimeout(() => saveToFile(get()), 1000);
+    return updatedNode;
+  },
+
+  getReviewQueue: () => {
+    const now = Date.now();
+    return get().nodes.filter((node) => {
+      if (!node.metadata) return false;
+      const state = getKnowledgeNodeDynamicState(node, now);
+      return state.isDueForReview;
+    }).sort((a, b) => {
+      const stateA = getKnowledgeNodeDynamicState(a, now);
+      const stateB = getKnowledgeNodeDynamicState(b, now);
+      return stateB.reviewUrgency - stateA.reviewUrgency;
+    });
+  },
+
+  getNodeDynamicState: (id: string) => {
+    const node = get().nodes.find((n) => n.id === id);
+    if (!node || !node.metadata) return null;
+    return getKnowledgeNodeDynamicState(node);
+  },
+
+  // ============================================
   // 查询方法
   // ============================================
 
@@ -195,6 +257,18 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
         node.tags.some((t) => t.toLowerCase().includes(q)) ||
         (node.topic && node.topic.toLowerCase().includes(q))
     );
+  },
+
+  searchNodesWithScore: (query: string, limit = 10) => {
+    const nodes = get().nodes;
+    const scored = nodes
+      .map((node) => ({
+        node,
+        score: scoreKnowledgeNodeRecall(node, query).total,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+    return scored;
   },
 
   // ============================================
@@ -349,6 +423,7 @@ async function loadFromProjectInternal(projectId: string) {
 
   try {
     const data = JSON.parse(knowledgeFile.content);
+    // 只加载新格式数据
     useKnowledgeGraphStore.setState({
       nodes: data.nodes || [],
       edges: data.edges || [],
@@ -358,7 +433,8 @@ async function loadFromProjectInternal(projectId: string) {
       isInitialized: true,
       isLoading: false,
     });
-  } catch {
+  } catch (error) {
+    console.error('[KnowledgeGraph] 加载数据失败:', error);
     useKnowledgeGraphStore.setState({
       nodes: [],
       edges: [],
