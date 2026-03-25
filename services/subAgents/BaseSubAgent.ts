@@ -48,10 +48,21 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
   /**
    * 滑动窗口裁剪：保留 history[0]（原始输入）+ 最近 N 轮 pair
    * 被裁剪的 pair 生成摘要插入到 history[0] 之后
+   *
+   * 注意：此裁剪功能已禁用，因为它会导致 Agent 丢失关键上下文。
+   * 对于长时间运行的批量操作（如创建多卷/章节），Agent 需要记住
+   * 之前的操作结果（如已创建的 index 范围）才能正确继续任务。
    */
   private trimHistory(history: any[], onLog?: (msg: string) => void): void {
+    // 裁剪功能已禁用
+    // 原因：摘要只包含工具名称，丢失了关键的上下文信息
+    // 例如：知道调用了 manageChapters，但不知道创建了哪些 index 的章节
+    // 这导致 Agent 无法正确继续批量操作
+    return;
+
+    /* 原始实现（已禁用）
     const maxPairs = this.config.maxHistoryPairs ?? 10;
-    const pairsStart = 1; // history[0] 是原始输入，永远保留
+    const pairsStart = 1;
     const pairsCount = Math.floor((history.length - pairsStart) / 2);
 
     if (pairsCount <= maxPairs) return;
@@ -59,7 +70,6 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
     const pairsToRemove = pairsCount - maxPairs;
     const messagesToRemove = pairsToRemove * 2;
 
-    // 提取被裁剪 pair 中的工具调用名称作为摘要
     const removedMessages = history.slice(pairsStart, pairsStart + messagesToRemove);
     const toolCalls: string[] = [];
     for (const msg of removedMessages) {
@@ -74,7 +84,6 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
 
     const summary = `[上下文窗口裁剪] 已裁剪 ${pairsToRemove} 轮历史操作：\n${toolCalls.join('\n')}\n以上操作已成功执行，请基于当前状态继续任务。`;
 
-    // 执行裁剪：移除旧 pair，插入摘要
     history.splice(pairsStart, messagesToRemove, {
       role: 'user',
       parts: [{ text: summary }]
@@ -83,6 +92,7 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
     if (onLog) {
       onLog(`✂️ [${this.config.name}] 上下文裁剪：移除 ${pairsToRemove} 轮旧历史，保留最近 ${maxPairs} 轮`);
     }
+    */
   }
 
   async run(

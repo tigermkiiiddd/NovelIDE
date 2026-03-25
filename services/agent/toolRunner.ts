@@ -1,5 +1,5 @@
 
-import { FileNode, TodoItem, PendingChange, FileType, PlanNote, EditDiff } from '../../types';
+import { FileNode, TodoItem, PendingChange, FileType, PlanNote, EditDiff, BatchEdit, StringMatchEdit, MatchPosition } from '../../types';
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
@@ -9,7 +9,6 @@ import { executeOutlineTool, executeProcessOutlineInput } from './tools/timeline
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
-import { BatchEdit } from '../../stores/fileStore';
 import { useVersionStore } from '../../stores/versionStore';
 
 /**
@@ -77,29 +76,71 @@ const injectMatchedCharacters = (content: string, files: FileNode[]): string => 
 };
 
 /**
+ * 查找所有匹配位置
+ */
+const findAllMatches = (content: string, search: string): MatchPosition[] => {
+    const matches: MatchPosition[] = [];
+    let currentIndex = 0;
+
+    while (true) {
+        const index = content.indexOf(search, currentIndex);
+        if (index === -1) break;
+
+        // 计算起始行号
+        const beforeMatch = content.substring(0, index);
+        const lines = beforeMatch.split('\n');
+        const startLine = lines.length;
+        const startOffset = index;
+        const endOffset = index + search.length;
+
+        // 计算结束行号
+        const matchLines = search.split('\n');
+        const endLine = startLine + matchLines.length - 1;
+
+        matches.push({
+            startLine,
+            endLine,
+            startOffset,
+            endOffset
+        });
+
+        currentIndex = endOffset;
+    }
+
+    return matches;
+};
+
+/**
  * Generate EditDiffs for each edit in a patchFile operation.
- * This enables granular approval/rejection of individual edits.
+ * Uses string matching mode (single/global).
  */
 const generateEditDiffs = (originalContent: string, edits: BatchEdit[], changeId: string): EditDiff[] => {
-    const originalLines = originalContent.split('\n');
-
     return edits.map((edit, index) => {
-        const startLine = edit.startLine;
-        const endLine = edit.endLine;
+        const stringEdit = edit as StringMatchEdit;
+        const { mode, oldContent, newContent } = stringEdit;
 
-        // Extract original segment (0-indexed slice)
-        const originalSegment = originalLines
-            .slice(Math.max(0, startLine - 1), Math.min(originalLines.length, endLine))
-            .join('\n');
+        // 查找所有匹配
+        const matches = findAllMatches(originalContent, oldContent);
+
+        // 计算行号（用于显示）- 默认为1而不是0
+        let startLine = 1;
+        let endLine = 1;
+        if (matches.length > 0) {
+            startLine = matches[0].startLine;
+            endLine = matches[matches.length - 1].endLine;
+        }
 
         return {
             id: `edit_${changeId}_${index}`,
             editIndex: index,
             startLine,
             endLine,
-            originalSegment,
-            modifiedSegment: edit.newContent || '',
-            status: 'pending' as const
+            originalSegment: oldContent,
+            modifiedSegment: newContent || '',
+            status: 'pending' as const,
+            mode,
+            matchCount: matches.length,
+            allMatches: matches
         };
     });
 };
@@ -277,19 +318,17 @@ export const executeTool = async (
             } else if (name === 'patchFile') {
                 description = `Patch: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
-                // Simulate patch using the SHADOW-AWARE base content
-                let allLines = baseContent.split(/\r?\n/);
-                const sortedEdits = [...args.edits].sort((a: any, b: any) => b.startLine - a.startLine);
-                for (const edit of sortedEdits) {
-                    const { startLine, endLine, newContent } = edit;
-                    const startIdx = Math.max(0, startLine - 1);
-                    const deleteCount = Math.max(0, endLine - startLine + 1);
-                    const newLines = newContent ? newContent.split(/\r?\n/) : [];
-                    if (startIdx <= allLines.length) {
-                        allLines.splice(startIdx, deleteCount, ...newLines);
+                // Simulate patch using string matching
+                let content = baseContent;
+                for (const edit of args.edits) {
+                    const { mode, oldContent, newContent: editNewContent } = edit;
+                    if (mode === 'global') {
+                        content = content.split(oldContent).join(editNewContent);
+                    } else {
+                        content = content.replace(oldContent, editNewContent);
                     }
                 }
-                newContent = allLines.join('\n');
+                newContent = content;
             } else if (name === 'deleteFile') {
                 // 验证文件存在
                 if (!existingFile) {

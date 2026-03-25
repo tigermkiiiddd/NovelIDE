@@ -19,6 +19,7 @@ interface OutlineViewerProps {
 }
 
 type TimelineLevel = 'events' | 'chapters' | 'volumes';
+type EventGroupMode = 'none' | 'day' | 'chapter';
 
 // 事件表单数据类型
 interface EventFormData {
@@ -714,6 +715,10 @@ const VolumeSection = React.memo(({
 const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   // 视图状态
   const [timelineLevel, setTimelineLevel] = useState<TimelineLevel>('events');
+  const [eventGroupMode, setEventGroupMode] = useState<EventGroupMode>('day');
+
+  // 折叠状态（使用 Set 存储已折叠的组 key）
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // 创建表单状态
   const [showAddVolume, setShowAddVolume] = useState(false);
@@ -1094,6 +1099,108 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     return map;
   }, [cachedChaptersList]);
 
+  // === Event Grouping Logic ===
+  const toggleGroupCollapse = useCallback((groupKey: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }, []);
+
+  // 按天或章节分组事件
+  const groupedEvents = useMemo(() => {
+    if (eventGroupMode === 'none') {
+      return null;
+    }
+
+    const groups = new Map<string, {
+      key: string;
+      label: string;
+      events: TimelineEvent[];
+      extraInfo?: string;
+    }>();
+
+    cachedEvents.forEach(event => {
+      let key: string;
+      let label: string;
+
+      if (eventGroupMode === 'day') {
+        const day = event.timestamp?.day || 1;
+        key = `day-${day}`;
+        label = `第 ${day} 天`;
+      } else {
+        // 按章节分组
+        const chapter = event.chapterId ? chapterMap.get(event.chapterId) : null;
+        if (chapter) {
+          key = `chapter-${chapter.chapterIndex}`;
+          label = `第${chapter.chapterIndex}章「${chapter.title}」`;
+        } else {
+          key = 'chapter-ungrouped';
+          label = '未分类事件';
+        }
+      }
+
+      if (!groups.has(key)) {
+        groups.set(key, { key, label, events: [] });
+      }
+      groups.get(key)!.events.push(event);
+    });
+
+    // 计算额外信息并按key排序
+    return Array.from(groups.values())
+      .sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }))
+      .map(group => {
+        if (eventGroupMode === 'day') {
+          // 按天分组：显示包含的章节
+          const chapterSet = new Set<string>();
+          group.events.forEach(event => {
+            if (event.chapterId) {
+              const chapter = chapterMap.get(event.chapterId);
+              if (chapter) {
+                chapterSet.add(`第${chapter.chapterIndex}章`);
+              }
+            }
+          });
+          const chapters = Array.from(chapterSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+          return {
+            ...group,
+            extraInfo: chapters.length > 0 ? `包含：${chapters.join('、')}` : undefined
+          };
+        } else {
+          // 按章节分组：显示时间跨度
+          const timestamps = group.events
+            .filter(e => e.timestamp && typeof e.timestamp.day === 'number')
+            .map(e => (e.timestamp.day - 1) * 24 + e.timestamp.hour);
+          if (timestamps.length > 0) {
+            const minHours = Math.min(...timestamps);
+            const maxHours = Math.max(...timestamps);
+            const startDay = Math.floor(minHours / 24) + 1;
+            const startHour = minHours % 24;
+            const endDay = Math.floor(maxHours / 24) + 1;
+            const endHour = maxHours % 24;
+
+            const formatTime = (day: number, hour: number) => {
+              const h = Math.floor(hour);
+              const m = Math.round((hour - h) * 60);
+              return m > 0 ? `第${day}天${h}:${m.toString().padStart(2, '0')}` : `第${day}天${h}:00`;
+            };
+
+            if (startDay === endDay && startHour === endHour) {
+              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour)}` };
+            } else {
+              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour)} ~ ${formatTime(endDay, endHour)}` };
+            }
+          }
+          return group;
+        }
+      });
+  }, [cachedEvents, eventGroupMode, chapterMap]);
+
   // === Render ===
   return (
     <div className="h-full flex flex-col bg-[#0d1117] text-gray-200">
@@ -1148,6 +1255,51 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
               {/* === Events Level === */}
               {timelineLevel === 'events' && (
                 <>
+                  {/* Group Mode Selector */}
+                  <div className="flex gap-1 mb-3 text-xs">
+                    <span className="text-gray-500 py-1">分组：</span>
+                    <button
+                      onClick={() => setEventGroupMode('none')}
+                      className={`px-2 py-1 rounded ${
+                        eventGroupMode === 'none' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      无
+                    </button>
+                    <button
+                      onClick={() => setEventGroupMode('day')}
+                      className={`px-2 py-1 rounded ${
+                        eventGroupMode === 'day' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      按天
+                    </button>
+                    <button
+                      onClick={() => setEventGroupMode('chapter')}
+                      className={`px-2 py-1 rounded ${
+                        eventGroupMode === 'chapter' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      按章节
+                    </button>
+                    {eventGroupMode !== 'none' && groupedEvents && (
+                      <button
+                        onClick={() => {
+                          if (collapsedGroups.size === groupedEvents.length) {
+                            // 全部折叠 -> 全部展开
+                            setCollapsedGroups(new Set());
+                          } else {
+                            // 部分折叠 -> 全部折叠
+                            setCollapsedGroups(new Set(groupedEvents.map(g => g.key)));
+                          }
+                        }}
+                        className="px-2 py-1 rounded bg-gray-700 text-gray-400 hover:text-gray-200 ml-2"
+                      >
+                        {collapsedGroups.size === groupedEvents.length ? '全部展开' : '全部折叠'}
+                      </button>
+                    )}
+                  </div>
+
                   {/* Add Event Button */}
               {!showAddEvent && (
                 <button
@@ -1181,6 +1333,100 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                   );
                 }
 
+                // 渲染单个事件的辅助函数
+                const renderEvent = (event: TimelineEvent) => {
+                  const storyLine = storyLineMap.get(event.storyLineId);
+                  const chapter = event.chapterId ? chapterMap.get(event.chapterId) : null;
+
+                  return (
+                    <div key={event.id} className="relative pl-10 pb-4 last:pb-0">
+                      {/* Timeline Dot */}
+                      <div
+                        className="absolute left-2.5 top-1 w-3 h-3 rounded-full border-2 border-gray-900"
+                        style={{ backgroundColor: storyLine?.color || '#4A90D9' }}
+                      />
+
+                      {/* Event Card or Edit Form */}
+                      {editingEventId === event.id ? (
+                        <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
+                          <EventForm
+                            formData={newEvent}
+                            storyLines={cachedStoryLines}
+                            chapters={cachedChapters}
+                            onFieldChange={handleEventFieldChange}
+                            onSubmit={handleSaveEditEvent}
+                            onCancel={handleCancelEditEvent}
+                            onQuickCreateChapter={handleQuickCreateChapter}
+                          />
+                        </div>
+                      ) : (
+                        <EventCard
+                          event={event}
+                          storyLineColor={storyLine?.color || '#4A90D9'}
+                          storyLineName={storyLine?.name}
+                          chapterInfo={chapter ? { chapterIndex: chapter.chapterIndex, title: chapter.title } : null}
+                          showChapterInfo
+                          onEdit={handleEventEdit}
+                          onDelete={handleDeleteTimelineEvent}
+                          isDragging={draggedEventId === event.id}
+                          isDragOver={dragOverEventId === event.id && draggedEventId !== event.id}
+                          onDragStart={handleDragStart}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={handleDragOver}
+                          onDrop={handleDrop}
+                        />
+                      )}
+                    </div>
+                  );
+                };
+
+                // 分组模式
+                if (eventGroupMode !== 'none' && groupedEvents) {
+                  return (
+                    <div className="space-y-2">
+                      {/* Event Count */}
+                      <div className="text-sm text-gray-500 mb-2">
+                        共 {cachedEvents.length} 个事件，{groupedEvents.length} 个分组
+                      </div>
+
+                      {groupedEvents.map(group => {
+                        const isCollapsed = collapsedGroups.has(group.key);
+                        return (
+                          <div key={group.key} className="border border-gray-700 rounded-lg overflow-hidden">
+                            {/* Group Header */}
+                            <div
+                              className="bg-gray-800/80 px-3 py-2 flex items-center justify-between cursor-pointer hover:bg-gray-800"
+                              onClick={() => toggleGroupCollapse(group.key)}
+                            >
+                              <div className="flex items-center gap-2">
+                                {isCollapsed ? (
+                                  <ChevronRight size={14} className="text-gray-500" />
+                                ) : (
+                                  <ChevronDown size={14} className="text-gray-500" />
+                                )}
+                                <span className="font-medium text-gray-200">{group.label}</span>
+                                <span className="text-xs text-gray-500">({group.events.length} 个事件)</span>
+                                {group.extraInfo && (
+                                  <span className="text-xs text-blue-400">{group.extraInfo}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Group Content */}
+                            {!isCollapsed && (
+                              <div className="relative p-2 bg-gray-900/50">
+                                <div className="absolute left-[18px] top-0 bottom-0 w-0.5 bg-gray-700" />
+                                {group.events.map(renderEvent)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                // 无分组模式
                 return (
                   <div className="relative">
                     {/* Timeline Line */}
@@ -1192,51 +1438,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     </div>
 
                     {/* Events - using optimized EventCard with Map lookups */}
-                    {cachedEvents.map((event) => {
-                      const storyLine = storyLineMap.get(event.storyLineId);
-                      const chapter = event.chapterId ? chapterMap.get(event.chapterId) : null;
-
-                      return (
-                        <div key={event.id} className="relative pl-10 pb-4 last:pb-0">
-                          {/* Timeline Dot */}
-                          <div
-                            className="absolute left-2.5 top-1 w-3 h-3 rounded-full border-2 border-gray-900"
-                            style={{ backgroundColor: storyLine?.color || '#4A90D9' }}
-                          />
-
-                          {/* Event Card or Edit Form */}
-                          {editingEventId === event.id ? (
-                            <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
-                              <EventForm
-                                formData={newEvent}
-                                storyLines={cachedStoryLines}
-                                chapters={cachedChapters}
-                                onFieldChange={handleEventFieldChange}
-                                onSubmit={handleSaveEditEvent}
-                                onCancel={handleCancelEditEvent}
-                                onQuickCreateChapter={handleQuickCreateChapter}
-                              />
-                            </div>
-                          ) : (
-                            <EventCard
-                              event={event}
-                              storyLineColor={storyLine?.color || '#4A90D9'}
-                              storyLineName={storyLine?.name}
-                              chapterInfo={chapter ? { chapterIndex: chapter.chapterIndex, title: chapter.title } : null}
-                              showChapterInfo
-                              onEdit={handleEventEdit}
-                              onDelete={handleDeleteTimelineEvent}
-                              isDragging={draggedEventId === event.id}
-                              isDragOver={dragOverEventId === event.id && draggedEventId !== event.id}
-                              onDragStart={handleDragStart}
-                              onDragEnd={handleDragEnd}
-                              onDragOver={handleDragOver}
-                              onDrop={handleDrop}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
+                    {cachedEvents.map(renderEvent)}
                   </div>
                 );
               })()}

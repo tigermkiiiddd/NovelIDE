@@ -5,7 +5,7 @@
 import { AIService } from '../../geminiService';
 import { runTimelineSubAgent, TimelineInput } from '../../subAgents/timelineAgent';
 import { useAgentStore } from '../../../stores/agentStore';
-import { useWorldTimelineStore } from '../../../stores/worldTimelineStore';
+import { useWorldTimelineStore, toHours } from '../../../stores/worldTimelineStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { TimelineEvent, ChapterGroup } from '../../../types';
 
@@ -84,18 +84,28 @@ export const executeProcessOutlineInput = async (
   const existingChapters = store.getChapters();
   const existingEvents = store.getEvents();
 
+  // 构建 volumeId -> volumeIndex 的映射
+  const volumeIdToIndex = new Map(existingVolumes.map(v => [v.id, v.volumeIndex]));
+
   const context = {
     existingVolumeCount: existingVolumes.length,
     existingChapterCount: existingChapters.length,
     existingEventCount: existingEvents.length,
-    volumeSummaries: existingVolumes.map(v => ({ volumeIndex: v.volumeIndex, title: v.title }))
+    volumeSummaries: existingVolumes.map(v => ({ volumeIndex: v.volumeIndex, title: v.title })),
+    chapterSummaries: existingChapters.map(c => ({
+      chapterIndex: c.chapterIndex,
+      title: c.title,
+      volumeIndex: c.volumeId ? (volumeIdToIndex.get(c.volumeId) ?? 0) : 0,
+      eventCount: c.eventIds.length
+    }))
   };
 
   const aiService = new AIService(agentStore.aiConfig);
   const input: TimelineInput = {
     userInput: args.userInput,
     projectId: getProjectId() || '',
-    mode: args.mode
+    mode: args.mode,
+    instructions: args.instructions  // 传递主 agent 的指令
   };
 
   try {
@@ -301,9 +311,10 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         result.updated = true;
       }
 
-      // delete
+      // delete（从大到小删除，避免 index 变化问题）
       if (args.delete) {
-        for (const idx of args.delete) {
+        const sortedIndexes = [...args.delete].sort((a: number, b: number) => b - a);
+        for (const idx of sortedIndexes) {
           const chapter = findChapterByIndex(idx);
           if (chapter) {
             store.deleteChapter(chapter.id);
@@ -316,7 +327,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
     }
 
     case 'outline_manageEvents': {
-      const result: any = { added: [], updated: false, deleted: [], moved: false };
+      const result: any = { added: [], inserted: [], updated: false, deleted: [], moved: false };
 
       // add
       if (args.add) {
@@ -330,6 +341,112 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           const r = JSON.parse(store.addEvent(eventData));
           result.added.push({ title: e.title, eventIndex: r.eventIndex });
         }
+      }
+
+      // insert（在指定位置插入，后续事件时间戳偏移）
+      if (args.insert) {
+        const { afterEventIndex, events } = args.insert;
+
+        // 计算插入事件的总持续时间（小时）
+        let totalDurationHours = 0;
+        for (const e of events) {
+          if (e.duration) {
+            const { value, unit } = e.duration;
+            if (unit === 'minute') totalDurationHours += value / 60;
+            else if (unit === 'hour') totalDurationHours += value;
+            else if (unit === 'day') totalDurationHours += value * 24;
+          }
+        }
+
+        if (totalDurationHours === 0) {
+          return JSON.stringify({ success: false, error: '插入事件必须指定 duration' });
+        }
+
+        // 获取所有事件
+        const allEvents = store.getEvents();
+
+        // 找到插入点的事件
+        const afterEvent = afterEventIndex === -1 ? null : findEventByIndex(afterEventIndex);
+        if (afterEventIndex !== -1 && !afterEvent) {
+          return JSON.stringify({ success: false, error: `事件 ${afterEventIndex} 不存在` });
+        }
+
+        // 计算插入点的时间戳
+        let insertAfterHours: number;
+        if (afterEvent) {
+          insertAfterHours = (afterEvent.timestamp.day - 1) * 24 + afterEvent.timestamp.hour;
+          // 加上 afterEvent 自己的持续时间
+          if (afterEvent.duration) {
+            insertAfterHours += toHours(afterEvent.duration);
+          }
+        } else {
+          // 在最前面插入，从第一个事件之前开始
+          if (allEvents.length > 0) {
+            insertAfterHours = (allEvents[0].timestamp.day - 1) * 24 + allEvents[0].timestamp.hour;
+          } else {
+            insertAfterHours = 8; // 默认第1天8点
+          }
+        }
+
+        // 偏移后续事件的时间戳
+        const afterEventId = afterEvent?.id;
+        const shouldShift = (e: TimelineEvent) => {
+          if (!afterEvent) return true; // 在最前面插入，所有事件都偏移
+          // 在 afterEvent 之后的事件才偏移
+          const eHours = (e.timestamp.day - 1) * 24 + e.timestamp.hour;
+          const afterHours = (afterEvent.timestamp.day - 1) * 24 + afterEvent.timestamp.hour;
+          return eHours > afterHours || (eHours === afterHours && e.eventIndex > afterEvent.eventIndex);
+        };
+
+        for (const e of allEvents) {
+          if (shouldShift(e)) {
+            const oldHours = (e.timestamp.day - 1) * 24 + e.timestamp.hour;
+            const newHours = oldHours + totalDurationHours;
+            const newTimestamp = {
+              day: Math.floor(newHours / 24) + 1,
+              hour: newHours % 24
+            };
+            store.updateEvent(e.id, { timestamp: newTimestamp });
+          }
+        }
+
+        // 插入新事件
+        let currentHours = insertAfterHours;
+        for (const e of events) {
+          const durationHours = e.duration
+            ? (e.duration.unit === 'minute' ? e.duration.value / 60 :
+               e.duration.unit === 'hour' ? e.duration.value :
+               e.duration.value * 24)
+            : 1;
+
+          const timestamp = {
+            day: Math.floor(currentHours / 24) + 1,
+            hour: currentHours % 24
+          };
+
+          const eventData: any = {
+            title: e.title,
+            content: e.content,
+            timestamp,
+            duration: e.duration
+          };
+
+          if (e.chapterIndex !== undefined) {
+            const chapter = findChapterByIndex(e.chapterIndex);
+            if (chapter) eventData.chapterId = chapter.id;
+          }
+          if (e.location) eventData.location = e.location;
+          if (e.characters) eventData.characters = e.characters;
+          if (e.emotion) eventData.emotion = e.emotion;
+          if (e.purpose) eventData.purpose = e.purpose;
+
+          const r = JSON.parse(store.addEvent(eventData));
+          result.inserted.push({ title: e.title, eventIndex: r.eventIndex });
+
+          currentHours += durationHours;
+        }
+
+        result.insertOffset = { hours: totalDurationHours, afterEventIndex };
       }
 
       // update
@@ -349,9 +466,10 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         result.updated = true;
       }
 
-      // delete
+      // delete（从大到小删除，避免 index 变化问题）
       if (args.delete) {
-        for (const idx of args.delete) {
+        const sortedIndexes = [...args.delete].sort((a: number, b: number) => b - a);
+        for (const idx of sortedIndexes) {
           const event = findEventByIndex(idx);
           if (event) {
             store.deleteEvent(event.id);

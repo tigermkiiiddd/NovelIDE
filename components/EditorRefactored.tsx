@@ -18,7 +18,7 @@ import { FileNode } from '../types';
 import DiffViewer from './DiffViewer';
 import { ReadingLightView } from './ReadingLightView';
 import { JsonViewer } from './JsonViewer';
-import { LongTermMemoryView } from './LongTermMemoryView';
+import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { CharacterProfileView } from './CharacterProfileView';
 import EditHighlightOverlay from './editor/EditHighlightOverlay';
 import VersionHistory from './VersionHistory';
@@ -278,11 +278,11 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
       );
     }
 
-    // 长期记忆.json -> LongTermMemoryView
+    // 长期记忆.json -> KnowledgeTreeView
     if (filePath === '00_基础信息/长期记忆.json') {
       return (
         <div className={`h-full ${className}`}>
-          <LongTermMemoryView />
+          <KnowledgeTreeView className="h-full" />
         </div>
       );
     }

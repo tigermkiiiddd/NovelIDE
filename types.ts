@@ -108,6 +108,29 @@ export interface PlanNote {
   updatedAt: number;
 }
 
+// --- Patch Mode Types (String Match) ---
+
+// 替换模式
+export type PatchMode = 'single' | 'global';
+
+// 匹配位置信息
+export interface MatchPosition {
+  startLine: number;           // 起始行号（1-based）
+  endLine: number;             // 结束行号（1-based）
+  startOffset: number;         // 字符偏移量
+  endOffset: number;           // 结束偏移量
+}
+
+// 字符串匹配编辑
+export interface StringMatchEdit {
+  mode: PatchMode;             // single=单点替换, global=全局替换
+  oldContent: string;          // 要查找的原文（精确匹配）
+  newContent: string;          // 替换内容
+}
+
+// 批量编辑类型
+export type BatchEdit = StringMatchEdit;
+
 // --- Edit-level Diff for Granular Approval ---
 export interface EditDiff {
   id: string;                  // Unique ID for this edit
@@ -117,6 +140,10 @@ export interface EditDiff {
   originalSegment: string;     // Original content
   modifiedSegment: string;     // Modified content
   status: 'pending' | 'accepted' | 'rejected' | 'manually_edited';
+  // 字符串匹配模式额外信息
+  mode?: PatchMode;            // 替换模式
+  matchCount?: number;         // 匹配次数
+  allMatches?: MatchPosition[]; // 所有匹配位置
 }
 
 // --- Edit Increment for Line Number Tracking ---
@@ -422,6 +449,73 @@ export interface MemoryMetadataStats {
   types: { type: MemoryType; count: number }[];
   keywords: { keyword: string; count: number }[];
   tags: { tag: string; count: number }[];
+}
+
+// ============================================
+// 知识图谱类型（新版本 - 使用中文标识）
+// ============================================
+
+// 一级分类（预制，不可扩展）
+export type KnowledgeCategory = '设定' | '规则' | '禁止' | '风格';
+
+// 二级分类默认值（半预制，业务AI可扩展）
+export const DEFAULT_SUB_CATEGORIES: Record<KnowledgeCategory, string[]> = {
+  '设定': ['世界设定', '剧情设定', '物品设定', '场景设定', '其他设定'],
+  '规则': ['创作规则', '叙事规则', '角色规则', '其他规则'],
+  '禁止': ['禁止词汇', '禁止情节', '禁止写法', '其他禁止'],
+  '风格': ['叙事风格', '对话风格', '描写风格', '其他风格'],
+};
+
+// 知识关系类型（中文）
+export type KnowledgeEdgeType = '属于' | '细化' | '依赖' | '冲突';
+
+// 知识节点
+export interface KnowledgeNode {
+  id: string;
+  // 三级分类
+  category: KnowledgeCategory;      // 一级（预制）
+  subCategory: string;              // 二级（半预制，中文）
+  topic?: string;                   // 三级（动态，可选）
+  // 内容（中文，简洁原则）
+  name: string;                     // 简短名称（≤20字）
+  summary: string;                  // 一句话概括（≤50字）
+  detail?: string;                  // 详细说明（≤200字，可选）
+  // Tag系统
+  tags: string[];                   // 标签（跨分类索引）
+  // 元数据
+  importance: 'critical' | 'important' | 'normal';
+  // 层级关系
+  parentId?: string;                // 父节点ID（用于树状结构）
+  // 来源追踪
+  source?: {
+    type: '对话' | '文档' | '用户';
+    ref?: string;
+  };
+  // 时间戳
+  createdAt: number;
+  updatedAt: number;
+}
+
+// 知识关系边
+export interface KnowledgeEdge {
+  id: string;
+  from: string;                     // 源节点ID
+  to: string;                       // 目标节点ID
+  type: KnowledgeEdgeType;          // 关系类型
+  note?: string;                    // 关系说明
+  createdAt: number;
+}
+
+// 知识节点草稿（用于创建/更新）
+export type KnowledgeNodeDraft = Omit<KnowledgeNode, 'id' | 'createdAt' | 'updatedAt'>;
+
+// 知识图谱统计
+export interface KnowledgeGraphStats {
+  totalNodes: number;
+  totalEdges: number;
+  byCategory: { category: KnowledgeCategory; count: number }[];
+  bySubCategory: { subCategory: string; count: number }[];
+  topTags: { tag: string; count: number }[];
 }
 
 // --- Story Outline Types ---

@@ -1,6 +1,6 @@
 
 import { create } from 'zustand';
-import { FileNode, FileType } from '../types';
+import { FileNode, FileType, BatchEdit, StringMatchEdit, MatchPosition } from '../types';
 import { dbAPI } from '../services/persistence';
 import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
 import { parseFrontmatter } from '../utils/frontmatter';
@@ -11,10 +11,51 @@ import { useVersionStore, VersionSource } from './versionStore';
 // Create FileService instance for domain logic
 const fileService = new FileService(generateId);
 
-export interface BatchEdit {
-  startLine: number;
-  endLine: number;
-  newContent: string;
+// ============================================
+// 辅助函数：字符串匹配
+// ============================================
+
+/**
+ * 查找所有匹配位置
+ */
+function findAllMatches(content: string, search: string): MatchPosition[] {
+  const matches: MatchPosition[] = [];
+  let currentIndex = 0;
+
+  while (true) {
+    const index = content.indexOf(search, currentIndex);
+    if (index === -1) break;
+
+    // 计算起始行号
+    const beforeMatch = content.substring(0, index);
+    const lines = beforeMatch.split('\n');
+    const startLine = lines.length;
+    const startOffset = index;
+    const endOffset = index + search.length;
+
+    // 计算结束行号
+    const matchLines = search.split('\n');
+    const endLine = startLine + matchLines.length - 1;
+
+    matches.push({
+      startLine,
+      endLine,
+      startOffset,
+      endOffset
+    });
+
+    currentIndex = endOffset;
+  }
+
+  return matches;
+}
+
+/**
+ * 截断字符串
+ */
+function truncate(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength) + '...';
 }
 
 interface FileState {
@@ -233,37 +274,68 @@ export const useFileStore = create<FileState>((set, get) => ({
       );
     }
 
-    const allLines = (file.content || '').split(/\r?\n/);
+    let content = file.content || '';
+    const results: string[] = [];
 
-    // Sort edits descending by startLine to ensure index stability
-    const sortedEdits = [...edits].sort((a, b) => b.startLine - a.startLine);
+    for (let i = 0; i < edits.length; i++) {
+      const edit = edits[i] as StringMatchEdit;
+      const { mode, oldContent, newContent } = edit;
 
-    for (const edit of sortedEdits) {
-        const { startLine, endLine, newContent } = edit;
-        const startIdx = Math.max(0, startLine - 1);
-        // deleteCount: number of lines to remove from startLine to endLine (inclusive)
-        const deleteCount = Math.max(0, endLine - startLine + 1);
+      // 验证 oldContent 不为空
+      if (!oldContent) {
+        return `❌ patchFile 失败 (Edit ${i + 1}): oldContent 不能为空`;
+      }
 
-        // FIX: Remove trailing newline from split to avoid extra empty line at end of block
-        // FIX: Handle empty string properly (as deletion)
-        const newLines = newContent ? newContent.replace(/\r?\n$/, '').split(/\r?\n/) : [];
+      // 查找所有匹配位置
+      const matches = findAllMatches(content, oldContent);
 
-        // FIX: Allow appending to the immediate end of file (when startIdx == length)
-        // Also clamp startIdx to ensure it doesn't gap wildly (though splice handles gaps by just appending)
-        const safeStartIdx = Math.min(startIdx, allLines.length);
+      // 根据模式验证
+      if (mode === 'single') {
+        if (matches.length === 0) {
+          return `❌ patchFile 失败 (Edit ${i + 1}): 未找到匹配内容。
 
-        allLines.splice(safeStartIdx, deleteCount, ...newLines);
+【可能原因】
+1. oldContent 与原文不完全一致（空格、换行、标点差异）
+2. 文件已被修改，内容已变化
+
+【搜索内容】
+"${truncate(oldContent, 200)}"`;
+        }
+        if (matches.length > 1) {
+          const positions = matches.map(m => `行 ${m.startLine}-${m.endLine}`).join(', ');
+          return `❌ patchFile 失败 (Edit ${i + 1}): 找到 ${matches.length} 处匹配，但使用的是单点模式。
+
+【匹配位置】
+${positions}
+
+【建议】
+1. 提供更多上下文使 oldContent 更精确、唯一
+2. 或改用 mode: "global" 进行全局替换`;
+        }
+      }
+
+      // 执行替换
+      if (mode === 'global') {
+        if (matches.length === 0) {
+          results.push(`Edit ${i + 1}: 未找到匹配，跳过`);
+        } else {
+          content = content.split(oldContent).join(newContent);
+          results.push(`Edit ${i + 1}: ${matches.length} 处已替换`);
+        }
+      } else {
+        // single 模式（已验证只有一处匹配）
+        content = content.replace(oldContent, newContent);
+        results.push(`Edit ${i + 1}: 1 处已替换`);
+      }
     }
 
-    const finalContent = allLines.join('\n');
-
-    const metadata = parseFrontmatter(finalContent);
+    const metadata = parseFrontmatter(content);
     set(state => ({
-        files: state.files.map(f => f.id === file.id ? { ...f, content: finalContent, metadata, lastModified: Date.now() } : f)
+        files: state.files.map(f => f.id === file.id ? { ...f, content, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
-    const wordInfo = formatWordCount(finalContent);
-    return `Successfully applied ${edits.length} patches to "${path}" (${wordInfo})`;
+    const wordInfo = formatWordCount(content);
+    return `✅ Successfully applied ${edits.length} patches to "${path}" (${wordInfo})\n${results.join('\n')}`;
   },
 
   readFile: (path, startLine = 1, endLine) => {

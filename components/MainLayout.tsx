@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileNode } from '../types';
-import { LoaderCircle, Menu, MessageSquare, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LoaderCircle, Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit } from 'lucide-react';
 import Editor from './EditorRefactored';
 import AgentChat from './AgentChat';
 import Sidebar from './Sidebar';
@@ -9,6 +9,7 @@ import ProjectOverview from './ProjectOverview';
 import StatusBar from './StatusBar';
 import PlanNoteViewer from './PlanNoteViewer';
 import OutlineViewer from './OutlineViewer';
+import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { useAgent } from '../hooks/useAgent';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useProjectStore } from '../stores/projectStore';
@@ -18,6 +19,7 @@ import { usePlanStore } from '../stores/planStore';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useLongTermMemoryStore } from '../stores/longTermMemoryStore';
 import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
+import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useShallow } from 'zustand/react/shallow';
 import { generateId, getNodePath } from '../services/fileSystem';
 
@@ -65,19 +67,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const loadProjectMemories = useLongTermMemoryStore(state => state.loadProjectMemories);
   const isMemoryExtracting = useLongTermMemoryStore(state => state.isExtracting);
   const loadProjectCharacterProfiles = useCharacterMemoryStore(state => state.loadProjectProfiles);
+  const ensureKnowledgeGraphInitialized = useKnowledgeGraphStore(state => state.ensureInitialized);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
   // Initialize Files and Chapter Analyses when Project Changes
   useEffect(() => {
     if (projectId) {
-        // 先加载文件，等完成后再加载章节分析、长期记忆
+        // 先加载文件，等完成后再加载章节分析、长期记忆、知识图谱
         loadProjectMemories(projectId);
+        ensureKnowledgeGraphInitialized(projectId);
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectCharacterProfiles(projectId);
         });
     }
-  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadProjectCharacterProfiles]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectMemories, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized]);
 
   // File System State & Actions
   const { 
@@ -171,6 +175,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   // Outline Viewer State
   const [isOutlineViewerOpen, setIsOutlineViewerOpen] = useState(false);
+
+  // Knowledge Graph Viewer State
+  const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
 
   // Auto-open/close OutlineViewer based on active file
   useEffect(() => {
@@ -352,6 +359,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             </div>
             <div className="flex items-center gap-2">
                  <button
+                    onClick={() => setIsKnowledgeGraphOpen(!isKnowledgeGraphOpen)}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isKnowledgeGraphOpen ? 'bg-purple-600/20 text-purple-400' : 'text-gray-400 hover:text-white'}`}
+                 >
+                    <BrainCircuit size={14} />
+                    知识图谱
+                 </button>
+                 <button
                     onClick={toggleChat}
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isChatOpen ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}
                  >
@@ -363,7 +377,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
         {/* Editor Container */}
         <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-          {isOutlineViewerOpen ? (
+          {isKnowledgeGraphOpen ? (
+            <KnowledgeTreeView
+              onSelectNode={(node) => {
+                console.log('Selected knowledge node:', node);
+              }}
+              className="h-full"
+            />
+          ) : isOutlineViewerOpen ? (
             <OutlineViewer
               isOpen={isOutlineViewerOpen}
               onClose={() => setIsOutlineViewerOpen(false)}

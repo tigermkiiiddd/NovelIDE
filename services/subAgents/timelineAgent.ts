@@ -48,6 +48,7 @@ export interface TimelineInput {
   userInput: string;
   projectId: string;
   mode: 'add' | 'update';
+  instructions?: string;  // 主 agent 传递的任务指令
 }
 
 export interface TimelineContext {
@@ -55,6 +56,7 @@ export interface TimelineContext {
   existingChapterCount: number;
   existingEventCount: number;
   volumeSummaries: Array<{ volumeIndex: number; title: string }>;
+  chapterSummaries: Array<{ chapterIndex: number; title: string; volumeIndex: number; eventCount: number }>;
 }
 
 export interface TimelineOutput {
@@ -73,80 +75,80 @@ const outlineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput, Timel
   getSystemPrompt: (_input, context) => `
 # 任务：结构化大纲转换
 
-你是一个**结构化转换器**，将剧情描述转换为结构化大纲数据。
+你是大纲结构化转换器，将剧情描述转换为结构化数据。
 
-⚠️ 你只做【解析和写入】，不具备创造能力。只转换原文提供的信息，不要脑补。
+## ⚠️ 核心原则：听从主 Agent 指令
 
-## 输入（主 Agent 提供）
-userInput 包含完整的剧情内容，你只需要：
-1. 解析文本
-2. 调用工具写入
-3. 提交报告
+**主 Agent 的 instructions 是最高优先级！**
+- 如果 instructions 说"禁止创建章节" → 直接调用 manageEvents
+- 如果 instructions 说"从零创建" → 走完整流程
+- 不要自己猜测，按指令执行
 
-## 现有数据（不要重复创建）
+## 现有数据（供参考）
 
 ${context ? `
 - 现有卷：${context.existingVolumeCount} 个
 - 现有章节：${context.existingChapterCount} 个
 - 现有事件：${context.existingEventCount} 个
-${context.volumeSummaries.length > 0 ? `
-现有卷：${context.volumeSummaries.map(v => `volumeIndex=${v.volumeIndex}「${v.title}」`).join('、')}
 
-⚠️ 如果卷已存在，使用现有 volumeIndex 创建章节，不要重复创建卷！
+${context.chapterSummaries && context.chapterSummaries.length > 0 ? `
+**现有章节：**
+${context.chapterSummaries.map(c => `- chapterIndex=${c.chapterIndex}「${c.title}」（${c.eventCount}个事件）`).join('\n')}
 ` : ''}
 ` : '（暂无数据）'}
 
-## 操作流程
+## 工具调用
 
-**第一步：创建卷**（仅当卷不存在时）
-\`\`\`
-outline_manageVolumes({ add: [{ title: "卷名", description: "描述" }] })
-\`\`\`
-
-**第二步：创建章节**（必须全部创建，不能只创建代表性章节）
-\`\`\`
-outline_manageChapters({
-  add: [
-    { title: "章节名", summary: "摘要", volumeIndex: 1 },
-    ...
-  ]
-})
-\`\`\`
-- 每批最多 20 章，分批处理
-- title 必须是具体名称，禁止用「第1章」这种占位符
-- summary 必填
-
-**第三步：创建事件**（如果有）
+**创建事件：**
 \`\`\`
 outline_manageEvents({
   add: [
-    { timestamp: { day: 1, hour: 8 }, title: "事件名", content: "内容" },
+    { timestamp: { day: 1, hour: 14 }, title: "事件", content: "内容", chapterIndex: 1 },
     ...
   ]
 })
 \`\`\`
-- timestamp 格式：{ day: 第几天, hour: 小时 }
-- chapterIndex 可选
 
-**最后：提交报告**
+**创建章节（仅当 instructions 要求时）：**
 \`\`\`
-outline_submitOutline({ success: true, report: "创建统计：卷X个，章节X个，事件X个" })
+outline_manageChapters({ add: [{ title: "章节名", summary: "摘要", volumeIndex: 1 }] })
 \`\`\`
 
-## 重要约束
+**提交：**
+\`\`\`
+outline_submitOutline({ success: true, report: "..." })
+\`\`\`
 
-1. ✅ 只看返回值 success 判断成功，不需要调用 read 工具验证
-2. ✅ index 由系统自动分配，不需要记录
+## 约束
+
+1. ✅ 优先遵守 instructions 中的指令
+2. ✅ 只看返回值 success 判断成功
 3. ❌ 禁止脑补原文没有的内容
-4. ❌ 禁止只创建"代表性章节"，必须全部创建
+4. ❌ 如果 instructions 禁止调用某个工具，绝对不要调用
 `,
 
   getInitialMessage: (input: TimelineInput) => `
-请解析以下内容并写入结构化大纲：
+${input.instructions ? `
+⚠️⚠️⚠️ 主 Agent 指令（必须优先遵守）：
+
+${input.instructions}
+
+---
+` : '⚠️ 警告：主 Agent 未提供 instructions，请根据现有数据判断任务类型。\n\n---'}
+
+## 待处理内容
 
 ${input.userInput}
 
-${input.mode === 'update' ? '模式：更新' : '模式：新增'}
+---
+
+**处理原则：**
+1. 先看上面的【主 Agent 指令】，明确任务类型和禁止事项
+2. 再看【现有数据】，确认哪些已存在
+3. 根据指令决定：直接创建事件？还是走完整流程？
+4. 如果指令明确说"禁止创建章节"，直接调用 manageEvents，不要调用 manageChapters
+
+模式：${input.mode === 'update' ? '更新' : '新增'}
 `,
 
   parseTerminalResult: (args: any): TimelineOutput => ({

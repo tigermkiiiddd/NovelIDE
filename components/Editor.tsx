@@ -14,7 +14,7 @@ import { parseFrontmatter } from '../utils/frontmatter';
 import { findSearchResults, getLineAndColFromIndex, getIndexFromLineAndCol } from '../utils/searchUtils';
 import { ReadingLightView } from './ReadingLightView';
 import { JsonViewer } from './JsonViewer';
-import { LongTermMemoryView } from './LongTermMemoryView';
+import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { CharacterProfileView } from './CharacterProfileView';
 import { useShallow } from 'zustand/react/shallow';
 import { PendingChange, EditDiff, EditIncrement } from '../types';
@@ -901,11 +901,11 @@ const Editor: React.FC<EditorProps> = ({
         </div>
       );
     }
-    // 长期记忆.json -> LongTermMemoryView
+    // 长期记忆.json -> KnowledgeTreeView
     if (filePath === '00_基础信息/长期记忆.json') {
       return (
         <div className={`h-full ${className}`}>
-          <LongTermMemoryView />
+          <KnowledgeTreeView className="h-full" />
         </div>
       );
     }
