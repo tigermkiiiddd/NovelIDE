@@ -111,7 +111,7 @@ export interface PlanNote {
 // --- Patch Mode Types (String Match) ---
 
 // 替换模式
-export type PatchMode = 'single' | 'global';
+export type PatchMode = 'single' | 'global' | 'insert';
 
 // 匹配位置信息
 export interface MatchPosition {
@@ -123,9 +123,11 @@ export interface MatchPosition {
 
 // 字符串匹配编辑
 export interface StringMatchEdit {
-  mode: PatchMode;             // single=单点替换, global=全局替换
-  oldContent: string;          // 要查找的原文（精确匹配）
-  newContent: string;          // 替换内容
+  mode: PatchMode;             // single=单点替换, global=全局替换, insert=插入
+  oldContent?: string;         // 要查找的原文（single/global 模式必需）
+  after?: string;              // 在此内容之后插入（insert 模式，空字符串=文件末尾）
+  before?: string;             // 在此内容之前插入（insert 模式）
+  newContent: string;          // 替换/插入的内容
 }
 
 // 批量编辑类型

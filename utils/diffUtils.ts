@@ -112,6 +112,24 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
         const firstNew = currentHunkLines.find(l => l.lineNumNew !== undefined);
         const lastNew = [...currentHunkLines].reverse().find(l => l.lineNumNew !== undefined);
 
+        // 计算行号：如果 hunk 开头是 added 行（没有 lineNumOriginal），需要从上下文推断
+        let startLineOriginal = firstOriginal?.lineNumOriginal;
+        let endLineOriginal = lastOriginal?.lineNumOriginal;
+
+        // 如果没有 original 行号（纯添加），从 new 行号推断位置
+        if (startLineOriginal === undefined && firstNew) {
+            // 找到这个 hunk 在整个 diffLines 中的位置，计算之前的 original 行数
+            let prevOriginalLines = 0;
+            for (let i = 0; i < diffLines.length; i++) {
+                if (diffLines[i] === currentHunkLines[0]) break;
+                if (diffLines[i].lineNumOriginal !== undefined) {
+                    prevOriginalLines = diffLines[i].lineNumOriginal!;
+                }
+            }
+            startLineOriginal = prevOriginalLines + 1;
+            endLineOriginal = prevOriginalLines;
+        }
+
         // Generate stable ID based on content hash
         const contentForId = currentHunkLines
             .map(l => `${l.type === 'add' ? '+' : l.type === 'remove' ? '-' : ' '}${l.content}`)
@@ -126,10 +144,10 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
         hunks.push({
             id: stableId,
             lines: [...currentHunkLines],
-            startLineOriginal: firstOriginal?.lineNumOriginal || 0,
-            endLineOriginal: lastOriginal?.lineNumOriginal || 0,
-            startLineNew: firstNew?.lineNumNew || 0,
-            endLineNew: lastNew?.lineNumNew || 0,
+            startLineOriginal: startLineOriginal || 1,
+            endLineOriginal: endLineOriginal || 1,
+            startLineNew: firstNew?.lineNumNew || 1,
+            endLineNew: lastNew?.lineNumNew || 1,
             type: isCurrentHunkActive ? 'change' : 'unchanged'
         });
         currentHunkLines = [];

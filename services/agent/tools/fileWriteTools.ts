@@ -75,60 +75,45 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: `✅ RECOMMENDED: 修改已有文件时优先使用此工具，基于字符串精确匹配。
+    description: `修改已有文件，基于字符串精确匹配。
 
-【🔥 批量操作】
-edits 数组支持一次修改多处位置！
-- **10条以内的修改**：打包到一个 patchFile 调用中
-- **超过10条修改**：分批次调用，每批约10条
+【🔥 批量操作优先】
+- **同一文件的多处修改应该打包到一个 patchFile 调用中**
+- 每批最多 10 个 edits，超过则分多次调用
+- 只有一处修改时，正常传入单个 edit 即可
 
-【两种替换模式】
+【三种操作模式】
 
-📌 **单点替换** (mode: "single")
-- 精确匹配某段原文，替换为新内容
-- 如果找到多处匹配会报错，要求提供更精确的原文
-- 适用于：修改特定段落、剧情
+📌 **single** - 单点替换
+- 精确匹配一处，多处匹配会报错
+- 需要：oldContent, newContent
 
-📌 **全局替换** (mode: "global")
-- 将文件中所有 oldContent 替换为 newContent
-- 适用于：批量改名、统一术语
+📌 **global** - 全局替换
+- 替换所有匹配项
+- 需要：oldContent, newContent
 
-【使用流程】
-1. 先 readFile 获取文件内容
-2. 复制需要修改的原文到 oldContent（必须精确，包括空格和换行）
-3. 编写 newContent 作为替换内容
-4. 将修改打包到 edits 数组中（10条以内一批）
+📌 **insert** - 插入内容
+- after="某内容" 在其后插入，after="" 在文件末尾插入
+- before="某内容" 在其前插入
+- 需要：after 或 before, newContent
 
-【示例】
+【示例 - 批量修改】
 
-批量修改多处：
 \`\`\`json
 {
   "path": "05_正文草稿/chapter1.md",
   "edits": [
-    { "mode": "single", "oldContent": "第一段原文", "newContent": "新内容1" },
-    { "mode": "single", "oldContent": "第二段原文", "newContent": "新内容2" },
-    { "mode": "global", "oldContent": "张三", "newContent": "李四" }
+    { "mode": "single", "oldContent": "*去死吧！*", "newContent": "*去死吧，怪物！*" },
+    { "mode": "single", "oldContent": "*怪物……*", "newContent": "*还能站起来……*" },
+    { "mode": "single", "oldContent": "*该出发了。*", "newContent": "*时间到了。*" }
   ]
 }
 \`\`\`
 
-全局替换（批量改名）：
-\`\`\`json
-{
-  "path": "05_正文草稿/chapter1.md",
-  "edits": [{
-    "mode": "global",
-    "oldContent": "林月如",
-    "newContent": "林月心"
-  }]
-}
-\`\`\`
-
-【关键规则 - CRITICAL】
-- oldContent 必须**精确匹配**原文，包括空格、标点、换行
-- 单点模式下如果匹配到多处，需要提供更多上下文使其唯一
-- 10条以内的修改打包到一个调用，超过则分批
+【关键规则】
+- 定位内容必须**精确匹配**原文（空格、换行、标点完全一致）
+- 多处修改打包到一个调用，减少审批次数
+- 每批最多10个 edits
 
 [WRITE TOOL]`,
     parameters: {
@@ -136,7 +121,7 @@ edits 数组支持一次修改多处位置！
       properties: {
         thinking: {
           type: 'string',
-          description: '思考过程(用中文):(1) 我读取了哪些内容？(2) oldContent 是否精确复制自原文？(3) 选择 single 还是 global 模式？(4) 是否合理分批（10条以内一批）？'
+          description: '思考过程(用中文):(1) 我要对这个文件做几处修改？(2) 是否有多个修改需要打包？(3) 每个 oldContent 是否精确复制自原文？'
         },
         path: {
           type: 'string',
@@ -144,25 +129,33 @@ edits 数组支持一次修改多处位置！
         },
         edits: {
           type: 'array',
-          description: '要应用的修改列表。10条以内打包到一个调用，超过则分批。',
+          description: '修改列表。多处修改打包到一个数组，单处修改正常传入即可。每批最多10个。',
           items: {
             type: 'object',
             properties: {
               mode: {
                 type: 'string',
-                enum: ['single', 'global'],
-                description: '替换模式：single=精确匹配单处，global=替换所有匹配'
+                enum: ['single', 'global', 'insert'],
+                description: '操作模式：single=单点替换, global=全局替换, insert=插入'
               },
               oldContent: {
                 type: 'string',
-                description: '要查找的原始内容（必须精确匹配，包括空格和换行）'
+                description: '[single/global] 要查找的原始内容（必须精确匹配）'
+              },
+              after: {
+                type: 'string',
+                description: '[insert] 在此内容之后插入。空字符串=文件末尾'
+              },
+              before: {
+                type: 'string',
+                description: '[insert] 在此内容之前插入'
               },
               newContent: {
                 type: 'string',
-                description: '替换后的新内容。如为空字符串则删除该内容。'
+                description: '新内容/插入内容'
               }
             },
-            required: ['mode', 'oldContent', 'newContent']
+            required: ['mode', 'newContent']
           }
         }
       },

@@ -323,9 +323,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       },
 
       addPendingChange: (change) => {
-        const { currentSessionId, pendingChanges } = get();
+        const { currentSessionId, pendingChanges, reviewingChangeId } = get();
         const newPendingChanges = [...pendingChanges, change];
-        set({ pendingChanges: newPendingChanges });
+        // 自动设置 reviewingChangeId 以触发 DiffViewer
+        const newState: Partial<AgentState> = { pendingChanges: newPendingChanges };
+        if (!reviewingChangeId) {
+          newState.reviewingChangeId = change.id;
+        }
+        set(newState);
         // 持久化到 IndexedDB
         if (currentSessionId) {
           debouncedSyncPendingChangesToDB(currentSessionId, newPendingChanges);

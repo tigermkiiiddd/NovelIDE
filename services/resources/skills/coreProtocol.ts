@@ -142,9 +142,10 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 工具选择决策链：\`listFiles 确认文件存在\` → \`readFile 查看当前内容\` → \`判断改动范围\` → \`小改用 patchFile / 大改或新建用 updateFile\`
 
 **patchFile 使用要点**：
-- 基于**字符串精确匹配**，用 oldContent 指定要替换的原文（必须精确复制，包括空格换行）
-- **单点替换** (mode: "single")：精确匹配一处，多处匹配会报错
-- **全局替换** (mode: "global")：替换文件中所有匹配项（如批量改名）
+- 基于**字符串精确匹配**，用 oldContent/after/before 定位（必须精确复制，包括空格换行）
+- **单点替换** (mode: "single")：精确匹配一处替换
+- **全局替换** (mode: "global")：替换所有匹配项（如批量改名）
+- **插入** (mode: "insert")：after="某内容" 在其后插入，after="" 在文件末尾插入，before="某内容" 在其前插入
 - **批量操作**：10条以内修改打包到一个调用，超过则分批
 - 文字无物理效力，必须调用工具才能改变文件
 

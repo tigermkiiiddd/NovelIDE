@@ -279,9 +279,65 @@ export const useFileStore = create<FileState>((set, get) => ({
 
     for (let i = 0; i < edits.length; i++) {
       const edit = edits[i] as StringMatchEdit;
-      const { mode, oldContent, newContent } = edit;
 
-      // 验证 oldContent 不为空
+      // 检查是否为旧格式（行号模式）
+      if ('startLine' in edit || 'endLine' in edit) {
+        return `❌ patchFile 失败: 参数格式已更新，不再支持行号模式。`;
+      }
+
+      const { mode, oldContent, newContent, after, before } = edit;
+
+      // 验证 mode
+      if (!mode) {
+        return `❌ patchFile 失败 (Edit ${i + 1}): 必须指定 mode ("single", "global", "insert")`;
+      }
+
+      // === INSERT 模式 ===
+      if (mode === 'insert') {
+        // 必须指定 after 或 before 其中之一
+        if (after === undefined && before === undefined) {
+          return `❌ patchFile 失败 (Edit ${i + 1}): insert 模式必须指定 after 或 before`;
+        }
+        if (after !== undefined && before !== undefined) {
+          return `❌ patchFile 失败 (Edit ${i + 1}): insert 模式只能指定 after 或 before，不能同时指定`;
+        }
+
+        if (after !== undefined) {
+          // after 模式
+          if (after === '') {
+            // 空字符串 = 文件末尾插入
+            content = content + newContent;
+            results.push(`Edit ${i + 1}: 已插入到文件末尾`);
+          } else {
+            // 在 after 内容之后插入
+            const matches = findAllMatches(content, after);
+            if (matches.length === 0) {
+              return `❌ patchFile 失败 (Edit ${i + 1}): 未找到 after 内容`;
+            }
+            if (matches.length > 1) {
+              return `❌ patchFile 失败 (Edit ${i + 1}): after 内容匹配 ${matches.length} 处，需要更精确`;
+            }
+            const match = matches[0];
+            content = content.slice(0, match.endOffset) + newContent + content.slice(match.endOffset);
+            results.push(`Edit ${i + 1}: 已插入到指定位置之后`);
+          }
+        } else {
+          // before 模式
+          const matches = findAllMatches(content, before!);
+          if (matches.length === 0) {
+            return `❌ patchFile 失败 (Edit ${i + 1}): 未找到 before 内容`;
+          }
+          if (matches.length > 1) {
+            return `❌ patchFile 失败 (Edit ${i + 1}): before 内容匹配 ${matches.length} 处，需要更精确`;
+          }
+          const match = matches[0];
+          content = content.slice(0, match.startOffset) + newContent + content.slice(match.startOffset);
+          results.push(`Edit ${i + 1}: 已插入到指定位置之前`);
+        }
+        continue;
+      }
+
+      // === SINGLE / GLOBAL 模式 ===
       if (!oldContent) {
         return `❌ patchFile 失败 (Edit ${i + 1}): oldContent 不能为空`;
       }
