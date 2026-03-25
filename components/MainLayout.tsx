@@ -71,10 +71,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   useEffect(() => {
     if (projectId) {
         // 先加载文件，等完成后再加载章节分析、知识图谱
-        ensureKnowledgeGraphInitialized(projectId);
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectCharacterProfiles(projectId);
+          // 在文件加载完成后再初始化知识图谱，避免读取空文件列表
+          ensureKnowledgeGraphInitialized(projectId);
         });
     }
   }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized]);

@@ -406,6 +406,16 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       return;
     }
 
+    // 等待文件加载完成（防御性编程）
+    let retryCount = 0;
+    while (!useFileStore.getState().isFilesLoaded && retryCount < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retryCount++;
+    }
+    if (retryCount > 0) {
+      console.log(`[KnowledgeGraph] 等待文件加载完成: ${retryCount * 100}ms`);
+    }
+
     if (targetProjectId) {
       await state.loadFromProject(targetProjectId);
     }

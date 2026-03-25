@@ -63,6 +63,7 @@ interface FileState {
   activeFileId: string | null;
   currentProjectId: string | null; // Track current project to avoid coupling
   virtualFile: FileNode | null; // Virtual file for previewing pending changes (createFile)
+  isFilesLoaded: boolean; // 标记文件是否已加载完成
 
   // Actions
   loadFiles: (projectId: string) => Promise<void>;
@@ -92,8 +93,10 @@ export const useFileStore = create<FileState>((set, get) => ({
   activeFileId: null,
   currentProjectId: null,
   virtualFile: null,
+  isFilesLoaded: false,
 
   loadFiles: async (projectId: string) => {
+    set({ isFilesLoaded: false }); // 开始加载
     let loadedFiles: FileNode[] | undefined;
 
     try {
@@ -138,7 +141,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     }
 
     // Set currentProjectId to avoid coupling with projectStore
-    set({ files: loadedFiles, currentProjectId: projectId });
+    set({ files: loadedFiles, currentProjectId: projectId, isFilesLoaded: true });
 
     // Check and restore missing system files
     get()._restoreSystemFiles();
