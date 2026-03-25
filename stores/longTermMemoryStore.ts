@@ -332,18 +332,41 @@ const legacySaveMemoriesToJson = async (memories: LongTermMemory[], _projectId?:
 };
 
 const saveMemoriesToJson = async (memories: LongTermMemory[], edges: MemoryEdge[], projectId?: string | null) => {
-  void legacySaveMemoriesToJson;
-
   const targetProjectId = projectId ?? useLongTermMemoryStore.getState().currentProjectId ?? resolveActiveProjectId();
   if (!targetProjectId) return;
 
+  // 1. 保存到专用表（主要存储）
+  try {
+    // 删除旧的，保存新的
+    const existingMemories = await dbAPI.getLongTermMemories(targetProjectId);
+    for (const m of existingMemories) {
+      await dbAPI.deleteLongTermMemory(m.id);
+    }
+    for (const memory of memories) {
+      await dbAPI.saveLongTermMemory(memory, targetProjectId);
+    }
+
+    // 保存边
+    const existingEdges = await dbAPI.getMemoryEdges(targetProjectId);
+    for (const e of existingEdges) {
+      await dbAPI.deleteMemoryEdge(e.id);
+    }
+    for (const edge of edges) {
+      await dbAPI.saveMemoryEdge(edge, targetProjectId);
+    }
+
+    console.log(`[LongTermMemoryStore] 已保存 ${memories.length} 条记忆到 IndexedDB 表`);
+  } catch (e) {
+    console.error('[LongTermMemoryStore] 保存到表失败:', e);
+  }
+
+  // 2. 同时保存到文件（兼容/备份）
   const fileStore = useFileStore.getState();
   const sourceFiles =
     fileStore.currentProjectId === targetProjectId
       ? fileStore.files
       : (await Promise.resolve(dbAPI.getFiles(targetProjectId)).catch(() => [])) || [];
 
-  // 保存为对象格式，包含 memories 和 edges
   const memoryData = {
     memories,
     edges,
@@ -365,118 +388,62 @@ const loadMemoriesForProject = async (projectId: string) => {
     currentProjectId: projectId,
   });
 
-  // 辅助函数：尝试从备份恢复
-  const tryRestoreFromBackup = async (): Promise<{ memories: LongTermMemory[]; edges: MemoryEdge[] } | null> => {
-    try {
-      const backup = await dbAPI.getBackup(`files-${projectId}`);
-      if (backup?.content) {
-        console.log('[LongTermMemoryStore] 尝试从备份恢复...');
-        const backupFiles = JSON.parse(backup.content) as FileNode[];
-        const backupMemoryFile = backupFiles.find(f => f.name === MEMORY_FILE_NAME);
-        if (backupMemoryFile?.content) {
-          const backupData = JSON.parse(backupMemoryFile.content);
-          if (Array.isArray(backupData)) {
-            return { memories: normalizeMemories(backupData), edges: [] };
-          } else if (backupData && typeof backupData === 'object') {
-            return {
-              memories: normalizeMemories(backupData.memories || []),
-              edges: backupData.edges || []
-            };
-          }
-        }
-      }
-    } catch (e) {
-      console.error('[LongTermMemoryStore] 备份恢复失败:', e);
-    }
-    return null;
-  };
-
   try {
-    const fileStore = useFileStore.getState();
-    const files =
-      fileStore.currentProjectId === projectId
-        ? fileStore.files
-        : (await Promise.resolve(dbAPI.getFiles(projectId)).catch(() => [])) || [];
-    const memoryFile = files.find((file) => file.name === MEMORY_FILE_NAME);
-
-    if (memoryFile?.content) {
-      // 安全解析 JSON
-      let rawData: any;
-      let parseError: string | null = null;
-
-      try {
-        rawData = JSON.parse(memoryFile.content);
-      } catch (e) {
-        parseError = e instanceof Error ? e.message : String(e);
-        console.error('[LongTermMemoryStore] JSON解析失败:', parseError);
-        console.error('[LongTermMemoryStore] 损坏内容前500字符:', memoryFile.content.slice(0, 500));
-      }
-
-      // 如果解析失败，尝试从备份恢复
-      if (parseError) {
-        const restored = await tryRestoreFromBackup();
-        if (restored) {
-          console.warn('[LongTermMemoryStore] 已从备份恢复 %d 条记忆', restored.memories.length);
-          toast.success('长期记忆已恢复', `从备份恢复了 ${restored.memories.length} 条记忆`);
-          rawData = { memories: restored.memories, edges: restored.edges, version: 2 };
-        } else {
-          // 恢复失败，使用空数据但警告用户
-          console.error('[LongTermMemoryStore] 无法恢复，数据可能已丢失');
-          toast.error('长期记忆数据损坏', '部分记忆数据无法恢复，请检查控制台了解详情', 0);
-          rawData = { memories: [], edges: [], version: 2 };
-        }
-      }
-
-      // 向后兼容：支持旧格式（数组）和新格式（对象）
-      let memories: LongTermMemory[];
-      let edges: MemoryEdge[] = [];
-
-      if (Array.isArray(rawData)) {
-        // 旧格式：直接是 memories 数组
-        memories = normalizeMemories(rawData as LongTermMemory[]);
-      } else if (rawData && typeof rawData === 'object') {
-        // 新格式：{ memories, edges, version }
-        memories = normalizeMemories(rawData.memories || []);
-        edges = rawData.edges || [];
-      } else {
-        memories = [];
-      }
-
-      if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
-      useLongTermMemoryStore.setState({
-        memories,
-        edges,
-        currentProjectId: projectId,
-        isInitialized: true,
-        isLoading: false,
-      });
-      return;
+    // 1. 检查是否需要迁移
+    const migrated = await dbAPI.getProjectMeta(projectId, 'memoriesMigrated');
+    if (!migrated) {
+      console.log('[LongTermMemoryStore] 检测到旧数据，执行迁移...');
+      const result = await dbAPI.migrateMemoriesFromFiles(projectId);
+      console.log('[LongTermMemoryStore] 迁移完成:', result);
     }
+
+    // 2. 从专用表读取
+    const memories = await dbAPI.getLongTermMemories(projectId);
+    const edges = await dbAPI.getMemoryEdges(projectId);
 
     if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
     useLongTermMemoryStore.setState({
-      memories: [],
-      edges: [],
+      memories: normalizeMemories(memories),
+      edges,
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
     });
-  } catch (error) {
-    console.error('[LongTermMemoryStore] Failed to load memories', error);
 
-    // 尝试从备份恢复
-    const restored = await tryRestoreFromBackup();
-    if (restored) {
-      console.warn('[LongTermMemoryStore] 加载失败后从备份恢复 %d 条记忆', restored.memories.length);
-      if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
-      useLongTermMemoryStore.setState({
-        memories: restored.memories,
-        edges: restored.edges,
-        currentProjectId: projectId,
-        isInitialized: true,
-        isLoading: false,
-      });
-      return;
+    if (memories.length > 0) {
+      console.log(`[LongTermMemoryStore] 从表加载了 ${memories.length} 条记忆`);
+    }
+  } catch (error) {
+    console.error('[LongTermMemoryStore] 加载失败:', error);
+
+    // 降级：尝试从文件读取
+    try {
+      const fileStore = useFileStore.getState();
+      const files = fileStore.currentProjectId === projectId
+        ? fileStore.files
+        : (await dbAPI.getFiles(projectId)) || [];
+      const memoryFile = files.find(f => f.name === MEMORY_FILE_NAME);
+
+      if (memoryFile?.content) {
+        const rawData = JSON.parse(memoryFile.content);
+        const memories = Array.isArray(rawData)
+          ? normalizeMemories(rawData)
+          : normalizeMemories(rawData.memories || []);
+        const edges = rawData.edges || [];
+
+        if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
+        useLongTermMemoryStore.setState({
+          memories,
+          edges,
+          currentProjectId: projectId,
+          isInitialized: true,
+          isLoading: false,
+        });
+        toast.warning('长期记忆从备份加载', '数据已恢复，建议检查数据完整性');
+        return;
+      }
+    } catch (e) {
+      console.error('[LongTermMemoryStore] 降级加载也失败:', e);
     }
 
     if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;

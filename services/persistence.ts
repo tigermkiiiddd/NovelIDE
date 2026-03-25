@@ -1,6 +1,6 @@
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis } from '../types';
+import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, FileType } from '../types';
 import { FileVersion } from '../stores/versionStore';
 
 interface UiSettings {
@@ -62,10 +62,32 @@ interface NovelGenieDB extends DBSchema {
       content: string;
     };
   };
+  // 新增：长期记忆专用表
+  longTermMemories: {
+    key: string; // memory.id
+    value: LongTermMemory & { projectId: string };
+    indexes: { 'by-project': string };
+  };
+  memoryEdges: {
+    key: string; // edge.id
+    value: MemoryEdge & { projectId: string };
+    indexes: { 'by-project': string };
+  };
+  // 新增：角色档案专用表
+  characterProfiles: {
+    key: string; // profile.characterId
+    value: CharacterProfileV2 & { projectId: string };
+    indexes: { 'by-project': string };
+  };
+  // 项目元数据（用于标记迁移状态等）
+  projectMeta: {
+    key: string; // '{projectId}-{key}'
+    value: any;
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -118,6 +140,23 @@ export const initDB = () => {
         // Version 11: Add backups store for data safety
         if (!db.objectStoreNames.contains('backups')) {
           db.createObjectStore('backups');
+        }
+
+        // Version 12: Add dedicated tables for memories and profiles
+        if (!db.objectStoreNames.contains('longTermMemories')) {
+          const store = db.createObjectStore('longTermMemories', { keyPath: 'id' });
+          store.createIndex('by-project', 'projectId');
+        }
+        if (!db.objectStoreNames.contains('memoryEdges')) {
+          const store = db.createObjectStore('memoryEdges', { keyPath: 'id' });
+          store.createIndex('by-project', 'projectId');
+        }
+        if (!db.objectStoreNames.contains('characterProfiles')) {
+          const store = db.createObjectStore('characterProfiles', { keyPath: 'characterId' });
+          store.createIndex('by-project', 'projectId');
+        }
+        if (!db.objectStoreNames.contains('projectMeta')) {
+          db.createObjectStore('projectMeta');
         }
 
         // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
@@ -562,5 +601,220 @@ export const dbAPI = {
       console.error('[dbAPI.listBackups] 列出备份失败:', error);
       return [];
     }
+  },
+
+  // ============================================
+  // 长期记忆专用表 API
+  // ============================================
+
+  getLongTermMemories: async (projectId: string): Promise<LongTermMemory[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('longTermMemories')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('longTermMemories', 'by-project', projectId);
+      return all.map(({ projectId: _, ...memory }) => memory as LongTermMemory);
+    } catch (error) {
+      console.error('[dbAPI.getLongTermMemories] 读取失败:', error);
+      return [];
+    }
+  },
+
+  saveLongTermMemory: async (memory: LongTermMemory, projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.put('longTermMemories', { ...memory, projectId });
+    } catch (error) {
+      console.error('[dbAPI.saveLongTermMemory] 保存失败:', error);
+    }
+  },
+
+  deleteLongTermMemory: async (memoryId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('longTermMemories', memoryId);
+    } catch (error) {
+      console.error('[dbAPI.deleteLongTermMemory] 删除失败:', error);
+    }
+  },
+
+  getMemoryEdges: async (projectId: string): Promise<MemoryEdge[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('memoryEdges')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('memoryEdges', 'by-project', projectId);
+      return all.map(({ projectId: _, ...edge }) => edge as MemoryEdge);
+    } catch (error) {
+      console.error('[dbAPI.getMemoryEdges] 读取失败:', error);
+      return [];
+    }
+  },
+
+  saveMemoryEdge: async (edge: MemoryEdge, projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.put('memoryEdges', { ...edge, projectId });
+    } catch (error) {
+      console.error('[dbAPI.saveMemoryEdge] 保存失败:', error);
+    }
+  },
+
+  deleteMemoryEdge: async (edgeId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('memoryEdges', edgeId);
+    } catch (error) {
+      console.error('[dbAPI.deleteMemoryEdge] 删除失败:', error);
+    }
+  },
+
+  // ============================================
+  // 角色档案专用表 API
+  // ============================================
+
+  getCharacterProfiles: async (projectId: string): Promise<CharacterProfileV2[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('characterProfiles')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('characterProfiles', 'by-project', projectId);
+      return all.map(({ projectId: _, ...profile }) => profile as CharacterProfileV2);
+    } catch (error) {
+      console.error('[dbAPI.getCharacterProfiles] 读取失败:', error);
+      return [];
+    }
+  },
+
+  saveCharacterProfile: async (profile: CharacterProfileV2, projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.put('characterProfiles', { ...profile, projectId });
+    } catch (error) {
+      console.error('[dbAPI.saveCharacterProfile] 保存失败:', error);
+    }
+  },
+
+  deleteCharacterProfile: async (characterId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('characterProfiles', characterId);
+    } catch (error) {
+      console.error('[dbAPI.deleteCharacterProfile] 删除失败:', error);
+    }
+  },
+
+  // ============================================
+  // 项目元数据 API
+  // ============================================
+
+  getProjectMeta: async (projectId: string, key: string): Promise<any> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('projectMeta')) {
+        return undefined;
+      }
+      return await db.get('projectMeta', `${projectId}-${key}`);
+    } catch (error) {
+      console.error('[dbAPI.getProjectMeta] 读取失败:', error);
+      return undefined;
+    }
+  },
+
+  setProjectMeta: async (projectId: string, key: string, value: any) => {
+    try {
+      const db = await initDB();
+      await db.put('projectMeta', value, `${projectId}-${key}`);
+    } catch (error) {
+      console.error('[dbAPI.setProjectMeta] 保存失败:', error);
+    }
+  },
+
+  // ============================================
+  // 迁移函数：从 JSON 文件迁移到专用表
+  // ============================================
+
+  migrateMemoriesFromFiles: async (projectId: string): Promise<{ memories: number; profiles: number }> => {
+    console.log('[dbAPI.migrateMemoriesFromFiles] 开始迁移, projectId:', projectId);
+    const result = { memories: 0, profiles: 0 };
+
+    try {
+      const db = await initDB();
+
+      // 检查是否已迁移
+      const migrated = await dbAPI.getProjectMeta(projectId, 'memoriesMigrated');
+      if (migrated) {
+        console.log('[dbAPI.migrateMemoriesFromFiles] 已迁移，跳过');
+        return result;
+      }
+
+      // 1. 读取 files 表中的 JSON
+      const files = await db.get('files', projectId);
+      if (!files) {
+        console.log('[dbAPI.migrateMemoriesFromFiles] 没有文件数据');
+        await dbAPI.setProjectMeta(projectId, 'memoriesMigrated', true);
+        return result;
+      }
+
+      // 2. 迁移长期记忆
+      const memoryFile = files.find((f: FileNode) => f.name === '长期记忆.json');
+      if (memoryFile?.content) {
+        try {
+          const data = JSON.parse(memoryFile.content);
+          const memories = Array.isArray(data) ? data : (data.memories || []);
+          const edges = data.edges || [];
+
+          for (const memory of memories) {
+            if (memory.id) {
+              await db.put('longTermMemories', { ...memory, projectId });
+              result.memories++;
+            }
+          }
+          for (const edge of edges) {
+            if (edge.id) {
+              await db.put('memoryEdges', { ...edge, projectId });
+            }
+          }
+          console.log(`[dbAPI.migrateMemoriesFromFiles] 迁移了 ${result.memories} 条记忆`);
+        } catch (e) {
+          console.error('[dbAPI.migrateMemoriesFromFiles] 长期记忆解析失败:', e);
+        }
+      }
+
+      // 3. 迁移角色档案
+      const CHARACTER_ROOT_FOLDER = '02_角色档案';
+      const PROFILE_FOLDER = '角色状态与记忆';
+      const characterFolder = files.find((f: FileNode) => f.name === CHARACTER_ROOT_FOLDER && f.parentId === 'root');
+      if (characterFolder) {
+        const profileFolder = files.find((f: FileNode) => f.name === PROFILE_FOLDER && f.parentId === characterFolder.id);
+        if (profileFolder) {
+          const profileFiles = files.filter((f: FileNode) => f.parentId === profileFolder.id && f.content);
+          for (const file of profileFiles) {
+            try {
+              const profile = JSON.parse(file.content!);
+              if (profile.characterId) {
+                await db.put('characterProfiles', { ...profile, projectId });
+                result.profiles++;
+              }
+            } catch (e) {
+              console.error(`[dbAPI.migrateMemoriesFromFiles] 角色档案解析失败: ${file.name}`, e);
+            }
+          }
+          console.log(`[dbAPI.migrateMemoriesFromFiles] 迁移了 ${result.profiles} 个角色档案`);
+        }
+      }
+
+      // 4. 标记已迁移
+      await dbAPI.setProjectMeta(projectId, 'memoriesMigrated', true);
+      console.log('[dbAPI.migrateMemoriesFromFiles] 迁移完成');
+
+    } catch (error) {
+      console.error('[dbAPI.migrateMemoriesFromFiles] 迁移失败:', error);
+    }
+
+    return result;
   }
 };

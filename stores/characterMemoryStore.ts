@@ -126,12 +126,41 @@ const ensureProfileFolder = () => {
   return profileFolder;
 };
 
-// 保存档案到文件
+// 保存档案到文件和 IndexedDB 表
 const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
   console.log('[CharacterMemoryStore] 开始保存档案，数量:', profiles.length);
+  const projectId = useProjectStore.getState().currentProjectId;
+
+  // 1. 保存到 IndexedDB 专用表（主要存储）
+  if (projectId) {
+    try {
+      // 获取现有档案 ID 列表
+      const existingIds = new Set(profiles.map(p => p.characterId));
+
+      // 保存所有档案
+      for (const profile of profiles) {
+        const normalized = normalizeProfile(profile);
+        await dbAPI.saveCharacterProfile(normalized, projectId);
+      }
+
+      // 删除不在列表中的档案
+      const allProfiles = await dbAPI.getCharacterProfiles(projectId);
+      for (const oldProfile of allProfiles) {
+        if (!existingIds.has(oldProfile.characterId)) {
+          await dbAPI.deleteCharacterProfile(oldProfile.characterId);
+        }
+      }
+
+      console.log('[CharacterMemoryStore] 已保存到 IndexedDB 表');
+    } catch (error) {
+      console.error('[CharacterMemoryStore] 保存到 IndexedDB 表失败:', error);
+    }
+  }
+
+  // 2. 同步到文件系统（兼容/导出用）
   const folder = ensureProfileFolder();
   if (!folder) {
-    console.log('[CharacterMemoryStore] 无法获取档案文件夹，跳过保存');
+    console.log('[CharacterMemoryStore] 无法获取档案文件夹，跳过文件同步');
     return;
   }
 
@@ -173,11 +202,9 @@ const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
       }
     });
 
-  const projectId = useProjectStore.getState().currentProjectId;
-  console.log('[CharacterMemoryStore] 当前项目ID:', projectId);
   if (projectId) {
     await dbAPI.saveFiles(projectId, [...fileStore.files]);
-    console.log('[CharacterMemoryStore] 已保存到 IndexedDB');
+    console.log('[CharacterMemoryStore] 已同步到文件系统');
   }
 };
 
@@ -208,6 +235,34 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
     isInitialized: false,
 
     loadProfiles: async () => {
+      const projectId = useProjectStore.getState().currentProjectId;
+
+      // 1. 尝试从 IndexedDB 专用表读取
+      if (projectId) {
+        try {
+          // 检查是否需要迁移
+          const migrated = await dbAPI.getProjectMeta(projectId, 'memoriesMigrated');
+          if (!migrated) {
+            console.log('[CharacterMemoryStore] 检测到旧数据。执行迁移...');
+            await dbAPI.migrateMemoriesFromFiles(projectId);
+          }
+
+          const profiles = await dbAPI.getCharacterProfiles(projectId);
+          if (profiles.length > 0) {
+            useCharacterMemoryStore.setState({
+              profiles: profiles.map(p => normalizeProfile(p)),
+              isInitialized: true
+            });
+            console.log(`[CharacterMemoryStore] 从表加载了 ${profiles.length} 个档案`);
+            return;
+          }
+        } catch (error) {
+          console.error('[CharacterMemoryStore] 从表加载失败:', error);
+          // 降级到文件读取
+        }
+      }
+
+      // 2. 降级：从文件读取
       const folder = ensureProfileFolder();
       const fileStore = useFileStore.getState();
 
