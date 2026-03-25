@@ -14,7 +14,7 @@ import { useFileStore } from '../../stores/fileStore';
 import { useDiffStore } from '../../stores/diffStore';
 import { useProjectStore } from '../../stores/projectStore';
 import { useChapterAnalysisStore } from '../../stores/chapterAnalysisStore';
-import { useLongTermMemoryStore } from '../../stores/longTermMemoryStore';
+import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
 import { getNodePath, findNodeByPath } from '../../services/fileSystem';
 import { applyPatchQueue, mergePendingChanges, generatePatchId, extractHunkContent, areAllHunksProcessed } from '../../utils/patchQueue';
 import { computeLineDiff, groupDiffIntoHunks, DiffHunk } from '../../utils/diffUtils';
@@ -312,16 +312,16 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
         }
 
         documentExtractionTimeoutRef.current = setTimeout(() => {
-          useLongTermMemoryStore
+          useKnowledgeGraphStore
             .getState()
             .triggerDocumentExtraction(filePath, computedContent)
             .then((result) => {
-              if (!result || result.added + result.updated === 0) return;
+              if (!result || result.added + result.updated + result.linked === 0) return;
 
               addMessage({
                 id: Math.random().toString(),
                 role: 'system',
-                text: `🧠 已从文档沉淀记忆：新增 ${result.added} 条，更新 ${result.updated} 条`,
+                text: `🧠 已从文档提取知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
                 timestamp: Date.now(),
                 metadata: { logType: 'success', extractionSummary: result.summary, filePath }
               });
@@ -525,16 +525,16 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [addMessage]);
 
   const triggerDocumentMemoryExtraction = useCallback((filePath: string, content: string) => {
-    useLongTermMemoryStore
+    useKnowledgeGraphStore
       .getState()
       .triggerDocumentExtraction(filePath, content)
       .then((result) => {
-        if (!result || result.added + result.updated === 0) return;
+        if (!result || result.added + result.updated + result.linked === 0) return;
 
         addMessage({
           id: Math.random().toString(),
           role: 'system',
-          text: `🧠 已从文档沉淀记忆：新增 ${result.added} 条，更新 ${result.updated} 条`,
+          text: `🧠 已从文档提取知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
           timestamp: Date.now(),
           metadata: { logType: 'success', extractionSummary: result.summary, filePath }
         });

@@ -1,6 +1,6 @@
 /**
  * @file KnowledgeTreeView.tsx
- * @description 知识图谱树状视图组件 - 三级分类 + Tag系统
+ * @description 知识图谱树状视图组件 - 三级分类 + Tag系统 + 详情面板
  */
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
@@ -17,6 +17,11 @@ import {
   BookOpen,
   AlertTriangle,
   PenTool,
+  X,
+  Link2,
+  Activity,
+  Clock,
+  Zap,
 } from 'lucide-react';
 import {
   KnowledgeCategory,

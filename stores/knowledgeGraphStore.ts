@@ -11,6 +11,7 @@ import {
   KnowledgeEdge,
   KnowledgeEdgeType,
   DEFAULT_SUB_CATEGORIES,
+  SUB_CATEGORY_MIGRATION,
 } from '../types';
 import { create } from 'zustand';
 import { useFileStore } from './fileStore';
@@ -21,6 +22,9 @@ import {
   applyKnowledgeNodeEvent,
   scoreKnowledgeNodeRecall,
 } from '../utils/knowledgeIntelligence';
+import { extractKnowledgeFromDocument, KnowledgeOperation } from '../services/subAgents/knowledgeExtractionAgent';
+import { AIService } from '../services/geminiService';
+import { useAgentStore } from './agentStore';
 
 // ============================================
 // 类型定义
@@ -39,6 +43,8 @@ interface KnowledgeGraphState {
   currentProjectId: string | null;
   isLoading: boolean;
   isInitialized: boolean;
+  isExtracting: boolean;
+  extractionError: string | null;
 
   // 节点操作
   addNode: (draft: KnowledgeNodeDraft) => KnowledgeNode;
@@ -82,6 +88,12 @@ interface KnowledgeGraphState {
   // 加载/保存
   loadFromProject: (projectId: string) => Promise<void>;
   ensureInitialized: (projectId?: string) => Promise<void>;
+
+  // 知识提取
+  triggerDocumentExtraction: (
+    filePath: string,
+    content: string
+  ) => Promise<{ added: number; updated: number; linked: number; skipped: number; summary: string } | null>;
 }
 
 
@@ -116,6 +128,8 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   currentProjectId: null,
   isLoading: false,
   isInitialized: false,
+  isExtracting: false,
+  extractionError: null,
 
   // ============================================
   // 节点操作
@@ -396,6 +410,118 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       await state.loadFromProject(targetProjectId);
     }
   },
+
+  // ============================================
+  // 知识提取
+  // ============================================
+
+  triggerDocumentExtraction: async (filePath: string, content: string) => {
+    const state = get();
+
+    // 检查是否为可提取的文档
+    const eligiblePrefixes = ['00_', '01_', '02_', '03_'];
+    const eligibleExtension = /\.(md|txt)$/i.test(filePath);
+    const excludedNames = ['长期记忆.json', '章节分析.json', 'outline.json'];
+
+    const isEligible =
+      eligiblePrefixes.some((prefix) => filePath.startsWith(prefix)) &&
+      eligibleExtension &&
+      !excludedNames.some((name) => filePath.endsWith(name));
+
+    if (!isEligible || !content.trim()) return null;
+
+    // 防止重复提取
+    if (state.isExtracting) return null;
+
+    const projectId = state.currentProjectId || resolveActiveProjectId();
+    if (!projectId) return null;
+
+    try {
+      set({ isExtracting: true, extractionError: null });
+
+      // 获取 AI 配置
+      const agentStore = useAgentStore.getState();
+      const aiConfig = agentStore.aiConfig;
+      const lightConfig = {
+        ...aiConfig,
+        modelName: aiConfig.lightweightModelName || aiConfig.modelName,
+      };
+      const aiService = new AIService(lightConfig);
+
+      // 调用知识提取 agent
+      const result = await extractKnowledgeFromDocument(
+        aiService,
+        filePath,
+        content,
+        state.nodes,
+        state.edges,
+        (msg) => console.log(`[KnowledgeExtraction] ${msg}`)
+      );
+
+      if (!result.shouldExtract || result.operations.length === 0) {
+        return {
+          added: 0,
+          updated: 0,
+          linked: 0,
+          skipped: result.operations.length,
+          summary: result.summary,
+        };
+      }
+
+      // 检查项目是否切换
+      if (get().currentProjectId !== projectId) {
+        console.warn('[KnowledgeGraph] 项目已切换，丢弃提取结果');
+        return null;
+      }
+
+      // 应用操作
+      let added = 0;
+      let updated = 0;
+      let linked = 0;
+      let skipped = 0;
+
+      for (const op of result.operations) {
+        switch (op.action) {
+          case 'add':
+            if (op.node) {
+              get().addNode(op.node);
+              added++;
+            }
+            break;
+          case 'update':
+            if (op.nodeId && op.node) {
+              get().updateNode(op.nodeId, op.node);
+              updated++;
+            }
+            break;
+          case 'link':
+            if (op.from && op.to && op.edgeType) {
+              get().addEdge(op.from, op.to, op.edgeType);
+              linked++;
+            }
+            break;
+          case 'skip':
+          default:
+            skipped++;
+            break;
+        }
+      }
+
+      return {
+        added,
+        updated,
+        linked,
+        skipped,
+        summary: result.summary,
+      };
+    } catch (error: any) {
+      console.error('[KnowledgeGraph] 文档提取失败:', error);
+      set({ extractionError: error?.message || '文档知识提取失败' });
+      return null;
+    } finally {
+      set({ isExtracting: false });
+    }
+  },
 }));
 
 // ============================================
@@ -423,16 +549,53 @@ async function loadFromProjectInternal(projectId: string) {
 
   try {
     const data = JSON.parse(knowledgeFile.content);
-    // 只加载新格式数据
+    const rawNodes = data.nodes || [];
+
+    // 迁移旧的二级分类
+    const migratedNodes = rawNodes.map((node: KnowledgeNode) => {
+      if (SUB_CATEGORY_MIGRATION[node.subCategory]) {
+        return {
+          ...node,
+          subCategory: SUB_CATEGORY_MIGRATION[node.subCategory],
+        };
+      }
+      return node;
+    });
+
+    // 统计迁移数量
+    const migratedCount = rawNodes.filter(
+      (n: KnowledgeNode) => SUB_CATEGORY_MIGRATION[n.subCategory]
+    ).length;
+
+    if (migratedCount > 0) {
+      console.log(`[KnowledgeGraph] 迁移了 ${migratedCount} 个节点的二级分类`);
+    }
+
+    // 过滤掉已废弃的二级分类，只保留新的
+    const validSubCategories = { ...DEFAULT_SUB_CATEGORIES };
+    migratedNodes.forEach((node: KnowledgeNode) => {
+      if (!validSubCategories[node.category].includes(node.subCategory)) {
+        validSubCategories[node.category] = [
+          ...validSubCategories[node.category],
+          node.subCategory,
+        ];
+      }
+    });
+
     useKnowledgeGraphStore.setState({
-      nodes: data.nodes || [],
+      nodes: migratedNodes,
       edges: data.edges || [],
-      availableSubCategories: data.availableSubCategories || { ...DEFAULT_SUB_CATEGORIES },
+      availableSubCategories: validSubCategories,
       availableTags: data.availableTags || [],
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
     });
+
+    // 如果有迁移，自动保存
+    if (migratedCount > 0) {
+      setTimeout(() => saveToFile(useKnowledgeGraphStore.getState()), 500);
+    }
   } catch (error) {
     console.error('[KnowledgeGraph] 加载数据失败:', error);
     useKnowledgeGraphStore.setState({

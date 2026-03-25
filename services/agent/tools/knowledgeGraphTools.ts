@@ -33,10 +33,10 @@ export const queryKnowledgeTool: ToolDefinition = {
     description: `【知识查询】从知识图谱中查询相关知识节点。
 
 ## 分类体系
-- **设定**: 世界设定、剧情设定、物品设定、场景设定等
-- **规则**: 创作规则、叙事规则、角色规则等
-- **禁止**: 禁止词汇、禁止情节、禁止写法等
-- **风格**: 叙事风格、对话风格、描写风格等
+- **设定（是什么）**: 世界设定、角色设定、物品设定、场景设定
+- **规则（必须遵守）**: 创作规则、叙事规则、逻辑规则
+- **禁止（绝对不能）**: 禁止词汇、禁止情节、禁止写法
+- **风格（建议偏好）**: 叙事风格、对话风格、描写风格
 
 ## 查询方式
 1. 按一级分类过滤
@@ -93,7 +93,7 @@ export const manageKnowledgeTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'manage_knowledge',
-    description: `【知识管理】添加、更新、删除知识节点，或强化/复习已有知识。
+    description: `【知识管理】批量添加、更新、删除知识节点，或强化/复习已有知识。
 
 ## 知识节点要求
 - **名称**: 简短明确，≤20字
@@ -101,15 +101,18 @@ export const manageKnowledgeTool: ToolDefinition = {
 - **详情**: 详细说明，≤200字（可选）
 - **简洁原则**: 如果内容过长，应该拆分为多个节点
 
-## 一级分类（固定）
-- 设定、规则、禁止、风格
+## 分类体系
+- **设定（是什么）**: 世界设定、角色设定、物品设定、场景设定
+- **规则（必须遵守）**: 创作规则、叙事规则、逻辑规则
+- **禁止（绝对不能）**: 禁止词汇、禁止情节、禁止写法
+- **风格（建议偏好）**: 叙事风格、对话风格、描写风格
 
-## 二级分类（可扩展）
-遵循命名规则：2-10个汉字，格式如「魔法设定」「战斗规则」等
-
-## 记忆智能操作
-- **reinforce**: 强化知识（提高激活度和强度，延长复习间隔）
-- **review**: 标记已复习（更新复习时间）
+## 操作类型
+- **add**: 批量添加节点（传入 nodes 数组）
+- **update**: 批量更新节点（传入 updates 数组，每项包含 nodeId 和更新内容）
+- **delete**: 删除节点（传入 nodeIds 数组）
+- **reinforce**: 强化知识（传入 nodeIds 数组）
+- **review**: 标记已复习（传入 nodeIds 数组）
 `,
     parameters: {
       type: 'object',
@@ -119,71 +122,49 @@ export const manageKnowledgeTool: ToolDefinition = {
           enum: ['add', 'update', 'delete', 'reinforce', 'review'],
           description: '操作类型',
         },
-        // add 操作
-        node: {
-          type: 'object',
-          properties: {
-            category: {
-              type: 'string',
-              enum: ['设定', '规则', '禁止', '风格'],
-              description: '一级分类',
+        // add 操作的节点数组
+        nodes: {
+          type: 'array',
+          description: '要添加的节点列表',
+          items: {
+            type: 'object',
+            properties: {
+              category: { type: 'string', enum: ['设定', '规则', '禁止', '风格'] },
+              subCategory: { type: 'string' },
+              topic: { type: 'string' },
+              name: { type: 'string' },
+              summary: { type: 'string' },
+              detail: { type: 'string' },
+              tags: { type: 'array', items: { type: 'string' } },
+              importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
             },
-            subCategory: {
-              type: 'string',
-              description: '二级分类',
-            },
-            topic: {
-              type: 'string',
-              description: '三级主题（可选）',
-            },
-            name: {
-              type: 'string',
-              description: '知识名称（≤20字）',
-            },
-            summary: {
-              type: 'string',
-              description: '一句话概括（≤50字）',
-            },
-            detail: {
-              type: 'string',
-              description: '详细说明（≤200字，可选）',
-            },
-            tags: {
-              type: 'array',
-              items: { type: 'string' },
-              description: '标签列表',
-            },
-            importance: {
-              type: 'string',
-              enum: ['critical', 'important', 'normal'],
-              default: 'normal',
-              description: '重要程度',
-            },
-            parentId: {
-              type: 'string',
-              description: '父节点ID（用于层级结构，可选）',
-            },
+            required: ['category', 'subCategory', 'name', 'summary'],
           },
-          required: ['category', 'subCategory', 'name', 'summary'],
         },
-        // update/delete/reinforce/review 操作
-        nodeId: {
-          type: 'string',
-          description: '知识节点ID',
-        },
-        // update 操作的更新内容
+        // update 操作的更新数组
         updates: {
-          type: 'object',
-          properties: {
-            subCategory: { type: 'string' },
-            topic: { type: 'string' },
-            name: { type: 'string' },
-            summary: { type: 'string' },
-            detail: { type: 'string' },
-            tags: { type: 'array', items: { type: 'string' } },
-            importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
-            parentId: { type: 'string' },
+          type: 'array',
+          description: '要更新的节点列表（update 时使用）',
+          items: {
+            type: 'object',
+            properties: {
+              nodeId: { type: 'string', description: '节点ID' },
+              subCategory: { type: 'string' },
+              topic: { type: 'string' },
+              name: { type: 'string' },
+              summary: { type: 'string' },
+              detail: { type: 'string' },
+              tags: { type: 'array', items: { type: 'string' } },
+              importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
+            },
+            required: ['nodeId'],
           },
+        },
+        // delete/reinforce/review 操作的节点ID数组
+        nodeIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '节点ID列表（delete/reinforce/review 时使用）',
         },
       },
       required: ['action'],
@@ -377,123 +358,204 @@ export const executeQueryKnowledge = async (args: {
 
 export const executeManageKnowledge = async (args: {
   action: 'add' | 'update' | 'delete' | 'reinforce' | 'review';
-  node?: KnowledgeNodeDraft;
-  nodeId?: string;
-  updates?: Partial<KnowledgeNode>;
+  nodes?: Array<{
+    category: KnowledgeCategory;
+    subCategory: string;
+    topic?: string;
+    name: string;
+    summary: string;
+    detail?: string;
+    tags?: string[];
+    importance?: 'critical' | 'important' | 'normal';
+  }>;
+  updates?: Array<{
+    nodeId: string;
+    subCategory?: string;
+    topic?: string;
+    name?: string;
+    summary?: string;
+    detail?: string;
+    tags?: string[];
+    importance?: 'critical' | 'important' | 'normal';
+  }>;
+  nodeIds?: string[];
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { action, node, nodeId, updates } = args;
+  const { action, nodes, updates, nodeIds } = args;
 
   switch (action) {
     case 'add': {
-      if (!node) {
-        return JSON.stringify({ success: false, error: '缺少节点数据' });
+      if (!nodes || nodes.length === 0) {
+        return JSON.stringify({ success: false, error: '缺少节点列表' });
       }
 
-      // 验证内容长度
-      if (node.name.length > 20) {
-        return JSON.stringify({ success: false, error: '名称过长，请控制在20字以内' });
-      }
-      if (node.summary.length > 50) {
-        return JSON.stringify({ success: false, error: '摘要过长，请控制在50字以内' });
-      }
-      if (node.detail && node.detail.length > 200) {
-        return JSON.stringify({
-          success: false,
-          error: '详情过长，请控制在200字以内，或拆分为多个节点',
+      const addedNodes: Array<{ id: string; name: string; category: string }> = [];
+      const errors: string[] = [];
+
+      for (const n of nodes) {
+        // 验证
+        if (n.name.length > 20) {
+          errors.push(`"${n.name}" 名称过长`);
+          continue;
+        }
+        if (n.summary.length > 50) {
+          errors.push(`"${n.name}" 摘要过长`);
+          continue;
+        }
+
+        const newNode = store.addNode({
+          category: n.category,
+          subCategory: n.subCategory,
+          topic: n.topic,
+          name: n.name,
+          summary: n.summary,
+          detail: n.detail,
+          tags: n.tags || [],
+          importance: n.importance || 'normal',
         });
-      }
-
-      const newNode = store.addNode(node);
-      return JSON.stringify({
-        success: true,
-        node: {
+        addedNodes.push({
           id: newNode.id,
           name: newNode.name,
           category: newNode.category,
-          subCategory: newNode.subCategory,
-        },
+        });
+      }
+
+      return JSON.stringify({
+        success: true,
+        added: addedNodes.length,
+        failed: errors.length,
+        nodes: addedNodes,
+        errors: errors.length > 0 ? errors : undefined,
       });
     }
 
     case 'update': {
-      if (!nodeId || !updates) {
-        return JSON.stringify({ success: false, error: '缺少节点ID或更新内容' });
+      if (!updates || updates.length === 0) {
+        return JSON.stringify({ success: false, error: '缺少更新列表' });
       }
 
-      // 验证更新内容长度
-      if (updates.name && updates.name.length > 20) {
-        return JSON.stringify({ success: false, error: '名称过长，请控制在20字以内' });
-      }
-      if (updates.summary && updates.summary.length > 50) {
-        return JSON.stringify({ success: false, error: '摘要过长，请控制在50字以内' });
-      }
-      if (updates.detail && updates.detail.length > 200) {
-        return JSON.stringify({
-          success: false,
-          error: '详情过长，请控制在200字以内，或拆分为多个节点',
+      const updatedNodes: Array<{ id: string; name: string }> = [];
+      const errors: string[] = [];
+
+      for (const update of updates) {
+        const existing = store.getNodeById(update.nodeId);
+        if (!existing) {
+          errors.push(`节点 ${update.nodeId} 不存在`);
+          continue;
+        }
+
+        store.updateNode(update.nodeId, {
+          subCategory: update.subCategory,
+          topic: update.topic,
+          name: update.name,
+          summary: update.summary,
+          detail: update.detail,
+          tags: update.tags,
+          importance: update.importance,
         });
-      }
-
-      store.updateNode(nodeId, updates);
-      return JSON.stringify({ success: true });
-    }
-
-    case 'delete': {
-      if (!nodeId) {
-        return JSON.stringify({ success: false, error: '缺少节点ID' });
-      }
-
-      store.deleteNode(nodeId);
-      return JSON.stringify({ success: true });
-    }
-
-    case 'reinforce': {
-      if (!nodeId) {
-        return JSON.stringify({ success: false, error: '缺少节点ID' });
-      }
-
-      const updatedNode = store.reinforceNode(nodeId);
-      if (!updatedNode) {
-        return JSON.stringify({ success: false, error: '节点不存在' });
+        updatedNodes.push({ id: update.nodeId, name: update.name || existing.name });
       }
 
       return JSON.stringify({
         success: true,
-        message: `知识「${updatedNode.name}」已强化`,
-        metadata: updatedNode.metadata ? {
-          activation: updatedNode.metadata.activation.toFixed(2),
-          strength: updatedNode.metadata.strength.toFixed(2),
-          nextReviewAt: new Date(updatedNode.metadata.nextReviewAt).toISOString(),
-        } : undefined,
+        updated: updatedNodes.length,
+        failed: errors.length,
+        nodes: updatedNodes,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    }
+
+    case 'delete': {
+      if (!nodeIds || nodeIds.length === 0) {
+        return JSON.stringify({ success: false, error: '缺少节点ID列表' });
+      }
+
+      const deletedIds: string[] = [];
+      const errors: string[] = [];
+
+      for (const id of nodeIds) {
+        const existing = store.getNodeById(id);
+        if (!existing) {
+          errors.push(`节点 ${id} 不存在`);
+          continue;
+        }
+        store.deleteNode(id);
+        deletedIds.push(id);
+      }
+
+      return JSON.stringify({
+        success: true,
+        deleted: deletedIds.length,
+        failed: errors.length,
+        nodeIds: deletedIds,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    }
+
+    case 'reinforce': {
+      if (!nodeIds || nodeIds.length === 0) {
+        return JSON.stringify({ success: false, error: '缺少节点ID列表' });
+      }
+
+      const reinforcedNodes: Array<{ id: string; name: string; activation: number }> = [];
+      const errors: string[] = [];
+
+      for (const id of nodeIds) {
+        const updatedNode = store.reinforceNode(id);
+        if (!updatedNode) {
+          errors.push(`节点 ${id} 不存在`);
+          continue;
+        }
+        reinforcedNodes.push({
+          id: updatedNode.id,
+          name: updatedNode.name,
+          activation: updatedNode.metadata?.activation || 0,
+        });
+      }
+
+      return JSON.stringify({
+        success: true,
+        reinforced: reinforcedNodes.length,
+        failed: errors.length,
+        nodes: reinforcedNodes,
+        errors: errors.length > 0 ? errors : undefined,
       });
     }
 
     case 'review': {
-      if (!nodeId) {
-        return JSON.stringify({ success: false, error: '缺少节点ID' });
+      if (!nodeIds || nodeIds.length === 0) {
+        return JSON.stringify({ success: false, error: '缺少节点ID列表' });
       }
 
-      // review 操作等同于 reinforce，但语义上表示"复习完成"
-      const updatedNode = store.reinforceNode(nodeId);
-      if (!updatedNode) {
-        return JSON.stringify({ success: false, error: '节点不存在' });
+      const reviewedNodes: Array<{ id: string; name: string; reviewCount: number }> = [];
+      const errors: string[] = [];
+
+      for (const id of nodeIds) {
+        const updatedNode = store.reinforceNode(id);
+        if (!updatedNode) {
+          errors.push(`节点 ${id} 不存在`);
+          continue;
+        }
+        reviewedNodes.push({
+          id: updatedNode.id,
+          name: updatedNode.name,
+          reviewCount: updatedNode.metadata?.reviewCount || 0,
+        });
       }
 
       return JSON.stringify({
         success: true,
-        message: `知识「${updatedNode.name}」复习完成`,
-        metadata: updatedNode.metadata ? {
-          reviewCount: updatedNode.metadata.reviewCount,
-          nextReviewAt: new Date(updatedNode.metadata.nextReviewAt).toISOString(),
-        } : undefined,
+        reviewed: reviewedNodes.length,
+        failed: errors.length,
+        nodes: reviewedNodes,
+        errors: errors.length > 0 ? errors : undefined,
       });
     }
 
     default:
-      return JSON.stringify({ success: false, error: '未知操作类型' });
+      return JSON.stringify({ success: false, error: `未知操作: ${action}` });
   }
 };
 
