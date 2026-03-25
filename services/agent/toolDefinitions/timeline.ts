@@ -310,13 +310,37 @@ export const processOutlineInputTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'processOutlineInput',
-    description: `将大纲内容写入结构化大纲（SubAgent 处理）。`,
+    description: `【SubAgent 入口】将剧情内容写入结构化大纲。
+
+⚠️ SubAgent 只做【解析和写入】，不具备创造能力。
+主 Agent 必须在 userInput 中提供完整、具体的内容。
+
+## userInput 必须包含：
+- 卷：标题、描述
+- 章节：标题、摘要（全部章节，不能只写代表性的）
+- 事件（可选）：时间、标题、内容
+
+## 格式示例：
+【卷】第二卷「抱团与开发」
+描述：主角团队建立基地
+【章节】
+- 第61章「被迫联合」：摘要...
+- 第62章「秘密基地」：摘要...
+（必须列出所有章节）
+
+## SubAgent 能做的：
+- 解析文本 → 调用工具写入 → 返回结果
+
+## SubAgent 不能做的：
+- 创造原文没有的内容
+- 推断或补充缺失信息
+`,
     parameters: {
       type: 'object',
       properties: {
         thinking: { type: 'string', description: '思考过程' },
-        userInput: { type: 'string', description: '大纲内容' },
-        mode: { type: 'string', enum: ['add', 'update'] }
+        userInput: { type: 'string', description: '完整的剧情内容' },
+        mode: { type: 'string', enum: ['add', 'update'], description: 'add=新增，update=更新' }
       },
       required: ['thinking', 'userInput', 'mode']
     }

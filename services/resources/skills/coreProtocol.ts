@@ -63,10 +63,11 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 
 5. **剧情/大纲操作** → ⚠️ 必须使用 Outline 工具（严禁创建 md 文件）
    - **查看剧情** → outline_getEvents / outline_getChapters / outline_getVolumes
-   - **添加剧情** → 必须使用 processOutlineInput 工具
+   - **添加剧情** → processOutlineInput(userInput, mode)
    - **触发词**："添加事件"、"规划章节"、"设计剧情"、"大纲"、"剧情走向"、"第X章写什么"、"创建总纲"、"规划剧情"
-   - ⚠️ 严禁：不要在 03_剧情大纲 目录下创建任何 md 文件（包括总纲.md、项目总纲.md 等）
-   - ⚠️ 正确流程：使用 processOutlineInput 工具，按照"先卷 → 章节 → 事件"的自顶向下顺序创建
+   - ⚠️ SubAgent 只做结构化转换，不具备创造能力
+   - ⚠️ 主 Agent 必须在 userInput 中提供完整内容：卷标题/描述、所有章节的标题/摘要、事件详情
+   - ⚠️ 严禁：不要在 03_剧情大纲 目录下创建任何 md 文件
 
 6. **任务管理** → 使用 TODO 工具
    - 示例："创建任务"、"标记完成"、"查看待办"
