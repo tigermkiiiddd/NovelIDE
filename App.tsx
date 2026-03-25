@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import VConsole from 'vconsole';
 import ProjectManager from './components/ProjectManager';
 import MainLayout from './components/MainLayout';
+import ToastContainer from './components/Toast';
 import { useProjectStore } from './stores/projectStore';
 import { useAgentStore } from './stores/agentStore';
 
@@ -43,6 +44,7 @@ export default function App() {
 
   return (
     <>
+      <ToastContainer />
       {!currentProjectId ? (
         <ProjectManager onSelectProject={handleSelectProject} />
       ) : (

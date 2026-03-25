@@ -6,6 +6,7 @@ import { useProjectStore } from './projectStore';
 import { useAgentStore } from './agentStore';
 import { AIService } from '../services/geminiService';
 import { useCharacterMemoryStore } from './characterMemoryStore';
+import { toast } from './toastStore';
 import {
   applyMemoryEvent,
   createMemoryMetadata,
@@ -364,6 +365,32 @@ const loadMemoriesForProject = async (projectId: string) => {
     currentProjectId: projectId,
   });
 
+  // 辅助函数：尝试从备份恢复
+  const tryRestoreFromBackup = async (): Promise<{ memories: LongTermMemory[]; edges: MemoryEdge[] } | null> => {
+    try {
+      const backup = await dbAPI.getBackup(`files-${projectId}`);
+      if (backup?.content) {
+        console.log('[LongTermMemoryStore] 尝试从备份恢复...');
+        const backupFiles = JSON.parse(backup.content) as FileNode[];
+        const backupMemoryFile = backupFiles.find(f => f.name === MEMORY_FILE_NAME);
+        if (backupMemoryFile?.content) {
+          const backupData = JSON.parse(backupMemoryFile.content);
+          if (Array.isArray(backupData)) {
+            return { memories: normalizeMemories(backupData), edges: [] };
+          } else if (backupData && typeof backupData === 'object') {
+            return {
+              memories: normalizeMemories(backupData.memories || []),
+              edges: backupData.edges || []
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[LongTermMemoryStore] 备份恢复失败:', e);
+    }
+    return null;
+  };
+
   try {
     const fileStore = useFileStore.getState();
     const files =
@@ -373,7 +400,32 @@ const loadMemoriesForProject = async (projectId: string) => {
     const memoryFile = files.find((file) => file.name === MEMORY_FILE_NAME);
 
     if (memoryFile?.content) {
-      const rawData = JSON.parse(memoryFile.content);
+      // 安全解析 JSON
+      let rawData: any;
+      let parseError: string | null = null;
+
+      try {
+        rawData = JSON.parse(memoryFile.content);
+      } catch (e) {
+        parseError = e instanceof Error ? e.message : String(e);
+        console.error('[LongTermMemoryStore] JSON解析失败:', parseError);
+        console.error('[LongTermMemoryStore] 损坏内容前500字符:', memoryFile.content.slice(0, 500));
+      }
+
+      // 如果解析失败，尝试从备份恢复
+      if (parseError) {
+        const restored = await tryRestoreFromBackup();
+        if (restored) {
+          console.warn('[LongTermMemoryStore] 已从备份恢复 %d 条记忆', restored.memories.length);
+          toast.success('长期记忆已恢复', `从备份恢复了 ${restored.memories.length} 条记忆`);
+          rawData = { memories: restored.memories, edges: restored.edges, version: 2 };
+        } else {
+          // 恢复失败，使用空数据但警告用户
+          console.error('[LongTermMemoryStore] 无法恢复，数据可能已丢失');
+          toast.error('长期记忆数据损坏', '部分记忆数据无法恢复，请检查控制台了解详情', 0);
+          rawData = { memories: [], edges: [], version: 2 };
+        }
+      }
 
       // 向后兼容：支持旧格式（数组）和新格式（对象）
       let memories: LongTermMemory[];
@@ -411,6 +463,22 @@ const loadMemoriesForProject = async (projectId: string) => {
     });
   } catch (error) {
     console.error('[LongTermMemoryStore] Failed to load memories', error);
+
+    // 尝试从备份恢复
+    const restored = await tryRestoreFromBackup();
+    if (restored) {
+      console.warn('[LongTermMemoryStore] 加载失败后从备份恢复 %d 条记忆', restored.memories.length);
+      if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
+      useLongTermMemoryStore.setState({
+        memories: restored.memories,
+        edges: restored.edges,
+        currentProjectId: projectId,
+        isInitialized: true,
+        isLoading: false,
+      });
+      return;
+    }
+
     if (useLongTermMemoryStore.getState().currentProjectId !== projectId) return;
     useLongTermMemoryStore.setState({
       memories: [],

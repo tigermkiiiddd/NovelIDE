@@ -87,6 +87,14 @@ export const executeProcessOutlineInput = async (
   // 构建 volumeId -> volumeIndex 的映射
   const volumeIdToIndex = new Map(existingVolumes.map(v => [v.id, v.volumeIndex]));
 
+  // 获取最新5个事件（按时间戳排序后的最后5个）
+  const recentEvents = existingEvents.slice(-5).map(e => ({
+    eventIndex: e.eventIndex,
+    timestamp: e.timestamp,
+    title: e.title,
+    content: e.content || ''
+  }));
+
   const context = {
     existingVolumeCount: existingVolumes.length,
     existingChapterCount: existingChapters.length,
@@ -97,7 +105,8 @@ export const executeProcessOutlineInput = async (
       title: c.title,
       volumeIndex: c.volumeId ? (volumeIdToIndex.get(c.volumeId) ?? 0) : 0,
       eventCount: c.eventIds.length
-    }))
+    })),
+    recentEvents
   };
 
   const aiService = new AIService(agentStore.aiConfig);

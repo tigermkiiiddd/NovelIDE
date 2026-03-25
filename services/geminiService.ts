@@ -108,7 +108,8 @@ export class AIService {
     signal?: AbortSignal,
     forceToolName?: string,  // 强制调用指定工具名称
     maxTokensOverride?: number,  // 覆盖默认的 max_tokens（用于限制纯文字回复长度）
-    temperatureOverride?: number  // 覆盖默认的 temperature（用于 SubAgent 低温度执行）
+    temperatureOverride?: number,  // 覆盖默认的 temperature（用于 SubAgent 低温度执行）
+    modelOverride?: string  // 覆盖默认模型（用于轻量任务）
   ): Promise<any> {
     
     if (!this.client) throw new Error("API Key not configured.");
@@ -175,7 +176,7 @@ export class AIService {
 
     try {
       // 2. Prepare Request Options (with Gemini Safety Settings Injection)
-      const modelName = this.config.modelName || 'gemini-2.0-flash';
+      const modelName = modelOverride || this.config.modelName || 'gemini-2.0-flash';
       const isGemini = modelName.toLowerCase().includes('gemini');
       const baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
 

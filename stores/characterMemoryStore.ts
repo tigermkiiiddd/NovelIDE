@@ -15,6 +15,7 @@ import { createPersistingStore } from './createPersistingStore';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
 import { dbAPI } from '../services/persistence';
+import { toast } from './toastStore';
 
 interface CharacterMemoryState {
   profiles: CharacterProfileV2[];
@@ -215,16 +216,32 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
         return;
       }
 
+      let failedFiles: string[] = [];
+
       const profiles = fileStore.files
         .filter((file) => file.parentId === folder.id && file.type === FileType.FILE && file.content)
         .map((file) => {
           try {
-            return normalizeProfile(JSON.parse(file.content!) as CharacterProfileV2);
-          } catch {
+            const parsed = JSON.parse(file.content!);
+            if (!parsed || typeof parsed !== 'object') {
+              console.warn(`[CharacterMemoryStore] 无效的档案数据: ${file.name}`);
+              failedFiles.push(file.name);
+              return null;
+            }
+            return normalizeProfile(parsed as CharacterProfileV2);
+          } catch (e) {
+            console.error(`[CharacterMemoryStore] 解析档案失败: ${file.name}`, e);
+            console.error(`[CharacterMemoryStore] 损坏内容前200字符:`, file.content?.slice(0, 200));
+            failedFiles.push(file.name);
             return null;
           }
         })
         .filter(Boolean) as CharacterProfileV2[];
+
+      // 如果有解析失败的文件，显示警告
+      if (failedFiles.length > 0) {
+        toast.error('角色档案加载失败', `${failedFiles.length} 个档案解析失败: ${failedFiles.join(', ')}`, 0);
+      }
 
       useCharacterMemoryStore.setState({ profiles, isInitialized: true });
     },

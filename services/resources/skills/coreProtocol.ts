@@ -416,7 +416,7 @@ export const constructSystemPrompt = (
       return `- **${characterName}**: ${summary} [${tags}]`;
     }).join('\n');
 
-    return `\n## 👥 角色档案索引\n> 共 ${characterFiles.length} 个角色（需要详细信息时使用 readFile 查看完整档案）\n\n${profiles}\n`;
+    return `\n## 👥 角色档案索引\n> 共 ${characterFiles.length} 个角色（需要详细信息时使用 readFile 查看完整档案）\n\n${profiles}\n\n> 💡 **角色状态自动注入**：使用 readFile 读取 02_角色档案 目录下的角色文件时，系统会自动注入该角色的最新动态状态（位置、情绪、技能等级、关系变化等），无需额外查询。\n`;
   };
 
   // Knowledge Graph (知识图谱)

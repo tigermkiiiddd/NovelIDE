@@ -59,6 +59,12 @@ export interface TimelineContext {
   existingEventCount: number;
   volumeSummaries: Array<{ volumeIndex: number; title: string }>;
   chapterSummaries: Array<{ chapterIndex: number; title: string; volumeIndex: number; eventCount: number }>;
+  recentEvents: Array<{
+    eventIndex: number;
+    timestamp: { day: number; hour: number };
+    title: string;
+    content: string;
+  }>;
   project?: ProjectMeta;
 }
 
@@ -100,6 +106,11 @@ ${context ? `
 ${context.chapterSummaries && context.chapterSummaries.length > 0 ? `
 **现有章节：**
 ${context.chapterSummaries.map(c => `- chapterIndex=${c.chapterIndex}「${c.title}」（${c.eventCount}个事件）`).join('\n')}
+` : ''}
+
+${context.recentEvents && context.recentEvents.length > 0 ? `
+**最近事件（剧情时间线参考）：**
+${context.recentEvents.map(e => `- [${e.eventIndex}] 第${e.timestamp.day}天${e.timestamp.hour}时「${e.title}」：${e.content.substring(0, 80)}${e.content.length > 80 ? '...' : ''}`).join('\n')}
 ` : ''}
 ` : '（暂无数据）'}
 

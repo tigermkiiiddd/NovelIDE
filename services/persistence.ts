@@ -55,10 +55,17 @@ interface NovelGenieDB extends DBSchema {
     key: string; // 'versions-{projectId}'
     value: FileVersion[];
   };
+  backups: {
+    key: string; // '{type}-{projectId}' e.g. 'files-{projectId}', 'sessions-{projectId}'
+    value: {
+      timestamp: number;
+      content: string;
+    };
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -108,6 +115,11 @@ export const initDB = () => {
           db.createObjectStore('versions');
         }
 
+        // Version 11: Add backups store for data safety
+        if (!db.objectStoreNames.contains('backups')) {
+          db.createObjectStore('backups');
+        }
+
         // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
         // No new object stores required for these versions.
       },
@@ -151,6 +163,20 @@ export const dbAPI = {
 
   saveFiles: async (projectId: string, files: FileNode[]) => {
     const db = await initDB();
+    // 写入前备份现有数据
+    try {
+      const existing = await db.get('files', projectId);
+      if (existing) {
+        await db.put('backups', {
+          timestamp: Date.now(),
+          content: JSON.stringify(existing)
+        }, `files-${projectId}`);
+        console.log(`[dbAPI.saveFiles] 已备份旧数据: files-${projectId}`);
+      }
+    } catch (backupError) {
+      console.warn('[dbAPI.saveFiles] 备份失败，继续保存:', backupError);
+    }
+    // 保存新数据
     await db.put('files', files, projectId);
   },
 
@@ -489,6 +515,52 @@ export const dbAPI = {
       console.log('[Persistence] Deleted versions for project:', projectId);
     } catch (error) {
       console.error('删除版本失败:', error);
+    }
+  },
+
+  // --- Backups (for data safety) ---
+  getBackup: async (key: string): Promise<{ timestamp: number; content: string } | undefined> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('backups')) {
+        console.warn('[dbAPI.getBackup] backups 表不存在');
+        return undefined;
+      }
+      return await db.get('backups', key);
+    } catch (error) {
+      console.error('[dbAPI.getBackup] 读取备份失败:', key, error);
+      return undefined;
+    }
+  },
+
+  saveBackup: async (key: string, content: string) => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('backups')) {
+        console.warn('[dbAPI.saveBackup] backups 表不存在，跳过保存');
+        return;
+      }
+      await db.put('backups', { timestamp: Date.now(), content }, key);
+      console.log('[dbAPI.saveBackup] 备份已保存:', key);
+    } catch (error) {
+      console.error('[dbAPI.saveBackup] 保存备份失败:', key, error);
+    }
+  },
+
+  listBackups: async (prefix?: string): Promise<string[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('backups')) {
+        return [];
+      }
+      const allKeys = await db.getAllKeys('backups');
+      if (prefix) {
+        return allKeys.filter(k => k.startsWith(prefix));
+      }
+      return allKeys;
+    } catch (error) {
+      console.error('[dbAPI.listBackups] 列出备份失败:', error);
+      return [];
     }
   }
 };

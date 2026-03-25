@@ -22,7 +22,9 @@ export const readFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'readFile',
-    description: 'Read the content of a specific file. [IMPORTANT]: The output format is "LineNum | Content". Use these line numbers for the `patchFile` tool. Default reads first 300 lines. [READ TOOL]',
+    description: `Read the content of a specific file. [IMPORTANT]: The output format is "LineNum | Content". Use these line numbers for the \`patchFile\` tool. Default reads first 300 lines. [READ TOOL]
+
+⚠️ 角色文件自动注入：当读取 02_角色档案 目录下的角色文件时，系统会自动在文件内容后追加【角色动态状态】，包含该角色的最新状态、技能等级、关系变化等动态信息。你无需额外调用其他工具获取这些动态状态。`,
     parameters: {
       type: 'object',
       properties: {

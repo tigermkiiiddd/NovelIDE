@@ -361,7 +361,334 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
   }
 };
 
+// --- 角色登场检测工具定义 ---
+const detectCharactersTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'submit_detected_characters',
+    description: '提交检测到的登场角色列表。[TERMINAL TOOL]',
+    parameters: {
+      type: 'object',
+      properties: {
+        characters: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '本章登场的主要角色名称列表（只包含有对话或重要行动的角色）'
+        }
+      },
+      required: ['characters']
+    }
+  }
+};
+
+/**
+ * 使用轻量模型检测章节中登场的角色
+ * @param aiService AI 服务实例
+ * @param chapterContent 章节内容
+ * @param characterList 项目中的角色列表（带角色卡的角色名）
+ * @param signal 中断信号
+ * @returns 登场角色名称列表
+ */
+export async function detectCharactersInChapter(
+  aiService: AIService,
+  chapterContent: string,
+  characterList: string[],
+  signal?: AbortSignal
+): Promise<string[]> {
+  const lightweightModel = (aiService as any).config?.lightweightModelName;
+  const systemPrompt = `你是一个【角色登场检测专家】。
+你的任务是从章节内容中识别哪些角色登场了。
+
+## 角色列表（只有这些角色需要检测）
+${characterList.map(name => `- ${name}`).join('\n')}
+
+## 检测规则
+1. 只有在角色列表中的角色才需要检测
+2. 角色必须有**对话**或**重要行动**才算登场
+3. 仅被提及但没有实际出场的角色不算登场
+4. 只返回确实登场的角色名称
+
+## 输出格式
+调用 submit_detected_characters 工具，传入登场角色列表。`;
+
+  const history: any[] = [];
+  const message = `## 章节内容
+\`\`\`
+${chapterContent.slice(0, 15000)} // 限制长度避免超出上下文
+\`\`\`
+
+请检测上述章节中登场的角色，调用工具提交结果。`;
+
+  try {
+    const response = await aiService.sendMessage(
+      history,
+      message,
+      systemPrompt,
+      [detectCharactersTool],
+      signal,
+      'submit_detected_characters', // 强制调用工具
+      1000, // 限制输出长度
+      0.3,  // 低温度
+      lightweightModel // 使用轻量模型
+    );
+
+    // 解析工具调用结果
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      const toolCall = response.toolCalls[0];
+      if (toolCall.function?.name === 'submit_detected_characters') {
+        const args = JSON.parse(toolCall.function.arguments || '{}');
+        return args.characters || [];
+      }
+    }
+
+    console.warn('[detectCharactersInChapter] 未收到工具调用，返回空列表');
+    return [];
+  } catch (error) {
+    console.error('[detectCharactersInChapter] 检测失败:', error);
+    // 失败时返回全部角色列表作为降级处理
+    return characterList;
+  }
+}
+
+// --- 单角色状态提取配置 ---
+interface SingleCharacterInput {
+  chapterContent: string;
+  chapterTitle: string;
+  project?: ProjectMeta;
+}
+
+const createSingleCharacterConfig = (characterName: string): SubAgentConfig<SingleCharacterInput, CharacterState> => {
+  const singleCharacterTool: ToolDefinition = {
+    type: 'function',
+    function: {
+      name: 'submit_character_state',
+      description: '提交单个角色的状态提取结果。[TERMINAL TOOL]',
+      parameters: {
+        type: 'object',
+        properties: {
+          characterName: { type: 'string', description: '角色名称' },
+          stateDescription: {
+            type: 'string',
+            description: '角色当前状态的综合描述（至少30字）'
+          },
+          emotionalState: { type: 'string', description: '情绪状态' },
+          location: { type: 'string', description: '所在位置' },
+          relationships: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                with: { type: 'string', description: '关系对象' },
+                status: { type: 'string', description: '关系状态描述' }
+              },
+              required: ['with', 'status']
+            },
+            description: '人际关系变化'
+          },
+          changes: {
+            type: 'array',
+            items: { type: 'string' },
+            description: '本章中该角色的重要变化列表（至少1个）'
+          }
+        },
+        required: ['characterName', 'stateDescription', 'changes']
+      }
+    }
+  };
+
+  return {
+    name: `Character State: ${characterName}`,
+    maxLoops: 3,
+    tools: [singleCharacterTool],
+    terminalToolName: 'submit_character_state',
+
+    getSystemPrompt: (input: SingleCharacterInput) => {
+      const projectOverview = buildProjectOverviewPrompt(input.project);
+      return `${projectOverview}
+
+你是一个【角色状态提取专家】。
+你的任务是从章节中提取**单个角色**的状态变化。
+
+## 目标角色
+**${characterName}**
+
+## 提取规则
+1. 只提取 ${characterName} 的状态，忽略其他角色
+2. **覆盖型字段**只提取最终状态，不要包含演变过程
+   - ❌ 错误: "A地 -> B地 -> C地"
+   - ✅ 正确: "C地"
+3. 变化列表记录本章发生的重要变化
+
+## 章节信息
+**章节标题**: ${input.chapterTitle}
+
+## 章节内容
+\`\`\`
+${input.chapterContent}
+\`\`\`
+
+请提取 ${characterName} 的状态，调用 submit_character_state 工具提交结果。`;
+    },
+
+    getInitialMessage: () => `请提取 ${characterName} 在本章的状态变化。`,
+
+    parseTerminalResult: (args): CharacterState => ({
+      id: `char-${Date.now()}`,
+      characterName: args.characterName || characterName,
+      stateDescription: args.stateDescription || '',
+      emotionalState: args.emotionalState,
+      location: args.location,
+      relationships: args.relationships || [],
+      changes: args.changes || []
+    }),
+
+    handleTextResponse: () => '请立即调用 submit_character_state 工具提交结果。'
+  };
+};
+
+/**
+ * 提取单个角色的状态
+ */
+export async function extractSingleCharacterState(
+  aiService: AIService,
+  characterName: string,
+  chapterContent: string,
+  chapterTitle: string,
+  project?: ProjectMeta,
+  onLog?: (msg: string) => void,
+  signal?: AbortSignal
+): Promise<CharacterState | null> {
+  try {
+    const config = createSingleCharacterConfig(characterName);
+    const agent = new BaseSubAgent(config);
+    const result = await agent.run(
+      aiService,
+      { chapterContent, chapterTitle, project },
+      undefined,
+      onLog,
+      signal
+    );
+    return result;
+  } catch (error) {
+    console.error(`[extractSingleCharacterState] 提取 ${characterName} 失败:`, error);
+    return null;
+  }
+}
+
 // --- 导出函数（保持向后兼容） ---
+
+/**
+ * 分步执行章节分析（推荐）
+ * 1. 使用轻量模型检测登场角色
+ * 2. 对每个角色单独提取状态
+ * 3. 提取剧情点和伏笔
+ */
+export async function runChapterAnalysisAgentWithSteps(
+  aiService: AIService,
+  chapterContent: string,
+  chapterTitle: string,
+  characterList: string[],
+  existingAnalysis?: ChapterAnalysis,
+  project?: ProjectMeta,
+  onLog?: (msg: string) => void,
+  signal?: AbortSignal
+): Promise<ChapterAnalysisOutput> {
+  onLog?.('[Step 1] 检测登场角色...');
+
+  // Step 1: 检测登场角色
+  const detectedCharacters = await detectCharactersInChapter(
+    aiService,
+    chapterContent,
+    characterList,
+    signal
+  );
+
+  onLog?.(`[Step 1] 检测到 ${detectedCharacters.length} 个角色: ${detectedCharacters.join(', ')}`);
+
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  // Step 2: 对每个角色单独提取状态（串行，避免并发压力）
+  onLog?.('[Step 2] 提取角色状态...');
+
+  const characterStates: CharacterState[] = [];
+  for (const name of detectedCharacters) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    onLog?.(`[Step 2] 正在提取: ${name}`);
+    const result = await extractSingleCharacterState(
+      aiService,
+      name,
+      chapterContent,
+      chapterTitle,
+      project,
+      onLog,
+      signal
+    );
+    if (result) {
+      characterStates.push(result);
+    }
+  }
+
+  onLog?.(`[Step 2] 成功提取 ${characterStates.length} 个角色状态`);
+
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  // Step 3: 提取剧情点和伏笔（使用原有逻辑，但跳过角色状态）
+  onLog?.('[Step 3] 提取剧情点和伏笔...');
+
+  const agent = new BaseSubAgent(chapterAnalysisConfig);
+
+  // 修改输入，告知已经提取了哪些角色
+  const modifiedInput = {
+    chapterContent,
+    chapterTitle,
+    existingAnalysis: existingAnalysis ? {
+      ...existingAnalysis,
+      characterStates: [] // 清空，让 agent 只提取剧情和伏笔
+    } : undefined,
+    project,
+    preExtractedCharacters: characterStates // 传入已提取的角色状态
+  };
+
+  // 使用修改后的 prompt
+  const originalGetSystemPrompt = chapterAnalysisConfig.getSystemPrompt;
+  const modifiedConfig: SubAgentConfig<any, ChapterAnalysisOutput> = {
+    ...chapterAnalysisConfig,
+    getSystemPrompt: (input: any) => {
+      const basePrompt = originalGetSystemPrompt(input);
+      const preExtractedInfo = input.preExtractedCharacters?.length > 0
+        ? `\n## 已提取的角色状态（无需重复提取）\n${input.preExtractedCharacters.map((c: CharacterState) =>
+            `- ${c.characterName}: ${c.stateDescription}`
+          ).join('\n')}`
+        : '';
+      return basePrompt + preExtractedInfo;
+    }
+  };
+
+  const modifiedAgent = new BaseSubAgent(modifiedConfig);
+  const result = await modifiedAgent.run(
+    aiService,
+    modifiedInput,
+    undefined,
+    onLog,
+    signal
+  );
+
+  // 合并预提取的角色状态
+  return {
+    ...result,
+    characterStates: [...characterStates, ...result.characterStates.filter(
+      c => !characterStates.some(pc => pc.characterName === c.characterName)
+    )]
+  };
+}
+
 export async function runChapterAnalysisAgent(
   aiService: AIService,
   chapterContent: string,

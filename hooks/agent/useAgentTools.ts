@@ -2,6 +2,7 @@
 import { useRef, useCallback } from 'react';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
+import { useCharacterMemoryStore } from '../../stores/characterMemoryStore';
 import { executeTool, ToolExecutionResult } from '../../services/agent/toolRunner';
 import { FileNode, TodoItem, PendingChange, ChatMessage, PlanNote } from '../../types';
 import { AIService } from '../../services/geminiService';
@@ -72,6 +73,13 @@ export const useAgentTools = ({
         lines.push(`最后更新: ${new Date(profile.updatedAt).toLocaleString('zh-CN')}`);
         lines.push('');
 
+        // 累加型分类的显示数量配置
+        const cumulativeLimits: Record<string, number> = {
+            '关系': 3,    // 关系显示最近3条
+            '经历': 10,   // 经历显示最近10条
+            '记忆': 10,   // 记忆显示最近10条
+        };
+
         // 遍历所有分类
         if (profile.categories) {
             Object.entries(profile.categories).forEach(([catName, catData]: [string, any]) => {
@@ -80,21 +88,37 @@ export const useAgentTools = ({
                 const subCatEntries = Object.entries(catData.subCategories);
                 if (subCatEntries.length === 0) return;
 
+                const isCumulative = catData.type === '累加';
                 lines.push(`【${catName}】(${catData.type || '未知'})`);
 
                 subCatEntries.forEach(([subCatName, value]) => {
                     if (Array.isArray(value)) {
-                        // 累加型：显示未归档的条目
+                        // 累加型：显示未归档的条目（按配置数量）
                         const activeEntries = value.filter((e: any) => !e.archived);
                         if (activeEntries.length > 0) {
-                            const latestEntry = activeEntries[activeEntries.length - 1];
-                            const valueStr = typeof latestEntry.value === 'object'
-                                ? JSON.stringify(latestEntry.value)
-                                : String(latestEntry.value);
-                            lines.push(`  - ${subCatName}: ${valueStr} (来源: ${latestEntry.chapterRef})`);
+                            const limit = cumulativeLimits[catName] || 5;
+                            const entriesToShow = activeEntries.slice(-limit); // 取最后N条
+
+                            if (entriesToShow.length === 1) {
+                                // 只有一条时，简洁显示
+                                const entry = entriesToShow[0];
+                                const valueStr = typeof entry.value === 'object'
+                                    ? JSON.stringify(entry.value)
+                                    : String(entry.value);
+                                lines.push(`  - ${subCatName}: ${valueStr} (来源: ${entry.chapterRef})`);
+                            } else {
+                                // 多条时，显示历史列表
+                                lines.push(`  - ${subCatName}:`);
+                                entriesToShow.forEach((entry: any) => {
+                                    const valueStr = typeof entry.value === 'object'
+                                        ? JSON.stringify(entry.value)
+                                        : String(entry.value);
+                                    lines.push(`      • ${entry.chapterRef}: ${valueStr}`);
+                                });
+                            }
                         }
                     } else if (value && (value as any).value) {
-                        // 覆盖型
+                        // 覆盖型：只显示最新值
                         const entry = value as { value: any; chapterRef: string };
                         const valueStr = typeof entry.value === 'object'
                             ? JSON.stringify(entry.value)
@@ -140,7 +164,6 @@ export const useAgentTools = ({
             }
 
             // 获取角色动态档案
-            const { useCharacterMemoryStore } = require('../../../stores/characterMemoryStore');
             const profile = useCharacterMemoryStore.getState().getByName(characterName);
 
             if (profile) {
