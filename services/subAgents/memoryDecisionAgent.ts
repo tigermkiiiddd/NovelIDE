@@ -15,6 +15,7 @@ import {
   MemoryType,
   MemoryEdgeType,
   GraphOperation,
+  ProjectMeta,
 } from '../../types';
 import {
   getMetadataStats,
@@ -25,6 +26,7 @@ import {
   formatOverlapResult,
   MemoryQueryParams,
 } from '../../utils/memoryGraph';
+import { buildProjectOverviewPrompt } from '../../utils/projectContext';
 
 // ==================== 输入输出类型 ====================
 
@@ -34,6 +36,7 @@ export interface MemoryDecisionInput {
   sourceRef?: string;
   existingMemories: LongTermMemory[];
   existingEdges: MemoryEdge[];
+  project?: ProjectMeta;
 }
 
 export interface MemoryDecisionOutput {
@@ -90,7 +93,10 @@ const quickEvalConfig: SubAgentConfig<MemoryDecisionInput, QuickEvalOutput> = {
   tools: [quickEvalTool],
   terminalToolName: 'quick_eval',
 
-  getSystemPrompt: (input) => `
+  getSystemPrompt: (input) => {
+    const projectOverview = buildProjectOverviewPrompt(input.project);
+    return `${projectOverview}
+
 你是【内容评估器】。快速判断以下内容是否值得进入长期记忆系统。
 
 ## ⚠️ 禁止提取的内容（直接返回 shouldProcess=false）
@@ -121,7 +127,8 @@ ${input.content.slice(0, 4000)}
 \`\`\`
 
 快速评估并调用 quick_eval 工具。
-`,
+`;
+  },
 
   getInitialMessage: () => '快速评估内容是否值得进入长期记忆系统。',
 
@@ -336,7 +343,10 @@ interface DecisionInput extends MemoryDecisionInput {
   evalResult: QuickEvalOutput;
 }
 
-const buildDecisionPrompt = (input: DecisionInput): string => `
+const buildDecisionPrompt = (input: DecisionInput): string => {
+  const projectOverview = buildProjectOverviewPrompt(input.project);
+  return `${projectOverview}
+
 你是记忆管理器。根据评估结果，决定如何更新知识图谱。
 
 ## 评估结果
@@ -384,6 +394,7 @@ ${input.source}${input.sourceRef ? ` - ${input.sourceRef}` : ''}
 ${input.content.slice(0, 6000)}
 \`\`\`
 `;
+};
 
 const decisionConfig: SubAgentConfig<DecisionInput, MemoryDecisionOutput> = {
   name: 'MemoryDecisionAgent',

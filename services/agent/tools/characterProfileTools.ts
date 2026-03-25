@@ -588,7 +588,6 @@ export const executeArchiveEntry = async (args: {
 export const characterProfileTools: ToolDefinition[] = [
   initCharacterProfileTool,
   updateCharacterProfileTool,
-  getCharacterProfileTool,
   manageSubCategoryTool,
   archiveEntryTool,
 ];

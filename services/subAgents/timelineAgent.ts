@@ -7,6 +7,8 @@ import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
 import { executeOutlineTool } from '../agent/tools/timelineTools';
 import { ToolDefinition } from '../agent/types';
 import { SKILL_CONSTRAINT_LAYERED_DESIGN } from '../resources/agentSkill';
+import { ProjectMeta } from '../../types';
+import { buildProjectOverviewPrompt } from '../../utils/projectContext';
 
 import {
   getEventsTool,
@@ -57,6 +59,7 @@ export interface TimelineContext {
   existingEventCount: number;
   volumeSummaries: Array<{ volumeIndex: number; title: string }>;
   chapterSummaries: Array<{ chapterIndex: number; title: string; volumeIndex: number; eventCount: number }>;
+  project?: ProjectMeta;
 }
 
 export interface TimelineOutput {
@@ -72,7 +75,10 @@ const outlineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput, Timel
   terminalToolName: 'outline_submitOutline',
   temperature: 0.1,
 
-  getSystemPrompt: (_input, context) => `
+  getSystemPrompt: (_input, context) => {
+    const projectOverview = buildProjectOverviewPrompt(context?.project);
+    return `${projectOverview}
+
 # 任务：结构化大纲转换
 
 你是大纲结构化转换器，将剧情描述转换为结构化数据。
@@ -125,7 +131,8 @@ outline_submitOutline({ success: true, report: "..." })
 2. ✅ 只看返回值 success 判断成功
 3. ❌ 禁止脑补原文没有的内容
 4. ❌ 如果 instructions 禁止调用某个工具，绝对不要调用
-`,
+`;
+  },
 
   getInitialMessage: (input: TimelineInput) => `
 ${input.instructions ? `

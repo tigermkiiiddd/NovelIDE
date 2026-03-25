@@ -20,7 +20,6 @@ import {
 import {
   initCharacterProfileTool,
   updateCharacterProfileTool,
-  getCharacterProfileTool,
   manageSubCategoryTool,
   archiveEntryTool,
 } from './characterProfileTools';
@@ -37,7 +36,6 @@ const readTools: ToolDefinition[] = [
   getChaptersTool,
   getEventsTool,
   getStoryLinesTool,
-  getCharacterProfileTool,
 ];
 
 const writeTools: ToolDefinition[] = [

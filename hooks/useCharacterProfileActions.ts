@@ -7,8 +7,11 @@
 import { useCallback, useState } from 'react';
 import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
 import { useAgentStore } from '../stores/agentStore';
+import { useProjectStore } from '../stores/projectStore';
 import { CharacterCategoryName } from '../types';
 import { AIService } from '../services/geminiService';
+import { buildProjectOverviewPrompt } from '../utils/projectContext';
+import { ToolDefinition } from '../services/agent/types';
 
 interface CharacterProfileActionsResult {
   isInitializing: boolean;
@@ -42,7 +45,8 @@ const extractCharacterNameFromPath = (filePath: string): string => {
 const analyzeCharacterCardWithAI = async (
   aiService: AIService,
   characterName: string,
-  content: string
+  content: string,
+  projectOverview: string
 ): Promise<{
   success: boolean;
   subCategories?: Record<CharacterCategoryName, string[]>;
@@ -53,7 +57,9 @@ const analyzeCharacterCardWithAI = async (
   }[];
   error?: string;
 }> => {
-  const systemPrompt = `你是一个小说角色分析专家。你的任务是分析【完整生命周期的角色设定卡】，为角色档案系统设计小分类结构，并提取【故事开始时的初始状态】。
+  const systemPrompt = `${projectOverview}
+
+你是一个小说角色分析专家。你的任务是分析【完整生命周期的角色设定卡】，为角色档案系统设计小分类结构，并提取【故事开始时的初始状态】。
 
 ## ⚠️ 关键概念
 
@@ -64,14 +70,14 @@ const analyzeCharacterCardWithAI = async (
 ### 举例说明
 
 设定卡可能写着：
-- "初期阶段：靠喝水憋尿，战斗中需要不断找机会喝水补充"
-- "后期可配合灌肠进一步增强威力"
-- "极限状态：膀胱充盈度100%时释放毁灭性攻击"
+- "初期阶段：仅掌握基础剑法，战斗中需要灵活走位"
+- "后期可领悟剑意增强威力"
+- "极限状态：剑意凝聚度100%时释放毁灭性攻击"
 
 你应该提取的初始值：
-- 技能"基础水刃"：初期阶段，需要喝水憋尿积累压力
-- 技能"高压水刀"：尚未掌握，需要进一步训练
-- 状态"膀胱充盈度"：0%（未憋尿）
+- 技能"基础剑法"：入门阶段，需要持续练习提升
+- 技能"剑意爆发"：尚未掌握，需要领悟剑意后解锁
+- 状态"剑意凝聚度"：0%（刚开始修炼）
 
 **不要**把后期才有的能力当作初始状态！
 
@@ -123,8 +129,8 @@ const analyzeCharacterCardWithAI = async (
 - unlockCondition: 解锁或提升条件
 
 示例：
-{ "subCategory": "基础水刃", "value": { "quality": "入门", "description": "利用膀胱压力释放水刃攻击", "unlockCondition": "需要喝水憋尿积累膀胱压力，充盈度30%即可释放" } }
-{ "subCategory": "高压水刀", "value": { "quality": "未掌握", "description": "更强力的水系攻击", "unlockCondition": "需要膀胱充盈度70%以上，配合训练后解锁" } }
+{ "subCategory": "基础剑法", "value": { "quality": "入门", "description": "掌握基本剑招，可进行攻防", "unlockCondition": "无需特殊条件，通过基础训练即可掌握" } }
+{ "subCategory": "剑意爆发", "value": { "quality": "未掌握", "description": "释放凝聚的剑意进行强力攻击", "unlockCondition": "需要剑意凝聚度达到70%以上，配合领悟后解锁" } }
 
 ### 关系（累加型）
 简单字符串值，描述当前关系状态。
@@ -146,7 +152,7 @@ ${content}
 4. **属性的 value 建议是结构化对象**，包含 level 和 description 字段`;
 
   // 定义工具
-  const tools = [{
+  const tools: ToolDefinition[] = [{
     type: 'function' as const,
     function: {
       name: 'submit_character_profile',
@@ -331,7 +337,8 @@ const analyzeChapterWithAI = async (
   aiService: AIService,
   content: string,
   chapterRef: string,
-  profiles: { characterName: string; categories: any }[]
+  profiles: { characterName: string; categories: any }[],
+  projectOverview: string
 ): Promise<{
   success: boolean;
   updates?: {
@@ -357,7 +364,9 @@ const analyzeChapterWithAI = async (
     return `【${p.characterName}】\n${categories.join('\n')}`;
   }).join('\n\n');
 
-  const systemPrompt = `你是一个小说内容分析专家。你的任务是分析正文内容，识别角色状态变化，并生成角色档案更新指令。
+  const systemPrompt = `${projectOverview}
+
+你是一个小说内容分析专家。你的任务是分析正文内容，识别角色状态变化，并生成角色档案更新指令。
 
 ## 角色档案分类体系
 
@@ -373,7 +382,7 @@ const analyzeChapterWithAI = async (
 
 **优先更新现有子分类，不要轻易创建新子分类！**
 
-- 如果正文提到"使用水刃攻击"，应该更新现有的"基础水刃"技能，而不是创建新的"水刃"子分类
+- 如果正文提到"使用剑法攻击"，应该更新现有的"基础剑法"技能，而不是创建新的"剑法"子分类
 - 只有当内容明确涉及全新的、现有子分类无法涵盖的内容时，才创建新子分类
 - 更新时使用现有子分类的准确名称
 
@@ -481,6 +490,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
   const updateProfile = useCharacterMemoryStore(state => state.updateProfile);
   const deleteProfileFromStore = useCharacterMemoryStore(state => state.deleteProfile);
   const aiConfig = useAgentStore(state => state.aiConfig);
+  const currentProject = useProjectStore(state => state.getCurrentProject());
 
   /**
    * 从 Markdown 角色卡初始化角色档案（使用 AI 分析）
@@ -520,9 +530,12 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       const aiService = new AIService(lightConfig);
       console.log('[CharacterProfile] 使用模型:', lightConfig.modelName);
 
+      // 构建项目概览
+      const projectOverview = buildProjectOverviewPrompt(currentProject);
+
       // 调用 AI 分析角色卡
       console.log(`[CharacterProfile] 正在使用 AI 分析角色卡: ${characterName}`);
-      const result = await analyzeCharacterCardWithAI(aiService, characterName, content);
+      const result = await analyzeCharacterCardWithAI(aiService, characterName, content, projectOverview);
 
       if (!result.success || !result.subCategories) {
         setError(result.error || 'AI 分析失败');
@@ -554,7 +567,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       setIsInitializing(false);
       return false;
     }
-  }, [getByName, initializeProfile, aiConfig]);
+  }, [getByName, initializeProfile, aiConfig, currentProject]);
 
   /**
    * 从正文内容更新相关角色（使用 AI 分析）
@@ -601,9 +614,12 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       };
       const aiService = new AIService(lightConfig);
 
+      // 构建项目概览
+      const projectOverview = buildProjectOverviewPrompt(currentProject);
+
       // 调用 AI 分析正文
       console.log(`[CharacterProfile] 正在使用 AI 分析章节: ${chapterRef}`);
-      const result = await analyzeChapterWithAI(aiService, content, chapterRef, mentionedProfiles);
+      const result = await analyzeChapterWithAI(aiService, content, chapterRef, mentionedProfiles, projectOverview);
 
       if (!result.success) {
         setError(result.error || 'AI 分析失败');
@@ -637,7 +653,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       setIsUpdating(false);
       return false;
     }
-  }, [updateProfile, aiConfig]);
+  }, [updateProfile, aiConfig, currentProject]);
 
   /**
    * 强制重新初始化（先删除旧档案）

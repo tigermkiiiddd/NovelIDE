@@ -11,8 +11,10 @@ import {
   KnowledgeNodeDraft,
   KnowledgeEdgeType,
   DEFAULT_SUB_CATEGORIES,
+  ProjectMeta,
 } from '../../types';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
+import { buildProjectOverviewPrompt } from '../../utils/projectContext';
 
 // ==================== 输入输出类型 ====================
 
@@ -20,6 +22,7 @@ export interface KnowledgeDecisionInput {
   content: string;
   source: 'dialogue' | 'document';
   sourceRef?: string;
+  project?: ProjectMeta;
 }
 
 export interface KnowledgeDecisionOutput {
@@ -93,7 +96,10 @@ const quickEvalConfig: SubAgentConfig<KnowledgeDecisionInput, QuickEvalOutput> =
   tools: [quickEvalTool],
   terminalToolName: 'quick_eval',
 
-  getSystemPrompt: (input) => `
+  getSystemPrompt: (input) => {
+    const projectOverview = buildProjectOverviewPrompt(input.project);
+    return `${projectOverview}
+
 你是【知识评估器】。快速判断内容是否值得进入知识图谱。
 
 ## ⚠️ 禁止提取的内容（直接返回 shouldProcess=false）
@@ -137,7 +143,8 @@ ${input.content.slice(0, 4000)}
 \`\`\`
 
 快速评估并调用 quick_eval 工具。
-`,
+`;
+  },
 
   getInitialMessage: () => '快速评估内容是否值得进入知识图谱。',
 
@@ -348,7 +355,10 @@ const decisionConfig: SubAgentConfig<
   tools: [listMetadataTool, queryKnowledgeTool, submitDecisionTool],
   terminalToolName: 'submit_decision',
 
-  getSystemPrompt: (input) => `
+  getSystemPrompt: (input) => {
+    const projectOverview = buildProjectOverviewPrompt(input.project);
+    return `${projectOverview}
+
 你是【知识决策器】。分析内容并决定如何更新知识图谱。
 
 ## 分类体系
@@ -394,7 +404,8 @@ ${input.content.slice(0, 6000)}
 \`\`\`
 
 先查询现有知识，然后做出决策。
-`,
+`;
+  },
 
   getInitialMessage: (input) =>
     `内容已通过初步评估。请先查询现有知识，然后提交决策。关键分类: ${input.quickEvalResult.category}`,

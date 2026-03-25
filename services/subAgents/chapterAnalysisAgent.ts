@@ -1,7 +1,8 @@
 import { AIService } from '../geminiService';
-import { ChapterAnalysis, PlotKeyPoint, CharacterState, ForeshadowingItem } from '../../types';
+import { ChapterAnalysis, PlotKeyPoint, CharacterState, ForeshadowingItem, ProjectMeta } from '../../types';
 import { ToolDefinition } from '../agent/types';
 import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
+import { buildProjectOverviewPrompt } from '../../utils/projectContext';
 
 // --- 工具定义 ---
 const submitAnalysisTool: ToolDefinition = {
@@ -150,6 +151,7 @@ interface ChapterAnalysisInput {
   chapterContent: string;
   chapterTitle: string;
   existingAnalysis?: ChapterAnalysis;
+  project?: ProjectMeta;
 }
 
 interface ChapterAnalysisOutput {
@@ -166,7 +168,10 @@ const chapterAnalysisConfig: SubAgentConfig<ChapterAnalysisInput, ChapterAnalysi
   tools: [submitAnalysisTool],
   terminalToolName: 'submit_analysis',
 
-  getSystemPrompt: (input) => `
+  getSystemPrompt: (input) => {
+    const projectOverview = buildProjectOverviewPrompt(input.project);
+    return `${projectOverview}
+
 你是一个专用的【章节结构化分析专家 (Chapter Analysis Sub-Agent)】。
 你的任务是从小说章节中提取结构化信息，并与现有分析进行智能合并。
 
@@ -289,7 +294,8 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
 - **标签使用**: 使用准确的标签帮助后续检索
 
 现在开始分析，完成后调用 submit_analysis 工具提交结果。
-`,
+`;
+  },
 
   getInitialMessage: (input) => `请分析上述章节内容，并制定合并策略。`,
 
@@ -361,13 +367,14 @@ export async function runChapterAnalysisAgent(
   chapterContent: string,
   chapterTitle: string,
   existingAnalysis?: ChapterAnalysis,
+  project?: ProjectMeta,
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<ChapterAnalysisOutput> {
   const agent = new BaseSubAgent(chapterAnalysisConfig);
   return agent.run(
     aiService,
-    { chapterContent, chapterTitle, existingAnalysis },
+    { chapterContent, chapterTitle, existingAnalysis, project },
     undefined,
     onLog,
     signal

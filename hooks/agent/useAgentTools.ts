@@ -65,6 +65,50 @@ export const useAgentTools = ({
         return latestChange ? (latestChange.newContent || null) : null;
     }, []);
 
+    // 构建角色动态状态摘要
+    const buildCharacterStatusSummary = useCallback((profile: any): string => {
+        const lines: string[] = [];
+        lines.push(`角色名: ${profile.characterName}`);
+        lines.push(`最后更新: ${new Date(profile.updatedAt).toLocaleString('zh-CN')}`);
+        lines.push('');
+
+        // 遍历所有分类
+        if (profile.categories) {
+            Object.entries(profile.categories).forEach(([catName, catData]: [string, any]) => {
+                if (!catData || !catData.subCategories) return;
+
+                const subCatEntries = Object.entries(catData.subCategories);
+                if (subCatEntries.length === 0) return;
+
+                lines.push(`【${catName}】(${catData.type || '未知'})`);
+
+                subCatEntries.forEach(([subCatName, value]) => {
+                    if (Array.isArray(value)) {
+                        // 累加型：显示未归档的条目
+                        const activeEntries = value.filter((e: any) => !e.archived);
+                        if (activeEntries.length > 0) {
+                            const latestEntry = activeEntries[activeEntries.length - 1];
+                            const valueStr = typeof latestEntry.value === 'object'
+                                ? JSON.stringify(latestEntry.value)
+                                : String(latestEntry.value);
+                            lines.push(`  - ${subCatName}: ${valueStr} (来源: ${latestEntry.chapterRef})`);
+                        }
+                    } else if (value && (value as any).value) {
+                        // 覆盖型
+                        const entry = value as { value: any; chapterRef: string };
+                        const valueStr = typeof entry.value === 'object'
+                            ? JSON.stringify(entry.value)
+                            : String(entry.value);
+                        lines.push(`  - ${subCatName}: ${valueStr} (来源: ${entry.chapterRef})`);
+                    }
+                });
+                lines.push('');
+            });
+        }
+
+        return lines.join('\n');
+    }, []);
+
     const shadowReadFile = useCallback((path: string, startLine?: number, endLine?: number): string => {
         const shadowContent = getShadowContent(path);
         if (shadowContent !== null) {
@@ -76,7 +120,37 @@ export const useAgentTools = ({
             const contentWithLineNumbers = linesToRead.map((line, idx) => `${String(start + idx).padEnd(4)} | ${line}`).join('\n');
             return `[Shadow Read - Pending Change]\nFile: ${path}\nTotal Lines: ${totalLines}\nReading Range: ${start} - ${end}\n---\n${contentWithLineNumbers}\n---\n(Content from Pending Approval)`;
         }
-        return tools.readFile(path, startLine, endLine);
+
+        // 检查是否为角色文件
+        const normalizedPath = path.replace(/\\/g, '/');
+        const isCharacterFile = normalizedPath.includes('02_角色档案') &&
+            (normalizedPath.endsWith('.md') || normalizedPath.endsWith('.txt'));
+
+        // 获取文件内容
+        let content = tools.readFile(path, startLine, endLine);
+
+        // 如果是角色文件，尝试注入动态状态
+        if (isCharacterFile) {
+            // 从文件名提取角色名 (格式: 前缀_角色名.md 或 角色名.md)
+            const fileName = normalizedPath.split('/').pop() || '';
+            let characterName = fileName.replace(/\.(md|txt)$/i, '').trim();
+            // 如果有前缀（如 "主角_"），移除前缀
+            if (characterName.includes('_')) {
+                characterName = characterName.substring(characterName.indexOf('_') + 1);
+            }
+
+            // 获取角色动态档案
+            const { useCharacterMemoryStore } = require('../../../stores/characterMemoryStore');
+            const profile = useCharacterMemoryStore.getState().getByName(characterName);
+
+            if (profile) {
+                // 构建动态状态摘要
+                const statusSummary = buildCharacterStatusSummary(profile);
+                content += `\n\n---\n【角色动态状态】\n${statusSummary}`;
+            }
+        }
+
+        return content;
     }, [getShadowContent, tools]);
 
     // --- 核心逻辑：执行工具 ---

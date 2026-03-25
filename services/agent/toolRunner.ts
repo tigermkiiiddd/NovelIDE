@@ -15,7 +15,6 @@ import { executeOutlineTool, executeProcessOutlineInput } from './tools/timeline
 import {
   executeInitCharacterProfile,
   executeUpdateCharacterProfile,
-  executeGetCharacterProfile,
   executeManageSubCategory,
   executeArchiveEntry,
 } from './tools/characterProfileTools';
@@ -585,9 +584,6 @@ export const executeTool = async (
                     break;
                 case 'update_character_profile':
                     result = await executeUpdateCharacterProfile(args);
-                    break;
-                case 'get_character_profile':
-                    result = await executeGetCharacterProfile(args);
                     break;
                 case 'manage_sub_category':
                     result = await executeManageSubCategory(args);

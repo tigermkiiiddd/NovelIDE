@@ -1,11 +1,12 @@
 import { AIService } from '../geminiService';
-import { FileNode } from '../../types';
+import { FileNode, ProjectMeta } from '../../types';
 import { ToolDefinition } from '../agent/types';
-import { 
-  listFilesTool, 
-  readFileTool, 
-  searchFilesTool 
+import {
+  listFilesTool,
+  readFileTool,
+  searchFilesTool
 } from '../agent/tools/fileReadTools';
+import { buildProjectOverviewPrompt } from '../../utils/projectContext';
 
 // --- Sub-Agent 专用工具：提交报告 ---
 const submitReportTool: ToolDefinition = {
@@ -46,7 +47,9 @@ const SEARCH_AGENT_TOOLS = [
 ];
 
 // --- Sub-Agent System Prompt ---
-const getSystemPrompt = (contextFiles: string) => `
+const getSystemPrompt = (contextFiles: string, projectOverview: string) => `
+${projectOverview}
+
 你是一个专用的【信息检索与分析专家 (Sub-Agent)】。
 你的上级是主 Agent，你负责在一个小说 IDE 环境中自主执行复杂的搜索和调研任务。
 
@@ -88,16 +91,18 @@ export async function runSearchSubAgent(
   requestDescription: string,
   files: FileNode[],
   fileActions: any, // Read-only subset
+  project?: ProjectMeta,
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  
+
   const history: any[] = [];
   const MAX_LOOPS = 8; // 给予子 Agent 足够的探索轮次
   let loopCount = 0;
-  
+
   // 1. Initialize Context
-  const systemPrompt = getSystemPrompt(`当前项目文件结构(简化):\n${fileActions.listFiles()}`);
+  const projectOverview = buildProjectOverviewPrompt(project);
+  const systemPrompt = getSystemPrompt(`当前项目文件结构(简化):\n${fileActions.listFiles()}`, projectOverview);
   
   // Initial Trigger
   history.push({ role: 'user', parts: [{ text: `【主 Agent 任务派发】\n\n需求描述：${requestDescription}\n\n请开始你的调查工作。请先制定搜索策略，然后一步步执行。` }] });
