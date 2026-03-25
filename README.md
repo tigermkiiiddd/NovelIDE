@@ -37,6 +37,12 @@ NovelIDE 是一款面向小说作者的集成开发环境，融合了先进的 A
 - 审查状态：跟踪内容审核进度
 - 计划与执行分离：先规划后执行
 
+### 知识图谱 (Knowledge Graph)
+- **可视化浏览**：通过树状图直观查看小说设定与知识点
+- **智能编辑**：支持节点的新增、修改和关联
+- **AI 协同**：AI 代理能自动识别并更新知识图谱节点
+- **数据同步**：与本地存储实时同步，保证数据一致性
+
 ### 用户体验
 - 响应式设计，支持移动端
 - 离线支持（IndexedDB 本地存储）
@@ -104,9 +110,10 @@ NovelIDE/
 ├── services/        # 业务逻辑层
 │   ├── agent/       # AI 代理工具和运行器
 │   ├── resources/   # 技能和写作指南
-│   └── subAgents/   # 专用子代理
+│   └── subAgents/   # 专用子代理 (Timeline, Knowledge Decision等)
 ├── hooks/           # 自定义 React Hooks
-│   └── agent/       # 分层代理 Hook 系统
+│   ├── agent/       # 分层代理 Hook 系统
+│   └── useAgent.ts  # 核心代理交互 Hook
 ├── domains/         # 领域驱动设计（DDD）领域逻辑
 ├── utils/           # 工具函数
 ├── types/           # TypeScript 类型定义
