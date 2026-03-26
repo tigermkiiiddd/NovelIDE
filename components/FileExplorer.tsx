@@ -122,6 +122,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       // Check if it's a system directory (Direct child of root)
       const isSystemDir = node.parentId === 'root' && node.type === FileType.FOLDER;
 
+      // Check if it's a protected file (cannot be deleted)
+      const protectedFileNames = ['长期记忆.json'];
+      const isProtectedFile = protectedFileNames.includes(node.name);
+
       return (
         <div key={node.id}>
           <div 
@@ -212,8 +216,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                     </>
                 )}
 
-                {/* Delete Button - Hidden for System Directories */}
-                {!isSystemDir && (
+                {/* Delete Button - Hidden for System Directories and Protected Files */}
+                {!isSystemDir && !isProtectedFile && (
                     <button 
                         onClick={(e) => {
                             e.stopPropagation();

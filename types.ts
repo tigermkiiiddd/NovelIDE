@@ -458,7 +458,7 @@ export interface MemoryMetadataStats {
 // ============================================
 
 // 一级分类（预制，不可扩展）
-export type KnowledgeCategory = '设定' | '规则' | '禁止' | '风格';
+export type KnowledgeCategory = '设定' | '规则' | '禁止' | '风格' | '用户偏好';
 
 // 二级分类默认值（半预制，业务AI可扩展）
 export const DEFAULT_SUB_CATEGORIES: Record<KnowledgeCategory, string[]> = {
@@ -466,6 +466,7 @@ export const DEFAULT_SUB_CATEGORIES: Record<KnowledgeCategory, string[]> = {
   '规则': ['创作规则', '叙事规则', '逻辑规则'],
   '禁止': ['禁止词汇', '禁止情节', '禁止写法'],
   '风格': ['叙事风格', '对话风格', '描写风格'],
+  '用户偏好': ['写作偏好', '交互偏好', '输出偏好'],
 };
 
 // 旧二级分类迁移映射（用于数据迁移）

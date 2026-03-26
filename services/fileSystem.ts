@@ -130,7 +130,22 @@ export const createInitialFileSystem = (): FileNode[] => {
     rulesFolder,
 
     // --- 00-05 业务文件夹初始为空 (用户要求) ---
-    
+
+    // --- 00_基础信息/长期记忆.json (知识图谱存储) ---
+    createFile('长期记忆.json', infoFolder.id, JSON.stringify({
+      nodes: [],
+      edges: [],
+      availableSubCategories: {
+        '设定': ['世界设定', '角色设定', '物品设定', '场景设定'],
+        '规则': ['创作规则', '叙事规则', '逻辑规则'],
+        '禁止': ['禁止词汇', '禁止情节', '禁止写法'],
+        '风格': ['叙事风格', '对话风格', '描写风格'],
+        '用户偏好': ['写作偏好', '交互偏好', '输出偏好'],
+      },
+      availableTags: [],
+      version: 1,
+    }, null, 2)),
+
     // --- 98_技能配置 (Agent Skills) ---
     createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
 

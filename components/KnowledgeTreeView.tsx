@@ -17,6 +17,7 @@ import {
   BookOpen,
   AlertTriangle,
   PenTool,
+  User,
 } from 'lucide-react';
 import {
   KnowledgeCategory,
@@ -55,6 +56,11 @@ const CATEGORY_CONFIG: Record<
     icon: <PenTool className="w-4 h-4" />,
     color: 'text-purple-400',
     bgColor: 'bg-purple-900/30',
+  },
+  '用户偏好': {
+    icon: <User className="w-4 h-4" />,
+    color: 'text-green-400',
+    bgColor: 'bg-green-900/30',
   },
 };
 

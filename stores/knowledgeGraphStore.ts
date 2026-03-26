@@ -16,6 +16,7 @@ import {
 import { create } from 'zustand';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
+import { dbAPI } from '../services/persistence';
 import {
   createKnowledgeNodeMetadata,
   getKnowledgeNodeDynamicState,
@@ -163,7 +164,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       };
     });
 
-    // 保存到文件
+    // 保存到文件（用户偏好会保存到全局存储，项目知识保存到项目文件）
     setTimeout(() => saveToFile(get()), 1000);
     return newNode;
   },
@@ -358,6 +359,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       '规则': 0,
       '禁止': 0,
       '风格': 0,
+      '用户偏好': 0,
     };
     const bySubCategory: Record<string, number> = {};
     const tagCounts: Record<string, number> = {};
@@ -544,12 +546,37 @@ async function loadFromProjectInternal(projectId: string) {
     (f) => f.name === KNOWLEDGE_FILE_NAME && f.parentId !== 'root'
   );
 
+  // 加载全局用户偏好
+  let globalUserPreferences: KnowledgeNode[] = [];
+  try {
+    globalUserPreferences = await dbAPI.getGlobalUserPreferences();
+    console.log(`[KnowledgeGraph] 从全局存储加载了 ${globalUserPreferences.length} 个用户偏好节点`);
+  } catch (error) {
+    console.error('[KnowledgeGraph] 加载全局用户偏好失败:', error);
+  }
+
+  // 收集用户偏好的标签和二级分类
+  const userPreferenceTags = globalUserPreferences.flatMap((n) => n.tags);
+  const userPreferenceSubCategories: string[] = [];
+  globalUserPreferences.forEach((node) => {
+    if (node.subCategory && !userPreferenceSubCategories.includes(node.subCategory)) {
+      userPreferenceSubCategories.push(node.subCategory);
+    }
+  });
+
   if (!knowledgeFile?.content) {
+    // 没有项目文件，只有全局用户偏好
+    const subCategoriesWithUserPrefs = { ...DEFAULT_SUB_CATEGORIES };
+    userPreferenceSubCategories.forEach((sub) => {
+      if (!subCategoriesWithUserPrefs['用户偏好'].includes(sub)) {
+        subCategoriesWithUserPrefs['用户偏好'].push(sub);
+      }
+    });
     useKnowledgeGraphStore.setState({
-      nodes: [],
+      nodes: globalUserPreferences,
       edges: [],
-      availableSubCategories: { ...DEFAULT_SUB_CATEGORIES },
-      availableTags: [],
+      availableSubCategories: subCategoriesWithUserPrefs,
+      availableTags: userPreferenceTags,
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
@@ -561,8 +588,11 @@ async function loadFromProjectInternal(projectId: string) {
     const data = JSON.parse(knowledgeFile.content);
     const rawNodes = data.nodes || [];
 
+    // 过滤掉项目文件中的用户偏好节点（这些应该从全局存储加载）
+    const projectNodes = rawNodes.filter((n: KnowledgeNode) => n.category !== '用户偏好');
+
     // 迁移旧的二级分类
-    const migratedNodes = rawNodes.map((node: KnowledgeNode) => {
+    const migratedNodes = projectNodes.map((node: KnowledgeNode) => {
       if (SUB_CATEGORY_MIGRATION[node.subCategory]) {
         return {
           ...node,
@@ -573,7 +603,7 @@ async function loadFromProjectInternal(projectId: string) {
     });
 
     // 统计迁移数量
-    const migratedCount = rawNodes.filter(
+    const migratedCount = projectNodes.filter(
       (n: KnowledgeNode) => SUB_CATEGORY_MIGRATION[n.subCategory]
     ).length;
 
@@ -592,11 +622,25 @@ async function loadFromProjectInternal(projectId: string) {
       }
     });
 
+    // 添加用户偏好的二级分类
+    userPreferenceSubCategories.forEach((sub) => {
+      if (!validSubCategories['用户偏好'].includes(sub)) {
+        validSubCategories['用户偏好'].push(sub);
+      }
+    });
+
+    // 合并项目节点和用户偏好节点
+    const allNodes = [...migratedNodes, ...globalUserPreferences];
+
+    // 合并标签
+    const allTags = [...(data.availableTags || []), ...userPreferenceTags];
+    const uniqueTags = [...new Set(allTags)];
+
     useKnowledgeGraphStore.setState({
-      nodes: migratedNodes,
+      nodes: allNodes,
       edges: data.edges || [],
       availableSubCategories: validSubCategories,
-      availableTags: data.availableTags || [],
+      availableTags: uniqueTags,
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
@@ -608,11 +652,18 @@ async function loadFromProjectInternal(projectId: string) {
     }
   } catch (error) {
     console.error('[KnowledgeGraph] 加载数据失败:', error);
+    // 即使加载失败，也保留全局用户偏好
+    const subCategoriesWithUserPrefs = { ...DEFAULT_SUB_CATEGORIES };
+    userPreferenceSubCategories.forEach((sub) => {
+      if (!subCategoriesWithUserPrefs['用户偏好'].includes(sub)) {
+        subCategoriesWithUserPrefs['用户偏好'].push(sub);
+      }
+    });
     useKnowledgeGraphStore.setState({
-      nodes: [],
+      nodes: globalUserPreferences,
       edges: [],
-      availableSubCategories: { ...DEFAULT_SUB_CATEGORIES },
-      availableTags: [],
+      availableSubCategories: subCategoriesWithUserPrefs,
+      availableTags: userPreferenceTags,
       currentProjectId: projectId,
       isInitialized: true,
       isLoading: false,
@@ -627,12 +678,31 @@ async function saveToFile(state: KnowledgeGraphState) {
   const fileStore = useFileStore.getState();
   const files = fileStore.files;
 
+  // 分离用户偏好节点和项目特定节点
+  const userPreferenceNodes = state.nodes.filter((n) => n.category === '用户偏好');
+  const projectNodes = state.nodes.filter((n) => n.category !== '用户偏好');
+
+  // 提取用户偏好的标签
+  const userPreferenceTags = userPreferenceNodes.flatMap((n) => n.tags);
+  const projectTags = state.availableTags.filter((t) => !userPreferenceTags.includes(t));
+
+  // 保存用户偏好到全局 IndexedDB
+  if (userPreferenceNodes.length > 0) {
+    try {
+      await dbAPI.saveGlobalUserPreferences(userPreferenceNodes);
+      console.log(`[KnowledgeGraph] 已保存 ${userPreferenceNodes.length} 个用户偏好节点到全局存储`);
+    } catch (error) {
+      console.error('[KnowledgeGraph] 保存用户偏好失败:', error);
+    }
+  }
+
+  // 构建项目特定内容（不包含用户偏好节点）
   const content = JSON.stringify(
     {
-      nodes: state.nodes,
+      nodes: projectNodes,
       edges: state.edges,
       availableSubCategories: state.availableSubCategories,
-      availableTags: state.availableTags,
+      availableTags: projectTags,
       version: 1,
     },
     null,

@@ -1,6 +1,6 @@
 
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
-import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, FileType } from '../types';
+import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, FileType, KnowledgeNode } from '../types';
 import { FileVersion } from '../stores/versionStore';
 
 interface UiSettings {
@@ -29,7 +29,7 @@ interface NovelGenieDB extends DBSchema {
   };
   settings: {
     key: string;
-    value: any; // Can be AIConfig, projectId string, or sessionId string
+    value: any; // Can be AIConfig, projectId string, sessionId string, or KnowledgeNode[] for global preferences
   };
   diffSessions: {
     key: string; // 'current-{fileId}'
@@ -175,7 +175,7 @@ export const dbAPI = {
     const db = await initDB();
     return await db.getAll('projects');
   },
-  
+
   saveProject: async (project: ProjectMeta) => {
     const db = await initDB();
     await db.put('projects', project);
@@ -730,6 +730,34 @@ export const dbAPI = {
       await db.put('projectMeta', value, `${projectId}-${key}`);
     } catch (error) {
       console.error('[dbAPI.setProjectMeta] 保存失败:', error);
+    }
+  },
+
+  // ============================================
+  // 全局用户偏好 API（跨项目通用）
+  // ============================================
+
+  getGlobalUserPreferences: async (): Promise<KnowledgeNode[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('settings')) {
+        return [];
+      }
+      const data = await db.get('settings', 'global-user-preferences');
+      return data || [];
+    } catch (error) {
+      console.error('[dbAPI.getGlobalUserPreferences] 读取失败:', error);
+      return [];
+    }
+  },
+
+  saveGlobalUserPreferences: async (nodes: KnowledgeNode[]) => {
+    try {
+      const db = await initDB();
+      await db.put('settings', nodes, 'global-user-preferences');
+      console.log(`[dbAPI.saveGlobalUserPreferences] 已保存 ${nodes.length} 个用户偏好节点到全局存储`);
+    } catch (error) {
+      console.error('[dbAPI.saveGlobalUserPreferences] 保存失败:', error);
     }
   },
 

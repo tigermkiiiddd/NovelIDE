@@ -19,6 +19,7 @@ import {
   X,
   Check,
   Save,
+  User,
 } from 'lucide-react';
 import { KnowledgeNode, KnowledgeCategory, DEFAULT_SUB_CATEGORIES } from '../types';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
@@ -54,6 +55,12 @@ const CATEGORY_CONFIG: Record<
     color: 'text-purple-400',
     bgColor: 'bg-purple-900/30',
     label: '风格',
+  },
+  '用户偏好': {
+    icon: <User className="w-4 h-4" />,
+    color: 'text-green-400',
+    bgColor: 'bg-green-900/30',
+    label: '用户偏好',
   },
 };
 

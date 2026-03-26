@@ -76,6 +76,11 @@ export class FileService {
       // 获取文件的完整路径
       const filePath = allFiles ? this.getNodePath(file, allFiles) : '';
 
+      // 长期记忆.json 文件禁止删除（知识图谱系统文件）
+      if (file.name === '长期记忆.json') {
+        return false;
+      }
+
       // 99_创作规范 目录下的文件允许删除（用户可重置内容）
       if (filePath.startsWith('/99_创作规范/')) {
         return true;
@@ -194,6 +199,21 @@ export class FileService {
 
     // 8. 确保章节分析.json 文件存在
     ensureFile('章节分析.json', infoFolder.id, '[]');
+
+    // 9. 确保长期记忆.json 文件存在（知识图谱存储）
+    ensureFile('长期记忆.json', infoFolder.id, JSON.stringify({
+      nodes: [],
+      edges: [],
+      availableSubCategories: {
+        '设定': ['世界设定', '角色设定', '物品设定', '场景设定'],
+        '规则': ['创作规则', '叙事规则', '逻辑规则'],
+        '禁止': ['禁止词汇', '禁止情节', '禁止写法'],
+        '风格': ['叙事风格', '对话风格', '描写风格'],
+        '用户偏好': ['写作偏好', '交互偏好', '输出偏好'],
+      },
+      availableTags: [],
+      version: 1,
+    }, null, 2));
 
     return updatedFiles;
   }
