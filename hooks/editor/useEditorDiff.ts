@@ -675,19 +675,25 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
         if (isVirtualFile && targetChange.fileName) {
           // 对于 createFile，需要创建真实文件
           console.log('[handleAcceptAll] Creating real file for virtual file:', targetChange.fileName);
-          const { createFile: createFileFn } = useFileStore.getState();
-          const createResult = createFileFn(targetChange.fileName, finalContent);
+          const fileStore = useFileStore.getState();
+          const createResult = fileStore.createFile(targetChange.fileName, finalContent);
           if (createResult.startsWith('Error:')) {
             console.error('[handleAcceptAll] Failed to create file:', createResult);
             return;
           }
-          // 获取新创建的文件 ID
+          // 获取新创建的文件 ID（createFile 会自动设置为 activeFileId）
           const newFileId = useFileStore.getState().activeFileId;
+          console.log('[handleAcceptAll] File created, newFileId:', newFileId);
           if (newFileId) {
             fileToSaveId = newFileId;
           }
-          // 清除虚拟文件
+          // 清除虚拟文件，但保留 activeFileId
+          // setVirtualFile(null) 会同时设置 activeFileId: null，所以我们需要先保存然后恢复
           useFileStore.getState().setVirtualFile(null);
+          // 恢复 activeFileId 到新创建的文件
+          if (newFileId) {
+            useFileStore.getState().setActiveFileId(newFileId);
+          }
         } else if (fileToSaveId && finalContent) {
           // 普通文件，直接保存
           computedContentFileIdRef.current = null;
