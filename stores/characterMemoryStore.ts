@@ -236,6 +236,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     loadProfiles: async () => {
       const projectId = useProjectStore.getState().currentProjectId;
+      const fileStore = useFileStore.getState();
 
       // 1. 尝试从 IndexedDB 专用表读取
       if (projectId) {
@@ -247,7 +248,43 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
             await dbAPI.migrateMemoriesFromFiles(projectId);
           }
 
-          const profiles = await dbAPI.getCharacterProfiles(projectId);
+          let profiles = await dbAPI.getCharacterProfiles(projectId);
+
+          // 同步检查：删除 IndexedDB 中存在但文件已不存在的档案
+          const folder = ensureProfileFolder();
+          if (folder && profiles.length > 0) {
+            const existingFileNames = new Set(
+              fileStore.files
+                .filter((f) => f.parentId === folder.id && f.type === FileType.FILE)
+                .map((f) => f.name.replace(/\.json$/i, ''))
+            );
+
+            const validProfiles: CharacterProfileV2[] = [];
+            const orphanedCharacterIds: string[] = [];
+
+            for (const profile of profiles) {
+              const normalized = normalizeName(profile.characterName);
+              // 检查是否有对应的文件（角色名.json）
+              const hasFile = Array.from(existingFileNames).some(
+                (name) => normalizeName(name) === normalized
+              );
+
+              if (hasFile) {
+                validProfiles.push(profile);
+              } else {
+                console.log(`[CharacterMemoryStore] 发现已删除的档案，从 IndexedDB 清理: ${profile.characterName}`);
+                orphanedCharacterIds.push(profile.characterId);
+              }
+            }
+
+            // 删除孤立的 IndexedDB 数据
+            for (const characterId of orphanedCharacterIds) {
+              await dbAPI.deleteCharacterProfile(characterId);
+            }
+
+            profiles = validProfiles;
+          }
+
           if (profiles.length > 0) {
             useCharacterMemoryStore.setState({
               profiles: profiles.map(p => normalizeProfile(p)),
@@ -264,7 +301,6 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
       // 2. 降级：从文件读取
       const folder = ensureProfileFolder();
-      const fileStore = useFileStore.getState();
 
       if (!folder) {
         useCharacterMemoryStore.setState({ profiles: [], isInitialized: true });
@@ -493,10 +529,25 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
     deleteProfile: (characterName) => {
       console.log('[CharacterMemoryStore] 删除档案:', characterName);
       useCharacterMemoryStore.setState((state) => {
+        const normalized = normalizeName(characterName);
         const newProfiles = state.profiles.filter(
-          (profile) => normalizeName(profile.characterName) !== normalizeName(characterName)
+          (profile) => normalizeName(profile.characterName) !== normalized
         );
         console.log('[CharacterMemoryStore] 删除后剩余档案数量:', newProfiles.length);
+
+        // 同时从 IndexedDB 删除
+        const projectId = useProjectStore.getState().currentProjectId;
+        if (projectId) {
+          const profileToDelete = state.profiles.find(
+            (p) => normalizeName(p.characterName) === normalized
+          );
+          if (profileToDelete) {
+            dbAPI.deleteCharacterProfile(profileToDelete.characterId).catch((err) => {
+              console.error('[CharacterMemoryStore] 从 IndexedDB 删除失败:', err);
+            });
+          }
+        }
+
         return { profiles: newProfiles };
       });
     },

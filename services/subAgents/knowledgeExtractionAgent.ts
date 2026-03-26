@@ -132,6 +132,8 @@ ${input.content.slice(0, 4000)}
 `;
   },
 
+  getInitialMessage: () => '快速评估内容是否值得进入知识图谱。',
+
   parseTerminalResult: (args) => ({
     shouldProcess: Boolean(args.shouldProcess),
     reason: args.reason || '',

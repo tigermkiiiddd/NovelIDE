@@ -1,5 +1,5 @@
 
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { openDB, DBSchema, IDBPDatabase, IDBPObjectStore } from 'idb';
 import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, FileType, KnowledgeNode } from '../types';
 import { FileVersion } from '../stores/versionStore';
 
@@ -192,6 +192,43 @@ export const dbAPI = {
     // Since we store sessions as array in one key "novel-chat-sessions-{id}", this is correct.
     await tx.objectStore('sessions').delete(`novel-chat-sessions-${id}`);
     await tx.done;
+  },
+
+  /**
+   * 删除项目及其所有关联数据（完整级联删除）
+   * @param projectId 项目 ID
+   */
+  deleteProjectCascade: async (projectId: string) => {
+    const db = await initDB();
+    const tx = db.transaction([
+      'projects',
+      'files',
+      'sessions',
+      'characterProfiles',
+      'longTermMemories',
+      'memoryEdges',
+      'chapterAnalyses',
+      'versions',
+      'planNotes',
+      'pendingChanges',
+      'diffSessions',
+    ], 'readwrite');
+
+    // 删除主表
+    await tx.objectStore('projects').delete(projectId);
+    await tx.objectStore('files').delete(projectId);
+    await tx.objectStore('sessions').delete(`novel-chat-sessions-${projectId}`);
+
+    // 级联删除关联表
+    await clearByProjectIndex(tx.objectStore('characterProfiles'), projectId);
+    await clearByProjectIndex(tx.objectStore('longTermMemories'), projectId);
+    await clearByProjectIndex(tx.objectStore('memoryEdges'), projectId);
+    await tx.objectStore('chapterAnalyses').delete(`chapter-analyses-${projectId}`);
+    await tx.objectStore('versions').delete(`versions-${projectId}`);
+    await tx.objectStore('planNotes').delete(`novel-plan-notes-${projectId}`);
+
+    await tx.done;
+    console.log(`[dbAPI] 级联删除项目完成: ${projectId}`);
   },
 
   // Files (Stored as whole tree array for simplicity, matching current logic)
@@ -846,3 +883,25 @@ export const dbAPI = {
     return result;
   }
 };
+
+// ============================================
+// 辅助函数
+// ============================================
+
+/**
+ * 按项目索引清理数据
+ */
+async function clearByProjectIndex(store: any, projectId: string): Promise<void> {
+  try {
+    const index = store.index('by-project');
+    const all = await index.getAll(projectId);
+    for (const item of all) {
+      const key = item.id || item.characterId;
+      if (key) {
+        await store.delete(key);
+      }
+    }
+  } catch (error) {
+    console.error('[clearByProjectIndex] 清理失败:', error);
+  }
+}

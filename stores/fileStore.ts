@@ -8,6 +8,7 @@ import { FileService } from '../domains/file/fileService';
 import { formatWordCount } from '../utils/wordCount';
 import { useVersionStore, VersionSource } from './versionStore';
 import { applyEdits } from '../utils/patchUtils';
+import { dataService } from '../services/dataService';
 
 // Create FileService instance for domain logic
 const fileService = new FileService(generateId);
@@ -307,7 +308,7 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
   },
 
   deleteFile: (pathOrId) => {
-    const { files, _saveToDB, activeFileId, setActiveFileId, _restoreSystemFiles } = get();
+    const { files, _saveToDB, activeFileId, setActiveFileId, _restoreSystemFiles, currentProjectId } = get();
     let targetNode = files.find(f => f.id === pathOrId) || findNodeByPath(files, pathOrId);
     if (!targetNode) return `Error: File not found`;
 
@@ -315,6 +316,9 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     if (!fileService.canDeleteFile(targetNode, files)) {
       return `Error: Cannot delete protected system file "${targetNode.name}"`;
     }
+
+    // 获取文件路径用于级联删除
+    const filePath = getNodePath(targetNode, files);
 
     const idsToDelete = new Set<string>();
     const collectIds = (id: string) => {
@@ -327,6 +331,11 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     set({ files: newFiles });
     if (activeFileId === targetNode.id) setActiveFileId(null);
     _saveToDB();
+
+    // 级联删除：通过 DataService 删除关联的专用表数据
+    if (currentProjectId) {
+      dataService.deleteFileCascade(filePath, currentProjectId).catch(console.error);
+    }
 
     // Trigger auto-restore for system files immediately after deletion
     _restoreSystemFiles();

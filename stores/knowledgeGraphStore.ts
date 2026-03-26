@@ -430,15 +430,12 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   triggerDocumentExtraction: async (filePath: string, content: string) => {
     const state = get();
 
-    // 检查是否为可提取的文档
-    const eligiblePrefixes = ['00_', '01_', '02_', '03_'];
+    // 只处理正文草稿（05_）- 只有正文才需要触发长期记忆/知识图谱
+    // 角色档案（02_）由档案系统管理，不在这里提取
+    const isDraftFile = filePath.startsWith('05_正文草稿/');
     const eligibleExtension = /\.(md|txt)$/i.test(filePath);
-    const excludedNames = ['长期记忆.json', '章节分析.json', 'outline.json'];
 
-    const isEligible =
-      eligiblePrefixes.some((prefix) => filePath.startsWith(prefix)) &&
-      eligibleExtension &&
-      !excludedNames.some((name) => filePath.endsWith(name));
+    const isEligible = isDraftFile && eligibleExtension;
 
     if (!isEligible || !content.trim()) return null;
 

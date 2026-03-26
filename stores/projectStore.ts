@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { ProjectMeta } from '../types';
 import { dbAPI } from '../services/persistence';
+import { dataService } from '../services/dataService';
 import { generateId } from '../services/fileSystem';
 import { createInitialFileSystem } from '../services/fileSystem';
 
@@ -104,7 +105,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       currentProjectId: currentProjectId === id ? null : currentProjectId
     }));
 
-    await dbAPI.deleteProject(id);
+    // 使用 DataService 进行完整的级联删除
+    await dataService.deleteProjectCascade(id);
 
     // If deleting current project, clear saved ID
     if (currentProjectId === id) {
