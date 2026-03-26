@@ -129,7 +129,8 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       computedFilePath: filePath,
       pendingChangesCount: pendingChanges.length,
       fileChangesCount: fileChanges.length,
-      pendingChangeFileNames: pendingChanges.map(c => c.fileName)
+      pendingChangeFileNames: pendingChanges.map(c => c.fileName),
+      fileChangeToolNames: fileChanges.map(c => c.toolName)
     });
 
     if (fileChanges.length === 0) return null;
@@ -139,11 +140,21 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     const isVirtualFile = !!activeFile.metadata?.virtualFilePath;
     const baseContent = isVirtualFile ? '' : (activeFile?.content || '');
 
-    console.log('[useEditorDiff] baseContent calculation:', {
+    // 检查是否有 createFile 类型的变更
+    // 对于 createFile，应该使用 pendingChange 自己的 originalContent（空字符串）
+    // 而不是 activeFile.content（已创建文件的内容）
+    const hasCreateFile = fileChanges.some(c => c.toolName === 'createFile');
+    // 如果有 createFile，使用第一个 createFile 的 originalContent（应该是空字符串）
+    const originalContent = hasCreateFile
+      ? (fileChanges.find(c => c.toolName === 'createFile')?.originalContent ?? '')
+      : baseContent;
+
+    console.log('[useEditorDiff] originalContent calculation:', {
       isVirtualFile,
+      hasCreateFile,
       baseContentLength: baseContent.length,
-      activeFileContentLength: activeFile?.content?.length || 0,
-      willUseEmptyBase: isVirtualFile
+      originalContentLength: originalContent.length,
+      willUseEmptyOriginal: hasCreateFile || isVirtualFile
     });
 
     const finalContent = mergePendingChanges(
@@ -159,7 +170,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     return {
       id: 'merged',
       fileName: filePath,
-      originalContent: baseContent,
+      originalContent: originalContent,
       newContent: finalContent,
       toolName: 'merged' as const,
       args: {},
@@ -656,17 +667,50 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       patchQueue: newPatches
     });
 
-    const finalContent = targetChange.newContent || '';
+        const finalContent = targetChange.newContent || '';
 
-    if (fileToSaveId && finalContent) {
-      computedContentFileIdRef.current = null;
-      saveFileContent(fileToSaveId, finalContent);
-    }
+        // 检查是否是虚拟文件（createFile 预览）
+        const isVirtualFile = activeFile?.metadata?.virtualFilePath;
 
-    const { files: currentFilesForPath } = useFileStore.getState();
+        if (isVirtualFile && targetChange.fileName) {
+          // 对于 createFile，需要创建真实文件
+          console.log('[handleAcceptAll] Creating real file for virtual file:', targetChange.fileName);
+          const { createFile: createFileFn } = useFileStore.getState();
+          const createResult = createFileFn(targetChange.fileName, finalContent);
+          if (createResult.startsWith('Error:')) {
+            console.error('[handleAcceptAll] Failed to create file:', createResult);
+            return;
+          }
+          // 获取新创建的文件 ID
+          const newFileId = useFileStore.getState().activeFileId;
+          if (newFileId) {
+            fileToSaveId = newFileId;
+          }
+          // 清除虚拟文件
+          useFileStore.getState().setVirtualFile(null);
+        } else if (fileToSaveId && finalContent) {
+          // 普通文件，直接保存
+          computedContentFileIdRef.current = null;
+          saveFileContent(fileToSaveId, finalContent);
+        }
+
+        const { files: currentFilesForPath } = useFileStore.getState();
     const { pendingChanges: currentPendingChanges } = useAgentStore.getState();
-    const filePath = fileToSave ? getNodePath(fileToSave, currentFilesForPath) : targetChange.fileName;
+    // 对于 createFile（虚拟文件），使用 targetChange.fileName（真实路径）
+    // 而不是虚拟文件路径
+    const filePath = isVirtualFile ? targetChange.fileName : (fileToSave ? getNodePath(fileToSave, currentFilesForPath) : targetChange.fileName);
+    console.log('[handleAcceptAll] Removing pendingChanges:', {
+      isVirtualFile,
+      filePath,
+      targetChangeFileName: targetChange.fileName,
+      currentPendingChangesCount: currentPendingChanges.length,
+      currentPendingChangeFileNames: currentPendingChanges.map(c => c.fileName)
+    });
     const changesToRemove = currentPendingChanges.filter(c => c.fileName === filePath);
+    console.log('[handleAcceptAll] Changes to remove:', {
+      count: changesToRemove.length,
+      ids: changesToRemove.map(c => c.id)
+    });
     changesToRemove.forEach(c => removePendingChange(c.id));
 
     addMessage({
