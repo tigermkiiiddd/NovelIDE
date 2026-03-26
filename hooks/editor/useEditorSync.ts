@@ -58,7 +58,7 @@ export const useEditorSync = (options: UseEditorSyncOptions): EditorSyncActions 
   } = options;
 
   const fileStore = useFileStore();
-  const { files, saveFileContent } = fileStore;
+  const { files, saveFileContent, virtualFile } = fileStore;
 
   const diffStore = useDiffStore();
   const { loadDiffSession, clearDiffSession } = diffStore;
@@ -71,8 +71,9 @@ export const useEditorSync = (options: UseEditorSyncOptions): EditorSyncActions 
   // 跟踪上一个文件 ID
   const prevFileIdRef = useRef<string | null>(null);
 
-  // 获取当前文件
-  const activeFile = files.find(f => f.id === activeFileId);
+  // 获取当前文件（支持虚拟文件）
+  const isVirtualFile = virtualFile?.id === activeFileId;
+  const activeFile = files.find(f => f.id === activeFileId) || (isVirtualFile ? virtualFile : undefined);
 
   // 当活动文件变化时，加载内容
   useEffect(() => {

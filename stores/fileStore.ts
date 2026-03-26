@@ -1,62 +1,16 @@
 
 import { create } from 'zustand';
-import { FileNode, FileType, BatchEdit, StringMatchEdit, MatchPosition } from '../types';
+import { FileNode, FileType, BatchEdit } from '../types';
 import { dbAPI } from '../services/persistence';
 import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
 import { parseFrontmatter } from '../utils/frontmatter';
 import { FileService } from '../domains/file/fileService';
 import { formatWordCount } from '../utils/wordCount';
 import { useVersionStore, VersionSource } from './versionStore';
+import { applyEdits } from '../utils/patchUtils';
 
 // Create FileService instance for domain logic
 const fileService = new FileService(generateId);
-
-// ============================================
-// 辅助函数：字符串匹配
-// ============================================
-
-/**
- * 查找所有匹配位置
- */
-function findAllMatches(content: string, search: string): MatchPosition[] {
-  const matches: MatchPosition[] = [];
-  let currentIndex = 0;
-
-  while (true) {
-    const index = content.indexOf(search, currentIndex);
-    if (index === -1) break;
-
-    // 计算起始行号
-    const beforeMatch = content.substring(0, index);
-    const lines = beforeMatch.split('\n');
-    const startLine = lines.length;
-    const startOffset = index;
-    const endOffset = index + search.length;
-
-    // 计算结束行号
-    const matchLines = search.split('\n');
-    const endLine = startLine + matchLines.length - 1;
-
-    matches.push({
-      startLine,
-      endLine,
-      startOffset,
-      endOffset
-    });
-
-    currentIndex = endOffset;
-  }
-
-  return matches;
-}
-
-/**
- * 截断字符串
- */
-function truncate(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.substring(0, maxLength) + '...';
-}
 
 interface FileState {
   files: FileNode[];
@@ -277,124 +231,21 @@ export const useFileStore = create<FileState>((set, get) => ({
       );
     }
 
-    let content = file.content || '';
-    const results: string[] = [];
+    // 使用公共函数应用 patch（严格模式，带验证）
+    const result = applyEdits(file.content || '', edits, { strict: true });
 
-    for (let i = 0; i < edits.length; i++) {
-      const edit = edits[i] as StringMatchEdit;
-
-      // 检查是否为旧格式（行号模式）
-      if ('startLine' in edit || 'endLine' in edit) {
-        return `❌ patchFile 失败: 参数格式已更新，不再支持行号模式。`;
-      }
-
-      const { mode, oldContent, newContent, after, before } = edit;
-
-      // 验证 mode
-      if (!mode) {
-        return `❌ patchFile 失败 (Edit ${i + 1}): 必须指定 mode ("single", "global", "insert")`;
-      }
-
-      // === INSERT 模式 ===
-      if (mode === 'insert') {
-        // 必须指定 after 或 before 其中之一
-        if (after === undefined && before === undefined) {
-          return `❌ patchFile 失败 (Edit ${i + 1}): insert 模式必须指定 after 或 before`;
-        }
-        if (after !== undefined && before !== undefined) {
-          return `❌ patchFile 失败 (Edit ${i + 1}): insert 模式只能指定 after 或 before，不能同时指定`;
-        }
-
-        if (after !== undefined) {
-          // after 模式
-          if (after === '') {
-            // 空字符串 = 文件末尾插入
-            content = content + newContent;
-            results.push(`Edit ${i + 1}: 已插入到文件末尾`);
-          } else {
-            // 在 after 内容之后插入
-            const matches = findAllMatches(content, after);
-            if (matches.length === 0) {
-              return `❌ patchFile 失败 (Edit ${i + 1}): 未找到 after 内容`;
-            }
-            if (matches.length > 1) {
-              return `❌ patchFile 失败 (Edit ${i + 1}): after 内容匹配 ${matches.length} 处，需要更精确`;
-            }
-            const match = matches[0];
-            content = content.slice(0, match.endOffset) + newContent + content.slice(match.endOffset);
-            results.push(`Edit ${i + 1}: 已插入到指定位置之后`);
-          }
-        } else {
-          // before 模式
-          const matches = findAllMatches(content, before!);
-          if (matches.length === 0) {
-            return `❌ patchFile 失败 (Edit ${i + 1}): 未找到 before 内容`;
-          }
-          if (matches.length > 1) {
-            return `❌ patchFile 失败 (Edit ${i + 1}): before 内容匹配 ${matches.length} 处，需要更精确`;
-          }
-          const match = matches[0];
-          content = content.slice(0, match.startOffset) + newContent + content.slice(match.startOffset);
-          results.push(`Edit ${i + 1}: 已插入到指定位置之前`);
-        }
-        continue;
-      }
-
-      // === SINGLE / GLOBAL 模式 ===
-      if (!oldContent) {
-        return `❌ patchFile 失败 (Edit ${i + 1}): oldContent 不能为空`;
-      }
-
-      // 查找所有匹配位置
-      const matches = findAllMatches(content, oldContent);
-
-      // 根据模式验证
-      if (mode === 'single') {
-        if (matches.length === 0) {
-          return `❌ patchFile 失败 (Edit ${i + 1}): 未找到匹配内容。
-
-【可能原因】
-1. oldContent 与原文不完全一致（空格、换行、标点差异）
-2. 文件已被修改，内容已变化
-
-【搜索内容】
-"${truncate(oldContent, 200)}"`;
-        }
-        if (matches.length > 1) {
-          const positions = matches.map(m => `行 ${m.startLine}-${m.endLine}`).join(', ');
-          return `❌ patchFile 失败 (Edit ${i + 1}): 找到 ${matches.length} 处匹配，但使用的是单点模式。
-
-【匹配位置】
-${positions}
-
-【建议】
-1. 提供更多上下文使 oldContent 更精确、唯一
-2. 或改用 mode: "global" 进行全局替换`;
-        }
-      }
-
-      // 执行替换
-      if (mode === 'global') {
-        if (matches.length === 0) {
-          results.push(`Edit ${i + 1}: 未找到匹配，跳过`);
-        } else {
-          content = content.split(oldContent).join(newContent);
-          results.push(`Edit ${i + 1}: ${matches.length} 处已替换`);
-        }
-      } else {
-        // single 模式（已验证只有一处匹配）
-        content = content.replace(oldContent, newContent);
-        results.push(`Edit ${i + 1}: 1 处已替换`);
-      }
+    if (!result.success) {
+      return result.error || 'Unknown error';
     }
 
+    const content = result.content;
     const metadata = parseFrontmatter(content);
     set(state => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
     const wordInfo = formatWordCount(content);
-    return `✅ Successfully applied ${edits.length} patches to "${path}" (${wordInfo})\n${results.join('\n')}`;
+    return `✅ Successfully applied ${edits.length} patches to "${path}" (${wordInfo})\n${result.results?.join('\n') || ''}`;
   },
 
   readFile: (path, startLine = 1, endLine) => {

@@ -119,8 +119,22 @@ export interface EditorHookResult {
 export const useEditor = (options: UseEditorOptions = {}): EditorHookResult => {
   // ==================== Stores ====================
   const fileStore = useFileStore();
-  const { files, activeFileId, saveFileContent, createFile, deleteFile } = fileStore;
-  const activeFile = files.find(f => f.id === activeFileId);
+  const { files, activeFileId, saveFileContent, createFile, deleteFile, virtualFile } = fileStore;
+  // 支持虚拟文件（用于 createFile 预览）
+  const isVirtualFile = virtualFile?.id === activeFileId;
+  const activeFile = files.find(f => f.id === activeFileId) || (isVirtualFile ? virtualFile : undefined);
+
+  // Debug log for virtual file
+  useEffect(() => {
+    console.log('[useEditor] File state:', {
+      activeFileId,
+      virtualFileId: virtualFile?.id,
+      isVirtualFile,
+      activeFileId: activeFile?.id,
+      activeFileName: activeFile?.name,
+      virtualFilePath: activeFile?.metadata?.virtualFilePath
+    });
+  }, [activeFileId, virtualFile?.id, isVirtualFile, activeFile?.id]);
 
   const {
     isSplitView,

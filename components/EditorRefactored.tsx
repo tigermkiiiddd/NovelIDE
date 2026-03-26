@@ -329,7 +329,8 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
   );
 
   // ==================== Special File Views ====================
-  if (activeFile) {
+  // 只在非 diff 模式下处理特殊文件视图
+  if (activeFile && internalMode !== 'diff') {
     const filePath = getNodePath(activeFile, editor.fileStore.files).replace(/\\/g, '/');
 
     // 章节分析.json -> ReadingLightView
@@ -592,26 +593,42 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
 
       {/* Content Area */}
       <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-        {internalMode === 'diff' && (mergedPendingChange || activePendingChange) ? (
+        {internalMode === 'diff' && mergedPendingChange ? (
           <DiffViewer
             originalContent={(() => {
-              const targetChange = mergedPendingChange || activePendingChange;
-
-              if (activeFile && diffSession?.sourceSnapshot) {
-                if (diffSession.sourceFileName === activeFile.name) {
-                  return diffSession.sourceSnapshot;
-                } else {
-                  return activeFile.content || '';
-                }
-              } else if (activeFile) {
-                return activeFile.content || '';
-              } else {
-                return targetChange?.originalContent || '';
+              // 对于虚拟文件（createFile 预览），使用空字符串作为原始内容
+              if (activeFile?.metadata?.virtualFilePath) {
+                console.log('[EditorRefactored] Virtual file detected in originalContent IIFE, returning empty string');
+                return '';
               }
+
+              // 只使用 mergedPendingChange（当前文件的 changes）
+              // 不再使用 activePendingChange（可能指向其他文件）
+              if (mergedPendingChange?.originalContent !== undefined && mergedPendingChange?.originalContent !== null) {
+                console.log('[EditorRefactored] Using mergedPendingChange.originalContent, length:', mergedPendingChange.originalContent.length);
+                // 如果有 diffSession 且文件名匹配，优先使用 sourceSnapshot
+                if (diffSession?.sourceSnapshot && diffSession?.sourceFileName === activeFile?.name) {
+                  console.log('[EditorRefactored] Using diffSession.sourceSnapshot instead');
+                  return diffSession.sourceSnapshot;
+                }
+                return mergedPendingChange.originalContent;
+              }
+
+              // Fallback: 使用 activeFile.content
+              if (activeFile) {
+                console.log('[EditorRefactored] Fallback to activeFile.content, length:', activeFile.content?.length || 0);
+                if (diffSession?.sourceSnapshot && diffSession?.sourceFileName === activeFile.name) {
+                  return diffSession.sourceSnapshot;
+                }
+                return activeFile.content || '';
+              }
+
+              console.log('[EditorRefactored] No activeFile, returning empty string');
+              return '';
             })()}
-            modifiedContent={(mergedPendingChange || activePendingChange)?.newContent || ''}
+            modifiedContent={mergedPendingChange?.newContent || ''}
             computedContent={computedContent}
-            pendingChange={mergedPendingChange || activePendingChange!}
+            pendingChange={mergedPendingChange}
             processedHunkIds={processedHunkIds}
             onAcceptHunk={handleAcceptHunk}
             onRejectHunk={handleRejectHunk}

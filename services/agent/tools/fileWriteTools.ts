@@ -7,6 +7,8 @@ export const createFileTool: ToolDefinition = {
     name: 'createFile',
     description: `Create a new markdown file with content at a specific path. [WRITE TOOL]
 
+⚠️ IMPORTANT: This tool can ONLY create NEW files. If the file already exists, this tool will fail with a conflict error. To update an existing file, use \`updateFile\` or \`patchFile\` instead.
+
 ⚠️ CRITICAL: All markdown files MUST start with YAML frontmatter metadata.
 
 General format (all files):

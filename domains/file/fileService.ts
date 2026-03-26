@@ -16,7 +16,6 @@ import { FileNode, FileType } from '../../types';
 import {
   DEFAULT_AGENT_SKILL,
   STYLE_GUIDE_TEMPLATE,
-  PROJECT_PROFILE_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
@@ -177,7 +176,6 @@ export class FileService {
 
     // 4. 确保创作规范文件（使用正确的模板常量）
     ensureFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE);
-    ensureFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE);
     ensureFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE);
     ensureFile('模板_世界线记录.md', rulesFolder.id, TIMELINE_TEMPLATE);
     ensureFile('模板_伏笔记录.md', rulesFolder.id, FORESHADOW_TEMPLATE);

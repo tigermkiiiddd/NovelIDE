@@ -111,14 +111,41 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [reviewingChangeId, pendingChanges]);
 
   const mergedPendingChange = useMemo(() => {
-    if (!activeFile) return null;
+    if (!activeFile) {
+      console.log('[useEditorDiff] mergedPendingChange: no activeFile');
+      return null;
+    }
 
-    const filePath = getNodePath(activeFile, files);
+    // 对于虚拟文件，使用 metadata.virtualFilePath 匹配
+    const filePath = activeFile.metadata?.virtualFilePath || getNodePath(activeFile, files);
     const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
+
+    console.log('[useEditorDiff] mergedPendingChange:', {
+      activeFileId: activeFile.id,
+      activeFileName: activeFile.name,
+      activeFileMetadata: activeFile.metadata,
+      isVirtual: !!activeFile.metadata?.virtualFilePath,
+      virtualFilePath: activeFile.metadata?.virtualFilePath,
+      computedFilePath: filePath,
+      pendingChangesCount: pendingChanges.length,
+      fileChangesCount: fileChanges.length,
+      pendingChangeFileNames: pendingChanges.map(c => c.fileName)
+    });
 
     if (fileChanges.length === 0) return null;
 
-    const baseContent = activeFile?.content || '';
+    // 对于虚拟文件（createFile 预览），originalContent 应该为空
+    // 因为虚拟文件代表一个新文件，没有原始内容
+    const isVirtualFile = !!activeFile.metadata?.virtualFilePath;
+    const baseContent = isVirtualFile ? '' : (activeFile?.content || '');
+
+    console.log('[useEditorDiff] baseContent calculation:', {
+      isVirtualFile,
+      baseContentLength: baseContent.length,
+      activeFileContentLength: activeFile?.content?.length || 0,
+      willUseEmptyBase: isVirtualFile
+    });
+
     const finalContent = mergePendingChanges(
       baseContent,
       fileChanges.map(c => ({
@@ -140,12 +167,13 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       description: `${fileChanges.length}个待审变更`,
       metadata: { sourceChanges: fileChanges }
     };
-  }, [activeFile?.id, pendingChanges, files]);
+  }, [activeFile?.id, activeFile?.metadata?.virtualFilePath, pendingChanges, files]);
 
   const activeEditDiffs = useMemo(() => {
     if (!activeFile) return [];
 
-    const filePath = getNodePath(activeFile, files);
+    // 对于虚拟文件，使用 metadata.virtualFilePath 匹配
+    const filePath = activeFile.metadata?.virtualFilePath || getNodePath(activeFile, files);
     const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
 
     const allEdits: EditDiff[] = [];
@@ -156,7 +184,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     }
 
     return allEdits;
-  }, [activeFile?.id, pendingChanges, files]);
+  }, [activeFile?.id, activeFile?.metadata?.virtualFilePath, pendingChanges, files]);
 
   const pendingEditCount = useMemo(() => {
     return activeEditDiffs.filter(edit =>
@@ -351,7 +379,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   useEffect(() => {
     if (!diffSession || !activeFile) return;
 
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = activePendingChange || mergedPendingChange;
     if (!targetChange) return;
 
     const allProcessed = areAllHunksProcessed(
@@ -373,9 +401,12 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
       saveFileContent(activeFile.id, computedContent);
 
+      // 只移除已经处理的 pendingChanges（通过 timestamp 识别）
+      // 避免移除在处理过程中新添加的 changes
+      const processedTimestamp = targetChange.timestamp;
       const filePath = getNodePath(activeFile, files);
       pendingChanges
-        .filter(c => c.fileName === filePath)
+        .filter(c => c.fileName === filePath && c.timestamp <= processedTimestamp)
         .forEach(c => removePendingChange(c.id));
 
       addMessage({
@@ -392,12 +423,28 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     }
   }, [diffSession, computedContent, activeFile, mergedPendingChange, activePendingChange, pendingChanges, saveFileContent, removePendingChange, addMessage, files]);
 
-  // ==================== Reviewing Change Effect ====================
+  // ==================== Reset completion tracking when new change arrives ====================
   useEffect(() => {
-    if (activePendingChange && internalMode !== 'diff') {
+    // 当 mergedPendingChange 改变时（有新的 change 进来），重置 completionMessageSentRef
+    // 这样可以确保新的 change 不会被跳过
+    if (mergedPendingChange) {
+      completionMessageSentRef.current = null;
+    }
+  }, [mergedPendingChange?.id]);
+
+  // ==================== Reviewing Change Effect ====================
+  // 只有当前文件有 pending changes 时才触发 diff 模式
+  // 不再使用 activePendingChange（可能指向其他文件）
+  useEffect(() => {
+    console.log('[useEditorDiff] Reviewing Change Effect:', {
+      hasMergedPendingChange: !!mergedPendingChange,
+      internalMode,
+      willSetDiff: mergedPendingChange && internalMode !== 'diff'
+    });
+    if (mergedPendingChange && internalMode !== 'diff') {
       setInternalMode('diff');
     }
-  }, [activePendingChange, internalMode, setInternalMode]);
+  }, [mergedPendingChange, internalMode, setInternalMode]);
 
   // ==================== Edit Increments Effect ====================
   useEffect(() => {
@@ -443,7 +490,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     };
 
     if (!diffSession) {
-      const targetChange = mergedPendingChange || activePendingChange;
+      const targetChange = activePendingChange || mergedPendingChange;
       const sourceSnapshot = targetChange?.originalContent || '';
       setDiffSession({
         sourceSnapshot,
@@ -470,7 +517,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     };
 
     if (!diffSession) {
-      const targetChange = mergedPendingChange || activePendingChange;
+      const targetChange = activePendingChange || mergedPendingChange;
       const sourceSnapshot = targetChange?.originalContent || '';
       setDiffSession({
         sourceSnapshot,
@@ -545,7 +592,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [addMessage]);
 
   const handleAcceptAll = useCallback(async () => {
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = activePendingChange || mergedPendingChange;
     if (!targetChange) return;
 
     let fileToSave = activeFile;
@@ -642,7 +689,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [mergedPendingChange, activePendingChange, activeFile, activeFileId, diffSession, computedContent, saveFileContent, removePendingChange, addMessage, setInternalMode, triggerChapterAnalysis, triggerDocumentMemoryExtraction]);
 
   const handleRejectAll = useCallback(() => {
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = activePendingChange || mergedPendingChange;
 
     const cleanupAndExit = () => {
       if (targetChange) {
@@ -691,7 +738,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
   const handleDismiss = useCallback(() => {
     if (!activeFile) return;
-    const targetChange = mergedPendingChange || activePendingChange;
+    const targetChange = activePendingChange || mergedPendingChange;
     if (!targetChange) return;
 
     isApplyingBatchRef.current = true;

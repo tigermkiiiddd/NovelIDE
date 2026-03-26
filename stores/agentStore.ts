@@ -323,14 +323,12 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       },
 
       addPendingChange: (change) => {
-        const { currentSessionId, pendingChanges, reviewingChangeId } = get();
+        const { currentSessionId, pendingChanges } = get();
         const newPendingChanges = [...pendingChanges, change];
-        // 自动设置 reviewingChangeId 以触发 DiffViewer
-        const newState: Partial<AgentState> = { pendingChanges: newPendingChanges };
-        if (!reviewingChangeId) {
-          newState.reviewingChangeId = change.id;
-        }
-        set(newState);
+        // 不再自动设置 reviewingChangeId
+        // DiffViewer 现在只基于当前文件的 mergedPendingChange 触发
+        // 避免跨文件的 change 显示在错误的编辑器中
+        set({ pendingChanges: newPendingChanges });
         // 持久化到 IndexedDB
         if (currentSessionId) {
           debouncedSyncPendingChangesToDB(currentSessionId, newPendingChanges);

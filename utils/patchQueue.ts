@@ -11,6 +11,7 @@
 
 import { FilePatch, DiffSessionState } from '../types';
 import { applyPatchInMemory } from './diffUtils';
+import { applyEditsSimple } from './patchUtils';
 
 /**
  * Apply all patches in the queue to the source snapshot
@@ -98,21 +99,10 @@ export const mergePendingChanges = (
       }
       result = change.newContent || '';
     } else if (change.toolName === 'patchFile') {
-      // Apply patch edits
+      // Apply patch edits using common utility
       const edits = change.args?.edits || [];
       if (edits.length > 0) {
-        // Sort edits in reverse order by startLine to apply correctly
-        const sortedEdits = [...edits].sort((a, b) => b.startLine - a.startLine);
-        let lines = result.split('\n');
-
-        for (const edit of sortedEdits) {
-          const startIdx = Math.max(0, edit.startLine - 1);
-          const deleteCount = Math.max(0, edit.endLine - edit.startLine + 1);
-          const newLines = edit.newContent ? edit.newContent.split('\n') : [];
-          lines.splice(startIdx, deleteCount, ...newLines);
-        }
-
-        result = lines.join('\n');
+        result = applyEditsSimple(result, edits);
       }
     }
   }

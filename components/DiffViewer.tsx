@@ -38,7 +38,19 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
   // Compute diff between current state and target state
   // Use computedContent (after patches) as base so approved hunks disappear
   const diffHunks = useMemo(() => {
-    const baseContent = computedContent || originalContent;
+    console.log('[DiffViewer] Computing diff:', {
+      computedContentLength: computedContent?.length,
+      originalContentLength: originalContent?.length,
+      modifiedContentLength: modifiedContent?.length,
+      willUseComputed: !!computedContent
+    });
+    // 对于 createFile（原始内容为空），始终使用原始内容作为基准
+    // 这样才能正确显示所有行都是新增
+    const baseContent = originalContent === '' ? originalContent : (computedContent || originalContent);
+    console.log('[DiffViewer] Using baseContent:', {
+      baseContentLength: baseContent?.length,
+      isBaseEmpty: baseContent === ''
+    });
     const rawLines = computeLineDiff(baseContent, modifiedContent);
     return groupDiffIntoHunks(rawLines, 3);
   }, [computedContent, originalContent, modifiedContent]);
@@ -51,10 +63,17 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
   console.log('DiffViewer visibleHunks', {
     total: diffHunks.length,
     visible: visibleHunks.length,
-    processed: processedHunkIds.length
+    processed: processedHunkIds.length,
+    hunkTypes: visibleHunks.map(h => ({ id: h.id, type: h.type }))
   });
 
   const hasChanges = useMemo(() => diffHunks.some(h => h.type === 'change'), [diffHunks]);
+
+  console.log('DiffViewer hasChanges check:', {
+    hasChanges,
+    visibleHunkTypes: visibleHunks.map(h => h.type),
+    willShowComplete: visibleHunks.length === 0 || !visibleHunks.some(h => h.type === 'change')
+  });
 
   // If there are no visible diffs (all hunks processed), show minimal state
   // Editor will automatically exit diff mode, so just show a subtle completion indicator

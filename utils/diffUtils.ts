@@ -28,6 +28,22 @@ export const computeLineDiff = (original: string, modified: string): DiffLine[] 
   const originalContent = original ?? '';
   const modifiedContent = modified ?? '';
 
+  // Special case: empty original means all content is new (createFile)
+  if (originalContent === '' && modifiedContent !== '') {
+    console.log('[computeLineDiff] Empty original, treating all lines as added');
+    const lines = modifiedContent.split(/\r?\n/);
+    let newLineNum = 1;
+    for (const line of lines) {
+      diff.push({
+        type: 'add',
+        content: line,
+        lineNumNew: newLineNum++
+      });
+    }
+    console.log('[computeLineDiff] Added', diff.length, 'lines');
+    return diff;
+  }
+
   // Use jsdiff's diffLines (implements Myers algorithm)
   const changes: Change[] = diffLines(originalContent, modifiedContent);
 
@@ -82,7 +98,12 @@ export const computeLineDiff = (original: string, modified: string): DiffLine[] 
  */
 export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): DiffHunk[] => {
     const activeIndices = new Set<number>();
-    
+
+    console.log('[groupDiffIntoHunks] Input:', {
+      diffLinesCount: diffLines.length,
+      firstFewLines: diffLines.slice(0, 5).map(l => ({ type: l.type, content: l.content?.substring(0, 30) }))
+    });
+
     // 1. Identify "Active" lines (Changes + Context)
     diffLines.forEach((line, index) => {
         if (line.type !== 'equal') {
@@ -96,6 +117,12 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
                  if (index + i < diffLines.length) activeIndices.add(index + i);
             }
         }
+    });
+
+    console.log('[groupDiffIntoHunks] Active indices:', {
+      totalActive: activeIndices.size,
+      totalLines: diffLines.length,
+      firstIndexActive: activeIndices.has(0)
     });
 
     const hunks: DiffHunk[] = [];
@@ -141,6 +168,14 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
         }
         const stableId = `hunk_${Math.abs(hash).toString(36)}`;
 
+        const hunkType = isCurrentHunkActive ? 'change' : 'unchanged';
+        console.log('[groupDiffIntoHunks] Creating hunk:', {
+          id: stableId,
+          type: hunkType,
+          isCurrentHunkActive,
+          linesCount: currentHunkLines.length
+        });
+
         hunks.push({
             id: stableId,
             lines: [...currentHunkLines],
@@ -148,7 +183,7 @@ export const groupDiffIntoHunks = (diffLines: DiffLine[], contextLines = 3): Dif
             endLineOriginal: endLineOriginal || 1,
             startLineNew: firstNew?.lineNumNew || 1,
             endLineNew: lastNew?.lineNumNew || 1,
-            type: isCurrentHunkActive ? 'change' : 'unchanged'
+            type: hunkType
         });
         currentHunkLines = [];
     };

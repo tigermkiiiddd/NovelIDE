@@ -69,8 +69,10 @@ export const useEditorState = (options: UseEditorStateOptions = {}): EditorState
 
   // Stores
   const fileStore = useFileStore();
-  const { files, activeFileId } = fileStore;
-  const activeFile = files.find(f => f.id === activeFileId);
+  const { files, activeFileId, virtualFile } = fileStore;
+  // 支持虚拟文件（用于 createFile 预览）
+  const isVirtualFile = virtualFile?.id === activeFileId;
+  const activeFile = files.find(f => f.id === activeFileId) || (isVirtualFile ? virtualFile : undefined);
 
   const diffStore = useDiffStore();
   const { loadDiffSession, saveDiffSession, clearDiffSession } = diffStore;

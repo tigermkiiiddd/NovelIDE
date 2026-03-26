@@ -19,6 +19,7 @@ import {
   executeArchiveEntry,
 } from './tools/characterProfileTools';
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
+import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
 import { useVersionStore } from '../../stores/versionStore';
@@ -85,41 +86,6 @@ const injectMatchedCharacters = (content: string, files: FileNode[]): string => 
         const header = `---\nsummarys: []\ntags: ["正文"]\ncharacters: [${matched.map(n => `"${n}"`).join(', ')}]\n---\n`;
         return header + content;
     }
-};
-
-/**
- * 查找所有匹配位置
- */
-const findAllMatches = (content: string, search: string): MatchPosition[] => {
-    const matches: MatchPosition[] = [];
-    let currentIndex = 0;
-
-    while (true) {
-        const index = content.indexOf(search, currentIndex);
-        if (index === -1) break;
-
-        // 计算起始行号
-        const beforeMatch = content.substring(0, index);
-        const lines = beforeMatch.split('\n');
-        const startLine = lines.length;
-        const startOffset = index;
-        const endOffset = index + search.length;
-
-        // 计算结束行号
-        const matchLines = search.split('\n');
-        const endLine = startLine + matchLines.length - 1;
-
-        matches.push({
-            startLine,
-            endLine,
-            startOffset,
-            endOffset
-        });
-
-        currentIndex = endOffset;
-    }
-
-    return matches;
 };
 
 /**
@@ -366,79 +332,8 @@ export const executeTool = async (
             } else if (name === 'patchFile') {
                 description = `Patch: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
-                // Simulate patch using string matching
-                let content = baseContent;
-                for (const edit of args.edits) {
-                    // 检查是否为旧格式（行号模式）
-                    if ('startLine' in edit || 'endLine' in edit) {
-                        return {
-                            type: 'ERROR',
-                            message: `❌ patchFile 参数格式已更新，不再支持行号模式。`
-                        };
-                    }
-
-                    const { mode, oldContent, after, before, newContent: editNewContent } = edit;
-
-                    // 验证 mode
-                    if (!mode) {
-                        return {
-                            type: 'ERROR',
-                            message: `❌ patchFile 参数不完整：必须指定 mode ("single", "global", "insert")`
-                        };
-                    }
-
-                    // === INSERT 模式 ===
-                    if (mode === 'insert') {
-                        if (after === undefined && before === undefined) {
-                            return {
-                                type: 'ERROR',
-                                message: `❌ patchFile insert 模式必须指定 after 或 before`
-                            };
-                        }
-
-                        if (after !== undefined) {
-                            if (after === '') {
-                                // 文件末尾插入
-                                content = content + editNewContent;
-                            } else {
-                                const index = content.indexOf(after);
-                                if (index === -1) {
-                                    return {
-                                        type: 'ERROR',
-                                        message: `❌ patchFile 未找到 after 内容`
-                                    };
-                                }
-                                const insertPos = index + after.length;
-                                content = content.slice(0, insertPos) + editNewContent + content.slice(insertPos);
-                            }
-                        } else if (before !== undefined) {
-                            const index = content.indexOf(before);
-                            if (index === -1) {
-                                return {
-                                    type: 'ERROR',
-                                    message: `❌ patchFile 未找到 before 内容`
-                                };
-                            }
-                            content = content.slice(0, index) + editNewContent + content.slice(index);
-                        }
-                        continue;
-                    }
-
-                    // === SINGLE / GLOBAL 模式 ===
-                    if (!oldContent) {
-                        return {
-                            type: 'ERROR',
-                            message: `❌ patchFile ${mode} 模式需要 oldContent`
-                        };
-                    }
-
-                    if (mode === 'global') {
-                        content = content.split(oldContent).join(editNewContent || '');
-                    } else {
-                        content = content.replace(oldContent, editNewContent || '');
-                    }
-                }
-                newContent = content;
+                // 使用通用函数应用 patch（预览阶段用非严格模式）
+                newContent = applyEditsSimple(baseContent, args.edits);
             } else if (name === 'deleteFile') {
                 // 验证文件存在
                 if (!existingFile) {

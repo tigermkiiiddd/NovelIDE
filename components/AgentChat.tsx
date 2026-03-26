@@ -110,9 +110,18 @@ const AgentChat: React.FC<AgentChatProps> = ({
                   name: fileName,
                   type: FileType.FILE,
                   content: change.newContent,
-                  metadata: {},
+                  metadata: {
+                      ...change.metadata,
+                      virtualFilePath: change.fileName  // 保存完整路径用于匹配
+                  },
                   lastModified: Date.now()
               };
+              console.log('[AgentChat] Creating virtual file:', {
+                  id: virtualFile.id,
+                  name: virtualFile.name,
+                  virtualFilePath: virtualFile.metadata?.virtualFilePath,
+                  changeFileName: change.fileName
+              });
               setVirtualFile(virtualFile);
           }
       }

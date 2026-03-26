@@ -158,7 +158,7 @@ describe('fileStore - Decoupled Behavior (Post-Refactoring)', () => {
 
       const { patchFile } = useFileStore.getState();
       const edits = [
-        { startLine: 1, endLine: 1, newContent: 'console.log("Patched");' }
+        { mode: 'single', oldContent: 'Hello World', newContent: 'Patched' }
       ];
 
       const result = patchFile('/file1.ts', edits);
