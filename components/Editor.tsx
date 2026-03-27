@@ -59,12 +59,55 @@ const Editor: React.FC<EditorProps> = ({
   const isVirtualFile = virtualFile?.id === activeFileId;
   const activeFile = files.find(f => f.id === activeFileId) || (isVirtualFile ? virtualFile : undefined);
 
-  // Wrapper for saveFileContent that skips virtual files
-  const safeSaveFileContent = useCallback((id: string, content: string) => {
-    if (!isVirtualFile) {
-      saveFileContent(id, content);
+  // Debounce timer ref for saveFileContent
+  const saveDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ id: string; content: string } | null>(null);
+
+  // Flush pending save immediately (used when switching files or unmounting)
+  const flushPendingSave = useCallback(() => {
+    if (saveDebounceRef.current) {
+      clearTimeout(saveDebounceRef.current);
+      saveDebounceRef.current = null;
     }
+    if (pendingSaveRef.current) {
+      saveFileContent(pendingSaveRef.current.id, pendingSaveRef.current.content);
+      pendingSaveRef.current = null;
+    }
+  }, [saveFileContent]);
+
+  // Wrapper for saveFileContent that skips virtual files with debounce
+  const safeSaveFileContent = useCallback((id: string, content: string) => {
+    if (isVirtualFile) return;
+
+    // Store pending save
+    pendingSaveRef.current = { id, content };
+
+    // Clear existing timer
+    if (saveDebounceRef.current) {
+      clearTimeout(saveDebounceRef.current);
+    }
+
+    // Debounce: save after 800ms of no activity
+    saveDebounceRef.current = setTimeout(() => {
+      if (pendingSaveRef.current) {
+        saveFileContent(pendingSaveRef.current.id, pendingSaveRef.current.content);
+        pendingSaveRef.current = null;
+      }
+      saveDebounceRef.current = null;
+    }, 800);
   }, [isVirtualFile, saveFileContent]);
+
+  // Cleanup on unmount: flush pending save
+  useEffect(() => {
+    return () => {
+      if (saveDebounceRef.current) {
+        clearTimeout(saveDebounceRef.current);
+      }
+      if (pendingSaveRef.current) {
+        saveFileContent(pendingSaveRef.current.id, pendingSaveRef.current.content);
+      }
+    };
+  }, [saveFileContent]);
 
   // 2. Agent Store (for pending changes)
   const { pendingChanges, updatePendingChange, removePendingChange, addMessage, reviewingChangeId, setReviewingChangeId } = useAgentStore();
@@ -391,6 +434,9 @@ const Editor: React.FC<EditorProps> = ({
   useEffect(() => {
       // Logic 1: File Switch
       if (activeFileId !== prevFileIdRef.current) {
+          // Flush pending save before switching files
+          flushPendingSave();
+
           // Clear edit mode diff state when switching files
           setEditIncrements([]);
           setProcessedEditIds([]);
@@ -439,7 +485,7 @@ const Editor: React.FC<EditorProps> = ({
               setContent(activeFile.content || '');
           }
       }
-  }, [activeFileId, activeFile, content, resetHistory, setContent, pendingChanges, reviewingChangeId, setReviewingChangeId, files, internalMode]);
+  }, [activeFileId, activeFile, content, resetHistory, setContent, pendingChanges, reviewingChangeId, setReviewingChangeId, files, internalMode, flushPendingSave]);
 
   // --- Preview Logic ---
   const { previewMetadata, previewBody } = useMemo(() => {
