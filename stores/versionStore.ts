@@ -103,6 +103,21 @@ export const useVersionStore = create<VersionState>((set, get) => ({
   createVersion: (fileId, fileName, filePath, content, source, description) => {
     const { versions, maxVersionsPerFile, _pruneOldVersions, _saveToDB } = get();
 
+    // 对于 user 类型的版本，检查时间间隔（避免频繁输入时创建过多版本）
+    if (source === 'user') {
+      const fileVersions = versions.get(fileId) || [];
+      const lastUserVersion = fileVersions.find(v => v.source === 'user');
+
+      if (lastUserVersion) {
+        const timeDiff = Date.now() - lastUserVersion.timestamp;
+        // 如果 60 秒内有 user 版本，跳过
+        if (timeDiff < 60000) {
+          console.log('[VersionStore] 跳过 user 版本（60秒内已有备份）');
+          return lastUserVersion.id;
+        }
+      }
+    }
+
     const stats = calculateStats(content);
     const newVersion: FileVersion = {
       id: generateId(),

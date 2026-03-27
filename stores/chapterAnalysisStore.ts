@@ -432,9 +432,9 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         // 3. 提取章节标题
         const chapterTitle = file.name.replace(/\.md$/, '');
 
-        // 4. 获取现有数据（兼容旧逻辑）
+        // 4. 获取现有数据
         const existingCharacterStates = state.data.characterStates.filter(s => s.chapterRef === chapterPath);
-        const existingForeshadowing = state.data.foreshadowing.filter(f => f.sourceRef === chapterPath);
+        const existingPlotKeyPoints = state.data.plotKeyPoints.filter(p => p.chapterRef === chapterPath);
 
         // 5. 获取未完结的伏笔
         const unresolvedForeshadowing = state.getUnresolvedForeshadowing();
@@ -444,36 +444,29 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         const projectStore = useProjectStore.getState();
         const project = projectStore.getCurrentProject();
 
-        // 7. 调用分析代理
-        // TODO: 需要更新 chapterAnalysisAgent 以支持新的扁平化结构
-        // 暂时使用旧逻辑
-        const legacyAnalysis = state.analyses.find(a => a.chapterPath === chapterPath);
-
+        // 7. 调用分析代理（使用新格式）
         const analysisResult = await runChapterAnalysisAgent(
           aiService,
           file.content,
           chapterTitle,
-          legacyAnalysis,
+          chapterPath,  // chapterRef
+          {
+            characterStates: existingCharacterStates,
+            plotKeyPoints: existingPlotKeyPoints
+          },
           project,
           unresolvedForeshadowing,
           (msg) => console.log(msg)
         );
 
-        // 8. 应用合并决策
+        // 8. 检查是否有变化
         const hasChanges = analysisResult.mergeActions.some((action: any) => action.action !== 'skip');
-        if (!hasChanges && legacyAnalysis) {
+        if (!hasChanges && existingCharacterStates.length > 0) {
           console.log('[ChapterAnalysisStore] LLM 决策：数据无变化，跳过更新');
           return;
         }
 
-        const finalAnalysis = applyMergeActions(
-          legacyAnalysis,
-          analysisResult,
-          chapterTitle,
-          chapterPath
-        );
-
-        // 9. 更新数据（将旧格式转换为新格式并合并）
+        // 9. 直接使用 agent 返回的新格式数据
         const { data } = useChapterAnalysisStore.getState();
 
         // 移除该章节的旧数据
@@ -481,75 +474,28 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         const filteredForeshadowing = data.foreshadowing.filter(f => f.sourceRef !== chapterPath);
         const filteredPlotKeyPoints = data.plotKeyPoints.filter(p => p.chapterRef !== chapterPath);
 
-        // 添加新数据
-        const newCharacterStates: ChapterCharacterState[] = (finalAnalysis.characterStates || []).map(s => ({
-          id: s.id || `state-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          characterName: s.characterName,
-          chapterRef: chapterPath,
-          stateDescription: s.stateDescription,
-          emotionalState: s.emotionalState,
-          location: s.location,
-          relationships: s.relationships,
-          changes: s.changes || [],
-          createdAt: Date.now(),
-        }));
-
-        const newForeshadowing: ForeshadowingItem[] = (finalAnalysis.foreshadowing || []).map(f => ({
-          id: f.id || `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          content: f.content,
-          type: f.type,
-          duration: (f as any).duration || 'mid_term',
-          tags: f.tags || [],
-          source: 'chapter_analysis' as const,
-          sourceRef: chapterPath,
-          developedRefs: (f as any).developedRefs || [],
-          resolvedRef: (f as any).resolvedRef,
-          notes: f.notes,
-          expectedResolution: (f as any).expectedResolution,
-        }));
-
-        const newPlotKeyPoints: ChapterPlotKeyPoint[] = (finalAnalysis.plotSummary || []).map(p => ({
-          id: p.id || `plot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          chapterRef: chapterPath,
-          description: p.description,
-          importance: p.importance,
-          tags: p.tags || [],
-          relatedCharacters: p.relatedCharacters || [],
-          createdAt: Date.now(),
-        }));
-
+        // 合并新数据（agent 已经返回带 chapterRef 的新格式）
         const newData: ChapterAnalysisData = {
-          characterStates: [...filteredCharacterStates, ...newCharacterStates],
-          foreshadowing: [...filteredForeshadowing, ...newForeshadowing],
-          plotKeyPoints: [...filteredPlotKeyPoints, ...newPlotKeyPoints],
+          characterStates: [...filteredCharacterStates, ...analysisResult.characterStates],
+          foreshadowing: [...filteredForeshadowing, ...analysisResult.foreshadowing],
+          plotKeyPoints: [...filteredPlotKeyPoints, ...analysisResult.plotKeyPoints],
           lastModified: Date.now(),
         };
 
         useChapterAnalysisStore.setState({ data: newData });
 
-        // 更新旧的 analyses（兼容）
-        if (legacyAnalysis) {
-          const newAnalyses = state.analyses.map(a =>
-            a.id === legacyAnalysis.id ? finalAnalysis : a
-          );
-          useChapterAnalysisStore.setState({ analyses: newAnalyses });
-        } else {
-          useChapterAnalysisStore.setState({ analyses: [...state.analyses, finalAnalysis] });
-        }
-
         // 同步到文件
         useChapterAnalysisStore.getState()._syncToJsonFile();
 
-        // 更新角色记忆
-        useCharacterMemoryStore.getState().upsertStateSnapshots(finalAnalysis);
+        // 更新角色记忆（需要转换为旧格式兼容）
+        // TODO: 更新 useCharacterMemoryStore 以支持新格式
+        // useCharacterMemoryStore.getState().upsertStateSnapshots(analysisResult.characterStates);
 
-        // 创建版本记录
-        const versionStore = useEntityVersionStore.getState();
-        versionStore.createAnalysisVersion(
-          finalAnalysis,
-          'agent',
-          `AI 分析: ${chapterTitle}`
-        );
+        console.log('[ChapterAnalysisStore] 章节分析完成:', {
+          characterStatesCount: analysisResult.characterStates.length,
+          foreshadowingCount: analysisResult.foreshadowing.length,
+          plotKeyPointsCount: analysisResult.plotKeyPoints.length
+        });
 
         console.log('[ChapterAnalysisStore] 章节分析完成');
 

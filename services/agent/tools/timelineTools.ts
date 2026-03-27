@@ -8,7 +8,7 @@ import { useAgentStore } from '../../../stores/agentStore';
 import { useWorldTimelineStore, toHours } from '../../../stores/worldTimelineStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
-import { TimelineEvent, ChapterGroup } from '../../../types';
+import { TimelineEvent, ChapterGroup, ForeshadowingItem } from '../../../types';
 
 // ============================================
 // 导出工具定义
@@ -64,37 +64,77 @@ const ensureLoaded = async () => {
 };
 
 /**
- * 创建伏笔并返回 ID 列表
- * 伏笔存储在特殊的 'timeline_foreshadowing' 章节分析中
+ * 处理伏笔操作（创建新伏笔或继续已有伏笔）
+ * @param foreshadowingData 伏笔数据列表
+ * @param eventId 关联的事件 ID（用于 developedRefs/resolvedRef）
+ * @returns 处理的伏笔 ID 列表
  */
-const createForeshadowings = (
+const processForeshadowings = (
   foreshadowingData: Array<{
-    content: string;
+    // 场景A：继续已有伏笔
+    existingForeshadowingId?: string;
+    // 场景B：创建新伏笔
+    content?: string;
+    duration?: 'short_term' | 'mid_term' | 'long_term';
+    // 通用字段
     type: 'planted' | 'developed' | 'resolved';
     tags: string[];
     notes?: string;
-  }>
+  }>,
+  eventId: string
 ): string[] => {
   if (!foreshadowingData || foreshadowingData.length === 0) {
     return [];
   }
 
   const chapterAnalysisStore = useChapterAnalysisStore.getState();
-  const createdIds: string[] = [];
-  const TIMELINE_CHAPTER_PATH = 'timeline_foreshadowing';
+  const processedIds: string[] = [];
+  const TIMELINE_SOURCE = 'timeline';
 
   for (const item of foreshadowingData) {
-    const id = chapterAnalysisStore.addForeshadowing(TIMELINE_CHAPTER_PATH, {
-      content: item.content,
-      type: item.type,
-      tags: item.tags,
-      notes: item.notes,
-      source: 'timeline'
-    });
-    createdIds.push(id);
+    if (item.existingForeshadowingId) {
+      // 场景A：继续已有伏笔（推进或收尾）
+      const existing = chapterAnalysisStore.data.foreshadowing.find(
+        f => f.id === item.existingForeshadowingId
+      );
+      if (existing) {
+        const updates: Partial<ForeshadowingItem> = { type: item.type };
+
+        if (item.type === 'developed') {
+          // 推进伏笔：添加到 developedRefs
+          updates.developedRefs = [
+            ...existing.developedRefs,
+            { source: 'timeline', ref: eventId }
+          ];
+        } else if (item.type === 'resolved') {
+          // 收尾伏笔：设置 resolvedRef
+          updates.resolvedRef = { source: 'timeline', ref: eventId };
+        }
+        if (item.notes) updates.notes = item.notes;
+        if (item.tags && item.tags.length > 0) {
+          // 合并标签（去重）
+          updates.tags = [...new Set([...existing.tags, ...item.tags])];
+        }
+
+        chapterAnalysisStore.updateForeshadowing(item.existingForeshadowingId, updates);
+        processedIds.push(item.existingForeshadowingId);
+      }
+    } else if (item.content) {
+      // 场景B：创建新伏笔
+      const id = chapterAnalysisStore.addForeshadowing(TIMELINE_SOURCE, {
+        content: item.content,
+        type: item.type,
+        duration: item.duration || 'mid_term',
+        tags: item.tags,
+        notes: item.notes,
+        source: TIMELINE_SOURCE,
+        sourceRef: eventId
+      });
+      processedIds.push(id);
+    }
   }
 
-  return createdIds;
+  return processedIds;
 };
 
 // ============================================
@@ -130,6 +170,10 @@ export const executeProcessOutlineInput = async (
     content: e.content || ''
   }));
 
+  // 获取未完结伏笔（用于继续/收尾已有伏笔）
+  const chapterAnalysisStore = useChapterAnalysisStore.getState();
+  const unresolvedForeshadowing = chapterAnalysisStore.getUnresolvedForeshadowing();
+
   const context = {
     existingVolumeCount: existingVolumes.length,
     existingChapterCount: existingChapters.length,
@@ -141,7 +185,17 @@ export const executeProcessOutlineInput = async (
       volumeIndex: c.volumeId ? (volumeIdToIndex.get(c.volumeId) ?? 0) : 0,
       eventCount: c.eventIds.length
     })),
-    recentEvents
+    recentEvents,
+    unresolvedForeshadowing: unresolvedForeshadowing.map(f => ({
+      id: f.id,
+      content: f.content,
+      type: f.type,
+      duration: f.duration,
+      tags: f.tags,
+      source: f.source,
+      sourceRef: f.sourceRef,
+      notes: f.notes
+    }))
   };
 
   const aiService = new AIService(agentStore.aiConfig);
@@ -195,7 +249,6 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           eventIndex: e.eventIndex,
           timestamp: e.timestamp,
           duration: e.duration,
-          cumulativeTime: e.cumulativeTime,
           title: e.title,
           content: fullContent ? e.content : (e.content.substring(0, 100) + (e.content.length > 100 ? '...' : '')),
           chapterIndex: e.chapterId ? chapterIdToIndex.get(e.chapterId) : undefined,
@@ -276,6 +329,32 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           name: s.name,
           color: s.color,
           isMain: s.isMain
+        }))
+      });
+    }
+
+    case 'outline_getUnresolvedForeshadowing': {
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+      let unresolved = chapterAnalysisStore.getUnresolvedForeshadowing();
+
+      // 按标签筛选
+      if (args.tags && args.tags.length > 0) {
+        unresolved = unresolved.filter(f =>
+          f.tags.some(t => args.tags.includes(t))
+        );
+      }
+
+      return JSON.stringify({
+        total: unresolved.length,
+        foreshadowing: unresolved.map(f => ({
+          id: f.id,
+          content: f.content,
+          type: f.type,
+          duration: f.duration,
+          tags: f.tags,
+          source: f.source,
+          sourceRef: f.sourceRef,
+          notes: f.notes
         }))
       });
     }
@@ -382,19 +461,28 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
             if (chapter) eventData.chapterId = chapter.id;
             delete eventData.chapterIndex;
           }
+          // 暂存伏笔数据，先创建事件
+          const foreshadowingData = e.foreshadowing;
+          delete eventData.foreshadowing;
 
-          // 创建伏笔并关联
-          if (e.foreshadowing && e.foreshadowing.length > 0) {
-            const foreshadowingIds = createForeshadowings(e.foreshadowing);
-            eventData.foreshadowingIds = foreshadowingIds;
-            delete eventData.foreshadowing;
+          // 创建事件
+          const r = JSON.parse(store.addEvent(eventData));
+          const eventId = r.id;
+
+          // 处理伏笔（创建新伏笔或继续已有伏笔）
+          let foreshadowingIds: string[] = [];
+          if (foreshadowingData && foreshadowingData.length > 0) {
+            foreshadowingIds = processForeshadowings(foreshadowingData, eventId);
+            // 如果有伏笔，更新事件的 foreshadowingIds
+            if (foreshadowingIds.length > 0) {
+              store.updateEvent(eventId, { foreshadowingIds });
+            }
           }
 
-          const r = JSON.parse(store.addEvent(eventData));
           result.added.push({
             title: e.title,
             eventIndex: r.eventIndex,
-            foreshadowingCount: eventData.foreshadowingIds?.length || 0
+            foreshadowingCount: foreshadowingIds.length
           });
         }
       }
@@ -496,17 +584,27 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           if (e.emotion) eventData.emotion = e.emotion;
           if (e.purpose) eventData.purpose = e.purpose;
 
-          // 创建伏笔并关联
-          if (e.foreshadowing && e.foreshadowing.length > 0) {
-            const foreshadowingIds = createForeshadowings(e.foreshadowing);
-            eventData.foreshadowingIds = foreshadowingIds;
+          // 暂存伏笔数据，先创建事件
+          const foreshadowingData = e.foreshadowing;
+
+          // 创建事件
+          const r = JSON.parse(store.addEvent(eventData));
+          const eventId = r.id;
+
+          // 处理伏笔（创建新伏笔或继续已有伏笔）
+          let foreshadowingIds: string[] = [];
+          if (foreshadowingData && foreshadowingData.length > 0) {
+            foreshadowingIds = processForeshadowings(foreshadowingData, eventId);
+            // 如果有伏笔，更新事件的 foreshadowingIds
+            if (foreshadowingIds.length > 0) {
+              store.updateEvent(eventId, { foreshadowingIds });
+            }
           }
 
-          const r = JSON.parse(store.addEvent(eventData));
           result.inserted.push({
             title: e.title,
             eventIndex: r.eventIndex,
-            foreshadowingCount: eventData.foreshadowingIds?.length || 0
+            foreshadowingCount: foreshadowingIds.length
           });
 
           currentHours += durationHours;

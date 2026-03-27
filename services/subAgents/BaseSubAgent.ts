@@ -26,8 +26,8 @@ export interface SubAgentConfig<TInput, TOutput, TContext = any> {
   /** 初始用户消息生成器 */
   getInitialMessage: (input: TInput) => string;
 
-  /** 终止工具结果解析器 */
-  parseTerminalResult: (args: any) => TOutput;
+  /** 终止工具结果解析器（支持 input 参数用于填充引用字段） */
+  parseTerminalResult: (args: any, input?: TInput) => TOutput;
 
   /** 可选：自定义工具执行器（用于非终止工具） */
   executeCustomTool?: (name: string, args: any, context?: TContext) => Promise<string>;
@@ -182,7 +182,7 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
             if (onLog) {
               onLog(`✅ [${this.config.name}] 任务完成`);
             }
-            return this.config.parseTerminalResult(args);
+            return this.config.parseTerminalResult(args, input);
           }
 
           // 执行自定义工具

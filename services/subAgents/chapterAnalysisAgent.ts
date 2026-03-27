@@ -1,5 +1,13 @@
 import { AIService } from '../geminiService';
-import { ChapterAnalysis, PlotKeyPoint, CharacterState, ForeshadowingItem, ProjectMeta } from '../../types';
+import {
+  ChapterAnalysis,
+  PlotKeyPoint,
+  CharacterState,
+  ChapterCharacterState,
+  ChapterPlotKeyPoint,
+  ForeshadowingItem,
+  ProjectMeta
+} from '../../types';
 import { ToolDefinition } from '../agent/types';
 import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
 import { buildProjectOverviewPrompt } from '../../utils/projectContext';
@@ -158,15 +166,19 @@ const submitAnalysisTool: ToolDefinition = {
 interface ChapterAnalysisInput {
   chapterContent: string;
   chapterTitle: string;
-  existingAnalysis?: ChapterAnalysis;
+  chapterRef: string;  // 章节路径（如 "01_正文/第1章.md"）
+  existingData?: {
+    characterStates: ChapterCharacterState[];
+    plotKeyPoints: ChapterPlotKeyPoint[];
+  };
   project?: ProjectMeta;
   unresolvedForeshadowing?: ForeshadowingItem[]; // 未完结的伏笔列表
 }
 
 interface ChapterAnalysisOutput {
   mergeActions: any[];
-  plotSummary: PlotKeyPoint[];
-  characterStates: CharacterState[];
+  plotKeyPoints: ChapterPlotKeyPoint[];
+  characterStates: ChapterCharacterState[];
   foreshadowing: ForeshadowingItem[];
 }
 
@@ -198,17 +210,14 @@ const chapterAnalysisConfig: SubAgentConfig<ChapterAnalysisInput, ChapterAnalysi
 ${input.chapterContent}
 \`\`\`
 
-${input.existingAnalysis ? `
-## 现有分析数据（必须参考）
+${input.existingData ? `
+## 当前章节已有数据（${input.chapterRef}）
 \`\`\`
 剧情关键点:
-${input.existingAnalysis.plotSummary.map(p => `- [${p.id}] [${p.importance}] ${p.description}`).join('\n')}
+${input.existingData.plotKeyPoints.map(p => `- [${p.id}] [${p.importance}] ${p.description}`).join('\n')}
 
 角色状态:
-${input.existingAnalysis.characterStates.map(c => `- [${c.id}] ${c.characterName}: ${c.stateDescription}`).join('\n')}
-
-伏笔:
-${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}`).join('\n')}
+${input.existingData.characterStates.map(c => `- [${c.id}] ${c.characterName}: ${c.stateDescription}`).join('\n')}
 \`\`\`
 
 ## 重要任务
@@ -216,7 +225,7 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
 1. **对比新旧数据**：识别哪些是新增、哪些是更新、哪些应该移除
 2. **生成 mergeActions**：明确说明每个合并操作
 3. **保留 ID**：如果是对现有数据的更新，必须保留原 ID
-` : '（无现有数据，将创建新记录）'}
+` : '（当前章节无现有数据，将创建新记录）'}
 
 ${input.unresolvedForeshadowing && input.unresolvedForeshadowing.length > 0 ? `
 ## ⚠️ 待回收/推进的伏笔（重要参考）
@@ -411,8 +420,10 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
 
   getInitialMessage: (input) => `请分析上述章节内容，并制定合并策略。`,
 
-  parseTerminalResult: (args) => {
+  parseTerminalResult: (args, input) => {
     console.log('[ChapterAnalysisAgent] LLM 返回的完整数据:', JSON.stringify(args, null, 2));
+
+    const chapterRef = input.chapterRef;
 
     // Parse merge actions
     const mergeActions = (args.mergeActions || []).map((a: any) => ({
@@ -423,50 +434,55 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
       reason: a.reason || ''
     }));
 
-    // Parse plot summary
-    const plotSummary: PlotKeyPoint[] = (args.plotSummary || []).map((p: any, idx: number) => ({
+    // Parse plot key points - 新格式，包含 chapterRef
+    const plotKeyPoints: ChapterPlotKeyPoint[] = (args.plotSummary || []).map((p: any, idx: number) => ({
       id: p.id || `plot-${Date.now()}-${idx}`,
+      chapterRef,  // 填充章节引用
       description: p.description || '',
       importance: p.importance || 'medium',
       tags: p.tags || [],
-      relatedCharacters: p.relatedCharacters || []
+      relatedCharacters: p.relatedCharacters || [],
+      createdAt: Date.now()
     }));
 
-    // Parse character states
-    const characterStates: CharacterState[] = (args.characterStates || []).map((c: any, idx: number) => ({
+    // Parse character states - 新格式，包含 chapterRef
+    const characterStates: ChapterCharacterState[] = (args.characterStates || []).map((c: any, idx: number) => ({
       id: c.id || `char-${Date.now()}-${idx}`,
       characterName: c.characterName || '',
+      chapterRef,  // 填充章节引用
       stateDescription: c.stateDescription || '',
       emotionalState: c.emotionalState,
       location: c.location,
       relationships: c.relationships || [],
-      changes: c.changes || []
+      changes: c.changes || [],
+      createdAt: Date.now()
     }));
 
-    // Parse foreshadowing
+    // Parse foreshadowing - 填充 sourceRef
     const foreshadowing: ForeshadowingItem[] = (args.foreshadowing || []).map((f: any, idx: number) => ({
       id: f.id || `foreshadow-${Date.now()}-${idx}`,
       content: f.content || '',
       type: f.type || 'planted',
       duration: f.duration || 'mid_term',
       tags: f.tags || [],
-      source: 'chapter_analysis',  // 标记来源为章节分析
-      sourceRef: '',  // 将在 store 中填充
+      source: 'chapter_analysis' as const,
+      sourceRef: chapterRef,  // 填充章节引用
       developedRefs: [],
       resolvedRef: undefined,
       notes: f.notes
     }));
 
     console.log('[ChapterAnalysisAgent] 解析后的数据:', {
+      chapterRef,
       mergeActionsCount: mergeActions.length,
-      plotSummaryCount: plotSummary.length,
+      plotKeyPointsCount: plotKeyPoints.length,
       characterStatesCount: characterStates.length,
       foreshadowingCount: foreshadowing.length
     });
 
     return {
       mergeActions,
-      plotSummary,
+      plotKeyPoints,
       characterStates,
       foreshadowing
     };
@@ -728,7 +744,7 @@ export async function runChapterAnalysisAgentWithSteps(
   // Step 2: 对每个角色单独提取状态（串行，避免并发压力）
   onLog?.('[Step 2] 提取角色状态...');
 
-  const characterStates: CharacterState[] = [];
+  const characterStates: (CharacterState | ChapterCharacterState)[] = [];
   for (const name of detectedCharacters) {
     if (signal?.aborted) {
       throw new DOMException('Aborted', 'AbortError');
@@ -797,11 +813,12 @@ export async function runChapterAnalysisAgentWithSteps(
   );
 
   // 合并预提取的角色状态
+  // 注意：这是一个兼容旧逻辑的函数，characterStates 包含旧类型的 CharacterState
   return {
     ...result,
     characterStates: [...characterStates, ...result.characterStates.filter(
       c => !characterStates.some(pc => pc.characterName === c.characterName)
-    )]
+    )] as ChapterCharacterState[]
   };
 }
 
@@ -809,7 +826,11 @@ export async function runChapterAnalysisAgent(
   aiService: AIService,
   chapterContent: string,
   chapterTitle: string,
-  existingAnalysis?: ChapterAnalysis,
+  chapterRef: string,
+  existingData?: {
+    characterStates: ChapterCharacterState[];
+    plotKeyPoints: ChapterPlotKeyPoint[];
+  },
   project?: ProjectMeta,
   unresolvedForeshadowing?: ForeshadowingItem[],
   onLog?: (msg: string) => void,
@@ -818,7 +839,7 @@ export async function runChapterAnalysisAgent(
   const agent = new BaseSubAgent(chapterAnalysisConfig);
   return agent.run(
     aiService,
-    { chapterContent, chapterTitle, existingAnalysis, project, unresolvedForeshadowing },
+    { chapterContent, chapterTitle, chapterRef, existingData, project, unresolvedForeshadowing },
     undefined,
     onLog,
     signal

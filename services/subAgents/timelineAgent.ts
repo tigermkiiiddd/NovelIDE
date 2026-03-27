@@ -14,6 +14,7 @@ import {
   getEventsTool,
   getChaptersTool,
   getVolumesTool,
+  getUnresolvedForeshadowingTool,
   manageVolumesTool,
   manageChaptersTool,
   manageEventsTool
@@ -40,6 +41,7 @@ const subAgentTools: ToolDefinition[] = [
   getVolumesTool,
   getChaptersTool,
   getEventsTool,
+  getUnresolvedForeshadowingTool,
   manageVolumesTool,
   manageChaptersTool,
   manageEventsTool,
@@ -64,6 +66,17 @@ export interface TimelineContext {
     timestamp: { day: number; hour: number };
     title: string;
     content: string;
+  }>;
+  // 未完结伏笔上下文（用于继续/收尾已有伏笔）
+  unresolvedForeshadowing?: Array<{
+    id: string;
+    content: string;
+    type: 'planted' | 'developed';
+    duration: 'short_term' | 'mid_term' | 'long_term';
+    tags: string[];
+    source: 'timeline' | 'chapter_analysis';
+    sourceRef: string;
+    notes?: string;
   }>;
   project?: ProjectMeta;
 }
@@ -112,16 +125,49 @@ ${context.recentEvents && context.recentEvents.length > 0 ? `
 **最近事件（剧情时间线参考）：**
 ${context.recentEvents.map(e => `- [${e.eventIndex}] 第${e.timestamp.day}天${e.timestamp.hour}时「${e.title}」：${e.content.substring(0, 80)}${e.content.length > 80 ? '...' : ''}`).join('\n')}
 ` : ''}
+
+${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0 ? `
+## ⚠️ 待回收/推进的伏笔（重要参考）
+
+以下是项目中尚未完结的伏笔。在创建事件时，可以：
+1. **埋下新伏笔**：基于剧情发展和故事风格，在合适的事件中埋下新的伏笔
+   - 使用 \`content\` + \`type: "planted"\` + \`duration\` + \`tags\` 字段
+2. **继续已有伏笔**：将伏笔状态推进为 \`developed\`
+   - 使用 \`existingForeshadowingId\` + \`type: "developed"\` + \`tags\` 字段
+3. **收尾已有伏笔**：将伏笔状态标记为 \`resolved\`
+   - 使用 \`existingForeshadowingId\` + \`type: "resolved"\` + \`tags\` 字段
+
+**未完结伏笔列表：**
+\`\`\`
+${context.unresolvedForeshadowing.map(f =>
+  `- [${f.id}] [${f.type}] [${f.duration}] ${f.content}
+   来源: ${f.source === 'timeline' ? '时间线' : '章节分析'} - ${f.sourceRef}
+   标签: ${f.tags.join(', ')}${f.notes ? `\n   备注: ${f.notes}` : ''}`
+).join('\n\n')}
+\`\`\`
+` : ''}
 ` : '（暂无数据）'}
 
 ## 工具调用
 
-**创建事件：**
+**创建事件（含伏笔）：**
 \`\`\`
 outline_manageEvents({
   add: [
-    { timestamp: { day: 1, hour: 14 }, title: "事件", content: "内容", chapterIndex: 1 },
-    ...
+    {
+      timestamp: { day: 1, hour: 14 },
+      title: "事件",
+      content: "内容",
+      chapterIndex: 1,
+      foreshadowing: [
+        // 场景A：继续已有伏笔（推进）
+        { existingForeshadowingId: "fore-xxx", type: "developed", tags: ["身世"] },
+        // 场景B：收尾已有伏笔
+        { existingForeshadowingId: "fore-yyy", type: "resolved", tags: ["物品"] },
+        // 场景C：埋下新伏笔
+        { content: "捡到神秘玉佩", type: "planted", duration: "long_term", tags: ["物品"] }
+      ]
+    }
   ]
 })
 \`\`\`
