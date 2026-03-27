@@ -10,8 +10,14 @@ import { useVersionStore, VersionSource } from './versionStore';
 import { applyEdits } from '../utils/patchUtils';
 import { dataService } from '../services/dataService';
 
-// Create FileService instance for domain logic
-const fileService = new FileService(generateId);
+// Lazy-init FileService to avoid circular dependency issues
+let _fileService: FileService | null = null;
+const getFileService = () => {
+  if (!_fileService) {
+    _fileService = new FileService(generateId);
+  }
+  return _fileService;
+};
 
 interface FileState {
   files: FileNode[];
@@ -106,7 +112,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB } = get();
 
     // Delegate to FileService for domain logic
-    const updatedFiles = fileService.restoreSystemFiles(files);
+    const updatedFiles = getFileService().restoreSystemFiles(files);
 
     // Check if any changes were made
     if (updatedFiles.length !== files.length) {
@@ -313,7 +319,7 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     if (!targetNode) return `Error: File not found`;
 
     // Check delete permission using FileService
-    if (!fileService.canDeleteFile(targetNode, files)) {
+    if (!getFileService().canDeleteFile(targetNode, files)) {
       return `Error: Cannot delete protected system file "${targetNode.name}"`;
     }
 
@@ -349,7 +355,7 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     if (!file) return `Error: File not found.`;
 
     // Check rename permission using FileService
-    if (!fileService.canRenameFile(file, files)) {
+    if (!getFileService().canRenameFile(file, files)) {
       return `Error: Cannot rename protected system file "${file.name}"`;
     }
 

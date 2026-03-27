@@ -347,14 +347,12 @@ export interface ForeshadowingItem {
   source: 'timeline' | 'chapter_analysis';
   sourceRef: string;              // 章节路径 或 时间线节点ID
 
-  // 发展轨迹（通用引用数组）
-  developedRefs: SourceRef[];
-
-  // 收尾位置（通用引用）
-  resolvedRef?: SourceRef;
+  // 树状结构：推进即子伏笔
+  parentId?: string;              // 父伏笔ID（有=子伏笔/推进记录，无=根伏笔）
 
   notes?: string;
   expectedResolution?: string;    // 预期收尾方式
+  createdAt: number;              // 创建时间
 }
 
 export interface ChapterAnalysis {

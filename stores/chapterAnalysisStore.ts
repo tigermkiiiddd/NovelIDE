@@ -57,15 +57,13 @@ function migrateOldData(oldAnalyses: ChapterAnalysis[]): ChapterAnalysisData {
           id: oldF.id || `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           content: oldF.content || '',
           type: oldF.type || 'planted',
-          duration: 'mid_term' as const, // 默认中期
+          duration: oldF.duration || 'mid_term',
           tags: oldF.tags || [],
           source: 'chapter_analysis' as const,
           sourceRef: analysis.chapterPath,
-          developedRefs: (oldF.relatedChapters || []).map((ch: string) => ({
-            source: 'chapter_analysis' as const,
-            ref: ch,
-          })),
+          // 旧的 developedRefs 不再使用，迁移时不保留
           notes: oldF.notes,
+          createdAt: analysis.extractedAt || Date.now(),
         });
       }
     }
@@ -131,7 +129,7 @@ interface ChapterAnalysisState {
   // Query methods - 伏笔
   getForeshadowingById: (id: string) => ForeshadowingItem | undefined;
   getAllForeshadowing: () => ForeshadowingItem[];
-  getUnresolvedForeshadowing: () => ForeshadowingItem[];
+  getUnresolvedForeshadowing: () => Array<ForeshadowingItem & { children: ForeshadowingItem[] }>;  // 获取未完结伏笔（含子伏笔）
   getForeshadowingByChapter: (chapterRef: string) => ForeshadowingItem[];
 
   // Query methods - 角色状态
@@ -366,17 +364,26 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
       return useChapterAnalysisStore.getState().data.foreshadowing;
     },
 
+    // 获取未完结伏笔（根伏笔 + 子伏笔）
     getUnresolvedForeshadowing: () => {
       const { foreshadowing } = useChapterAnalysisStore.getState().data;
-      return foreshadowing.filter(f => f.type === 'planted' || f.type === 'developed');
+      // 获取根伏笔
+      const roots = foreshadowing.filter(f => !f.parentId);
+      // 过滤出未收尾的（没有 type='resolved' 的子伏笔）并附加子伏笔
+      return roots.filter(root => {
+        const hasResolved = foreshadowing.some(
+          child => child.parentId === root.id && child.type === 'resolved'
+        );
+        return !hasResolved;
+      }).map(root => ({
+        ...root,
+        children: foreshadowing.filter(child => child.parentId === root.id)
+      }));
     },
 
     getForeshadowingByChapter: (chapterRef) => {
       const { foreshadowing } = useChapterAnalysisStore.getState().data;
-      return foreshadowing.filter(f =>
-        f.sourceRef === chapterRef ||
-        f.developedRefs.some(r => r.ref === chapterRef)
-      );
+      return foreshadowing.filter(f => f.sourceRef === chapterRef);
     },
 
     getCharacterStatesByCharacter: (characterName) => {

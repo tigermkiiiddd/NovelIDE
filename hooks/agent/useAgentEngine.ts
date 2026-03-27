@@ -79,7 +79,6 @@ export const useAgentEngine = ({
       const fullSystemInstruction = constructSystemPrompt(
         files,
         project,
-        activeFile,
         freshTodos,
         freshSession?.messages,  // 传递会话消息历史
         planMode  // 传递 Plan 模式状态

@@ -486,9 +486,8 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
       tags: f.tags || [],
       source: 'chapter_analysis' as const,
       sourceRef: chapterRef,  // 填充章节引用
-      developedRefs: [],
-      resolvedRef: undefined,
-      notes: f.notes
+      notes: f.notes,
+      createdAt: Date.now()
     }));
 
     console.log('[ChapterAnalysisAgent] 解析后的数据:', {
@@ -947,9 +946,8 @@ export function applyMergeActions(
           tags: action.data?.tags || [],
           source: 'chapter_analysis',  // 标记来源为章节分析
           sourceRef: chapterPath,
-          developedRefs: [],
-          resolvedRef: undefined,
-          notes: action.data?.notes
+          notes: action.data?.notes,
+          createdAt: Date.now()
         });
       } else if (action.action === 'update') {
         const idx = foreshadowing.findIndex(f => f.id === action.id);

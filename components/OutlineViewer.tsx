@@ -11,7 +11,8 @@ import {
 } from 'lucide-react';
 import { useWorldTimelineStore, formatTimeDisplay, formatTimeRangeDisplay } from '../stores/worldTimelineStore';
 import { useProjectStore } from '../stores/projectStore';
-import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine } from '../types';
+import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
+import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine, ForeshadowingItem } from '../types';
 
 interface OutlineViewerProps {
   isOpen: boolean;
@@ -46,7 +47,14 @@ const EventForm = React.memo(({
   onFieldChange,
   onSubmit,
   onCancel,
-  onQuickCreateChapter
+  onQuickCreateChapter,
+  // 伏笔相关
+  foreshadowingItems,
+  foreshadowingIds,
+  onAddForeshadowing,
+  onUpdateForeshadowing,
+  onDeleteForeshadowing,
+  onLinkForeshadowing
 }: {
   formData: EventFormData;
   storyLines: { id: string; name: string }[];
@@ -55,11 +63,125 @@ const EventForm = React.memo(({
   onSubmit: () => void;
   onCancel: () => void;
   onQuickCreateChapter?: (title: string) => Promise<string | null>; // 返回新章节ID
+  // 伏笔相关
+  foreshadowingItems?: Map<string, ForeshadowingItem>;
+  foreshadowingIds?: string[];
+  onAddForeshadowing?: (f: Omit<ForeshadowingItem, 'id'>) => string;
+  onUpdateForeshadowing?: (id: string, updates: Partial<ForeshadowingItem>) => void;
+  onDeleteForeshadowing?: (id: string) => void;
+  onLinkForeshadowing?: (id: string) => void; // 关联现有伏笔到事件
 }) => {
   const previewTime = formatTimeDisplay({ day: formData.day, hour: formData.hour });
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickCreateTitle, setQuickCreateTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  // 伏笔编辑状态
+  const [showForeshadowEditor, setShowForeshadowEditor] = useState<string | 'new' | null>(null);
+  const [parentForeshadowingId, setParentForeshadowingId] = useState<string | null>(null); // 继续已有伏笔时的父ID
+  const [editingForeshadow, setEditingForeshadow] = useState<{
+    content: string;
+    type: 'planted' | 'developed' | 'resolved';
+    duration: 'short_term' | 'mid_term' | 'long_term';
+    tags: string;
+    notes: string;
+  }>({
+    content: '',
+    type: 'planted',
+    duration: 'short_term',
+    tags: '',
+    notes: ''
+  });
+  const [showForeshadowSelector, setShowForeshadowSelector] = useState(false);
+
+  // 获取未完结的伏笔列表（用于选择关联）
+  const unresolvedForeshadowing = useMemo(() => {
+    if (!foreshadowingItems) return [];
+    const allItems = Array.from(foreshadowingItems.values());
+    // 只返回根伏笔（无 parentId），且未收尾的
+    return allItems.filter(f =>
+      !f.parentId &&  // 只显示根伏笔
+      (f.type === 'planted' || f.type === 'developed') &&
+      !foreshadowingIds?.includes(f.id)
+    );
+  }, [foreshadowingItems, foreshadowingIds]);
+
+  // 开始编辑伏笔
+  const handleStartEditForeshadow = (f?: ForeshadowingItem, isContinue: boolean = false) => {
+    if (f) {
+      if (isContinue) {
+        // 继续已有伏笔：创建子伏笔，内容清空让用户填写推进描述
+        setParentForeshadowingId(f.id);
+        setEditingForeshadow({
+          content: '',  // 用户需要填写如何推进/收尾
+          type: 'developed',  // 默认推进
+          duration: f.duration,  // 继承父伏笔的时长
+          tags: f.tags.join(', '),
+          notes: ''
+        });
+        setShowForeshadowEditor('new');  // 作为新伏笔创建
+      } else {
+        // 编辑现有伏笔（仅限编辑刚创建的子伏笔）
+        setParentForeshadowingId(null);
+        setEditingForeshadow({
+          content: f.content,
+          type: f.type,
+          duration: f.duration,
+          tags: f.tags.join(', '),
+          notes: f.notes || ''
+        });
+        setShowForeshadowEditor(f.id);
+      }
+    } else {
+      // 新建根伏笔
+      setParentForeshadowingId(null);
+      setEditingForeshadow({
+        content: '',
+        type: 'planted',
+        duration: 'short_term',  // 默认短期
+        tags: '',
+        notes: ''
+      });
+      setShowForeshadowEditor('new');
+    }
+  };
+
+  const handleSaveForeshadow = () => {
+    if (!editingForeshadow.content.trim()) return;
+
+    const item: Omit<ForeshadowingItem, 'id'> = {
+      content: editingForeshadow.content.trim(),
+      type: editingForeshadow.type,
+      duration: editingForeshadow.duration,
+      tags: editingForeshadow.tags.split(',').map(t => t.trim()).filter(Boolean),
+      notes: editingForeshadow.notes.trim() || undefined,
+      source: 'timeline' as const,
+      sourceRef: '', // 事件保存时由外部设置
+      createdAt: Date.now()
+    };
+
+    if (showForeshadowEditor === 'new') {
+      // 新建伏笔（可能是根伏笔或子伏笔）
+      if (parentForeshadowingId) {
+        // 有父ID，创建子伏笔
+        const childItem = { ...item, parentId: parentForeshadowingId };
+        onAddForeshadowing?.(childItem);
+      } else {
+        // 无父ID，创建根伏笔
+        onAddForeshadowing?.(item);
+      }
+    } else if (typeof showForeshadowEditor === 'string') {
+      // 更新现有伏笔
+      onUpdateForeshadowing?.(showForeshadowEditor, item);
+      // 如果这个伏笔还未关联到当前事件，则关联
+      if (!foreshadowingIds?.includes(showForeshadowEditor)) {
+        onLinkForeshadowing?.(showForeshadowEditor);
+      }
+    }
+    // 重置状态
+    setShowForeshadowEditor(null);
+    setParentForeshadowingId(null);
+  };
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700">
@@ -285,6 +407,215 @@ const EventForm = React.memo(({
           </select>
         )}
       </div>
+
+      {/* 伏笔编辑区域 */}
+      <div className="border-t border-gray-700 pt-3 mt-3">
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-xs text-gray-500">关联伏笔</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowForeshadowSelector(!showForeshadowSelector)}
+              className="text-xs text-green-400 hover:text-green-300"
+            >
+              📎 关联已有
+            </button>
+            <button
+              type="button"
+              onClick={() => handleStartEditForeshadow()}
+              className="text-xs text-blue-400 hover:text-blue-300"
+            >
+              + 新建伏笔
+            </button>
+          </div>
+        </div>
+
+        {/* 选择已有伏笔 */}
+        {showForeshadowSelector && (
+          <div className="mb-2 p-2 bg-gray-700/50 rounded border border-gray-600">
+            <label className="text-xs text-gray-500 mb-1 block">选择已有伏笔推进或收尾</label>
+            {unresolvedForeshadowing.length > 0 ? (
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {unresolvedForeshadowing.map(f => {
+                  const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
+                  const labels: Record<string, string> = { planted: '🌱埋下', developed: '🌿推进', resolved: '✅收回' };
+                  const durationLabels: Record<string, string> = { short_term: '短期', mid_term: '中期', long_term: '长期' };
+
+                  return (
+                    <div
+                      key={f.id}
+                      className="flex items-center gap-2 p-1.5 rounded bg-gray-800/50 hover:bg-gray-600/50 cursor-pointer border border-transparent hover:border-gray-500"
+                      onClick={() => {
+                        // 继续已有伏笔，创建子伏笔
+                        handleStartEditForeshadow(f, true);
+                        setShowForeshadowSelector(false);
+                      }}
+                    >
+                      <span
+                        className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                        style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
+                      >
+                        {labels[f.type]}
+                      </span>
+                      <span className="text-xs text-gray-400 shrink-0">
+                        [{durationLabels[f.duration]}]
+                      </span>
+                      <span className="flex-1 text-sm text-gray-200 truncate">
+                        {f.content}
+                      </span>
+                      <span className="text-xs text-green-400">推进/收尾</span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-xs text-gray-500 py-2 text-center">
+                暂无可关联的伏笔
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 伏笔列表 */}
+        {foreshadowingIds && foreshadowingIds.length > 0 && foreshadowingItems && (
+          <div className="space-y-1 mb-2">
+            {foreshadowingIds.map(fid => {
+              const f = foreshadowingItems.get(fid);
+              if (!f) return null;
+
+              const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
+              const labels: Record<string, string> = { planted: '🌱埋下', developed: '🌿推进', resolved: '✅收回' };
+              const durationLabels: Record<string, string> = { short_term: '短期', mid_term: '中期', long_term: '长期' };
+
+              return (
+                <div
+                  key={fid}
+                  className="flex items-center gap-2 p-2 rounded bg-gray-700/50 border border-gray-600"
+                >
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                    style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
+                  >
+                    {labels[f.type]}
+                  </span>
+                  <span className="text-xs text-gray-400 shrink-0">
+                    [{durationLabels[f.duration]}]
+                  </span>
+                  <span className="flex-1 text-sm text-gray-200 truncate">
+                    {f.content}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleStartEditForeshadow(f)}
+                    className="text-gray-500 hover:text-blue-400 p-1"
+                    title="编辑"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteForeshadowing?.(fid)}
+                    className="text-gray-500 hover:text-red-400 p-1"
+                    title="取消关联"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 伏笔编辑器 */}
+        {showForeshadowEditor && (
+          <div className="bg-gray-700/50 rounded p-3 space-y-2 border border-gray-600">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-400">
+                {parentForeshadowingId ? '🌿 推进已有伏笔' : showForeshadowEditor === 'new' ? '🌱 新建伏笔' : '编辑伏笔'}
+              </span>
+              {parentForeshadowingId && foreshadowingItems?.get(parentForeshadowingId) && (
+                <span className="text-xs text-gray-500">
+                  原：{foreshadowingItems.get(parentForeshadowingId)?.content?.substring(0, 20)}...
+                </span>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">
+                {parentForeshadowingId ? '推进/收尾描述' : '伏笔内容'}
+              </label>
+              <input
+                type="text"
+                value={editingForeshadow.content}
+                onChange={(e) => setEditingForeshadow(prev => ({ ...prev, content: e.target.value }))}
+                placeholder={parentForeshadowingId ? "描述如何推进或收尾此伏笔（30字以内）" : "简洁描述伏笔（30字以内）"}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                autoFocus
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-500">状态</label>
+                <select
+                  value={editingForeshadow.type}
+                  onChange={(e) => setEditingForeshadow(prev => ({ ...prev, type: e.target.value as any }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                >
+                  <option value="planted">🌱 埋下</option>
+                  <option value="developed">🌿 推进</option>
+                  <option value="resolved">✅ 收回</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">时长</label>
+                <select
+                  value={editingForeshadow.duration}
+                  onChange={(e) => setEditingForeshadow(prev => ({ ...prev, duration: e.target.value as any }))}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                  disabled={!!parentForeshadowingId}
+                >
+                  <option value="short_term">短期（1-5章）</option>
+                  <option value="mid_term">中期（10-20章）</option>
+                  <option value="long_term">长期（100章+）</option>
+                </select>
+                {parentForeshadowingId && (
+                  <span className="text-xs text-gray-500">继承父伏笔</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">标签（逗号分隔）</label>
+              <input
+                type="text"
+                value={editingForeshadow.tags}
+                onChange={(e) => setEditingForeshadow(prev => ({ ...prev, tags: e.target.value }))}
+                placeholder="身世, 物品, 关系..."
+                className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleSaveForeshadow}
+                disabled={!editingForeshadow.content.trim()}
+                className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded px-2 py-1 text-sm"
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowForeshadowEditor(null);
+                  setParentForeshadowingId(null);
+                }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 text-sm"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex gap-2">
         <button onClick={onSubmit} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm">
           确认
@@ -466,6 +797,7 @@ interface EventCardProps {
   storyLineName?: string;
   chapterInfo?: { chapterIndex: number; title: string } | null;
   showChapterInfo?: boolean;
+  foreshadowingItems?: Map<string, ForeshadowingItem>;
   onEdit: (eventId: string) => void;
   onDelete: (eventId: string) => void;
   // Drag props
@@ -477,7 +809,7 @@ interface EventCardProps {
   onDrop: (e: React.DragEvent, targetEventId: string) => void;
 }
 
-const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInfo, showChapterInfo, onEdit, onDelete, isDragging, isDragOver, onDragStart, onDragEnd, onDragOver, onDrop }: EventCardProps) => {
+const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInfo, showChapterInfo, foreshadowingItems, onEdit, onDelete, isDragging, isDragOver, onDragStart, onDragEnd, onDragOver, onDrop }: EventCardProps) => {
   const handleEdit = useCallback(() => onEdit(event.id), [event.id, onEdit]);
   const handleDelete = useCallback(() => onDelete(event.id), [event.id, onDelete]);
 
@@ -562,6 +894,29 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
 
       {event.content && (
         <p className="text-sm text-gray-300 mt-2 ml-6">{event.content}</p>
+      )}
+
+      {/* 伏笔显示 */}
+      {event.foreshadowingIds && event.foreshadowingIds.length > 0 && foreshadowingItems && (
+        <div className="flex flex-wrap gap-1 mt-2 ml-6">
+          {event.foreshadowingIds.map(fid => {
+            const f = foreshadowingItems.get(fid);
+            if (!f || !f.content) return null;
+            const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
+            const labels: Record<string, string> = { planted: '🌱埋', developed: '🌿进', resolved: '✅收' };
+            const displayContent = f.content.length > 15 ? f.content.substring(0, 15) + '...' : f.content;
+            return (
+              <span
+                key={fid}
+                className="text-xs px-1.5 py-0.5 rounded cursor-help"
+                style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
+                title={f.content}
+              >
+                {labels[f.type]} {displayContent}
+              </span>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -731,6 +1086,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
   // Event form states
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editingEventForeshadowingIds, setEditingEventForeshadowingIds] = useState<string[]>([]);
   const [newEvent, setNewEvent] = useState({
     day: 1,
     hour: 8,
@@ -766,6 +1122,40 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const addChaptersToVolume = useWorldTimelineStore(state => state.addChaptersToVolume);
   const moveEvent = useWorldTimelineStore(state => state.moveEvent);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
+
+  // 伏笔数据 - 从 chapterAnalysisStore 获取
+  const foreshadowingList = useChapterAnalysisStore(state => state.data.foreshadowing);
+  const addForeshadowingToStore = useChapterAnalysisStore(state => state.addForeshadowing);
+  const updateForeshadowingInStore = useChapterAnalysisStore(state => state.updateForeshadowing);
+  const deleteForeshadowingFromStore = useChapterAnalysisStore(state => state.deleteForeshadowing);
+  const foreshadowingMap = useMemo<Map<string, ForeshadowingItem>>(() =>
+    new Map(foreshadowingList.map(f => [f.id, f])),
+    [foreshadowingList]
+  );
+
+  // 伏笔操作 handlers
+  const handleAddForeshadowing = useCallback((item: Omit<ForeshadowingItem, 'id'>) => {
+    const id = addForeshadowingToStore({ ...item, source: 'timeline', sourceRef: editingEventId || '' });
+    setEditingEventForeshadowingIds(prev => [...prev, id]);
+    return id;
+  }, [addForeshadowingToStore, editingEventId]);
+
+  const handleUpdateForeshadowing = useCallback((id: string, updates: Partial<ForeshadowingItem>) => {
+    updateForeshadowingInStore(id, updates);
+  }, [updateForeshadowingInStore]);
+
+  const handleDeleteForeshadowing = useCallback((id: string) => {
+    deleteForeshadowingFromStore(id);
+    setEditingEventForeshadowingIds(prev => prev.filter(fid => fid !== id));
+  }, [deleteForeshadowingFromStore]);
+
+  // 关联已有伏笔到当前事件
+  const handleLinkForeshadowing = useCallback((id: string) => {
+    setEditingEventForeshadowingIds(prev => {
+      if (prev.includes(id)) return prev;
+      return [...prev, id];
+    });
+  }, []);
 
   // Drag state
   const [draggedEventId, setDraggedEventId] = useState<string | null>(null);
@@ -856,6 +1246,8 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       storyLineId: event.storyLineId || '',
       chapterId: event.chapterId || ''
     });
+    // 加载该事件关联的伏笔ID
+    setEditingEventForeshadowingIds(event.foreshadowingIds || []);
     setShowAddEvent(false);
   }, []);
 
@@ -884,9 +1276,11 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       characters: newEvent.characters ? newEvent.characters.split(',').map(s => s.trim()).filter(Boolean) : undefined,
       emotion: newEvent.emotion.trim() || undefined,
       storyLineId: newEvent.storyLineId || undefined,
-      chapterId: newEvent.chapterId || undefined
+      chapterId: newEvent.chapterId || undefined,
+      foreshadowingIds: editingEventForeshadowingIds.length > 0 ? editingEventForeshadowingIds : undefined
     });
     setEditingEventId(null);
+    setEditingEventForeshadowingIds([]);
     setNewEvent({
       day: 1,
       hour: 8,
@@ -904,6 +1298,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
   const handleCancelEditEvent = () => {
     setEditingEventId(null);
+    setEditingEventForeshadowingIds([]);
     setNewEvent({
       day: 1,
       hour: 8,
@@ -1318,8 +1713,17 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                   chapters={cachedChapters}
                   onFieldChange={handleEventFieldChange}
                   onSubmit={handleAddTimelineEvent}
-                  onCancel={() => setShowAddEvent(false)}
+                  onCancel={() => {
+                    setShowAddEvent(false);
+                    setEditingEventForeshadowingIds([]);
+                  }}
                   onQuickCreateChapter={handleQuickCreateChapter}
+                  foreshadowingItems={foreshadowingMap}
+                  foreshadowingIds={editingEventForeshadowingIds}
+                  onAddForeshadowing={handleAddForeshadowing}
+                  onUpdateForeshadowing={handleUpdateForeshadowing}
+                  onDeleteForeshadowing={handleDeleteForeshadowing}
+                  onLinkForeshadowing={handleLinkForeshadowing}
                 />
               )}
 
@@ -1357,6 +1761,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                             onSubmit={handleSaveEditEvent}
                             onCancel={handleCancelEditEvent}
                             onQuickCreateChapter={handleQuickCreateChapter}
+                            foreshadowingItems={foreshadowingMap}
+                            foreshadowingIds={editingEventForeshadowingIds}
+                            onAddForeshadowing={handleAddForeshadowing}
+                            onUpdateForeshadowing={handleUpdateForeshadowing}
+                            onDeleteForeshadowing={handleDeleteForeshadowing}
+                  onLinkForeshadowing={handleLinkForeshadowing}
                           />
                         </div>
                       ) : (
@@ -1366,6 +1776,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                           storyLineName={storyLine?.name}
                           chapterInfo={chapter ? { chapterIndex: chapter.chapterIndex, title: chapter.title } : null}
                           showChapterInfo
+                          foreshadowingItems={foreshadowingMap}
                           onEdit={handleEventEdit}
                           onDelete={handleDeleteTimelineEvent}
                           isDragging={draggedEventId === event.id}

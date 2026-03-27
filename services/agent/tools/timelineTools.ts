@@ -66,7 +66,7 @@ const ensureLoaded = async () => {
 /**
  * 处理伏笔操作（创建新伏笔或继续已有伏笔）
  * @param foreshadowingData 伏笔数据列表
- * @param eventId 关联的事件 ID（用于 developedRefs/resolvedRef）
+ * @param eventId 关联的事件 ID
  * @returns 处理的伏笔 ID 列表
  */
 const processForeshadowings = (
@@ -93,42 +93,34 @@ const processForeshadowings = (
 
   for (const item of foreshadowingData) {
     if (item.existingForeshadowingId) {
-      // 场景A：继续已有伏笔（推进或收尾）
-      const existing = chapterAnalysisStore.data.foreshadowing.find(
-        f => f.id === item.existingForeshadowingId
-      );
-      if (existing) {
-        const updates: Partial<ForeshadowingItem> = { type: item.type };
-
-        if (item.type === 'developed') {
-          // 推进伏笔：添加到 developedRefs
-          updates.developedRefs = [
-            ...existing.developedRefs,
-            { source: 'timeline', ref: eventId }
-          ];
-        } else if (item.type === 'resolved') {
-          // 收尾伏笔：设置 resolvedRef
-          updates.resolvedRef = { source: 'timeline', ref: eventId };
-        }
-        if (item.notes) updates.notes = item.notes;
-        if (item.tags && item.tags.length > 0) {
-          // 合并标签（去重）
-          updates.tags = [...new Set([...existing.tags, ...item.tags])];
-        }
-
-        chapterAnalysisStore.updateForeshadowing(item.existingForeshadowingId, updates);
-        processedIds.push(item.existingForeshadowingId);
+      // 场景A：继续已有伏笔（推进或收尾）- 创建子伏笔
+      const parent = chapterAnalysisStore.getForeshadowingById(item.existingForeshadowingId);
+      if (parent) {
+        // 创建子伏笔作为推进/收尾记录
+        const childId = chapterAnalysisStore.addForeshadowing({
+          content: item.content || (item.type === 'resolved' ? '伏笔收尾' : '伏笔推进'),
+          type: item.type,
+          duration: parent.duration,  // 继承父伏笔的时长
+          tags: item.tags && item.tags.length > 0 ? item.tags : parent.tags,
+          notes: item.notes,
+          source: TIMELINE_SOURCE,
+          sourceRef: eventId,
+          parentId: parent.id,  // 关联父伏笔
+          createdAt: Date.now()
+        });
+        processedIds.push(childId);
       }
     } else if (item.content) {
-      // 场景B：创建新伏笔
-      const id = chapterAnalysisStore.addForeshadowing(TIMELINE_SOURCE, {
+      // 场景B：创建新伏笔（根伏笔）
+      const id = chapterAnalysisStore.addForeshadowing({
         content: item.content,
         type: item.type,
-        duration: item.duration || 'mid_term',
+        duration: item.duration || 'short_term',
         tags: item.tags,
         notes: item.notes,
         source: TIMELINE_SOURCE,
-        sourceRef: eventId
+        sourceRef: eventId,
+        createdAt: Date.now()
       });
       processedIds.push(id);
     }
@@ -335,18 +327,18 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
 
     case 'outline_getUnresolvedForeshadowing': {
       const chapterAnalysisStore = useChapterAnalysisStore.getState();
-      let unresolved = chapterAnalysisStore.getUnresolvedForeshadowing();
+      let unresolvedWithChildren = chapterAnalysisStore.getUnresolvedForeshadowing();
 
       // 按标签筛选
       if (args.tags && args.tags.length > 0) {
-        unresolved = unresolved.filter(f =>
+        unresolvedWithChildren = unresolvedWithChildren.filter(f =>
           f.tags.some(t => args.tags.includes(t))
         );
       }
 
       return JSON.stringify({
-        total: unresolved.length,
-        foreshadowing: unresolved.map(f => ({
+        total: unresolvedWithChildren.length,
+        foreshadowing: unresolvedWithChildren.map(f => ({
           id: f.id,
           content: f.content,
           type: f.type,
@@ -354,7 +346,15 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           tags: f.tags,
           source: f.source,
           sourceRef: f.sourceRef,
-          notes: f.notes
+          notes: f.notes,
+          // 子伏笔（推进/收尾记录）
+          children: f.children.map(c => ({
+            id: c.id,
+            content: c.content,
+            type: c.type,
+            sourceRef: c.sourceRef,
+            createdAt: c.createdAt
+          }))
         }))
       });
     }

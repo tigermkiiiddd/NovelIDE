@@ -93,7 +93,7 @@ export const useAgent = (
       const limit = isGemini ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
-      const sysPrompt = constructSystemPrompt(files, project, activeFile, todos, undefined, undefined, knowledgeNodes);
+      const sysPrompt = constructSystemPrompt(files, project, todos, undefined, undefined, knowledgeNodes);
       const msgs = currentSession?.messages || [];
       const msgsText = msgs.reduce((acc, m) => {
           let content = m.text;
@@ -109,7 +109,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, activeFile, todos, currentSession?.messages]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages]);
 
   const approveChange = useCallback((change: PendingChange) => {
     // 构造包含追踪功能的 Action 集合

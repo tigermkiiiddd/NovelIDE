@@ -189,9 +189,7 @@ export const ReadingLightView: React.FC = () => {
   };
 
   const handleDeleteForeshadowing = (id: string) => {
-    if (confirm('确定删除这个伏笔吗？')) {
-      deleteForeshadowing(id);
-    }
+    deleteForeshadowing(id);
   };
 
   // ========== 角色状态操作 ==========
@@ -217,9 +215,7 @@ export const ReadingLightView: React.FC = () => {
   };
 
   const handleDeleteCharacter = (id: string) => {
-    if (confirm('确定删除这个角色状态吗？')) {
-      deleteCharacterState(id);
-    }
+    deleteCharacterState(id);
   };
 
   // ========== 剧情关键点操作 ==========
@@ -245,9 +241,7 @@ export const ReadingLightView: React.FC = () => {
   };
 
   const handleDeletePlot = (id: string) => {
-    if (confirm('确定删除这个剧情关键点吗？')) {
-      deletePlotKeyPoint(id);
-    }
+    deletePlotKeyPoint(id);
   };
 
   // ========== 取消编辑 ==========
@@ -535,13 +529,16 @@ const ForeshadowingView: React.FC<{
   const typeColors = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
   const typeLabels = { planted: '埋下', developed: '推进', resolved: '收回' };
 
-  // 按状态排序（planted > developed > resolved）
+  // 获取未完结伏笔（包含子伏笔树）
+  const unresolvedWithChildren = useChapterAnalysisStore.getState().getUnresolvedForeshadowing();
+
+  // 按状态排序（planted > developed）
   const sortedItems = useMemo(() => {
-    return [...data.foreshadowing].sort((a, b) => {
+    return [...unresolvedWithChildren].sort((a, b) => {
       const order = { planted: 0, developed: 1, resolved: 2 };
       return order[a.type] - order[b.type];
     });
-  }, [data.foreshadowing]);
+  }, [unresolvedWithChildren, data.foreshadowing]); // 依赖 data.foreshadowing 以响应数据变化
 
   if (sortedItems.length === 0) {
     return <EmptyState message="暂无伏笔数据" />;
@@ -552,6 +549,7 @@ const ForeshadowingView: React.FC<{
       {sortedItems.map((item) => {
         const duration = item.duration || 'mid_term';
         const durationColor = DURATION_COLORS[duration];
+        const children = item.children || [];
 
         return (
           <div
@@ -615,21 +613,9 @@ const ForeshadowingView: React.FC<{
               📍 来源：{getChapterTitle(item.sourceRef || '')}
             </div>
 
-            {/* 发展轨迹 */}
-            {item.developedRefs?.length > 0 && (
-              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
-                📖 发展：
-                {item.developedRefs.map((r, i) => (
-                  <span key={i} style={{ marginLeft: 4 }}>
-                    {getChapterTitle(r.ref)}{i < item.developedRefs.length - 1 ? ' →' : ''}
-                  </span>
-                ))}
-              </div>
-            )}
-
             {/* 标签 */}
-            {item.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {item.tags && item.tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: children.length > 0 ? 12 : 0 }}>
                 {item.tags.map(tag => (
                   <span key={tag} style={tagStyle}>{tag}</span>
                 ))}
@@ -638,8 +624,60 @@ const ForeshadowingView: React.FC<{
 
             {/* 备注 */}
             {item.notes && (
-              <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8', fontStyle: 'italic', marginBottom: children.length > 0 ? 12 : 0 }}>
                 💡 {item.notes}
+              </div>
+            )}
+
+            {/* 子伏笔（推进/收尾记录） */}
+            {children.length > 0 && (
+              <div style={{
+                marginTop: 12,
+                paddingTop: 12,
+                borderTop: '1px solid rgba(148, 163, 184, 0.1)',
+              }}>
+                <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+                  📖 发展轨迹 ({children.length})
+                </div>
+                {children.map((child) => (
+                  <div
+                    key={child.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      padding: '8px 10px',
+                      marginBottom: 6,
+                      backgroundColor: 'rgba(30, 41, 59, 0.4)',
+                      borderRadius: 6,
+                      borderLeft: `2px solid ${typeColors[child.type]}`,
+                    }}
+                  >
+                    <span style={{
+                      padding: '2px 6px',
+                      backgroundColor: `${typeColors[child.type]}22`,
+                      borderRadius: 3,
+                      color: typeColors[child.type],
+                      fontSize: 10,
+                      flexShrink: 0,
+                    }}>
+                      {typeLabels[child.type]}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, color: '#cbd5e1' }}>{child.content}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                        📍 {getChapterTitle(child.sourceRef || '')}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => onDelete(child.id)}
+                      style={{ ...actionButtonStyle, padding: 4, color: '#f87171' }}
+                      title="删除"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -910,10 +948,9 @@ const ForeshadowingForm: React.FC<{
       duration,
       source: 'chapter_analysis',
       sourceRef,
-      developedRefs: item?.developedRefs || [],
-      resolvedRef: item?.resolvedRef,
       notes: notes.trim() || undefined,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      createdAt: item?.createdAt || Date.now(),
     });
   };
 

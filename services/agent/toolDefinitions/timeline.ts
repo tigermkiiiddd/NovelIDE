@@ -250,7 +250,10 @@ export const manageEventsTool: ToolDefinition = {
               purpose: { type: 'string' },
               foreshadowing: {
                 type: 'array',
-                description: '伏笔操作：可创建新伏笔或继续已有伏笔',
+                description: `伏笔操作：
+- 创建新伏笔：提供 content, type='planted', duration, tags
+- 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type='developed'
+- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'`,
                 items: {
                   type: 'object',
                   properties: {
@@ -262,12 +265,12 @@ export const manageEventsTool: ToolDefinition = {
                     // 场景B：创建新伏笔
                     content: {
                       type: 'string',
-                      description: '伏笔内容（30字以内！必须简洁）'
+                      description: '伏笔内容（30字以内！必须简洁）。继续已有伏笔时，描述如何推进/收尾'
                     },
                     duration: {
                       type: 'string',
                       enum: ['short_term', 'mid_term', 'long_term'],
-                      description: '伏笔时长：short_term=1-5章，mid_term=10-20章，long_term=100章以上'
+                      description: '伏笔时长（仅新伏笔需要）：short_term=1-5章，mid_term=10-20章，long_term=100章以上'
                     },
                     type: {
                       type: 'string',
@@ -284,7 +287,7 @@ export const manageEventsTool: ToolDefinition = {
                       description: '补充说明（可选，如预计回收时间）'
                     }
                   },
-                  required: ['type', 'tags']
+                  required: ['type', 'content']
                 }
               }
             },
@@ -323,7 +326,10 @@ export const manageEventsTool: ToolDefinition = {
                   purpose: { type: 'string' },
                   foreshadowing: {
                     type: 'array',
-                    description: '伏笔操作：可创建新伏笔或继续已有伏笔',
+                    description: `伏笔操作：
+- 创建新伏笔：提供 content, type='planted', duration, tags
+- 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type='developed'
+- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'`,
                     items: {
                       type: 'object',
                       properties: {
@@ -335,12 +341,12 @@ export const manageEventsTool: ToolDefinition = {
                         // 场景B：创建新伏笔
                         content: {
                           type: 'string',
-                          description: '伏笔内容（30字以内！必须简洁）'
+                          description: '伏笔内容（30字以内！必须简洁）。继续已有伏笔时，描述如何推进/收尾'
                         },
                         duration: {
                           type: 'string',
                           enum: ['short_term', 'mid_term', 'long_term'],
-                          description: '伏笔时长：short_term=1-5章，mid_term=10-20章，long_term=100章以上'
+                          description: '伏笔时长（仅新伏笔需要）：short_term=1-5章，mid_term=10-20章，long_term=100章以上'
                         },
                         type: {
                           type: 'string',
@@ -357,7 +363,7 @@ export const manageEventsTool: ToolDefinition = {
                           description: '补充说明（可选，如预计回收时间）'
                         }
                       },
-                      required: ['type', 'tags']
+                      required: ['type', 'content']
                     }
                   }
                 },

@@ -10,8 +10,7 @@
 
 import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
-// 延迟导入以避免循环依赖
-// import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
+import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 
 // Plan 模式已移除
 // export const PLAN_MODE_PROTOCOL = ...
@@ -293,7 +292,6 @@ const extractUserInputHistory = (messages: any[] | undefined): string => {
 export const constructSystemPrompt = (
   files: FileNode[],
   project: ProjectMeta | undefined,
-  activeFile: FileNode | null,
   todos: TodoItem[],
   messages?: any[],
   planMode?: boolean,
@@ -439,11 +437,9 @@ export const constructSystemPrompt = (
     return output;
   };
 
-  // Foreshadowing (未收尾伏笔) - 延迟加载以避免循环依赖
+  // Foreshadowing (未收尾伏笔)
   const getForeshadowingSection = () => {
     try {
-      // 动态导入以避免循环依赖
-      const { useChapterAnalysisStore } = require('../../../stores/chapterAnalysisStore');
       const analysisStore = useChapterAnalysisStore.getState();
       const unresolvedForeshadowing = analysisStore.data.foreshadowing.filter(
         (f: ForeshadowingItem) => f.type === 'planted' || f.type === 'developed'
@@ -463,8 +459,8 @@ export const constructSystemPrompt = (
       const formatForeshadowing = (f: ForeshadowingItem) => {
         const statusEmoji = f.type === 'planted' ? '🌱' : '🌿';
         const sourceLabel = f.source === 'chapter_analysis' ? '章节' : '时间线';
-        const developedCount = f.developedRefs?.length || 0;
-        return `- ${statusEmoji} **${f.content}**\n  - 来源: ${sourceLabel} \`${f.sourceRef}\`${developedCount > 0 ? ` | 已发展 ${developedCount} 次` : ''}${f.expectedResolution ? ` | 预期收尾: ${f.expectedResolution}` : ''}`;
+        const typeLabel = f.type === 'planted' ? '新埋' : '推进中';
+        return `- ${statusEmoji} **${f.content}**\n  - 来源: ${sourceLabel} \`${f.sourceRef}\` | 状态: ${typeLabel}${f.expectedResolution ? ` | 预期收尾: ${f.expectedResolution}` : ''}`;
       };
 
       if (shortTerm.length > 0) {
