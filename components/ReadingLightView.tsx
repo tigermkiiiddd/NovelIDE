@@ -154,9 +154,9 @@ export const ReadingLightView: React.FC = () => {
     characters: data.characterStates.length,
     plots: data.plotKeyPoints.length,
     chapters: new Set([
-      ...data.characterStates.map(s => s.chapterRef),
-      ...data.foreshadowing.map(f => f.sourceRef),
-      ...data.plotKeyPoints.map(p => p.chapterRef),
+      ...data.characterStates.map((s: ChapterCharacterState) => s.chapterRef),
+      ...data.foreshadowing.map((f: ForeshadowingItem) => f.sourceRef),
+      ...data.plotKeyPoints.map((p: ChapterPlotKeyPoint) => p.chapterRef),
     ]).size,
   }), [data]);
 
@@ -530,12 +530,12 @@ const ForeshadowingView: React.FC<{
   const typeLabels = { planted: '埋下', developed: '推进', resolved: '收回' };
 
   // 获取未完结伏笔（包含子伏笔树）
-  const unresolvedWithChildren = useChapterAnalysisStore.getState().getUnresolvedForeshadowing();
+  const unresolvedWithChildren: Array<ForeshadowingItem & { children: ForeshadowingItem[] }> = useChapterAnalysisStore.getState().getUnresolvedForeshadowing();
 
   // 按状态排序（planted > developed）
   const sortedItems = useMemo(() => {
     return [...unresolvedWithChildren].sort((a, b) => {
-      const order = { planted: 0, developed: 1, resolved: 2 };
+      const order: Record<string, number> = { planted: 0, developed: 1, resolved: 2 };
       return order[a.type] - order[b.type];
     });
   }, [unresolvedWithChildren, data.foreshadowing]); // 依赖 data.foreshadowing 以响应数据变化
@@ -616,7 +616,7 @@ const ForeshadowingView: React.FC<{
             {/* 标签 */}
             {item.tags && item.tags.length > 0 && (
               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: children.length > 0 ? 12 : 0 }}>
-                {item.tags.map(tag => (
+                {item.tags.map((tag: string) => (
                   <span key={tag} style={tagStyle}>{tag}</span>
                 ))}
               </div>
@@ -639,7 +639,7 @@ const ForeshadowingView: React.FC<{
                 <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
                   📖 发展轨迹 ({children.length})
                 </div>
-                {children.map((child) => (
+                {children.map((child: ForeshadowingItem) => (
                   <div
                     key={child.id}
                     style={{

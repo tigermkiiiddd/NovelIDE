@@ -65,7 +65,7 @@ function isRateLimitError(error: any): boolean {
 
   return (
     status === 429 ||
-    code === 429 ||
+    code === '429' ||
     message.includes('429') ||
     message.toLowerCase().includes('rate limit') ||
     message.toLowerCase().includes('too many requests')
@@ -81,8 +81,8 @@ function isAuthError(error: any): boolean {
   return (
     status === 401 ||
     status === 403 ||
-    code === 401 ||
-    code === 403 ||
+    code === '401' ||
+    code === '403' ||
     message.toLowerCase().includes('unauthorized') ||
     message.toLowerCase().includes('invalid api key') ||
     message.toLowerCase().includes('forbidden') ||
@@ -95,8 +95,8 @@ function isAuthError(error: any): boolean {
  */
 function isServerError(error: any): boolean {
   const { status, code } = extractErrorContext(error);
-  const statusCode = status || code;
-  return statusCode >= 500 && statusCode < 600;
+  const statusCode = status ?? (typeof code === 'number' ? code : undefined);
+  return statusCode !== undefined && statusCode >= 500 && statusCode < 600;
 }
 
 /**
@@ -157,11 +157,11 @@ export function apiError(error: any, requestInfo?: any, responseInfo?: any): Age
 
   return {
     category: AgentErrorCategory.API,
-    severity: status >= 500 ? AgentErrorSeverity.MEDIUM : AgentErrorSeverity.HIGH,
+    severity: (status ?? 0) >= 500 ? AgentErrorSeverity.MEDIUM : AgentErrorSeverity.HIGH,
     title,
     message: detailedMessage,
     suggestions,
-    recoverable: status >= 500 || status === 400,
+    recoverable: (status ?? 0) >= 500 || status === 400,
     debugData: {
       rawError: error,
       request: requestInfo,

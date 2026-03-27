@@ -452,7 +452,6 @@ export const getHistoryStats = (messages: ChatMessage[]): {
     [ToolType.DELETE_FILE]: 0,
     [ToolType.LIST_FILES]: 0,
     [ToolType.MANAGE_TODOS]: 0,
-    [ToolType.THINKING]: 0,
     [ToolType.CALL_SEARCH_AGENT]: 0,
     [ToolType.MANAGE_PLAN_NOTE]: 0,
     [ToolType.UPDATE_PROJECT_META]: 0,

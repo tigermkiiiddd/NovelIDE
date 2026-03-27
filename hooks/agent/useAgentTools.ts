@@ -4,10 +4,9 @@ import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useCharacterMemoryStore } from '../../stores/characterMemoryStore';
 import { executeTool, ToolExecutionResult } from '../../services/agent/toolRunner';
-import { FileNode, TodoItem, PendingChange, ChatMessage, PlanNote } from '../../types';
+import { FileNode, TodoItem, PendingChange, ChatMessage, PlanNote, BatchEdit } from '../../types';
 import { AIService } from '../../services/geminiService';
 import { generateId } from '../../services/fileSystem';
-import { BatchEdit } from '../../stores/fileStore';
 
 // 定义工具接口
 export interface AgentToolsImplementation {

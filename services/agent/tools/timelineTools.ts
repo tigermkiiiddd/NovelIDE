@@ -8,7 +8,7 @@ import { useAgentStore } from '../../../stores/agentStore';
 import { useWorldTimelineStore, toHours } from '../../../stores/worldTimelineStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
-import { TimelineEvent, ChapterGroup, ForeshadowingItem } from '../../../types';
+import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine, ForeshadowingItem } from '../../../types';
 
 // ============================================
 // 导出工具定义
@@ -36,17 +36,17 @@ const getProjectId = () => useProjectStore.getState().getCurrentProject()?.id;
 
 const findChapterByIndex = (chapterIndex: number) => {
   const chapters = getStore().getChapters();
-  return chapters.find(c => c.chapterIndex === chapterIndex) || null;
+  return chapters.find((c: ChapterGroup) => c.chapterIndex === chapterIndex) || null;
 };
 
 const findVolumeByIndex = (volumeIndex: number) => {
   const volumes = getStore().getVolumes();
-  return volumes.find(v => v.volumeIndex === volumeIndex) || null;
+  return volumes.find((v: VolumeGroup) => v.volumeIndex === volumeIndex) || null;
 };
 
 const findEventByIndex = (eventIndex: number) => {
   const events = getStore().getEvents();
-  return events.find(e => e.eventIndex === eventIndex) || null;
+  return events.find((e: TimelineEvent) => e.eventIndex === eventIndex) || null;
 };
 
 const findStoryLineByIndex = (storyLineIndex: number) => {
@@ -152,10 +152,10 @@ export const executeProcessOutlineInput = async (
   const existingEvents = store.getEvents();
 
   // 构建 volumeId -> volumeIndex 的映射
-  const volumeIdToIndex = new Map(existingVolumes.map(v => [v.id, v.volumeIndex]));
+  const volumeIdToIndex = new Map(existingVolumes.map((v: VolumeGroup) => [v.id, v.volumeIndex]));
 
   // 获取最新5个事件（按时间戳排序后的最后5个）
-  const recentEvents = existingEvents.slice(-5).map(e => ({
+  const recentEvents = existingEvents.slice(-5).map((e: TimelineEvent) => ({
     eventIndex: e.eventIndex,
     timestamp: e.timestamp,
     title: e.title,
@@ -170,18 +170,18 @@ export const executeProcessOutlineInput = async (
     existingVolumeCount: existingVolumes.length,
     existingChapterCount: existingChapters.length,
     existingEventCount: existingEvents.length,
-    volumeSummaries: existingVolumes.map(v => ({ volumeIndex: v.volumeIndex, title: v.title })),
-    chapterSummaries: existingChapters.map(c => ({
+    volumeSummaries: existingVolumes.map((v: VolumeGroup) => ({ volumeIndex: v.volumeIndex, title: v.title })),
+    chapterSummaries: existingChapters.map((c: ChapterGroup) => ({
       chapterIndex: c.chapterIndex,
       title: c.title,
       volumeIndex: c.volumeId ? (volumeIdToIndex.get(c.volumeId) ?? 0) : 0,
       eventCount: c.eventIds.length
     })),
     recentEvents,
-    unresolvedForeshadowing: unresolvedForeshadowing.map(f => ({
+    unresolvedForeshadowing: unresolvedForeshadowing.map((f: ForeshadowingItem & { children: ForeshadowingItem[] }) => ({
       id: f.id,
       content: f.content,
-      type: f.type,
+      type: f.type as 'planted' | 'developed',
       duration: f.duration,
       tags: f.tags,
       source: f.source,
@@ -223,17 +223,17 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         const chapter = findChapterByIndex(chapterIndex);
         if (!chapter) return JSON.stringify({ error: `章节 ${chapterIndex} 不存在` });
         const eventIdSet = new Set(chapter.eventIds);
-        events = events.filter(e => eventIdSet.has(e.id));
+        events = events.filter((e: TimelineEvent) => eventIdSet.has(e.id));
       }
 
       if (fromIndex !== undefined || toIndex !== undefined) {
         const from = fromIndex ?? 0;
         const to = toIndex ?? Infinity;
-        events = events.filter(e => e.eventIndex >= from && e.eventIndex <= to);
+        events = events.filter((e: TimelineEvent) => e.eventIndex >= from && e.eventIndex <= to);
       }
 
       const chapters = store.getChapters();
-      const chapterIdToIndex = new Map(chapters.map(c => [c.id, c.chapterIndex]));
+      const chapterIdToIndex = new Map(chapters.map((c: ChapterGroup) => [c.id, c.chapterIndex]));
 
       return JSON.stringify({
         total: events.length,
@@ -258,7 +258,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
 
       if (volumeIndex !== undefined) {
         const volume = findVolumeByIndex(volumeIndex);
-        if (volume) chapters = chapters.filter(c => c.volumeId === volume.id);
+        if (volume) chapters = chapters.filter((c: ChapterGroup) => c.volumeId === volume.id);
       }
 
       // 最多返回 40 条
@@ -269,7 +269,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
       if (fromIndex !== undefined || toIndex !== undefined) {
         const from = fromIndex ?? 0;
         const to = toIndex ?? Infinity;
-        chapters = chapters.filter(c => c.chapterIndex >= from && c.chapterIndex <= to);
+        chapters = chapters.filter((c: ChapterGroup) => c.chapterIndex >= from && c.chapterIndex <= to);
       }
 
       if (chapters.length > MAX_CHAPTERS) {
@@ -279,7 +279,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
       }
 
       const volumes = store.getVolumes();
-      const volumeIdToIndex = new Map(volumes.map(v => [v.id, v.volumeIndex]));
+      const volumeIdToIndex = new Map(volumes.map((v: VolumeGroup) => [v.id, v.volumeIndex]));
 
       const result: any = {
         total: chapters.length,
@@ -304,7 +304,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
     case 'outline_getVolumes': {
       const volumes = store.getVolumes();
       return JSON.stringify({
-        volumes: volumes.map(v => ({
+        volumes: volumes.map((v: VolumeGroup) => ({
           volumeIndex: v.volumeIndex,
           title: v.title,
           description: v.description,
@@ -316,7 +316,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
     case 'outline_getStoryLines': {
       const storyLines = store.getStoryLines();
       return JSON.stringify({
-        storyLines: storyLines.map((s, i) => ({
+        storyLines: storyLines.map((s: StoryLine, i: number) => ({
           storyLineIndex: i,
           name: s.name,
           color: s.color,
@@ -331,14 +331,14 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
 
       // 按标签筛选
       if (args.tags && args.tags.length > 0) {
-        unresolvedWithChildren = unresolvedWithChildren.filter(f =>
-          f.tags.some(t => args.tags.includes(t))
+        unresolvedWithChildren = unresolvedWithChildren.filter((f: ForeshadowingItem & { children: ForeshadowingItem[] }) =>
+          f.tags.some((t: string) => args.tags.includes(t))
         );
       }
 
       return JSON.stringify({
         total: unresolvedWithChildren.length,
-        foreshadowing: unresolvedWithChildren.map(f => ({
+        foreshadowing: unresolvedWithChildren.map((f: ForeshadowingItem & { children: ForeshadowingItem[] }) => ({
           id: f.id,
           content: f.content,
           type: f.type,
@@ -348,7 +348,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           sourceRef: f.sourceRef,
           notes: f.notes,
           // 子伏笔（推进/收尾记录）
-          children: f.children.map(c => ({
+          children: f.children.map((c: ForeshadowingItem) => ({
             id: c.id,
             content: c.content,
             type: c.type,

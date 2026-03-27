@@ -9,9 +9,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X, Clock, Plus, Pencil, ChevronDown, ChevronRight, GripVertical
 } from 'lucide-react';
-import { useWorldTimelineStore, formatTimeDisplay, formatTimeRangeDisplay } from '../stores/worldTimelineStore';
-import { useProjectStore } from '../stores/projectStore';
-import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
+import { useWorldTimelineStore, formatTimeDisplay, formatTimeRangeDisplay, WorldTimelineState } from '../stores/worldTimelineStore';
+import { useProjectStore, ProjectState } from '../stores/projectStore';
+import { useChapterAnalysisStore, ChapterAnalysisState } from '../stores/chapterAnalysisStore';
 import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine, ForeshadowingItem } from '../types';
 
 interface OutlineViewerProps {
@@ -1102,34 +1102,34 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   });
 
   // Store - 使用 worldTimelineStore 作为唯一数据源
-  const timeline = useWorldTimelineStore(state => state.timeline);
-  const isLoading = useWorldTimelineStore(state => state.isLoading);
-  const loadTimeline = useWorldTimelineStore(state => state.loadTimeline);
-  const addEvent = useWorldTimelineStore(state => state.addEvent);
-  const updateEvent = useWorldTimelineStore(state => state.updateEvent);
-  const deleteEvent = useWorldTimelineStore(state => state.deleteEvent);
-  const addChapter = useWorldTimelineStore(state => state.addChapter);
-  const updateChapter = useWorldTimelineStore(state => state.updateChapter);
-  const addVolume = useWorldTimelineStore(state => state.addVolume);
-  const updateVolume = useWorldTimelineStore(state => state.updateVolume);
-  const deleteVolume = useWorldTimelineStore(state => state.deleteVolume);
-  const deleteChapter = useWorldTimelineStore(state => state.deleteChapter);
-  const getEvents = useWorldTimelineStore(state => state.getEvents);
-  const getChapters = useWorldTimelineStore(state => state.getChapters);
-  const getVolumes = useWorldTimelineStore(state => state.getVolumes);
-  const getStoryLines = useWorldTimelineStore(state => state.getStoryLines);
-  const getTimeRange = useWorldTimelineStore(state => state.getTimeRange);
-  const addChaptersToVolume = useWorldTimelineStore(state => state.addChaptersToVolume);
-  const moveEvent = useWorldTimelineStore(state => state.moveEvent);
-  const currentProjectId = useProjectStore(state => state.currentProjectId);
+  const timeline = useWorldTimelineStore((state: WorldTimelineState) => state.timeline);
+  const isLoading = useWorldTimelineStore((state: WorldTimelineState) => state.isLoading);
+  const loadTimeline = useWorldTimelineStore((state: WorldTimelineState) => state.loadTimeline);
+  const addEvent = useWorldTimelineStore((state: WorldTimelineState) => state.addEvent);
+  const updateEvent = useWorldTimelineStore((state: WorldTimelineState) => state.updateEvent);
+  const deleteEvent = useWorldTimelineStore((state: WorldTimelineState) => state.deleteEvent);
+  const addChapter = useWorldTimelineStore((state: WorldTimelineState) => state.addChapter);
+  const updateChapter = useWorldTimelineStore((state: WorldTimelineState) => state.updateChapter);
+  const addVolume = useWorldTimelineStore((state: WorldTimelineState) => state.addVolume);
+  const updateVolume = useWorldTimelineStore((state: WorldTimelineState) => state.updateVolume);
+  const deleteVolume = useWorldTimelineStore((state: WorldTimelineState) => state.deleteVolume);
+  const deleteChapter = useWorldTimelineStore((state: WorldTimelineState) => state.deleteChapter);
+  const getEvents = useWorldTimelineStore((state: WorldTimelineState) => state.getEvents);
+  const getChapters = useWorldTimelineStore((state: WorldTimelineState) => state.getChapters);
+  const getVolumes = useWorldTimelineStore((state: WorldTimelineState) => state.getVolumes);
+  const getStoryLines = useWorldTimelineStore((state: WorldTimelineState) => state.getStoryLines);
+  const getTimeRange = useWorldTimelineStore((state: WorldTimelineState) => state.getTimeRange);
+  const addChaptersToVolume = useWorldTimelineStore((state: WorldTimelineState) => state.addChaptersToVolume);
+  const moveEvent = useWorldTimelineStore((state: WorldTimelineState) => state.moveEvent);
+  const currentProjectId = useProjectStore((state: ProjectState) => state.currentProjectId);
 
   // 伏笔数据 - 从 chapterAnalysisStore 获取
-  const foreshadowingList = useChapterAnalysisStore(state => state.data.foreshadowing);
-  const addForeshadowingToStore = useChapterAnalysisStore(state => state.addForeshadowing);
-  const updateForeshadowingInStore = useChapterAnalysisStore(state => state.updateForeshadowing);
-  const deleteForeshadowingFromStore = useChapterAnalysisStore(state => state.deleteForeshadowing);
+  const foreshadowingList = useChapterAnalysisStore((state: ChapterAnalysisState) => state.data.foreshadowing);
+  const addForeshadowingToStore = useChapterAnalysisStore((state: ChapterAnalysisState) => state.addForeshadowing);
+  const updateForeshadowingInStore = useChapterAnalysisStore((state: ChapterAnalysisState) => state.updateForeshadowing);
+  const deleteForeshadowingFromStore = useChapterAnalysisStore((state: ChapterAnalysisState) => state.deleteForeshadowing);
   const foreshadowingMap = useMemo<Map<string, ForeshadowingItem>>(() =>
-    new Map(foreshadowingList.map(f => [f.id, f])),
+    new Map(foreshadowingList.map((f: ForeshadowingItem) => [f.id, f])),
     [foreshadowingList]
   );
 
@@ -1254,7 +1254,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   // 稳定的编辑回调 - 供 EventCard 使用
   const handleEventEdit = useCallback((eventId: string) => {
     const events = getEvents();
-    const event = events.find(e => e.id === eventId);
+    const event = events.find((e: TimelineEvent) => e.id === eventId);
     if (!event) return;
     handleStartEditEvent(event);
   }, [getEvents, handleStartEditEvent]);
@@ -1344,7 +1344,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
     // 获取目标事件的位置
     const events = getEvents();
-    const targetIndex = events.findIndex(ev => ev.id === targetEventId);
+    const targetIndex = events.findIndex((ev: TimelineEvent) => ev.id === targetEventId);
     if (targetIndex !== -1) {
       moveEvent(draggedEventId, targetIndex);
     }
@@ -1413,7 +1413,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     if (!title.trim()) return null;
 
     const existingVolumes = getVolumes();
-    const maxIndex = existingVolumes.reduce((max, v) => Math.max(max, v.volumeIndex), 0);
+    const maxIndex = existingVolumes.reduce((max: number, v: VolumeGroup) => Math.max(max, v.volumeIndex), 0);
     const nextIndex = maxIndex + 1;
 
     const result = addVolume({
@@ -1467,12 +1467,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
   // === Performance: Map lookups for O(1) access ===
   const storyLineMap = useMemo(() =>
-    new Map<string, StoryLine>(cachedStoryLines.map(s => [s.id, s])),
+    new Map<string, StoryLine>(cachedStoryLines.map((s: StoryLine) => [s.id, s])),
     [cachedStoryLines]
   );
 
   const chapterMap = useMemo(() =>
-    new Map<string, ChapterGroup>(cachedChapters.map(c => [c.id, c])),
+    new Map<string, ChapterGroup>(cachedChapters.map((c: ChapterGroup) => [c.id, c])),
     [cachedChapters]
   );
 
@@ -1486,7 +1486,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   // === Performance: Memoize chaptersByVolume grouping ===
   const chaptersByVolume = useMemo(() => {
     const map = new Map<string | undefined, ChapterGroup[]>();
-    cachedChaptersList.forEach(ch => {
+    cachedChaptersList.forEach((ch: ChapterGroup) => {
       const vid = ch.volumeId || undefined;
       if (!map.has(vid)) map.set(vid, []);
       map.get(vid)!.push(ch);
@@ -1520,7 +1520,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       extraInfo?: string;
     }>();
 
-    cachedEvents.forEach(event => {
+    cachedEvents.forEach((event: TimelineEvent) => {
       let key: string;
       let label: string;
 
@@ -1896,7 +1896,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     return (
                       <div className="space-y-4">
                         {/* 有卷分组的章节 */}
-                        {cachedVolumesList.map(volume => {
+                        {cachedVolumesList.map((volume: VolumeGroup) => {
                           const volumeChapters = chaptersByVolume.get(volume.id) || [];
                           return (
                             <VolumeSection

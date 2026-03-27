@@ -854,9 +854,9 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     className={`group flex flex-col ${isUser ? 'items-end' : 'items-start'} relative`}
                 >
                     {/* Loop Count Display for Model Messages */}
-                    {isModel && msg.metadata?.loopCount && (
+                    {isModel && !!msg.metadata?.loopCount && (
                         <div className="text-[10px] text-gray-500 mb-1 px-1 font-mono">
-                            轮次 {msg.metadata.loopCount}
+                            轮次 {String(msg.metadata.loopCount)}
                         </div>
                     )}
 
@@ -906,22 +906,22 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         )}
 
                         {/* Response Warnings - 显示在 Model 消息下方 */}
-                        {isModel && msg.metadata?.responseWarnings && (
-                            <ResponseWarningBadge warnings={msg.metadata.responseWarnings} />
+                        {isModel && !!msg.metadata?.responseWarnings && (
+                            <ResponseWarningBadge warnings={msg.metadata.responseWarnings as string[]} />
                         )}
                     </div>
 
                     {/* API Metadata Display - 仅 Debug 模式显示 */}
-                    {isDebugMode && msg.metadata?.apiMetadata && (
+                    {isDebugMode && !!msg.metadata?.apiMetadata && (
                         <APIInputView
-                            apiMetadata={msg.metadata.apiMetadata}
+                            apiMetadata={msg.metadata.apiMetadata as any}
                             label="API 调用详情"
                         />
                     )}
 
                     {/* Debug Payload Display - 仅 Debug 模式显示 (LLM 输入详情) */}
-                    {isDebugMode && msg.metadata?.debugPayload && (
-                        <DebugPayloadView debugPayload={msg.metadata.debugPayload} />
+                    {isDebugMode && !!msg.metadata?.debugPayload && (
+                        <DebugPayloadView debugPayload={msg.metadata.debugPayload as DebugPayload} />
                     )}
 
                     {/* Action Buttons */}

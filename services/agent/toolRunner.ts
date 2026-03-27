@@ -530,23 +530,24 @@ export const executeTool = async (
 export const executeApprovedChange = (change: PendingChange, actions: ToolContext['actions']): string => {
     try {
         let result = '';
+        const a = change.args as Record<string, unknown>;
 
         switch (change.toolName) {
             case 'createFile':
                 // Use newContent (may have been enriched, e.g. auto-injected characters)
-                result = actions.createFile(change.args.path, change.newContent ?? change.args.content);
+                result = actions.createFile(a.path as string, (change.newContent ?? a.content) as string);
                 break;
             case 'updateFile':
-                result = actions.updateFile(change.args.path, change.args.content);
+                result = actions.updateFile(a.path as string, a.content as string);
                 break;
             case 'patchFile':
-                result = actions.patchFile(change.args.path, change.args.edits);
+                result = actions.patchFile(a.path as string, a.edits as BatchEdit[]);
                 break;
             case 'deleteFile':
-                result = actions.deleteFile(change.args.path);
+                result = actions.deleteFile(a.path as string);
                 break;
             case 'renameFile':
-                result = actions.renameFile(change.args.oldPath, change.args.newName);
+                result = actions.renameFile(a.oldPath as string, a.newName as string);
                 break;
             default:
                 return 'Error: Unknown tool for approval';

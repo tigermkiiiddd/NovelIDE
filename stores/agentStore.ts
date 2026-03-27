@@ -1,6 +1,13 @@
 
 import { create } from 'zustand';
-import { DEFAULT_AI_CONFIG } from '../types';
+import {
+  AIConfig,
+  ChatSession,
+  ChatMessage,
+  TodoItem,
+  PendingChange,
+  DEFAULT_AI_CONFIG,
+} from '../types';
 import { dbAPI } from '../services/persistence';
 import { generateId } from '../services/fileSystem';
 
@@ -166,8 +173,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }
       },
 
-      createSession: (projectId, initialTitle = '新会话') => {
-        const currentSessions = get().sessions || [];
+      createSession: (projectId: string, initialTitle = '新会话') => {
+        const currentSessions: ChatSession[] = get().sessions || [];
         const newSession: ChatSession = {
           id: generateId(),
           projectId,
@@ -268,13 +275,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       editMessageContent: (messageId, newText) => {
         const session = get().sessions.find(s => s.id === get().currentSessionId);
-        const msgExists = session?.messages.some(m => m.id === messageId);
+        const msgExists = session?.messages.some((m: ChatMessage) => m.id === messageId);
         if (!msgExists) {
-          console.warn('[editMessageContent] 消息不存在:', messageId, '当前消息IDs:', session?.messages.map(m => m.id));
+          console.warn('[editMessageContent] 消息不存在:', messageId, '当前消息IDs:', session?.messages.map((m: ChatMessage) => m.id));
         }
         get().updateCurrentSession(session => ({
             ...session,
-            messages: session.messages.map(m => m.id === messageId ? { ...m, text: newText } : m),
+            messages: session.messages.map((m: ChatMessage) => m.id === messageId ? { ...m, text: newText } : m),
             lastModified: Date.now()
         }));
       },
@@ -283,14 +290,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       updateMessageMetadata: (messageId, metadata) => {
         get().updateCurrentSession(session => ({
             ...session,
-            messages: session.messages.map(m => m.id === messageId ? { ...m, metadata: { ...m.metadata, ...metadata } } : m),
+            messages: session.messages.map((m: ChatMessage) => m.id === messageId ? { ...m, metadata: { ...m.metadata, ...metadata } } : m),
             lastModified: Date.now()
         }));
       },
 
       deleteMessagesFrom: (startMessageId, inclusive) => {
         get().updateCurrentSession(session => {
-            const index = session.messages.findIndex(m => m.id === startMessageId);
+            const index = session.messages.findIndex((m: ChatMessage) => m.id === startMessageId);
             if (index === -1) return session;
 
             const cutIndex = inclusive ? index : index + 1;
@@ -337,7 +344,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       
       updatePendingChange: (id, updates) => {
         const { currentSessionId, pendingChanges } = get();
-        const newPendingChanges = pendingChanges.map(c => c.id === id ? { ...c, ...updates } : c);
+        const newPendingChanges = pendingChanges.map((c: PendingChange) => c.id === id ? { ...c, ...updates } : c);
         set({ pendingChanges: newPendingChanges });
         // 持久化到 IndexedDB
         if (currentSessionId) {
@@ -347,7 +354,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       removePendingChange: (id) => {
         const { currentSessionId, pendingChanges, reviewingChangeId } = get();
-        const newPendingChanges = pendingChanges.filter(c => c.id !== id);
+        const newPendingChanges = pendingChanges.filter((c: PendingChange) => c.id !== id);
         set({
           pendingChanges: newPendingChanges,
           reviewingChangeId: reviewingChangeId === id ? null : reviewingChangeId

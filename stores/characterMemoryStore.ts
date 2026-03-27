@@ -10,15 +10,18 @@ import {
   ChapterAnalysis,
   FileType,
   LongTermMemory,
+  SkillValue,
+  AttributeValue,
 } from '../types';
 import { createPersistingStore } from './createPersistingStore';
+import type { UseBoundStore, StoreApi } from 'zustand';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
 import { dbAPI } from '../services/persistence';
 import { toast } from './toastStore';
 import { useEntityVersionStore } from './entityVersionStore';
 
-interface CharacterMemoryState {
+export interface CharacterMemoryState {
   profiles: CharacterProfileV2[];
   isInitialized: boolean;
   loadProfiles: () => Promise<void>;
@@ -230,7 +233,7 @@ const upsertProfile = (
   return nextProfiles;
 };
 
-export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryState>(
+export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryState>> = createPersistingStore<CharacterMemoryState>(
   'characterMemoryStore',
   {
     profiles: [],
@@ -459,7 +462,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
       }
 
       console.log('[CharacterMemoryStore] 更新 state，角色:', profile.characterName);
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, () => profile),
       }));
 
@@ -481,7 +484,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
     updateProfile: (request: CharacterProfileUpdateRequest) => {
       const { characterName, chapterRef, updates } = request;
 
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           const now = Date.now();
 
@@ -553,10 +556,10 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
     // 删除角色档案
     deleteProfile: (characterName) => {
       console.log('[CharacterMemoryStore] 删除档案:', characterName);
-      useCharacterMemoryStore.setState((state) => {
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => {
         const normalized = normalizeName(characterName);
         const newProfiles = state.profiles.filter(
-          (profile) => normalizeName(profile.characterName) !== normalized
+          (profile: CharacterProfileV2) => normalizeName(profile.characterName) !== normalized
         );
         console.log('[CharacterMemoryStore] 删除后剩余档案数量:', newProfiles.length);
 
@@ -564,7 +567,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
         const projectId = useProjectStore.getState().currentProjectId;
         if (projectId) {
           const profileToDelete = state.profiles.find(
-            (p) => normalizeName(p.characterName) === normalized
+            (p: CharacterProfileV2) => normalizeName(p.characterName) === normalized
           );
           if (profileToDelete) {
             dbAPI.deleteCharacterProfile(profileToDelete.characterId).catch((err) => {
@@ -579,7 +582,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     // 归档条目
     archiveEntry: (characterName, category, subCategory, entryIndex) => {
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           if (!isAccumulateCategory(category)) return profile;
 
@@ -606,7 +609,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     // 取消归档
     unarchiveEntry: (characterName, category, subCategory, entryIndex) => {
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           if (!isAccumulateCategory(category)) return profile;
 
@@ -623,7 +626,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     // 添加小分类
     addSubCategory: (characterName, category, subCategory) => {
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           if (!profile.categories[category]) return profile;
 
@@ -647,7 +650,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     // 删除小分类
     removeSubCategory: (characterName, category, subCategory) => {
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           if (!profile.categories[category]) return profile;
 
@@ -661,7 +664,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
     upsertStateSnapshots: (analysis) => {
       const chapterRef = analysis.chapterTitle || analysis.chapterPath;
 
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: analysis.characterStates.reduce((profiles, charState) => {
           return upsertProfile(profiles, charState.characterName, (profile) => {
             const now = Date.now();
@@ -746,7 +749,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     // 从长期记忆添加记忆条目
     upsertMemoryFromLongTerm: (memory, characterName) => {
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           const now = Date.now();
           const entries = profile.categories['记忆'].subCategories['重要信息'] as AccumulateEntry[] | undefined;
@@ -779,7 +782,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
 
     // 移除记忆引用
     removeMemoryRef: (memoryId, characterName) => {
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: upsertProfile(state.profiles, characterName, (profile) => {
           const entries = profile.categories['记忆'].subCategories['重要信息'] as AccumulateEntry[] | undefined;
           if (entries) {
@@ -810,8 +813,8 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
       }
 
       // 应用快照
-      useCharacterMemoryStore.setState((state) => ({
-        profiles: state.profiles.map((p) =>
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
+        profiles: state.profiles.map((p: CharacterProfileV2) =>
           p.characterId === snapshot.characterId ? { ...snapshot, updatedAt: Date.now() } : p
         ),
       }));
@@ -824,7 +827,7 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
       await saveProfilesToFiles(useCharacterMemoryStore.getState().profiles);
     },
   },
-  async (state) => {
+  async (state: CharacterMemoryState) => {
     await saveProfilesToFiles(state.profiles);
   },
   0

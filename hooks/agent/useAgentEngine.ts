@@ -1,6 +1,6 @@
 
 import { useRef, useCallback, useMemo } from 'react';
-import { ChatMessage, FileNode, ProjectMeta, TodoItem, PlanNote } from '../../types';
+import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote } from '../../types';
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
 import { allTools, getToolsForMode } from '../../services/agent/tools/index';
@@ -438,9 +438,9 @@ export const useAgentEngine = ({
 
           if (signal.aborted) {
             // 更新所有 UI 消息为已中止
-            useAgentStore.getState().updateCurrentSession(session => ({
+            useAgentStore.getState().updateCurrentSession((session: ChatSession) => ({
               ...session,
-              messages: session.messages.map(m => {
+              messages: session.messages.map((m: ChatMessage) => {
                 const result = toolResults.find(r => r.toolMsgId === m.id);
                 if (!result) return m;
                 return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: true };
@@ -451,9 +451,9 @@ export const useAgentEngine = ({
           }
 
           // 更新所有 UI 消息为完成，并把 functionResponse 挂载到对应 system 消息上
-          useAgentStore.getState().updateCurrentSession(session => ({
+          useAgentStore.getState().updateCurrentSession((session: ChatSession) => ({
             ...session,
-            messages: session.messages.map(m => {
+            messages: session.messages.map((m: ChatMessage) => {
               const result = toolResults.find(r => r.toolMsgId === m.id);
               if (!result) return m;
               return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: result.hasError };

@@ -95,7 +95,7 @@ export const useAgent = (
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
       const sysPrompt = constructSystemPrompt(files, project, todos, undefined, undefined, knowledgeNodes);
       const msgs = currentSession?.messages || [];
-      const msgsText = msgs.reduce((acc, m) => {
+      const msgsText = msgs.reduce((acc: string, m: ChatMessage) => {
           let content = m.text;
           if (m.rawParts) content += JSON.stringify(m.rawParts);
           return acc + content;

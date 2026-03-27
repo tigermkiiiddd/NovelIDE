@@ -7,7 +7,7 @@ import { generateId } from '../services/fileSystem';
 import { createInitialFileSystem } from '../services/fileSystem';
 import { getPresetById } from '../services/resources/presets';
 
-interface ProjectState {
+export interface ProjectState {
   projects: ProjectMeta[];
   currentProjectId: string | null;
   isLoading: boolean;

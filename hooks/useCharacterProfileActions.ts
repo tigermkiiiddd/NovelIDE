@@ -5,10 +5,10 @@
  * 初始化时使用 AI 分析角色卡，自动生成小分类
  */
 import { useCallback, useState } from 'react';
-import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
+import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useProjectStore } from '../stores/projectStore';
-import { CharacterCategoryName } from '../types';
+import { CharacterCategoryName, CharacterProfileV2 } from '../types';
 import { AIService } from '../services/geminiService';
 import { buildProjectOverviewPrompt } from '../utils/projectContext';
 import { ToolDefinition } from '../services/agent/types';
@@ -485,10 +485,10 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const initializeProfile = useCharacterMemoryStore(state => state.initializeProfile);
-  const getByName = useCharacterMemoryStore(state => state.getByName);
-  const updateProfile = useCharacterMemoryStore(state => state.updateProfile);
-  const deleteProfileFromStore = useCharacterMemoryStore(state => state.deleteProfile);
+  const initializeProfile = useCharacterMemoryStore((state: CharacterMemoryState) => state.initializeProfile);
+  const getByName = useCharacterMemoryStore((state: CharacterMemoryState) => state.getByName);
+  const updateProfile = useCharacterMemoryStore((state: CharacterMemoryState) => state.updateProfile);
+  const deleteProfileFromStore = useCharacterMemoryStore((state: CharacterMemoryState) => state.deleteProfile);
   const aiConfig = useAgentStore(state => state.aiConfig);
   const currentProject = useProjectStore(state => state.getCurrentProject());
 
@@ -590,7 +590,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       }
 
       // 查找在正文中提到的角色
-      const mentionedProfiles = profiles.filter(profile =>
+      const mentionedProfiles = profiles.filter((profile: CharacterProfileV2) =>
         content.includes(profile.characterName)
       );
 

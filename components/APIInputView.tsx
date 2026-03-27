@@ -25,6 +25,7 @@ interface APIMetadata {
         promptFeedback?: any;
         duration: string;
         timestamp: string;
+        rawCompletion?: any;
     };
 }
 
@@ -64,7 +65,7 @@ const APIInputView: React.FC<APIInputViewProps> = ({ apiMetadata, messageCount =
     const [isExpanded, setIsExpanded] = useState(false);
 
     // Format usage display
-    const formatUsage = (usage?: APIMetadata['response']['usage']) => {
+    const formatUsage = (usage?: NonNullable<APIMetadata['response']>['usage']) => {
         if (!usage) return 'N/A';
         const prompt = usage.prompt_tokens || 0;
         const completion = usage.completion_tokens || 0;

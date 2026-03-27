@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { UseBoundStore, StoreApi } from 'zustand';
 import {
   ChapterAnalysis,
   ChapterAnalysisData,
@@ -99,7 +100,7 @@ function isNewFormat(data: any): data is ChapterAnalysisData {
 // Store 接口定义
 // ============================================
 
-interface ChapterAnalysisState {
+export interface ChapterAnalysisState {
   // 新的扁平化数据结构
   data: ChapterAnalysisData;
 
@@ -168,7 +169,7 @@ const initialState: ChapterAnalysisData = {
   lastModified: Date.now(),
 };
 
-export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisState>(
+export const useChapterAnalysisStore: UseBoundStore<StoreApi<ChapterAnalysisState>> = createPersistingStore<ChapterAnalysisState>(
   'chapterAnalysisStore',
   {
     data: initialState,
@@ -613,12 +614,12 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
   },
 
   // 持久化回调
-  async (state) => {
+  async (state: ChapterAnalysisState) => {
     const fileStore = useFileStore.getState();
-    let analysisFile = fileStore.files.find(f => f.name === '章节分析.json');
+    let analysisFile = fileStore.files.find((f) => f.name === '章节分析.json');
 
     if (!analysisFile) {
-      const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
+      const infoFolder = fileStore.files.find((f) => f.name === '00_基础信息' && f.parentId === 'root');
       if (infoFolder) {
         analysisFile = {
           id: `analysis-${Date.now()}`,

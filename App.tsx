@@ -1,6 +1,7 @@
 
 import React, { useEffect } from 'react';
 import VConsole from 'vconsole';
+import ErrorBoundary from './components/ErrorBoundary';
 import ProjectManager from './components/ProjectManager';
 import MainLayout from './components/MainLayout';
 import ToastContainer from './components/Toast';
@@ -43,7 +44,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <ErrorBoundary>
       <ToastContainer />
       {!currentProjectId ? (
         <ProjectManager onSelectProject={handleSelectProject} />
@@ -53,6 +54,6 @@ export default function App() {
              onBack={handleBack}
         />
       )}
-    </>
+    </ErrorBoundary>
   );
 }

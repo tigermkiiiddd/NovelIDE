@@ -8,7 +8,7 @@
  * - VolumeGroup 是章节的容器
  */
 
-import { create } from 'zustand';
+import { create, UseBoundStore, StoreApi } from 'zustand';
 import {
   WorldTimeline,
   TimelineEvent,
@@ -24,7 +24,7 @@ import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
 
-interface WorldTimelineState {
+export interface WorldTimelineState {
   timeline: WorldTimeline | null;
   isLoading: boolean;
 
@@ -69,8 +69,6 @@ interface WorldTimelineState {
 const generateId = () => `timeline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
 // === Time Utilities ===
-
-import { StoryTimeStamp } from '../types';
 
 /**
  * 将时间戳转换为总小时数（用于比较）
@@ -319,7 +317,7 @@ const DEFAULT_STORYLINE: StoryLine = {
   isMain: true
 };
 
-export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
+export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> = createPersistingStore<WorldTimelineState>(
   'worldTimelineStore',
   {
     timeline: null,
@@ -1013,7 +1011,6 @@ export const useWorldTimelineStore = createPersistingStore<WorldTimelineState>(
       timelineFile.lastModified = Date.now();
       console.log('[WorldTimelineStore] 更新 outline.json');
     } else {
-      const { FileType } = await import('../types');
       timelineFile = {
         id: `outline-${Date.now()}`,
         parentId: timelineFolder.id,

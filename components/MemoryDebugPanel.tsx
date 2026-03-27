@@ -206,7 +206,6 @@ const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ session, onClose })
       [ToolType.DELETE_FILE]: 'deleteFile',
       [ToolType.LIST_FILES]: 'listFiles',
       [ToolType.MANAGE_TODOS]: 'manageTodos',
-      [ToolType.THINKING]: 'thinking',
       [ToolType.CALL_SEARCH_AGENT]: 'search',
       [ToolType.MANAGE_PLAN_NOTE]: 'planNote',
       [ToolType.UPDATE_PROJECT_META]: 'meta',

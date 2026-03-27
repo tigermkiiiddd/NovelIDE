@@ -422,6 +422,17 @@ ${input.content.slice(0, 6000)}
   }),
 
   handleTextResponse: () => '请使用工具查询现有知识，然后调用 submit_decision 提交决策。',
+
+  executeCustomTool: async (toolName: string, args: any) => {
+    switch (toolName) {
+      case 'list_knowledge_metadata':
+        return executeListMetadata();
+      case 'query_knowledge':
+        return executeQueryKnowledge(args);
+      default:
+        return null as any;
+    }
+  },
 };
 
 // ==================== 主 Agent ====================
@@ -451,15 +462,17 @@ export class KnowledgeDecisionAgent extends BaseSubAgent<
   }
 
   async run(
+    aiService: AIService,
     input: KnowledgeDecisionInput,
-    options?: { signal?: AbortSignal; onLog?: (msg: string) => void }
+    _context?: any,
+    onLog?: (msg: string) => void,
+    signal?: AbortSignal
   ): Promise<KnowledgeDecisionOutput> {
-    const onLog = options?.onLog;
 
     // 阶段一：快速评估
     onLog?.('[阶段一] 快速评估内容...');
     const quickEvalAgent = new BaseSubAgent(quickEvalConfig);
-    const quickResult = await quickEvalAgent.run(input, options);
+    const quickResult = await quickEvalAgent.run(aiService, input, undefined, onLog, signal);
 
     if (!quickResult.shouldProcess) {
       onLog?.(`[跳过] ${quickResult.reason}`);
@@ -479,19 +492,13 @@ export class KnowledgeDecisionAgent extends BaseSubAgent<
       quickEvalResult: quickResult,
     };
 
-    const decisionResult = await decisionAgent.run(decisionInput, {
-      ...options,
-      toolsExecutor: async (toolName, args) => {
-        switch (toolName) {
-          case 'list_knowledge_metadata':
-            return executeListMetadata();
-          case 'query_knowledge':
-            return executeQueryKnowledge(args as any);
-          default:
-            return null;
-        }
-      },
-    });
+    const decisionResult = await decisionAgent.run(
+      aiService,
+      decisionInput,
+      undefined,
+      onLog,
+      signal
+    );
 
     return decisionResult;
   }
@@ -499,11 +506,12 @@ export class KnowledgeDecisionAgent extends BaseSubAgent<
 
 // 便捷函数
 export const runKnowledgeDecisionAgent = (
+  aiService: AIService,
   input: KnowledgeDecisionInput,
   options?: { signal?: AbortSignal; onLog?: (msg: string) => void }
 ): Promise<KnowledgeDecisionOutput> => {
   const agent = new KnowledgeDecisionAgent();
-  return agent.run(input, options);
+  return agent.run(aiService, input, undefined, options?.onLog, options?.signal);
 };
 
 export default KnowledgeDecisionAgent;

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { FileNode } from '../types';
 import { LoaderCircle, Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit } from 'lucide-react';
+import ErrorBoundary from './ErrorBoundary';
 import Editor from './EditorRefactored';
 import AgentChat from './AgentChat';
 import Sidebar from './Sidebar';
@@ -16,8 +17,8 @@ import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
 import { usePlanStore } from '../stores/planStore';
-import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
-import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
+import { useChapterAnalysisStore, ChapterAnalysisState } from '../stores/chapterAnalysisStore';
+import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useShallow } from 'zustand/react/shallow';
 import { generateId, getNodePath } from '../services/fileSystem';
@@ -61,9 +62,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const currentProject = useProjectStore(state => state.getCurrentProject());
   const updateProject = useProjectStore(state => state.updateProject);
   const loadFiles = useFileStore(state => state.loadFiles);
-  const loadProjectAnalyses = useChapterAnalysisStore(state => state.loadProjectAnalyses);
-  const triggerExtraction = useChapterAnalysisStore(state => state.triggerExtraction);
-  const loadProjectCharacterProfiles = useCharacterMemoryStore(state => state.loadProjectProfiles);
+  const loadProjectAnalyses = useChapterAnalysisStore((state: ChapterAnalysisState) => state.loadProjectAnalyses);
+  const triggerExtraction = useChapterAnalysisStore((state: ChapterAnalysisState) => state.triggerExtraction);
+  const loadProjectCharacterProfiles = useCharacterMemoryStore((state: CharacterMemoryState) => state.loadProjectProfiles);
   const ensureKnowledgeGraphInitialized = useKnowledgeGraphStore(state => state.ensureInitialized);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
@@ -303,18 +304,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   return (
     <div className="flex h-[100dvh] bg-gray-950 text-gray-100 font-sans overflow-hidden relative selection:bg-blue-500/30">
       
-      <Sidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        onBackToProjects={onBack}
-        onOpenSettings={() => {
-            setIsProjectOverviewOpen(true);
-            if (isMobile) setSidebarOpen(false);
-        }}
-        width={sidebarWidth}
-        isMobile={isMobile}
-        onAnalyzeFile={handleAnalyzeFile}
-      />
+      <ErrorBoundary>
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          onBackToProjects={onBack}
+          onOpenSettings={() => {
+              setIsProjectOverviewOpen(true);
+              if (isMobile) setSidebarOpen(false);
+          }}
+          width={sidebarWidth}
+          isMobile={isMobile}
+          onAnalyzeFile={handleAnalyzeFile}
+        />
+      </ErrorBoundary>
 
       {/* Sidebar Resizer (Desktop Only) */}
       {isSidebarOpen && !isMobile && (
@@ -373,6 +376,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         </div>
 
         {/* Editor Container */}
+        <ErrorBoundary>
         <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
           {isKnowledgeGraphOpen ? (
             <KnowledgeTreeView
@@ -408,6 +412,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             <Editor className="w-full h-full" />
           )}
         </div>
+        </ErrorBoundary>
 
         {/* Status Bar */}
         <StatusBar
@@ -439,6 +444,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       )}
 
       {/* Agent Panel */}
+      <ErrorBoundary>
       <AgentChat
         messages={messages}
         onSendMessage={sendMessage}
@@ -450,7 +456,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         onClose={() => setChatOpen(false)}
         todos={todos}
         sessions={sessions}
-        currentSessionId={currentSessionId}
+        currentSessionId={currentSessionId ?? ''}
         onCreateSession={createNewSession}
         onSwitchSession={switchSession}
         onDeleteSession={deleteSession}
@@ -469,6 +475,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         if (isMobile) setChatOpen(false);
       }}
       />
+      </ErrorBoundary>
 
       <ProjectOverview
         project={currentProject}

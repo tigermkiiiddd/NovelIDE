@@ -7,7 +7,9 @@ export enum FileType {
 export interface FileMetadata {
   summarys?: string[];
   tags?: string[];
-  [key: string]: any; // Allow other YAML fields like 'name', 'description' for skills
+  name?: string;
+  description?: string;
+  [key: string]: unknown; // Allow other YAML fields
 }
 
 export interface FileNode {
@@ -20,6 +22,30 @@ export interface FileNode {
   lastModified: number;
 }
 
+// --- API Content Part Types (for rawParts) ---
+
+export interface FunctionCallPart {
+  functionCall: {
+    name: string;
+    args: Record<string, unknown>;
+    id?: string;
+  };
+}
+
+export interface FunctionResponsePart {
+  functionResponse: {
+    name: string;
+    response: unknown;
+    id?: string;
+  };
+}
+
+export interface TextPart {
+  text: string;
+}
+
+export type ContentPart = FunctionCallPart | FunctionResponsePart | TextPart;
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'model' | 'system';
@@ -28,7 +54,7 @@ export interface ChatMessage {
   isToolOutput?: boolean; // 标记是否为工具执行结果的反馈
   skipInHistory?: boolean; // 标记是否跳过 AI 历史记录（如停止通知、中断提示等）
   isError?: boolean; // 标记工具执行是否失败
-  rawParts?: any[]; // Stores the raw API parts (ContentPart[]) to preserve FunctionCalls/Responses in history
+  rawParts?: ContentPart[]; // Stores the raw API parts to preserve FunctionCalls/Responses in history
   isSubAgentOutput?: boolean; // 标记是否为 subagent 的输出
   subAgentName?: string; // subagent 名称
   metadata?: {
@@ -39,15 +65,15 @@ export interface ChatMessage {
     // AI 响应元数据
     responseMetadata?: import('./types/agentErrors').AIResponseMetadata;
     // 响应警告列表
-    responseWarnings?: any[];
-    [key: string]: any;
+    responseWarnings?: string[];
+    [key: string]: unknown;
   };
 }
 
 export interface ToolCallResult {
   functionName: string;
-  args: any;
-  result: any;
+  args: Record<string, unknown>;
+  result: string;
 }
 
 export interface TodoItem {
@@ -166,7 +192,7 @@ export interface EditIncrement {
 export interface PendingChange {
   id: string;
   toolName: string;
-  args: any;
+  args: Record<string, unknown>;
   fileName: string;
   fileId?: string;  // 用于可靠关联文件的唯一ID
   originalContent: string | null; // Null for new files
@@ -174,6 +200,7 @@ export interface PendingChange {
   timestamp: number;
   description: string; // Summary for UI
   editDiffs?: EditDiff[];  // Granular edit-level diffs for patchFile operations
+  metadata?: FileMetadata; // File metadata for virtual file creation
 }
 
 // --- Diff Session State (for Editor's patch queue system) ---

@@ -5,7 +5,8 @@ import FileExplorer from './FileExplorer';
 import FileSearch from './FileSearch';
 import { useFileStore } from '../stores/fileStore';
 import { useShallow } from 'zustand/react/shallow';
-import { getNodePath, FileNode } from '../services/fileSystem';
+import { getNodePath } from '../services/fileSystem';
+import { FileNode } from '../types';
 
 interface SidebarProps {
   isOpen: boolean;

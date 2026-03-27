@@ -16,9 +16,6 @@ export enum ToolType {
   // 任务管理
   MANAGE_TODOS = 'manageTodos',
 
-  // 思考工具（已移除）
-  // THINKING = 'thinking',
-
   // 搜索
   CALL_SEARCH_AGENT = 'call_search_agent',
 
@@ -102,9 +99,6 @@ const PARAM_VALUE_CONFIG: Record<ToolType, Record<string, { type: ContentType; v
     todo: { type: ContentType.TASK, value: ContentValue.MEDIUM, decayRounds: 4 },
     task: { type: ContentType.TASK, value: ContentValue.MEDIUM, decayRounds: 4 }
   },
-  [ToolType.THINKING]: {
-    thought: { type: ContentType.THOUGHT, value: ContentValue.HIGH, decayRounds: -1 } // -1 表示永久保留
-  },
   [ToolType.CALL_SEARCH_AGENT]: {
     query: { type: ContentType.QUERY, value: ContentValue.MEDIUM, decayRounds: 3 }
   },
@@ -147,9 +141,6 @@ const RESULT_VALUE_CONFIG: Record<ToolType, Record<string, { type: ContentType; 
   },
   [ToolType.MANAGE_TODOS]: {
     todos: { type: ContentType.LIST, value: ContentValue.MEDIUM, decayRounds: 4 }
-  },
-  [ToolType.THINKING]: {
-    thought: { type: ContentType.THOUGHT, value: ContentValue.HIGH, decayRounds: -1 }
   },
   [ToolType.CALL_SEARCH_AGENT]: {
     results: { type: ContentType.LIST, value: ContentValue.MEDIUM, decayRounds: 3 }
@@ -194,15 +185,15 @@ export const extractToolCallInfo = (message: ChatMessage): ToolCallInfo | null =
   }
 
   // 查找 functionCall 或 functionResponse
-  const functionCall = message.rawParts.find(part => part?.functionCall);
-  const functionResponse = message.rawParts.find(part => part?.functionResponse);
+  const functionCall = message.rawParts.find((part): part is import('../../types').FunctionCallPart => 'functionCall' in part);
+  const functionResponse = message.rawParts.find((part): part is import('../../types').FunctionResponsePart => 'functionResponse' in part);
 
   if (functionCall) {
     const fc = functionCall.functionCall;
     return {
       toolName: getToolType(fc.name),
       functionName: fc.name,
-      args: typeof fc.arguments === 'string' ? JSON.parse(fc.arguments) : fc.arguments
+      args: typeof fc.args === 'string' ? JSON.parse(fc.args) : fc.args
     };
   }
 
@@ -301,13 +292,6 @@ export const getToolDecayConfigs = (toolType: ToolType): ToolDecayConfigs => {
         call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
         content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // todo/task 8轮
         response: { value: ContentValue.MEDIUM, decayRounds: 8 }  // todos 8轮
-      };
-
-    case ToolType.THINKING:
-      return {
-        call: { value: ContentValue.HIGH, decayRounds: -1 },
-        content: { value: ContentValue.HIGH, decayRounds: -1 }, // thought 永久
-        response: { value: ContentValue.HIGH, decayRounds: -1 }
       };
 
     case ToolType.CALL_SEARCH_AGENT:

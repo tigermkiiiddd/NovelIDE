@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { EntityVersionHistory } from './EntityVersionHistory';
 import { useEntityVersionStore } from '../stores/entityVersionStore';
-import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
+import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
 import {
   CharacterProfileV2,
   CharacterCategoryName,
@@ -171,7 +171,7 @@ const CategoryCard: React.FC<{
   const color = CATEGORY_COLORS[categoryName];
   const isOverwrite = category.type === '覆盖';
   const subCategoryCount = Object.keys(category.subCategories).length;
-  const addSubCategory = useCharacterMemoryStore((state) => state.addSubCategory);
+  const addSubCategory = useCharacterMemoryStore((state: CharacterMemoryState) => state.addSubCategory);
 
   // 计算条目数量
   const entryCount = useMemo(() => {
@@ -678,9 +678,9 @@ const SubCategoryView: React.FC<{
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newName, setNewName] = useState(subCategoryName);
-  const updateProfile = useCharacterMemoryStore((state) => state.updateProfile);
-  const removeSubCategory = useCharacterMemoryStore((state) => state.removeSubCategory);
-  const addSubCategory = useCharacterMemoryStore((state) => state.addSubCategory);
+  const updateProfile = useCharacterMemoryStore((state: CharacterMemoryState) => state.updateProfile);
+  const removeSubCategory = useCharacterMemoryStore((state: CharacterMemoryState) => state.removeSubCategory);
+  const addSubCategory = useCharacterMemoryStore((state: CharacterMemoryState) => state.addSubCategory);
 
   // 重命名子分类
   const handleRename = () => {
@@ -695,7 +695,7 @@ const SubCategoryView: React.FC<{
     addSubCategory(characterName, categoryName, trimmedName);
 
     // 2. 复制内容到新子分类
-    useCharacterMemoryStore.setState((state) => {
+    useCharacterMemoryStore.setState((state: CharacterMemoryState) => {
       const profile = state.profiles.find(p => p.characterName === characterName);
       if (!profile) return state;
 
@@ -758,7 +758,7 @@ const SubCategoryView: React.FC<{
       entries[actualIndex].value = newValue;
       entries[actualIndex].updatedAt = Date.now();
       // 触发更新
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: state.profiles.map(p =>
           p.characterName === characterName ? { ...p, updatedAt: Date.now() } : p
         ),
@@ -776,7 +776,7 @@ const SubCategoryView: React.FC<{
     if (actualIndex >= 0) {
       entries.splice(actualIndex, 1);
       // 触发更新
-      useCharacterMemoryStore.setState((state) => ({
+      useCharacterMemoryStore.setState((state: CharacterMemoryState) => ({
         profiles: state.profiles.map(p =>
           p.characterName === characterName ? { ...p, updatedAt: Date.now() } : p
         ),
@@ -1232,18 +1232,18 @@ const EmptyInline: React.FC<{ text: string }> = ({ text }) => (
 );
 
 export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ filePath, content }) => {
-  const profiles = useCharacterMemoryStore((state) => state.profiles);
+  const profiles = useCharacterMemoryStore((state: CharacterMemoryState) => state.profiles);
   const characterName = useMemo(() => deriveCharacterName(filePath), [filePath]);
   const fallbackProfile = useMemo(() => parseFallbackProfile(content), [content]);
   const profile = useMemo(
     () =>
       profiles.find(
-        (item) => item.characterName.trim().toLowerCase() === characterName.trim().toLowerCase()
+        (item: CharacterProfileV2) => item.characterName.trim().toLowerCase() === characterName.trim().toLowerCase()
       ) || fallbackProfile,
     [characterName, fallbackProfile, profiles]
   );
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const restoreProfileFromVersion = useCharacterMemoryStore((state) => state.restoreProfileFromVersion);
+  const restoreProfileFromVersion = useCharacterMemoryStore((state: CharacterMemoryState) => state.restoreProfileFromVersion);
 
   if (!profile) {
     return (
