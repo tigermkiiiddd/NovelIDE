@@ -3,13 +3,31 @@ import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
 import { useEntityVersionStore } from '../stores/entityVersionStore';
-import { ChapterAnalysis, PlotKeyPoint, CharacterState, ForeshadowingItem } from '../types';
-import { Plus, Trash2, Edit2, X, ChevronDown, ChevronRight, BookOpen, User, Sparkles, Zap, History } from 'lucide-react';
+import {
+  ForeshadowingItem,
+  ForeshadowingDuration,
+  ChapterCharacterState,
+  ChapterPlotKeyPoint,
+} from '../types';
+import { Plus, Trash2, Edit2, X, User, Sparkles, Zap, History, Clock, Check } from 'lucide-react';
 import { EntityVersionHistory } from './EntityVersionHistory';
 
-type ViewMode = 'plot' | 'character' | 'foreshadowing';
+type ViewMode = 'foreshadowing' | 'character' | 'plot';
 
-// ==================== 样式常量（与 CharacterProfileView 统一） ====================
+// 伏笔时长颜色映射
+const DURATION_COLORS: Record<ForeshadowingDuration, string> = {
+  short_term: '#4ade80',  // 短期 - 绿色
+  mid_term: '#f59e0b',    // 中期 - 橙色
+  long_term: '#f472b6',   // 长期 - 粉色
+};
+
+const DURATION_LABELS: Record<ForeshadowingDuration, string> = {
+  short_term: '短期',
+  mid_term: '中期',
+  long_term: '长期',
+};
+
+// ==================== 样式常量 ====================
 
 // 视图颜色映射
 const VIEW_COLORS: Record<ViewMode, string> = {
@@ -35,7 +53,7 @@ const chapterCardStyle: React.CSSProperties = {
   boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
 };
 
-// Pill 按钮样式（版本历史等）
+// Pill 按钮样式
 const pillButtonStyle = (color: string): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
@@ -82,16 +100,46 @@ const tagStyle: React.CSSProperties = {
   fontSize: 11,
 };
 
+// 操作按钮样式
+const actionButtonStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 6,
+  backgroundColor: 'transparent',
+  border: '1px solid rgba(148, 163, 184, 0.16)',
+  borderRadius: 6,
+  color: '#94a3b8',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+};
+
 export const ReadingLightView: React.FC = () => {
   const getCurrentProject = useProjectStore(state => state.getCurrentProject);
   const project = getCurrentProject();
-  const { analyses, addAnalysis, updateAnalysis, deleteAnalysis } = useChapterAnalysisStore();
   const fileStore = useFileStore();
 
+  const {
+    data,
+    // 新的 CRUD 方法
+    addForeshadowing,
+    updateForeshadowing,
+    deleteForeshadowing,
+    addCharacterState,
+    updateCharacterState,
+    deleteCharacterState,
+    addPlotKeyPoint,
+    updatePlotKeyPoint,
+    deletePlotKeyPoint,
+  } = useChapterAnalysisStore();
+
   const [viewMode, setViewMode] = useState<ViewMode>('foreshadowing');
-  const [editMode, setEditMode] = useState<'none' | 'add' | 'edit'>('none');
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [versionHistoryAnalysis, setVersionHistoryAnalysis] = useState<ChapterAnalysis | null>(null);
+
+  // 编辑状态 - 分别管理三种类型
+  const [editingForeshadowing, setEditingForeshadowing] = useState<ForeshadowingItem | null>(null);
+  const [editingCharacter, setEditingCharacter] = useState<ChapterCharacterState | null>(null);
+  const [editingPlot, setEditingPlot] = useState<ChapterPlotKeyPoint | null>(null);
+  const [isAdding, setIsAdding] = useState<'foreshadowing' | 'character' | 'plot' | null>(null);
 
   // 可用的章节列表
   const availableChapters = useMemo(() => {
@@ -100,48 +148,115 @@ export const ReadingLightView: React.FC = () => {
     return fileStore.files.filter(f => f.parentId === draftFolder.id && f.name.endsWith('.md'));
   }, [fileStore.files]);
 
-  // 按章节排序的分析数据
-  const sortedAnalyses = useMemo(() => {
-    return [...analyses].sort((a, b) => a.extractedAt - b.extractedAt);
-  }, [analyses]);
-
   // 统计数据
   const stats = useMemo(() => ({
-    foreshadowing: analyses.reduce((sum, a) => sum + a.foreshadowing.length, 0),
-    characters: analyses.reduce((sum, a) => sum + a.characterStates.length, 0),
-    plots: analyses.reduce((sum, a) => sum + a.plotSummary.length, 0),
-    chapters: analyses.length,
-  }), [analyses]);
+    foreshadowing: data.foreshadowing.length,
+    characters: data.characterStates.length,
+    plots: data.plotKeyPoints.length,
+    chapters: new Set([
+      ...data.characterStates.map(s => s.chapterRef),
+      ...data.foreshadowing.map(f => f.sourceRef),
+      ...data.plotKeyPoints.map(p => p.chapterRef),
+    ]).size,
+  }), [data]);
 
-  const handleAddNew = () => {
-    setEditMode('add');
-    setEditingId(null);
+  // 获取章节标题
+  const getChapterTitle = (ref: string) => {
+    const chapter = availableChapters.find(c => c.name.replace('.md', '') === ref.split('/').pop()?.replace('.md', ''));
+    return chapter?.name.replace('.md', '') || ref.split('/').pop()?.replace('.md', '') || ref;
   };
 
-  const handleEdit = (id: string) => {
-    setEditMode('edit');
-    setEditingId(id);
+  // ========== 伏笔操作 ==========
+
+  const handleAddForeshadowing = () => {
+    setIsAdding('foreshadowing');
+    setEditingForeshadowing(null);
   };
 
-  const handleDelete = (id: string) => {
-    if (confirm('确定删除这个章节分析吗？')) {
-      deleteAnalysis(id);
+  const handleEditForeshadowing = (item: ForeshadowingItem) => {
+    setEditingForeshadowing(item);
+    setIsAdding(null);
+  };
+
+  const handleSaveForeshadowing = (item: Omit<ForeshadowingItem, 'id'> & { id?: string }) => {
+    if (item.id) {
+      updateForeshadowing(item.id, item);
+    } else {
+      addForeshadowing(item as Omit<ForeshadowingItem, 'id'>);
+    }
+    setEditingForeshadowing(null);
+    setIsAdding(null);
+  };
+
+  const handleDeleteForeshadowing = (id: string) => {
+    if (confirm('确定删除这个伏笔吗？')) {
+      deleteForeshadowing(id);
     }
   };
 
-  const handleSave = (analysis: ChapterAnalysis) => {
-    if (editMode === 'add') {
-      addAnalysis(analysis);
-    } else if (editMode === 'edit' && editingId) {
-      updateAnalysis(editingId, analysis);
-    }
-    setEditMode('none');
-    setEditingId(null);
+  // ========== 角色状态操作 ==========
+
+  const handleAddCharacter = () => {
+    setIsAdding('character');
+    setEditingCharacter(null);
   };
 
-  const handleCancel = () => {
-    setEditMode('none');
-    setEditingId(null);
+  const handleEditCharacter = (state: ChapterCharacterState) => {
+    setEditingCharacter(state);
+    setIsAdding(null);
+  };
+
+  const handleSaveCharacter = (state: Omit<ChapterCharacterState, 'id'> & { id?: string }) => {
+    if (state.id) {
+      updateCharacterState(state.id, state);
+    } else {
+      addCharacterState(state as Omit<ChapterCharacterState, 'id'>);
+    }
+    setEditingCharacter(null);
+    setIsAdding(null);
+  };
+
+  const handleDeleteCharacter = (id: string) => {
+    if (confirm('确定删除这个角色状态吗？')) {
+      deleteCharacterState(id);
+    }
+  };
+
+  // ========== 剧情关键点操作 ==========
+
+  const handleAddPlot = () => {
+    setIsAdding('plot');
+    setEditingPlot(null);
+  };
+
+  const handleEditPlot = (point: ChapterPlotKeyPoint) => {
+    setEditingPlot(point);
+    setIsAdding(null);
+  };
+
+  const handleSavePlot = (point: Omit<ChapterPlotKeyPoint, 'id'> & { id?: string }) => {
+    if (point.id) {
+      updatePlotKeyPoint(point.id, point);
+    } else {
+      addPlotKeyPoint(point as Omit<ChapterPlotKeyPoint, 'id'>);
+    }
+    setEditingPlot(null);
+    setIsAdding(null);
+  };
+
+  const handleDeletePlot = (id: string) => {
+    if (confirm('确定删除这个剧情关键点吗？')) {
+      deletePlotKeyPoint(id);
+    }
+  };
+
+  // ========== 取消编辑 ==========
+
+  const handleCancelEdit = () => {
+    setEditingForeshadowing(null);
+    setEditingCharacter(null);
+    setEditingPlot(null);
+    setIsAdding(null);
   };
 
   if (!project) {
@@ -158,6 +273,9 @@ export const ReadingLightView: React.FC = () => {
       </div>
     );
   }
+
+  const hasAnyData = data.foreshadowing.length > 0 || data.characterStates.length > 0 || data.plotKeyPoints.length > 0;
+  const isEditing = editingForeshadowing || editingCharacter || editingPlot || isAdding;
 
   return (
     <div style={{
@@ -181,7 +299,6 @@ export const ReadingLightView: React.FC = () => {
           {/* 标题行 */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {/* 图标容器 */}
               <div style={iconContainerStyle(VIEW_COLORS[viewMode])}>
                 <Zap size={18} />
               </div>
@@ -196,7 +313,11 @@ export const ReadingLightView: React.FC = () => {
             </div>
             {/* 添加按钮 */}
             <button
-              onClick={handleAddNew}
+              onClick={() => {
+                if (viewMode === 'foreshadowing') handleAddForeshadowing();
+                else if (viewMode === 'character') handleAddCharacter();
+                else if (viewMode === 'plot') handleAddPlot();
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -212,7 +333,7 @@ export const ReadingLightView: React.FC = () => {
               }}
             >
               <Plus size={16} />
-              添加分析
+              添加{viewMode === 'foreshadowing' ? '伏笔' : viewMode === 'character' ? '角色状态' : '剧情点'}
             </button>
           </div>
 
@@ -258,82 +379,86 @@ export const ReadingLightView: React.FC = () => {
           </div>
         </div>
 
-        {/* 添加/编辑表单 */}
-        {editMode !== 'none' && (
-          <AnalysisForm
-            mode={editMode}
-            editingData={editMode === 'edit' ? analyses.find(a => a.id === editingId) : undefined}
+        {/* 编辑表单 */}
+        {(isAdding === 'foreshadowing' || editingForeshadowing) && (
+          <ForeshadowingForm
+            item={editingForeshadowing}
             availableChapters={availableChapters}
-            onSave={handleSave}
-            onCancel={handleCancel}
+            onSave={handleSaveForeshadowing}
+            onCancel={handleCancelEdit}
+          />
+        )}
+
+        {(isAdding === 'character' || editingCharacter) && (
+          <CharacterForm
+            state={editingCharacter}
+            availableChapters={availableChapters}
+            onSave={handleSaveCharacter}
+            onCancel={handleCancelEdit}
+          />
+        )}
+
+        {(isAdding === 'plot' || editingPlot) && (
+          <PlotForm
+            point={editingPlot}
+            availableChapters={availableChapters}
+            onSave={handleSavePlot}
+            onCancel={handleCancelEdit}
           />
         )}
 
         {/* 内容区 */}
-        {analyses.length === 0 && editMode === 'none' ? (
+        {!hasAnyData && !isEditing ? (
           <div style={{
             ...cardStyle,
-            padding: 40,
+            padding: 48,
             textAlign: 'center',
             color: '#64748b',
           }}>
-            <div style={{ marginBottom: 12 }}>暂无章节分析数据</div>
-            <div style={{ fontSize: 13 }}>点击右上角"添加分析"按钮手动添加</div>
+            <Zap size={40} style={{ marginBottom: 16, opacity: 0.4 }} />
+            <div style={{ fontSize: 15, marginBottom: 8, color: '#94a3b8' }}>暂无章节分析数据</div>
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+              在章节编辑器中选中章节，点击"AI 分析"按钮触发分析
+            </div>
           </div>
         ) : (
           <>
-            {viewMode === 'foreshadowing' && (
+            {viewMode === 'foreshadowing' && !isEditing && (
               <ForeshadowingView
-                analyses={sortedAnalyses}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onVersionHistory={(analysis) => setVersionHistoryAnalysis(analysis)}
+                data={data}
+                getChapterTitle={getChapterTitle}
+                onEdit={handleEditForeshadowing}
+                onDelete={handleDeleteForeshadowing}
               />
             )}
-            {viewMode === 'character' && (
+            {viewMode === 'character' && !isEditing && (
               <CharacterView
-                analyses={sortedAnalyses}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onVersionHistory={(analysis) => setVersionHistoryAnalysis(analysis)}
+                data={data}
+                getChapterTitle={getChapterTitle}
+                onEdit={handleEditCharacter}
+                onDelete={handleDeleteCharacter}
               />
             )}
-            {viewMode === 'plot' && (
+            {viewMode === 'plot' && !isEditing && (
               <PlotView
-                analyses={sortedAnalyses}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onVersionHistory={(analysis) => setVersionHistoryAnalysis(analysis)}
+                data={data}
+                getChapterTitle={getChapterTitle}
+                onEdit={handleEditPlot}
+                onDelete={handleDeletePlot}
               />
             )}
           </>
         )}
       </div>
-
-      {/* 版本历史弹窗 */}
-      {versionHistoryAnalysis && (
-        <EntityVersionHistory
-          isOpen={true}
-          onClose={() => setVersionHistoryAnalysis(null)}
-          entityType="chapter_analysis"
-          entityId={versionHistoryAnalysis.id}
-          entityName={versionHistoryAnalysis.chapterTitle}
-          onRestore={(versionId) => {
-            const versionStore = useEntityVersionStore.getState();
-            const restored = versionStore.restoreAnalysisVersion(versionId);
-            if (restored) {
-              updateAnalysis(versionHistoryAnalysis.id, restored);
-              setVersionHistoryAnalysis(null);
-            }
-          }}
-        />
-      )}
     </div>
   );
 };
 
-// --- Metric Card ---
+// ============================================
+// 子组件
+// ============================================
 
+// --- Metric Card ---
 const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
   <div style={{
     padding: 14,
@@ -347,7 +472,6 @@ const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({
 );
 
 // --- Tab Button ---
-
 const TabButton: React.FC<{
   active: boolean;
   onClick: () => void;
@@ -386,319 +510,7 @@ const TabButton: React.FC<{
   </button>
 );
 
-// --- Foreshadowing View (按章节) ---
-
-const ForeshadowingView: React.FC<{
-  analyses: ChapterAnalysis[];
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onVersionHistory: (analysis: ChapterAnalysis) => void;
-}> = ({ analyses, onEdit, onDelete, onVersionHistory }) => {
-  const typeColors = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
-  const typeLabels = { planted: '埋下', developed: '推进', resolved: '收回' };
-
-  const chaptersWithForeshadowing = analyses.filter(a => a.foreshadowing.length > 0);
-
-  if (chaptersWithForeshadowing.length === 0) {
-    return <EmptyState message="暂无伏笔数据" />;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {chaptersWithForeshadowing.map((analysis) => (
-        <div key={analysis.id} style={chapterCardStyle}>
-          {/* 章节标题 + 操作按钮 */}
-          <div style={{
-            padding: '14px 18px',
-            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
-              {analysis.chapterTitle}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {/* 版本历史按钮 - 醒目的 pill 样式 */}
-              <button
-                onClick={() => onVersionHistory(analysis)}
-                style={pillButtonStyle('#38bdf8')}
-                title="版本历史"
-              >
-                <History size={14} />
-                版本
-              </button>
-              <button onClick={() => onEdit(analysis.id)} style={actionButtonStyle} title="编辑">
-                <Edit2 size={14} />
-              </button>
-              <button onClick={() => onDelete(analysis.id)} style={{ ...actionButtonStyle, color: '#f87171' }} title="删除">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* 伏笔列表 */}
-          <div style={{ padding: '12px 18px' }}>
-            {analysis.foreshadowing.map((item, i) => (
-              <div key={item.id || i} style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 12,
-                marginBottom: i < analysis.foreshadowing.length - 1 ? 12 : 0,
-                padding: '10px 12px',
-                borderRadius: 10,
-                backgroundColor: 'rgba(30, 41, 59, 0.4)',
-                transition: 'background-color 0.2s',
-              }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.6)'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.4)'}
-              >
-                <div style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: '50%',
-                  backgroundColor: typeColors[item.type],
-                  flexShrink: 0,
-                  marginTop: 5,
-                }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{
-                      padding: '2px 8px',
-                      backgroundColor: `${typeColors[item.type]}22`,
-                      border: `1px solid ${typeColors[item.type]}33`,
-                      borderRadius: 4,
-                      color: typeColors[item.type],
-                      fontSize: 11,
-                      fontWeight: 500,
-                    }}>
-                      {typeLabels[item.type]}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 13, marginBottom: 6, lineHeight: 1.6, color: '#cbd5e1' }}>
-                    {item.content}
-                  </div>
-                  {item.tags.length > 0 && (
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {item.tags.map(tag => (
-                        <span key={tag} style={tagStyle}>{tag}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// --- Character View (按章节) ---
-
-const CharacterView: React.FC<{
-  analyses: ChapterAnalysis[];
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onVersionHistory: (analysis: ChapterAnalysis) => void;
-}> = ({ analyses, onEdit, onDelete, onVersionHistory }) => {
-  const chaptersWithCharacters = analyses.filter(a => a.characterStates.length > 0);
-
-  if (chaptersWithCharacters.length === 0) {
-    return <EmptyState message="暂无角色数据" />;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {chaptersWithCharacters.map((analysis) => (
-        <div key={analysis.id} style={chapterCardStyle}>
-          {/* 章节标题 + 操作按钮 */}
-          <div style={{
-            padding: '14px 18px',
-            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
-              {analysis.chapterTitle}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => onVersionHistory(analysis)}
-                style={pillButtonStyle('#38bdf8')}
-                title="版本历史"
-              >
-                <History size={14} />
-                版本
-              </button>
-              <button onClick={() => onEdit(analysis.id)} style={actionButtonStyle} title="编辑">
-                <Edit2 size={14} />
-              </button>
-              <button onClick={() => onDelete(analysis.id)} style={{ ...actionButtonStyle, color: '#f87171' }} title="删除">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* 角色状态列表 */}
-          <div style={{ padding: '12px 18px' }}>
-            {analysis.characterStates.map((state, i) => (
-              <div key={i} style={{
-                marginBottom: i < analysis.characterStates.length - 1 ? 16 : 0,
-                paddingBottom: i < analysis.characterStates.length - 1 ? 16 : 0,
-                borderBottom: i < analysis.characterStates.length - 1 ? '1px solid rgba(148, 163, 184, 0.1)' : 'none',
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  marginBottom: 8,
-                }}>
-                  <div style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 8,
-                    background: 'rgba(56, 189, 248, 0.12)',
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: '#38bdf8',
-                  }}>
-                    <User size={14} />
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#dcdcaa' }}>
-                    {state.characterName}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, marginBottom: 8, color: '#cbd5e1', paddingLeft: 36 }}>
-                  {state.stateDescription}
-                </div>
-                {state.emotionalState && (
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, paddingLeft: 36 }}>
-                    情绪: <span style={{ color: '#94a3b8' }}>{state.emotionalState}</span>
-                  </div>
-                )}
-                {state.location && (
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, paddingLeft: 36 }}>
-                    位置: <span style={{ color: '#94a3b8' }}>{state.location}</span>
-                  </div>
-                )}
-                {state.relationships && state.relationships.length > 0 && (
-                  <div style={{ marginTop: 8, paddingLeft: 36 }}>
-                    {state.relationships.map((rel, j) => (
-                      <div key={j} style={{ fontSize: 12, color: '#9cdcfe', marginBottom: 2 }}>
-                        与 {rel.with}: {rel.status}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// --- Plot View ---
-
-const PlotView: React.FC<{
-  analyses: ChapterAnalysis[];
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-  onVersionHistory: (analysis: ChapterAnalysis) => void;
-}> = ({ analyses, onEdit, onDelete, onVersionHistory }) => {
-  const importanceColors = { high: '#f48771', medium: '#dcdcaa', low: '#9cdcfe' };
-  const importanceLabels = { high: '重要', medium: '一般', low: '次要' };
-
-  const chaptersWithPlot = analyses.filter(a => a.plotSummary.length > 0);
-
-  if (chaptersWithPlot.length === 0) {
-    return <EmptyState message="暂无剧情数据" />;
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {chaptersWithPlot.map((analysis) => (
-        <div key={analysis.id} style={chapterCardStyle}>
-          {/* 章节标题 + 操作按钮 */}
-          <div style={{
-            padding: '14px 18px',
-            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
-              {analysis.chapterTitle}
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => onVersionHistory(analysis)}
-                style={pillButtonStyle('#38bdf8')}
-                title="版本历史"
-              >
-                <History size={14} />
-                版本
-              </button>
-              <button onClick={() => onEdit(analysis.id)} style={actionButtonStyle} title="编辑">
-                <Edit2 size={14} />
-              </button>
-              <button onClick={() => onDelete(analysis.id)} style={{ ...actionButtonStyle, color: '#f87171' }} title="删除">
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* 剧情点列表 */}
-          <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {analysis.plotSummary.map((point, idx) => (
-              <div key={idx} style={{
-                padding: '12px 14px',
-                backgroundColor: 'rgba(30, 41, 59, 0.4)',
-                border: '1px solid rgba(148, 163, 184, 0.1)',
-                borderLeft: `3px solid ${importanceColors[point.importance]}`,
-                borderRadius: 10,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{
-                    padding: '2px 8px',
-                    backgroundColor: `${importanceColors[point.importance]}22`,
-                    border: `1px solid ${importanceColors[point.importance]}33`,
-                    borderRadius: 4,
-                    color: importanceColors[point.importance],
-                    fontSize: 11,
-                    fontWeight: 500,
-                  }}>
-                    {importanceLabels[point.importance]}
-                  </span>
-                </div>
-                <div style={{ fontSize: 13, marginBottom: 8, color: '#cbd5e1' }}>
-                  {point.description}
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {point.tags.map(tag => (
-                    <span key={tag} style={tagStyle}>{tag}</span>
-                  ))}
-                  {point.relatedCharacters.length > 0 && (
-                    <span style={{ color: '#64748b', fontSize: 12 }}>
-                      👤 {point.relatedCharacters.join(', ')}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
 // --- Empty State ---
-
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   <div style={{
     ...cardStyle,
@@ -710,208 +522,485 @@ const EmptyState: React.FC<{ message: string }> = ({ message }) => (
   </div>
 );
 
-// --- Action Button Style ---
+// ============================================
+// 伏笔视图
+// ============================================
 
-const actionButtonStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 6,
-  backgroundColor: 'transparent',
-  border: '1px solid rgba(148, 163, 184, 0.16)',
-  borderRadius: 6,
-  color: '#94a3b8',
-  cursor: 'pointer',
-  transition: 'all 0.2s',
+const ForeshadowingView: React.FC<{
+  data: { foreshadowing: ForeshadowingItem[] };
+  getChapterTitle: (ref: string) => string;
+  onEdit: (item: ForeshadowingItem) => void;
+  onDelete: (id: string) => void;
+}> = ({ data, getChapterTitle, onEdit, onDelete }) => {
+  const typeColors = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
+  const typeLabels = { planted: '埋下', developed: '推进', resolved: '收回' };
+
+  // 按状态排序（planted > developed > resolved）
+  const sortedItems = useMemo(() => {
+    return [...data.foreshadowing].sort((a, b) => {
+      const order = { planted: 0, developed: 1, resolved: 2 };
+      return order[a.type] - order[b.type];
+    });
+  }, [data.foreshadowing]);
+
+  if (sortedItems.length === 0) {
+    return <EmptyState message="暂无伏笔数据" />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {sortedItems.map((item) => {
+        const duration = item.duration || 'mid_term';
+        const durationColor = DURATION_COLORS[duration];
+
+        return (
+          <div
+            key={item.id}
+            style={{
+              ...chapterCardStyle,
+              padding: '14px 18px',
+              borderLeft: `3px solid ${durationColor}`,
+            }}
+          >
+            {/* 顶部：状态 + 时长标签 + 操作按钮 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  padding: '3px 10px',
+                  backgroundColor: `${typeColors[item.type]}22`,
+                  border: `1px solid ${typeColors[item.type]}44`,
+                  borderRadius: 4,
+                  color: typeColors[item.type],
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}>
+                  {typeLabels[item.type]}
+                </span>
+                <span style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 8px',
+                  backgroundColor: `${durationColor}14`,
+                  border: `1px solid ${durationColor}33`,
+                  borderRadius: 4,
+                  color: durationColor,
+                  fontSize: 11,
+                }}>
+                  <Clock size={12} />
+                  {DURATION_LABELS[duration]}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => onEdit(item)} style={actionButtonStyle} title="编辑">
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={() => onDelete(item.id)}
+                  style={{ ...actionButtonStyle, color: '#f87171' }}
+                  title="删除"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+
+            {/* 伏笔内容 */}
+            <div style={{ fontSize: 14, marginBottom: 10, lineHeight: 1.6, color: '#e2e8f0' }}>
+              {item.content}
+            </div>
+
+            {/* 来源章节 */}
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+              📍 来源：{getChapterTitle(item.sourceRef || '')}
+            </div>
+
+            {/* 发展轨迹 */}
+            {item.developedRefs?.length > 0 && (
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>
+                📖 发展：
+                {item.developedRefs.map((r, i) => (
+                  <span key={i} style={{ marginLeft: 4 }}>
+                    {getChapterTitle(r.ref)}{i < item.developedRefs.length - 1 ? ' →' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* 标签 */}
+            {item.tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {item.tags.map(tag => (
+                  <span key={tag} style={tagStyle}>{tag}</span>
+                ))}
+              </div>
+            )}
+
+            {/* 备注 */}
+            {item.notes && (
+              <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>
+                💡 {item.notes}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
-// --- Analysis Form ---
+// ============================================
+// 角色状态视图
+// ============================================
 
-interface AnalysisFormProps {
-  mode: 'add' | 'edit';
-  editingData?: ChapterAnalysis;
-  availableChapters: { name: string; id: string }[];
-  onSave: (analysis: ChapterAnalysis) => void;
-  onCancel: () => void;
-}
+const CharacterView: React.FC<{
+  data: { characterStates: ChapterCharacterState[] };
+  getChapterTitle: (ref: string) => string;
+  onEdit: (state: ChapterCharacterState) => void;
+  onDelete: (id: string) => void;
+}> = ({ data, getChapterTitle, onEdit, onDelete }) => {
+  // 按章节分组
+  const groupedByChapter = useMemo(() => {
+    const groups: Record<string, ChapterCharacterState[]> = {};
+    for (const state of data.characterStates) {
+      if (!groups[state.chapterRef]) {
+        groups[state.chapterRef] = [];
+      }
+      groups[state.chapterRef].push(state);
+    }
+    return groups;
+  }, [data.characterStates]);
 
-const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availableChapters, onSave, onCancel }) => {
-  const [chapterPath, setChapterPath] = useState(editingData?.chapterPath || '');
-  const [chapterTitle, setChapterTitle] = useState(editingData?.chapterTitle || '');
-  const [plotSummary, setPlotSummary] = useState<PlotKeyPoint[]>(editingData?.plotSummary || []);
-  const [characterStates, setCharacterStates] = useState<CharacterState[]>(editingData?.characterStates || []);
-  const [foreshadowing, setForeshadowing] = useState<ForeshadowingItem[]>(
-    (editingData?.foreshadowing || []).map(f => ({
-      ...f,
-      source: f.source || 'chapter_analysis'
-    }))
+  const chapters = Object.keys(groupedByChapter);
+
+  if (chapters.length === 0) {
+    return <EmptyState message="暂无角色状态数据" />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {chapters.map((chapterRef) => (
+        <div key={chapterRef} style={chapterCardStyle}>
+          {/* 章节标题 */}
+          <div style={{
+            padding: '14px 18px',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
+              {getChapterTitle(chapterRef)}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>
+              {groupedByChapter[chapterRef].length} 个角色
+            </div>
+          </div>
+
+          {/* 角色状态列表 */}
+          <div style={{ padding: '12px 18px' }}>
+            {groupedByChapter[chapterRef].map((state, i, arr) => (
+              <div key={state.id} style={{
+                marginBottom: i < arr.length - 1 ? 16 : 0,
+                paddingBottom: i < arr.length - 1 ? 16 : 0,
+                borderBottom: i < arr.length - 1 ? '1px solid rgba(148, 163, 184, 0.1)' : 'none',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        background: 'rgba(56, 189, 248, 0.12)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: '#38bdf8',
+                      }}>
+                        <User size={14} />
+                      </div>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#dcdcaa' }}>
+                        {state.characterName}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, marginBottom: 8, color: '#cbd5e1', paddingLeft: 36 }}>
+                      {state.stateDescription}
+                    </div>
+                    {state.emotionalState && (
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, paddingLeft: 36 }}>
+                        情绪: <span style={{ color: '#94a3b8' }}>{state.emotionalState}</span>
+                      </div>
+                    )}
+                    {state.location && (
+                      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, paddingLeft: 36 }}>
+                        位置: <span style={{ color: '#94a3b8' }}>{state.location}</span>
+                      </div>
+                    )}
+                    {state.relationships && state.relationships.length > 0 && (
+                      <div style={{ marginTop: 8, paddingLeft: 36 }}>
+                        {state.relationships.map((rel, j) => (
+                          <div key={j} style={{ fontSize: 12, color: '#9cdcfe', marginBottom: 2 }}>
+                            与 {rel.with}: {rel.status}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => onEdit(state)} style={actionButtonStyle} title="编辑">
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(state.id)}
+                      style={{ ...actionButtonStyle, color: '#f87171' }}
+                      title="删除"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
+};
+
+// ============================================
+// 剧情关键点视图
+// ============================================
+
+const PlotView: React.FC<{
+  data: { plotKeyPoints: ChapterPlotKeyPoint[] };
+  getChapterTitle: (ref: string) => string;
+  onEdit: (point: ChapterPlotKeyPoint) => void;
+  onDelete: (id: string) => void;
+}> = ({ data, getChapterTitle, onEdit, onDelete }) => {
+  const importanceColors = { high: '#f48771', medium: '#dcdcaa', low: '#9cdcfe' };
+  const importanceLabels = { high: '重要', medium: '一般', low: '次要' };
+
+  // 按章节分组
+  const groupedByChapter = useMemo(() => {
+    const groups: Record<string, ChapterPlotKeyPoint[]> = {};
+    for (const point of data.plotKeyPoints) {
+      if (!groups[point.chapterRef]) {
+        groups[point.chapterRef] = [];
+      }
+      groups[point.chapterRef].push(point);
+    }
+    return groups;
+  }, [data.plotKeyPoints]);
+
+  const chapters = Object.keys(groupedByChapter);
+
+  if (chapters.length === 0) {
+    return <EmptyState message="暂无剧情关键点数据" />;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {chapters.map((chapterRef) => (
+        <div key={chapterRef} style={chapterCardStyle}>
+          {/* 章节标题 */}
+          <div style={{
+            padding: '14px 18px',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
+              {getChapterTitle(chapterRef)}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>
+              {groupedByChapter[chapterRef].length} 个关键点
+            </div>
+          </div>
+
+          {/* 剧情点列表 */}
+          <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {groupedByChapter[chapterRef].map((point) => (
+              <div key={point.id} style={{
+                padding: '12px 14px',
+                backgroundColor: 'rgba(30, 41, 59, 0.4)',
+                border: '1px solid rgba(148, 163, 184, 0.1)',
+                borderLeft: `3px solid ${importanceColors[point.importance]}`,
+                borderRadius: 10,
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <span style={{
+                        padding: '2px 8px',
+                        backgroundColor: `${importanceColors[point.importance]}22`,
+                        border: `1px solid ${importanceColors[point.importance]}33`,
+                        borderRadius: 4,
+                        color: importanceColors[point.importance],
+                        fontSize: 11,
+                        fontWeight: 500,
+                      }}>
+                        {importanceLabels[point.importance]}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, marginBottom: 8, color: '#cbd5e1' }}>
+                      {point.description}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {point.tags.map(tag => (
+                        <span key={tag} style={tagStyle}>{tag}</span>
+                      ))}
+                      {point.relatedCharacters.length > 0 && (
+                        <span style={{ color: '#64748b', fontSize: 12 }}>
+                          👤 {point.relatedCharacters.join(', ')}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => onEdit(point)} style={actionButtonStyle} title="编辑">
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => onDelete(point.id)}
+                      style={{ ...actionButtonStyle, color: '#f87171' }}
+                      title="删除"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ============================================
+// 编辑表单
+// ============================================
+
+// --- 伏笔表单 ---
+const ForeshadowingForm: React.FC<{
+  item: ForeshadowingItem | null;
+  availableChapters: { name: string; id: string }[];
+  onSave: (item: Omit<ForeshadowingItem, 'id'> & { id?: string }) => void;
+  onCancel: () => void;
+}> = ({ item, availableChapters, onSave, onCancel }) => {
+  const [content, setContent] = useState(item?.content || '');
+  const [type, setType] = useState<'planted' | 'developed' | 'resolved'>(item?.type || 'planted');
+  const [duration, setDuration] = useState<ForeshadowingDuration>(item?.duration || 'mid_term');
+  const [sourceRef, setSourceRef] = useState(item?.sourceRef || '');
+  const [notes, setNotes] = useState(item?.notes || '');
+  const [tags, setTags] = useState(item?.tags?.join(', ') || '');
 
   const handleSave = () => {
-    const now = Date.now();
-    const analysis: ChapterAnalysis = {
-      id: editingData?.id || `analysis-${now}`,
-      chapterPath: chapterPath || '手动添加',
-      chapterTitle: chapterTitle || '未命名章节',
-      sessionId: editingData?.sessionId || 'manual',
-      projectId: editingData?.projectId || '',
-      plotSummary,
-      characterStates,
-      foreshadowing,
-      extractedAt: editingData?.extractedAt || now,
-      lastModified: now,
-      wordCount: editingData?.wordCount || 0
-    };
-    onSave(analysis);
+    if (!content.trim() || !sourceRef) {
+      alert('请填写伏笔内容和来源章节');
+      return;
+    }
+    onSave({
+      id: item?.id,
+      content: content.trim(),
+      type,
+      duration,
+      source: 'chapter_analysis',
+      sourceRef,
+      developedRefs: item?.developedRefs || [],
+      resolvedRef: item?.resolvedRef,
+      notes: notes.trim() || undefined,
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+    });
   };
 
   return (
     <div style={{ ...cardStyle, padding: 18 }}>
       <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
-        {mode === 'add' ? '添加章节分析' : '编辑章节分析'}
+        {item ? '编辑伏笔' : '添加伏笔'}
       </h3>
 
-      {/* 章节选择 */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-          选择章节
-        </label>
-        <select
-          value={chapterPath}
-          onChange={(e) => {
-            setChapterPath(e.target.value);
-            const chapter = availableChapters.find(c => c.id === e.target.value);
-            if (chapter) {
-              setChapterTitle(chapter.name.replace('.md', ''));
-            }
-          }}
-          style={{ ...inputStyle, cursor: 'pointer' }}
-        >
-          <option value="">-- 选择章节 --</option>
-          {availableChapters.map(ch => (
-            <option key={ch.id} value={`05_正文草稿/${ch.name}`}>{ch.name}</option>
-          ))}
-          <option value="手动添加">手动输入</option>
-        </select>
-      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* 伏笔内容 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+            伏笔内容 <span style={{ color: '#f87171' }}>*</span>
+          </label>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="简洁描述伏笔（30字以内）..."
+            style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+          />
+        </div>
 
-      {chapterPath === '手动添加' && (
-        <div style={{ marginBottom: 16 }}>
+        {/* 类型 + 时长 */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>状态</label>
+            <select value={type} onChange={(e) => setType(e.target.value as any)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="planted">新埋下</option>
+              <option value="developed">推进中</option>
+              <option value="resolved">已收回</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>时长类型</label>
+            <select value={duration} onChange={(e) => setDuration(e.target.value as any)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="short_term">短期（1-5章）</option>
+              <option value="mid_term">中期（10-20章）</option>
+              <option value="long_term">长期（100章+）</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 来源章节 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+            来源章节 <span style={{ color: '#f87171' }}>*</span>
+          </label>
+          <select
+            value={sourceRef}
+            onChange={(e) => setSourceRef(e.target.value)}
+            style={{ ...inputStyle, cursor: 'pointer' }}
+          >
+            <option value="">-- 选择章节 --</option>
+            {availableChapters.map(ch => (
+              <option key={ch.id} value={`05_正文草稿/${ch.name}`}>{ch.name.replace('.md', '')}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 标签 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>标签（逗号分隔）</label>
           <input
             type="text"
-            value={chapterTitle}
-            onChange={(e) => setChapterTitle(e.target.value)}
-            placeholder="章节标题"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="神秘, 道具, 伏笔..."
             style={inputStyle}
           />
         </div>
-      )}
 
-      {/* 伏笔 */}
-      <SectionEditor
-        title="伏笔"
-        items={foreshadowing}
-        onChange={setForeshadowing}
-        renderItem={(item, idx) => (
-          <>
-            <select
-              value={item.type}
-              onChange={(e) => {
-                const newItems = [...foreshadowing];
-                newItems[idx] = { ...item, type: e.target.value as any };
-                setForeshadowing(newItems);
-              }}
-              style={{ ...inputStyle, width: 100, cursor: 'pointer' }}
-            >
-              <option value="planted">新埋下</option>
-              <option value="developed">推进中</option>
-              <option value="resolved">已回收</option>
-            </select>
-            <input
-              type="text"
-              value={item.content}
-              onChange={(e) => {
-                const newItems = [...foreshadowing];
-                newItems[idx] = { ...item, content: e.target.value };
-                setForeshadowing(newItems);
-              }}
-              placeholder="伏笔内容..."
-              style={{ ...inputStyle, flex: 1 }}
-            />
-          </>
-        )}
-      />
-
-      {/* 角色状态 */}
-      <SectionEditor
-        title="角色状态"
-        items={characterStates}
-        onChange={setCharacterStates}
-        renderItem={(item, idx) => (
-          <>
-            <input
-              type="text"
-              value={item.characterName}
-              onChange={(e) => {
-                const newItems = [...characterStates];
-                newItems[idx] = { ...item, characterName: e.target.value };
-                setCharacterStates(newItems);
-              }}
-              placeholder="角色名"
-              style={{ ...inputStyle, width: 100 }}
-            />
-            <input
-              type="text"
-              value={item.stateDescription}
-              onChange={(e) => {
-                const newItems = [...characterStates];
-                newItems[idx] = { ...item, stateDescription: e.target.value };
-                setCharacterStates(newItems);
-              }}
-              placeholder="状态描述"
-              style={{ ...inputStyle, flex: 1 }}
-            />
-          </>
-        )}
-      />
-
-      {/* 剧情关键点 */}
-      <SectionEditor
-        title="剧情关键点"
-        items={plotSummary}
-        onChange={setPlotSummary}
-        renderItem={(item, idx) => (
-          <>
-            <select
-              value={item.importance}
-              onChange={(e) => {
-                const newItems = [...plotSummary];
-                newItems[idx] = { ...item, importance: e.target.value as any };
-                setPlotSummary(newItems);
-              }}
-              style={{ ...inputStyle, width: 80, cursor: 'pointer' }}
-            >
-              <option value="high">重要</option>
-              <option value="medium">一般</option>
-              <option value="low">次要</option>
-            </select>
-            <input
-              type="text"
-              value={item.description}
-              onChange={(e) => {
-                const newItems = [...plotSummary];
-                newItems[idx] = { ...item, description: e.target.value };
-                setPlotSummary(newItems);
-              }}
-              placeholder="关键点描述..."
-              style={{ ...inputStyle, flex: 1 }}
-            />
-          </>
-        )}
-      />
+        {/* 备注 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>备注</label>
+          <input
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="额外说明..."
+            style={inputStyle}
+          />
+        </div>
+      </div>
 
       {/* 操作按钮 */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
         <button
           onClick={onCancel}
           style={{
@@ -929,6 +1018,9 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
         <button
           onClick={handleSave}
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
             padding: '8px 16px',
             backgroundColor: 'rgba(34, 197, 94, 0.12)',
             border: '1px solid rgba(34, 197, 94, 0.2)',
@@ -938,6 +1030,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
             fontSize: 13,
           }}
         >
+          <Check size={14} />
           保存
         </button>
       </div>
@@ -945,52 +1038,303 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
   );
 };
 
-// --- Section Editor ---
+// --- 角色状态表单 ---
+const CharacterForm: React.FC<{
+  state: ChapterCharacterState | null;
+  availableChapters: { name: string; id: string }[];
+  onSave: (state: Omit<ChapterCharacterState, 'id'> & { id?: string }) => void;
+  onCancel: () => void;
+}> = ({ state, availableChapters, onSave, onCancel }) => {
+  const [characterName, setCharacterName] = useState(state?.characterName || '');
+  const [chapterRef, setChapterRef] = useState(state?.chapterRef || '');
+  const [stateDescription, setStateDescription] = useState(state?.stateDescription || '');
+  const [emotionalState, setEmotionalState] = useState(state?.emotionalState || '');
+  const [location, setLocation] = useState(state?.location || '');
+  const [changes, setChanges] = useState(state?.changes?.join(', ') || '');
 
-const SectionEditor: React.FC<{
-  title: string;
-  items: any[];
-  onChange: (items: any[]) => void;
-  renderItem: (item: any, idx: number) => React.ReactNode;
-}> = ({ title, items, onChange, renderItem }) => (
-  <div style={{ marginBottom: 16 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <label style={{ fontSize: 13, color: '#94a3b8' }}>{title}</label>
-      <button
-        onClick={() => onChange([...items, { id: `${Date.now()}-${Math.random()}`, content: '', type: 'planted', tags: [], source: 'chapter_analysis' }])}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          padding: '4px 8px',
-          backgroundColor: 'rgba(148, 163, 184, 0.1)',
-          border: '1px solid rgba(148, 163, 184, 0.16)',
-          borderRadius: 6,
-          color: '#94a3b8',
-          cursor: 'pointer',
-          fontSize: 12,
-        }}
-      >
-        <Plus size={14} /> 添加
-      </button>
-    </div>
-    {items.map((item, idx) => (
-      <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        {renderItem(item, idx)}
+  const handleSave = () => {
+    if (!characterName.trim() || !chapterRef) {
+      alert('请填写角色名和章节');
+      return;
+    }
+    onSave({
+      id: state?.id,
+      characterName: characterName.trim(),
+      chapterRef,
+      stateDescription: stateDescription.trim(),
+      emotionalState: emotionalState.trim() || undefined,
+      location: location.trim() || undefined,
+      relationships: state?.relationships || [],
+      changes: changes.split(',').map(c => c.trim()).filter(Boolean),
+      createdAt: state?.createdAt || Date.now(),
+    });
+  };
+
+  return (
+    <div style={{ ...cardStyle, padding: 18 }}>
+      <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
+        {state ? '编辑角色状态' : '添加角色状态'}
+      </h3>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* 角色名 + 章节 */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+              角色名 <span style={{ color: '#f87171' }}>*</span>
+            </label>
+            <input
+              type="text"
+              value={characterName}
+              onChange={(e) => setCharacterName(e.target.value)}
+              placeholder="角色名称"
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+              章节 <span style={{ color: '#f87171' }}>*</span>
+            </label>
+            <select
+              value={chapterRef}
+              onChange={(e) => setChapterRef(e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">-- 选择章节 --</option>
+              {availableChapters.map(ch => (
+                <option key={ch.id} value={`05_正文草稿/${ch.name}`}>{ch.name.replace('.md', '')}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 状态描述 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>状态描述</label>
+          <textarea
+            value={stateDescription}
+            onChange={(e) => setStateDescription(e.target.value)}
+            placeholder="描述角色当前状态..."
+            style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+          />
+        </div>
+
+        {/* 情绪 + 位置 */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>情绪状态</label>
+            <input
+              type="text"
+              value={emotionalState}
+              onChange={(e) => setEmotionalState(e.target.value)}
+              placeholder="愤怒、悲伤、平静..."
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>位置</label>
+            <input
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="客栈、森林..."
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {/* 变化 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>变化（逗号分隔）</label>
+          <input
+            type="text"
+            value={changes}
+            onChange={(e) => setChanges(e.target.value)}
+            placeholder="获得新技能, 关系变化..."
+            style={inputStyle}
+          />
+        </div>
+      </div>
+
+      {/* 操作按钮 */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
         <button
-          onClick={() => onChange(items.filter((_, i) => i !== idx))}
+          onClick={onCancel}
           style={{
-            padding: 6,
-            backgroundColor: 'transparent',
-            border: '1px solid rgba(248, 113, 113, 0.2)',
+            padding: '8px 16px',
+            backgroundColor: 'rgba(148, 163, 184, 0.1)',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
             borderRadius: 6,
-            color: '#f87171',
+            color: '#94a3b8',
             cursor: 'pointer',
+            fontSize: 13,
           }}
         >
-          <Trash2 size={14} />
+          取消
+        </button>
+        <button
+          onClick={handleSave}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 16px',
+            backgroundColor: 'rgba(34, 197, 94, 0.12)',
+            border: '1px solid rgba(34, 197, 94, 0.2)',
+            borderRadius: 6,
+            color: '#4ade80',
+            cursor: 'pointer',
+            fontSize: 13,
+          }}
+        >
+          <Check size={14} />
+          保存
         </button>
       </div>
-    ))}
-  </div>
-);
+    </div>
+  );
+};
+
+// --- 剧情关键点表单 ---
+const PlotForm: React.FC<{
+  point: ChapterPlotKeyPoint | null;
+  availableChapters: { name: string; id: string }[];
+  onSave: (point: Omit<ChapterPlotKeyPoint, 'id'> & { id?: string }) => void;
+  onCancel: () => void;
+}> = ({ point, availableChapters, onSave, onCancel }) => {
+  const [chapterRef, setChapterRef] = useState(point?.chapterRef || '');
+  const [description, setDescription] = useState(point?.description || '');
+  const [importance, setImportance] = useState<'high' | 'medium' | 'low'>(point?.importance || 'medium');
+  const [tags, setTags] = useState(point?.tags?.join(', ') || '');
+  const [relatedCharacters, setRelatedCharacters] = useState(point?.relatedCharacters?.join(', ') || '');
+
+  const handleSave = () => {
+    if (!description.trim() || !chapterRef) {
+      alert('请填写描述和章节');
+      return;
+    }
+    onSave({
+      id: point?.id,
+      chapterRef,
+      description: description.trim(),
+      importance,
+      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      relatedCharacters: relatedCharacters.split(',').map(c => c.trim()).filter(Boolean),
+      createdAt: point?.createdAt || Date.now(),
+    });
+  };
+
+  return (
+    <div style={{ ...cardStyle, padding: 18 }}>
+      <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
+        {point ? '编辑剧情关键点' : '添加剧情关键点'}
+      </h3>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {/* 章节 + 重要程度 */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+              章节 <span style={{ color: '#f87171' }}>*</span>
+            </label>
+            <select
+              value={chapterRef}
+              onChange={(e) => setChapterRef(e.target.value)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">-- 选择章节 --</option>
+              {availableChapters.map(ch => (
+                <option key={ch.id} value={`05_正文草稿/${ch.name}`}>{ch.name.replace('.md', '')}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>重要程度</label>
+            <select
+              value={importance}
+              onChange={(e) => setImportance(e.target.value as any)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="high">重要</option>
+              <option value="medium">一般</option>
+              <option value="low">次要</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 描述 */}
+        <div>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+            描述 <span style={{ color: '#f87171' }}>*</span>
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="描述剧情关键点..."
+            style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+          />
+        </div>
+
+        {/* 标签 + 相关角色 */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>标签（逗号分隔）</label>
+            <input
+              type="text"
+              value={tags}
+              onChange={(e) => setTags(e.target.value)}
+              placeholder="战斗, 转折..."
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>相关角色（逗号分隔）</label>
+            <input
+              type="text"
+              value={relatedCharacters}
+              onChange={(e) => setRelatedCharacters(e.target.value)}
+              placeholder="张三, 李四..."
+              style={inputStyle}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 操作按钮 */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 18 }}>
+        <button
+          onClick={onCancel}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: 'rgba(148, 163, 184, 0.1)',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            borderRadius: 6,
+            color: '#94a3b8',
+            cursor: 'pointer',
+            fontSize: 13,
+          }}
+        >
+          取消
+        </button>
+        <button
+          onClick={handleSave}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '8px 16px',
+            backgroundColor: 'rgba(34, 197, 94, 0.12)',
+            border: '1px solid rgba(34, 197, 94, 0.2)',
+            borderRadius: 6,
+            color: '#4ade80',
+            cursor: 'pointer',
+            fontSize: 13,
+          }}
+        >
+          <Check size={14} />
+          保存
+        </button>
+      </div>
+    </div>
+  );
+};

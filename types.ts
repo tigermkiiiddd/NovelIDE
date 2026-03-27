@@ -327,14 +327,34 @@ export interface CharacterProfile {
   updatedAt: number;
 }
 
+// 伏笔时长类型
+export type ForeshadowingDuration = 'short_term' | 'mid_term' | 'long_term';
+
+// 通用来源引用
+export interface SourceRef {
+  source: 'timeline' | 'chapter_analysis';
+  ref: string;                    // 章节路径 或 时间线节点ID
+}
+
 export interface ForeshadowingItem {
   id: string;
-  content: string;
+  content: string;                // 30字以内
   type: 'planted' | 'developed' | 'resolved';
+  duration: ForeshadowingDuration; // 时长类型
   tags: string[];
-  source: 'timeline' | 'chapter_analysis';  // 伏笔来源
-  relatedChapters?: string[];
+
+  // 来源（通用引用）
+  source: 'timeline' | 'chapter_analysis';
+  sourceRef: string;              // 章节路径 或 时间线节点ID
+
+  // 发展轨迹（通用引用数组）
+  developedRefs: SourceRef[];
+
+  // 收尾位置（通用引用）
+  resolvedRef?: SourceRef;
+
   notes?: string;
+  expectedResolution?: string;    // 预期收尾方式
 }
 
 export interface ChapterAnalysis {
@@ -349,6 +369,42 @@ export interface ChapterAnalysis {
   extractedAt: number;
   lastModified: number;
   wordCount: number;
+}
+
+// ============================================
+// 章节分析 V2 - 扁平化顶层结构
+// ============================================
+
+// 章节角色状态（扁平化，含章节引用）
+export interface ChapterCharacterState {
+  id: string;
+  characterName: string;
+  chapterRef: string;              // 章节引用
+  stateDescription: string;
+  emotionalState?: string;
+  location?: string;
+  relationships?: { with: string; status: string; }[];
+  changes: string[];
+  createdAt: number;
+}
+
+// 章节剧情关键点（扁平化，含章节引用）
+export interface ChapterPlotKeyPoint {
+  id: string;
+  chapterRef: string;              // 章节引用
+  description: string;
+  importance: 'high' | 'medium' | 'low';
+  tags: string[];
+  relatedCharacters: string[];
+  createdAt: number;
+}
+
+// 章节分析数据 V2（扁平化顶层结构）
+export interface ChapterAnalysisData {
+  characterStates: ChapterCharacterState[];
+  foreshadowing: ForeshadowingItem[];
+  plotKeyPoints: ChapterPlotKeyPoint[];
+  lastModified: number;
 }
 
 // 长期记忆类型

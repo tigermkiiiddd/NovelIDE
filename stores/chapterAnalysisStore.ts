@@ -1,5 +1,13 @@
 import { create } from 'zustand';
-import { ChapterAnalysis, ForeshadowingItem, FileType } from '../types';
+import {
+  ChapterAnalysis,
+  ChapterAnalysisData,
+  ForeshadowingItem,
+  ChapterCharacterState,
+  ChapterPlotKeyPoint,
+  FileType,
+  SourceRef,
+} from '../types';
 import { createPersistingStore } from './createPersistingStore';
 import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
@@ -11,23 +19,126 @@ import { AIService } from '../services/geminiService';
 import { runChapterAnalysisAgent, applyMergeActions } from '../services/subAgents/chapterAnalysisAgent';
 import { getNodePath } from '../services/fileSystem';
 
+// ============================================
+// 数据迁移函数：旧格式 → 新格式
+// ============================================
+
+function migrateOldData(oldAnalyses: ChapterAnalysis[]): ChapterAnalysisData {
+  const characterStates: ChapterCharacterState[] = [];
+  const foreshadowing: ForeshadowingItem[] = [];
+  const plotKeyPoints: ChapterPlotKeyPoint[] = [];
+
+  for (const analysis of oldAnalyses) {
+    // 扁平化角色状态
+    for (const state of analysis.characterStates || []) {
+      characterStates.push({
+        id: state.id || `state-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        characterName: state.characterName,
+        chapterRef: analysis.chapterPath,
+        stateDescription: state.stateDescription,
+        emotionalState: state.emotionalState,
+        location: state.location,
+        relationships: state.relationships,
+        changes: state.changes || [],
+        createdAt: analysis.extractedAt,
+      });
+    }
+
+    // 扁平化伏笔（添加 source 和 sourceRef）
+    for (const f of analysis.foreshadowing || []) {
+      // 检查是否已迁移（有 sourceRef 字段）
+      if ('sourceRef' in f && f.sourceRef) {
+        foreshadowing.push(f as ForeshadowingItem);
+      } else {
+        // 旧格式迁移 - 使用 any 类型处理旧数据
+        const oldF = f as any;
+        foreshadowing.push({
+          id: oldF.id || `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content: oldF.content || '',
+          type: oldF.type || 'planted',
+          duration: 'mid_term' as const, // 默认中期
+          tags: oldF.tags || [],
+          source: 'chapter_analysis' as const,
+          sourceRef: analysis.chapterPath,
+          developedRefs: (oldF.relatedChapters || []).map((ch: string) => ({
+            source: 'chapter_analysis' as const,
+            ref: ch,
+          })),
+          notes: oldF.notes,
+        });
+      }
+    }
+
+    // 扁平化剧情关键点
+    for (const point of analysis.plotSummary || []) {
+      plotKeyPoints.push({
+        id: point.id || `plot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        chapterRef: analysis.chapterPath,
+        description: point.description,
+        importance: point.importance,
+        tags: point.tags,
+        relatedCharacters: point.relatedCharacters,
+        createdAt: analysis.extractedAt,
+      });
+    }
+  }
+
+  return {
+    characterStates,
+    foreshadowing,
+    plotKeyPoints,
+    lastModified: Date.now(),
+  };
+}
+
+// 判断数据是否为新格式
+function isNewFormat(data: any): data is ChapterAnalysisData {
+  return data && 'characterStates' in data && 'foreshadowing' in data && 'plotKeyPoints' in data;
+}
+
+// ============================================
+// Store 接口定义
+// ============================================
+
 interface ChapterAnalysisState {
+  // 新的扁平化数据结构
+  data: ChapterAnalysisData;
+
+  // 兼容：保留旧的 analyses 数组用于过渡
   analyses: ChapterAnalysis[];
   isExtracting: boolean;
   extractionError: string | null;
 
-  // Actions
+  // Actions - 数据加载
   loadProjectAnalyses: (projectId: string) => Promise<void>;
-  setAnalyses: (analyses: ChapterAnalysis[]) => void;
-  addAnalysis: (analysis: ChapterAnalysis) => void;
-  updateAnalysis: (id: string, updates: Partial<ChapterAnalysis>) => void;
-  deleteAnalysis: (id: string) => void;
 
-  // Query methods
-  getByPath: (chapterPath: string) => ChapterAnalysis | undefined;
-  getByCharacter: (characterName: string) => ChapterAnalysis[];
-  getBySession: (sessionId: string) => ChapterAnalysis[];
-  getSortedByTime: () => ChapterAnalysis[];
+  // Actions - 伏笔操作（顶层）
+  addForeshadowing: (item: Omit<ForeshadowingItem, 'id'>) => string;
+  updateForeshadowing: (id: string, updates: Partial<ForeshadowingItem>) => void;
+  deleteForeshadowing: (id: string) => void;
+
+  // Actions - 角色状态操作
+  addCharacterState: (state: Omit<ChapterCharacterState, 'id'>) => string;
+  updateCharacterState: (id: string, updates: Partial<ChapterCharacterState>) => void;
+  deleteCharacterState: (id: string) => void;
+
+  // Actions - 剧情关键点操作
+  addPlotKeyPoint: (point: Omit<ChapterPlotKeyPoint, 'id'>) => string;
+  updatePlotKeyPoint: (id: string, updates: Partial<ChapterPlotKeyPoint>) => void;
+  deletePlotKeyPoint: (id: string) => void;
+
+  // Query methods - 伏笔
+  getForeshadowingById: (id: string) => ForeshadowingItem | undefined;
+  getAllForeshadowing: () => ForeshadowingItem[];
+  getUnresolvedForeshadowing: () => ForeshadowingItem[];
+  getForeshadowingByChapter: (chapterRef: string) => ForeshadowingItem[];
+
+  // Query methods - 角色状态
+  getCharacterStatesByCharacter: (characterName: string) => ChapterCharacterState[];
+  getCharacterStatesByChapter: (chapterRef: string) => ChapterCharacterState[];
+
+  // Query methods - 剧情关键点
+  getPlotKeyPointsByChapter: (chapterRef: string) => ChapterPlotKeyPoint[];
 
   // Extraction trigger
   triggerExtraction: (
@@ -39,27 +150,30 @@ interface ChapterAnalysisState {
   setExtracting: (isExtracting: boolean) => void;
   setExtractionError: (error: string | null) => void;
 
-  // 伏笔操作（唯一入口）
-  addForeshadowing: (chapterPath: string, item: Omit<ForeshadowingItem, 'id'>) => string;
-  updateForeshadowing: (chapterPath: string, foreshadowingId: string, updates: Partial<ForeshadowingItem>) => void;
-  deleteForeshadowing: (chapterPath: string, foreshadowingId: string) => void;
-
-  // 获取所有伏笔（聚合查询）
-  getAllForeshadowing: () => ForeshadowingItem[];
-  getUnresolvedForeshadowing: () => ForeshadowingItem[];
-
   // 版本管理
   restoreAnalysisFromVersion: (versionId: string) => boolean;
 
   // Internal helpers
-  _syncToJsonFile: (analyses: ChapterAnalysis[]) => Promise<void>;
+  _syncToJsonFile: () => Promise<void>;
   _saveToJsonFile: () => Promise<void>;
 }
+
+// ============================================
+// Store 实现
+// ============================================
+
+const initialState: ChapterAnalysisData = {
+  characterStates: [],
+  foreshadowing: [],
+  plotKeyPoints: [],
+  lastModified: Date.now(),
+};
 
 export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisState>(
   'chapterAnalysisStore',
   {
-    analyses: [],
+    data: initialState,
+    analyses: [], // 兼容保留
     isExtracting: false,
     extractionError: null,
 
@@ -67,144 +181,223 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
       try {
         console.log('[ChapterAnalysisStore] 开始加载章节分析, projectId:', projectId);
 
-        // 从 JSON 文件加载
         const fileStore = useFileStore.getState();
         console.log('[ChapterAnalysisStore] fileStore.files 数量:', fileStore.files.length);
 
         const analysisFile = fileStore.files.find(f => f.name === '章节分析.json');
-        console.log('[ChapterAnalysisStore] 找到 analysisFile:', !!analysisFile, 'content:', analysisFile?.content?.substring(0, 50));
+        console.log('[ChapterAnalysisStore] 找到 analysisFile:', !!analysisFile);
 
         if (analysisFile && analysisFile.content) {
           try {
-            const analyses = JSON.parse(analysisFile.content);
-            if (Array.isArray(analyses)) {
-              useChapterAnalysisStore.setState({ analyses });
-              console.log('[ChapterAnalysisStore] 从 JSON 文件加载完成, 分析数量:', analyses.length);
-              return;
+            const parsed = JSON.parse(analysisFile.content);
+
+            // 判断是新格式还是旧格式
+            if (isNewFormat(parsed)) {
+              // 新格式直接使用
+              useChapterAnalysisStore.setState({ data: parsed });
+              console.log('[ChapterAnalysisStore] 加载新格式数据:', {
+                characterStates: parsed.characterStates.length,
+                foreshadowing: parsed.foreshadowing.length,
+                plotKeyPoints: parsed.plotKeyPoints.length,
+              });
+            } else if (Array.isArray(parsed)) {
+              // 旧格式，需要迁移
+              console.log('[ChapterAnalysisStore] 检测到旧格式，开始迁移...');
+              const migrated = migrateOldData(parsed);
+              useChapterAnalysisStore.setState({ data: migrated, analyses: parsed });
+              console.log('[ChapterAnalysisStore] 迁移完成:', {
+                characterStates: migrated.characterStates.length,
+                foreshadowing: migrated.foreshadowing.length,
+                plotKeyPoints: migrated.plotKeyPoints.length,
+              });
+              // 立即保存新格式
+              useChapterAnalysisStore.getState()._syncToJsonFile();
             }
+            return;
           } catch (parseError) {
             console.error('[ChapterAnalysisStore] JSON 解析失败:', parseError);
           }
         }
 
         console.log('[ChapterAnalysisStore] 没有找到章节分析数据');
-        useChapterAnalysisStore.setState({ analyses: [] });
+        useChapterAnalysisStore.setState({ data: initialState });
       } catch (error) {
         console.error('[ChapterAnalysisStore] 加载章节分析失败:', error);
-        useChapterAnalysisStore.setState({ analyses: [] });
+        useChapterAnalysisStore.setState({ data: initialState });
       }
     },
 
-    setAnalyses: (analyses) => {
-      useChapterAnalysisStore.setState({ analyses });
-    },
+    // ========== 伏笔操作 ==========
 
-    // 辅助函数：立即同步更新 JSON 文件内容到内存
-    _syncToJsonFile: async (analyses: ChapterAnalysis[]) => {
-      console.log('[ChapterAnalysisStore] _syncToJsonFile 开始, 数据:', analyses.length);
-
-      const fileStore = useFileStore.getState();
-      const jsonContent = JSON.stringify(analyses, null, 2);
-      console.log('[ChapterAnalysisStore] JSON 内容:', jsonContent.substring(0, 100));
-
-      // 查找或创建章节分析文件
-      let analysisFile = fileStore.files.find(f => f.name === '章节分析.json');
-
-      if (analysisFile) {
-        // 更新现有文件内容
-        analysisFile.content = jsonContent;
-        analysisFile.lastModified = Date.now();
-        console.log('[ChapterAnalysisStore] 更新现有文件');
-      } else {
-        // 创建新文件
-        const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
-        if (infoFolder) {
-          analysisFile = {
-            id: `analysis-${Date.now()}`,
-            parentId: infoFolder.id,
-            name: '章节分析.json',
-            type: FileType.FILE,
-            content: jsonContent,
-            lastModified: Date.now()
-          };
-          fileStore.files.push(analysisFile);
-          console.log('[ChapterAnalysisStore] 创建新文件');
-        } else {
-          console.error('[ChapterAnalysisStore] 未找到 00_基础信息 文件夹');
-        }
-      }
-
-      // 立即保存到数据库
-      const projectStore = useProjectStore.getState();
-      const projectId = projectStore.currentProjectId;
-      console.log('[ChapterAnalysisStore] projectId:', projectId);
-
-      if (projectId) {
-        try {
-          await dbAPI.saveFiles(projectId, [...fileStore.files]);
-          console.log('[ChapterAnalysisStore] ✅ 保存成功');
-        } catch (err) {
-          console.error('[ChapterAnalysisStore] ❌ 保存失败:', err);
-        }
-      }
-    },
-
-    addAnalysis: (analysis) => {
-      console.log('[ChapterAnalysisStore] addAnalysis 被调用', analysis);
+    addForeshadowing: (item) => {
       const state = useChapterAnalysisStore.getState();
-      const newAnalyses = [...state.analyses, analysis];
-      useChapterAnalysisStore.setState({ analyses: newAnalyses });
-      console.log('[ChapterAnalysisStore] 新状态:', newAnalyses);
-      // 立即同步到 JSON 文件
-      useChapterAnalysisStore.getState()._syncToJsonFile(newAnalyses);
+      const id = `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      const newItem: ForeshadowingItem = { ...item, id };
+      const newData = {
+        ...state.data,
+        foreshadowing: [...state.data.foreshadowing, newItem],
+        lastModified: Date.now(),
+      };
+
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+      return id;
     },
 
-    updateAnalysis: (id, updates) => {
-      console.log('[ChapterAnalysisStore] updateAnalysis 被调用', id, updates);
+    updateForeshadowing: (id, updates) => {
       const state = useChapterAnalysisStore.getState();
-      const newAnalyses = state.analyses.map((a) =>
-        a.id === id ? { ...a, ...updates } : a
+      const newForeshadowing = state.data.foreshadowing.map(f =>
+        f.id === id ? { ...f, ...updates } : f
       );
-      useChapterAnalysisStore.setState({ analyses: newAnalyses });
-      // 立即同步到 JSON 文件
-      useChapterAnalysisStore.getState()._syncToJsonFile(newAnalyses);
+      const newData = {
+        ...state.data,
+        foreshadowing: newForeshadowing,
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
     },
 
-    deleteAnalysis: (id) => {
-      console.log('[ChapterAnalysisStore] deleteAnalysis 被调用', id);
+    deleteForeshadowing: (id) => {
       const state = useChapterAnalysisStore.getState();
-      const newAnalyses = state.analyses.filter((a) => a.id !== id);
-      useChapterAnalysisStore.setState({ analyses: newAnalyses });
-      // 立即同步到 JSON 文件
-      useChapterAnalysisStore.getState()._syncToJsonFile(newAnalyses);
+      const newForeshadowing = state.data.foreshadowing.filter(f => f.id !== id);
+      const newData = {
+        ...state.data,
+        foreshadowing: newForeshadowing,
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
     },
 
-    getByPath: (chapterPath) => {
-      const state = useChapterAnalysisStore.getState();
-      return state.analyses.find((a) => a.chapterPath === chapterPath);
+    // ========== 角色状态操作 ==========
+
+    addCharacterState: (state) => {
+      const storeState = useChapterAnalysisStore.getState();
+      const id = `char-state-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newState: ChapterCharacterState = { ...state, id };
+      const newData = {
+        ...storeState.data,
+        characterStates: [...storeState.data.characterStates, newState],
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+      return id;
     },
 
-    getByCharacter: (characterName) => {
+    updateCharacterState: (id, updates) => {
       const state = useChapterAnalysisStore.getState();
-      return state.analyses.filter((a) =>
-        a.characterStates.some((cs) => cs.characterName === characterName)
+      const newCharacterStates = state.data.characterStates.map(s =>
+        s.id === id ? { ...s, ...updates } : s
+      );
+      const newData = {
+        ...state.data,
+        characterStates: newCharacterStates,
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+    },
+
+    deleteCharacterState: (id) => {
+      const state = useChapterAnalysisStore.getState();
+      const newCharacterStates = state.data.characterStates.filter(s => s.id !== id);
+      const newData = {
+        ...state.data,
+        characterStates: newCharacterStates,
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+    },
+
+    // ========== 剧情关键点操作 ==========
+
+    addPlotKeyPoint: (point) => {
+      const state = useChapterAnalysisStore.getState();
+      const id = `plot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const newPoint: ChapterPlotKeyPoint = { ...point, id };
+      const newData = {
+        ...state.data,
+        plotKeyPoints: [...state.data.plotKeyPoints, newPoint],
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+      return id;
+    },
+
+    updatePlotKeyPoint: (id, updates) => {
+      const state = useChapterAnalysisStore.getState();
+      const newPlotKeyPoints = state.data.plotKeyPoints.map(p =>
+        p.id === id ? { ...p, ...updates } : p
+      );
+      const newData = {
+        ...state.data,
+        plotKeyPoints: newPlotKeyPoints,
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+    },
+
+    deletePlotKeyPoint: (id) => {
+      const state = useChapterAnalysisStore.getState();
+      const newPlotKeyPoints = state.data.plotKeyPoints.filter(p => p.id !== id);
+      const newData = {
+        ...state.data,
+        plotKeyPoints: newPlotKeyPoints,
+        lastModified: Date.now(),
+      };
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+    },
+
+    // ========== 查询方法 ==========
+
+    getForeshadowingById: (id) => {
+      return useChapterAnalysisStore.getState().data.foreshadowing.find(f => f.id === id);
+    },
+
+    getAllForeshadowing: () => {
+      return useChapterAnalysisStore.getState().data.foreshadowing;
+    },
+
+    getUnresolvedForeshadowing: () => {
+      const { foreshadowing } = useChapterAnalysisStore.getState().data;
+      return foreshadowing.filter(f => f.type === 'planted' || f.type === 'developed');
+    },
+
+    getForeshadowingByChapter: (chapterRef) => {
+      const { foreshadowing } = useChapterAnalysisStore.getState().data;
+      return foreshadowing.filter(f =>
+        f.sourceRef === chapterRef ||
+        f.developedRefs.some(r => r.ref === chapterRef)
       );
     },
 
-    getBySession: (sessionId) => {
-      const state = useChapterAnalysisStore.getState();
-      return state.analyses.filter((a) => a.sessionId === sessionId);
+    getCharacterStatesByCharacter: (characterName) => {
+      const { characterStates } = useChapterAnalysisStore.getState().data;
+      return characterStates.filter(s => s.characterName === characterName);
     },
 
-    getSortedByTime: () => {
-      const state = useChapterAnalysisStore.getState();
-      return [...state.analyses].sort((a, b) => a.extractedAt - b.extractedAt);
+    getCharacterStatesByChapter: (chapterRef) => {
+      const { characterStates } = useChapterAnalysisStore.getState().data;
+      return characterStates.filter(s => s.chapterRef === chapterRef);
     },
+
+    getPlotKeyPointsByChapter: (chapterRef) => {
+      const { plotKeyPoints } = useChapterAnalysisStore.getState().data;
+      return plotKeyPoints.filter(p => p.chapterRef === chapterRef);
+    },
+
+    // ========== 提取逻辑 ==========
 
     triggerExtraction: async (chapterPath, sessionId, projectId) => {
       const state = useChapterAnalysisStore.getState();
 
-      // 防止重复提取
       if (state.isExtracting) {
         console.log('[ChapterAnalysisStore] 已有提取任务在进行中，跳过');
         return;
@@ -227,10 +420,9 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           throw new Error(`无法找到章节文件或内容为空: ${chapterPath}`);
         }
 
-        // 2. 获取 AIService 实例（使用轻量模型）
+        // 2. 获取 AIService 实例
         const agentStore = useAgentStore.getState();
         const aiConfig = agentStore.aiConfig;
-        // 使用轻量模型，如果没有配置则回退到主模型
         const lightConfig = {
           ...aiConfig,
           modelName: aiConfig.lightweightModelName || aiConfig.modelName
@@ -240,57 +432,115 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         // 3. 提取章节标题
         const chapterTitle = file.name.replace(/\.md$/, '');
 
-        // 4. 检查是否已存在该章节的分析
-        const existingAnalysis = state.getByPath(chapterPath);
-        console.log('[ChapterAnalysisStore] 现有分析:', existingAnalysis ? '有' : '无');
+        // 4. 获取现有数据（兼容旧逻辑）
+        const existingCharacterStates = state.data.characterStates.filter(s => s.chapterRef === chapterPath);
+        const existingForeshadowing = state.data.foreshadowing.filter(f => f.sourceRef === chapterPath);
 
-        // 5. 获取未完结的伏笔（从所有章节分析中提取 planted 和 developed 状态）
-        const unresolvedForeshadowing: ForeshadowingItem[] = state.analyses.flatMap(
-          (analysis: ChapterAnalysis) => (analysis.foreshadowing || [])
-        ).filter(
-          (item: ForeshadowingItem) => item.type === 'planted' || item.type === 'developed'
-        );
+        // 5. 获取未完结的伏笔
+        const unresolvedForeshadowing = state.getUnresolvedForeshadowing();
         console.log('[ChapterAnalysisStore] 未完结伏笔数量:', unresolvedForeshadowing.length);
 
         // 6. 获取项目元信息
         const projectStore = useProjectStore.getState();
         const project = projectStore.getCurrentProject();
 
-        // 7. 调用分析代理（传入现有分析和未完结伏笔，让 LLM 做决策）
+        // 7. 调用分析代理
+        // TODO: 需要更新 chapterAnalysisAgent 以支持新的扁平化结构
+        // 暂时使用旧逻辑
+        const legacyAnalysis = state.analyses.find(a => a.chapterPath === chapterPath);
+
         const analysisResult = await runChapterAnalysisAgent(
           aiService,
           file.content,
           chapterTitle,
-          existingAnalysis,
+          legacyAnalysis,
           project,
           unresolvedForeshadowing,
           (msg) => console.log(msg)
         );
 
-        // 8. LLM 决策：如果 mergeActions 中全是 skip 或无操作，则不更新
+        // 8. 应用合并决策
         const hasChanges = analysisResult.mergeActions.some((action: any) => action.action !== 'skip');
-        if (!hasChanges && existingAnalysis) {
+        if (!hasChanges && legacyAnalysis) {
           console.log('[ChapterAnalysisStore] LLM 决策：数据无变化，跳过更新');
           return;
         }
 
-        // 9. 应用 LLM 的合并决策
         const finalAnalysis = applyMergeActions(
-          existingAnalysis,
+          legacyAnalysis,
           analysisResult,
           chapterTitle,
           chapterPath
         );
 
-        // 10. 更新状态
-        if (existingAnalysis) {
-          state.updateAnalysis(existingAnalysis.id, finalAnalysis);
-          console.log('[ChapterAnalysisStore] 更新章节分析:', chapterPath);
+        // 9. 更新数据（将旧格式转换为新格式并合并）
+        const { data } = useChapterAnalysisStore.getState();
+
+        // 移除该章节的旧数据
+        const filteredCharacterStates = data.characterStates.filter(s => s.chapterRef !== chapterPath);
+        const filteredForeshadowing = data.foreshadowing.filter(f => f.sourceRef !== chapterPath);
+        const filteredPlotKeyPoints = data.plotKeyPoints.filter(p => p.chapterRef !== chapterPath);
+
+        // 添加新数据
+        const newCharacterStates: ChapterCharacterState[] = (finalAnalysis.characterStates || []).map(s => ({
+          id: s.id || `state-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          characterName: s.characterName,
+          chapterRef: chapterPath,
+          stateDescription: s.stateDescription,
+          emotionalState: s.emotionalState,
+          location: s.location,
+          relationships: s.relationships,
+          changes: s.changes || [],
+          createdAt: Date.now(),
+        }));
+
+        const newForeshadowing: ForeshadowingItem[] = (finalAnalysis.foreshadowing || []).map(f => ({
+          id: f.id || `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          content: f.content,
+          type: f.type,
+          duration: (f as any).duration || 'mid_term',
+          tags: f.tags || [],
+          source: 'chapter_analysis' as const,
+          sourceRef: chapterPath,
+          developedRefs: (f as any).developedRefs || [],
+          resolvedRef: (f as any).resolvedRef,
+          notes: f.notes,
+          expectedResolution: (f as any).expectedResolution,
+        }));
+
+        const newPlotKeyPoints: ChapterPlotKeyPoint[] = (finalAnalysis.plotSummary || []).map(p => ({
+          id: p.id || `plot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          chapterRef: chapterPath,
+          description: p.description,
+          importance: p.importance,
+          tags: p.tags || [],
+          relatedCharacters: p.relatedCharacters || [],
+          createdAt: Date.now(),
+        }));
+
+        const newData: ChapterAnalysisData = {
+          characterStates: [...filteredCharacterStates, ...newCharacterStates],
+          foreshadowing: [...filteredForeshadowing, ...newForeshadowing],
+          plotKeyPoints: [...filteredPlotKeyPoints, ...newPlotKeyPoints],
+          lastModified: Date.now(),
+        };
+
+        useChapterAnalysisStore.setState({ data: newData });
+
+        // 更新旧的 analyses（兼容）
+        if (legacyAnalysis) {
+          const newAnalyses = state.analyses.map(a =>
+            a.id === legacyAnalysis.id ? finalAnalysis : a
+          );
+          useChapterAnalysisStore.setState({ analyses: newAnalyses });
         } else {
-          state.addAnalysis(finalAnalysis);
-          console.log('[ChapterAnalysisStore] 添加章节分析:', chapterPath);
+          useChapterAnalysisStore.setState({ analyses: [...state.analyses, finalAnalysis] });
         }
 
+        // 同步到文件
+        useChapterAnalysisStore.getState()._syncToJsonFile();
+
+        // 更新角色记忆
         useCharacterMemoryStore.getState().upsertStateSnapshots(finalAnalysis);
 
         // 创建版本记录
@@ -301,12 +551,12 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           `AI 分析: ${chapterTitle}`
         );
 
-        console.log('[ChapterAnalysisStore] 章节分析完成，最终数据:', finalAnalysis);
+        console.log('[ChapterAnalysisStore] 章节分析完成');
 
       } catch (error: any) {
         console.error('[ChapterAnalysisStore] 提取失败:', error);
         state.setExtractionError(error.message || '未知错误');
-        throw error; // 重新抛出错误，让调用方处理
+        throw error;
       } finally {
         state.setExtracting(false);
       }
@@ -320,86 +570,6 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
       useChapterAnalysisStore.setState({ extractionError: error });
     },
 
-    // ========== 伏笔操作（唯一入口） ==========
-    addForeshadowing: (chapterPath, item) => {
-      const state = useChapterAnalysisStore.getState();
-      const id = `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-      const analysis = state.analyses.find(a => a.chapterPath === chapterPath);
-      if (analysis) {
-        analysis.foreshadowing.push({ ...item, id });
-        useChapterAnalysisStore.setState({ analyses: [...state.analyses] });
-
-        // 创建版本记录
-        const versionStore = useEntityVersionStore.getState();
-        versionStore.createAnalysisVersion(analysis, 'manual', '添加伏笔');
-      } else {
-        // 如果没有章节分析，创建一个基础的
-        const newAnalysis: ChapterAnalysis = {
-          id: `analysis-${Date.now()}`,
-          chapterPath,
-          chapterTitle: chapterPath.split('/').pop() || '',
-          sessionId: 'manual',
-          projectId: '',
-          plotSummary: [],
-          characterStates: [],
-          foreshadowing: [{ ...item, id }],
-          extractedAt: Date.now(),
-          lastModified: Date.now(),
-          wordCount: 0
-        };
-        useChapterAnalysisStore.setState({ analyses: [...state.analyses, newAnalysis] });
-      }
-
-      // 延迟保存
-      setTimeout(() => useChapterAnalysisStore.getState()._saveToJsonFile(), 500);
-      return id;
-    },
-
-    updateForeshadowing: (chapterPath, foreshadowingId, updates) => {
-      const state = useChapterAnalysisStore.getState();
-      const analysis = state.analyses.find(a => a.chapterPath === chapterPath);
-      if (!analysis) return;
-
-      analysis.foreshadowing = analysis.foreshadowing.map(f =>
-        f.id === foreshadowingId ? { ...f, ...updates } : f
-      );
-      analysis.lastModified = Date.now();
-
-      useChapterAnalysisStore.setState({ analyses: [...state.analyses] });
-
-      // 创建版本记录
-      const versionStore = useEntityVersionStore.getState();
-      versionStore.createAnalysisVersion(analysis, 'manual', '编辑伏笔');
-
-      setTimeout(() => useChapterAnalysisStore.getState()._saveToJsonFile(), 500);
-    },
-
-    deleteForeshadowing: (chapterPath, foreshadowingId) => {
-      const state = useChapterAnalysisStore.getState();
-      const analysis = state.analyses.find(a => a.chapterPath === chapterPath);
-      if (!analysis) return;
-
-      analysis.foreshadowing = analysis.foreshadowing.filter(f => f.id !== foreshadowingId);
-      analysis.lastModified = Date.now();
-
-      useChapterAnalysisStore.setState({ analyses: [...state.analyses] });
-      setTimeout(() => useChapterAnalysisStore.getState()._saveToJsonFile(), 500);
-    },
-
-    // ========== 伏笔查询（聚合） ==========
-    getAllForeshadowing: () => {
-      const state = useChapterAnalysisStore.getState();
-      return state.analyses.flatMap(a => a.foreshadowing || []);
-    },
-
-    getUnresolvedForeshadowing: () => {
-      const state = useChapterAnalysisStore.getState();
-      return state.analyses.flatMap(
-        a => (a.foreshadowing || []).filter(f => f.type === 'planted' || f.type === 'developed')
-      );
-    },
-
     // 版本恢复
     restoreAnalysisFromVersion: (versionId: string) => {
       const versionStore = useEntityVersionStore.getState();
@@ -409,104 +579,109 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         return false;
       }
 
-      const state = useChapterAnalysisStore.getState();
-      const existingIndex = state.analyses.findIndex(a => a.id === restored.id);
+      // 重新迁移恢复的数据
+      const migrated = migrateOldData([restored]);
+      const { data } = useChapterAnalysisStore.getState();
 
-      if (existingIndex >= 0) {
-        // 更新现有分析
-        const newAnalyses = [...state.analyses];
-        newAnalyses[existingIndex] = restored;
-        useChapterAnalysisStore.setState({ analyses: newAnalyses });
-        // 同步到 JSON 文件
-        useChapterAnalysisStore.getState()._syncToJsonFile(newAnalyses);
-        console.log('[ChapterAnalysisStore] 恢复版本成功:', restored.chapterTitle);
-        return true;
-      } else {
-        // 添加新分析
-        const newAnalyses = [...state.analyses, restored];
-        useChapterAnalysisStore.setState({ analyses: newAnalyses });
-        useChapterAnalysisStore.getState()._syncToJsonFile(newAnalyses);
-        console.log('[ChapterAnalysisStore] 恢复版本成功(新增):', restored.chapterTitle);
-        return true;
-      }
+      // 合并数据（替换该章节的数据）
+      const chapterPath = restored.chapterPath;
+      const filteredData: ChapterAnalysisData = {
+        characterStates: data.characterStates.filter(s => s.chapterRef !== chapterPath),
+        foreshadowing: data.foreshadowing.filter(f => f.sourceRef !== chapterPath),
+        plotKeyPoints: data.plotKeyPoints.filter(p => p.chapterRef !== chapterPath),
+        lastModified: Date.now(),
+      };
+
+      const newData: ChapterAnalysisData = {
+        characterStates: [...filteredData.characterStates, ...migrated.characterStates],
+        foreshadowing: [...filteredData.foreshadowing, ...migrated.foreshadowing],
+        plotKeyPoints: [...filteredData.plotKeyPoints, ...migrated.plotKeyPoints],
+        lastModified: Date.now(),
+      };
+
+      useChapterAnalysisStore.setState({ data: newData });
+      useChapterAnalysisStore.getState()._syncToJsonFile();
+      console.log('[ChapterAnalysisStore] 恢复版本成功:', restored.chapterTitle);
+      return true;
     },
 
-    // 内部方法:保存到 JSON 文件
-    _saveToJsonFile: async () => {
+    // 内部方法：同步到 JSON 文件
+    _syncToJsonFile: async () => {
       const state = useChapterAnalysisStore.getState();
       const fileStore = useFileStore.getState();
 
-      // 找到或创建章节分析.json 文件
+      // 保存新格式
+      const jsonContent = JSON.stringify(state.data, null, 2);
+
       let analysisFile = fileStore.files.find(f => f.name === '章节分析.json');
 
-      if (!analysisFile) {
-        // 需要先找到 00_基础信息 文件夹
-        const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
-        if (!infoFolder) {
-          console.warn('[ChapterAnalysisStore] 无法保存：00_基础信息 文件夹不存在');
-          return;
-        }
-
-        // 创建文件
-        const newFileId = `analysis-${Date.now()}`;
-        analysisFile = {
-          id: newFileId,
-          parentId: infoFolder.id,
-          name: '章节分析.json',
-          type: FileType.FILE,
-          content: JSON.stringify(state.analyses, null, 2),
-          lastModified: Date.now()
-        };
-
-        fileStore.files.push(analysisFile);
-        console.log('[ChapterAnalysisStore] 创建章节分析.json 文件');
-      } else {
-        // 更新现有文件
-        analysisFile.content = JSON.stringify(state.analyses, null, 2);
+      if (analysisFile) {
+        analysisFile.content = jsonContent;
         analysisFile.lastModified = Date.now();
+      } else {
+        const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
+        if (infoFolder) {
+          analysisFile = {
+            id: `analysis-${Date.now()}`,
+            parentId: infoFolder.id,
+            name: '章节分析.json',
+            type: FileType.FILE,
+            content: jsonContent,
+            lastModified: Date.now()
+          };
+          fileStore.files.push(analysisFile);
+        }
       }
 
       // 保存到数据库
       const projectStore = useProjectStore.getState();
-      const projectId = projectStore.getCurrentProject()?.id;
+      const projectId = projectStore.currentProjectId;
+
       if (projectId) {
-        await dbAPI.saveFiles(projectId, fileStore.files);
-        console.log('[ChapterAnalysisStore] 已保存到 JSON 文件');
+        try {
+          await dbAPI.saveFiles(projectId, [...fileStore.files]);
+          console.log('[ChapterAnalysisStore] ✅ 保存成功');
+        } catch (err) {
+          console.error('[ChapterAnalysisStore] ❌ 保存失败:', err);
+        }
       }
-    }
+    },
+
+    _saveToJsonFile: async () => {
+      const state = useChapterAnalysisStore.getState();
+      state._syncToJsonFile();
+    },
   },
+
+  // 持久化回调
   async (state) => {
-    // 保存到 JSON 文件而不是 IndexedDB
     const fileStore = useFileStore.getState();
     let analysisFile = fileStore.files.find(f => f.name === '章节分析.json');
 
     if (!analysisFile) {
-      // 需要先找到 00_基础信息 文件夹
       const infoFolder = fileStore.files.find(f => f.name === '00_基础信息' && f.parentId === 'root');
       if (infoFolder) {
-        const newFileId = `analysis-${Date.now()}`;
         analysisFile = {
-          id: newFileId,
+          id: `analysis-${Date.now()}`,
           parentId: infoFolder.id,
           name: '章节分析.json',
           type: FileType.FILE,
-          content: JSON.stringify(state.analyses, null, 2),
+          content: JSON.stringify(state.data, null, 2),
           lastModified: Date.now()
         };
         fileStore.files.push(analysisFile);
       }
     } else {
-      analysisFile.content = JSON.stringify(state.analyses, null, 2);
+      analysisFile.content = JSON.stringify(state.data, null, 2);
       analysisFile.lastModified = Date.now();
     }
 
     const projectStore = useProjectStore.getState();
     const projectId = projectStore.getCurrentProject()?.id;
     if (projectId) {
-      // 直接保存到数据库，绕过 fileStore 的状态更新
       await dbAPI.saveFiles(projectId, [...fileStore.files]);
       console.log('[ChapterAnalysisStore] 已保存到 JSON 文件');
     }
   },
-  0  // 立即保存，不延迟
+  0
 );

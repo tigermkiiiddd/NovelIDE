@@ -122,12 +122,17 @@ const submitAnalysisTool: ToolDefinition = {
               id: { type: 'string', description: '唯一标识符（如果是新增则留空）' },
               content: {
                 type: 'string',
-                description: '伏笔内容的详细描述（至少30字）。必须包含：1) 伏笔的具体内容是什么 2) 为什么这是伏笔（暗示了什么） 3) 可能的后续发展。示例："苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。酒会的时间地点都很模糊，增加了悬念感。"'
+                description: '伏笔内容的简洁描述（30字以内）。必须精炼概括伏笔核心。示例："苏清月捡到神秘玉佩，暗藏家族秘密" 或 "梦境预言：不要相信身边最亲近的人"'
               },
               type: {
                 type: 'string',
                 enum: ['planted', 'developed', 'resolved'],
                 description: '伏笔类型：planted=新埋下（本章首次出现的线索、暗示、未解释的细节），developed=推进中（之前埋下的伏笔本章有新进展、新信息），resolved=已回收（本章揭晓答案、谜底揭开、预言成真）'
+              },
+              duration: {
+                type: 'string',
+                enum: ['short_term', 'mid_term', 'long_term'],
+                description: '伏笔时长类型：short_term=短期伏笔（预计1-5章内回收），mid_term=中期伏笔（预计10-20章回收），long_term=长期伏笔（预计100章以上回收，如身世之谜、世界观秘密）'
               },
               tags: {
                 type: 'array',
@@ -139,9 +144,9 @@ const submitAnalysisTool: ToolDefinition = {
                 description: '补充说明（可选）。如：预计回收时间、与其他伏笔的关联、重要性评估等。示例："预计在第10章回收"、"与第3章的梦境伏笔呼应"、"这是全文最重要的身世伏笔"'
               }
             },
-            required: ['content', 'type', 'tags']
+            required: ['content', 'type', 'duration', 'tags']
           },
-          description: '伏笔跟踪列表。仔细识别：1) 角色提到但未出场的人物 2) 神秘物品/未解释的现象 3) 反常行为/未说明的动机 4) 预言/梦境/暗示 5) 刻意强调的细节。如果本章确实没有伏笔，可以为空数组。每个content至少30字。'
+          description: '伏笔跟踪列表。仔细识别：1) 角色提到但未出场的人物 2) 神秘物品/未解释的现象 3) 反常行为/未说明的动机 4) 预言/梦境/暗示 5) 刻意强调的细节。如果本章确实没有伏笔，可以为空数组。content必须30字以内！'
         }
       },
       required: ['thinking', 'mergeActions', 'plotSummary', 'characterStates', 'foreshadowing']
@@ -267,7 +272,11 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
   \`\`\`
 
 ### 3. 伏笔（foreshadowing）
-- **content长度**：每个至少30字
+- **content长度**：每个**30字以内**（关键！必须简洁）
+- **duration**：必须选择时长类型
+  - short_term: 短期伏笔（1-5章内回收），如对话暗示、场景细节、角色小秘密
+  - mid_term: 中期伏笔（10-20章回收），如支线剧情、角色关系转变、物品用途
+  - long_term: 长期伏笔（100章以上回收），如身世之谜、世界观秘密、终极目标
 - **tags数量**：至少1个
 
 #### 什么是伏笔？
@@ -320,30 +329,40 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
 {
   "content": "提到了酒会",
   "type": "planted",
+  "duration": "mid_term",
   "tags": ["酒会"]
 }
 
-**✅ 正确示例（详细且有分析）**
+**❌ 错误示例（太长，超过30字）**
 {
   "content": "苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。酒会的时间地点都很模糊，增加了悬念感。",
+  "type": "planted"
+}
+
+**✅ 正确示例（简洁精准，30字以内）**
+{
+  "content": "神秘酒会邀请：将在那里遇到改变命运的人",
   "type": "planted",
-  "tags": ["感情线", "男主登场", "命运转折"],
-  "notes": "预计在第5章回收，可能是两人的初次见面"
+  "duration": "short_term",
+  "tags": ["感情线", "命运转折"],
+  "notes": "预计第5章回收，可能是男主初遇"
 }
 
 **✅ 推进中的伏笔示例**
 {
-  "content": "苏清月再次梦到了那个神秘的红衣女子，这次女子开口说话了，警告她'不要相信身边最亲近的人'。这个伏笔在第3章首次出现，本章有了新进展，暗示闺蜜秦雨薇可能是背叛者。",
+  "content": "梦境预言：不要相信身边最亲近的人",
   "type": "developed",
-  "tags": ["预言", "背叛", "梦境"],
-  "notes": "与第3章的梦境呼应，伏笔逐渐明朗"
+  "duration": "mid_term",
+  "tags": ["预言", "背叛"],
+  "notes": "与第3章梦境呼应，暗示闺蜜是背叛者"
 }
 
 **✅ 已回收的伏笔示例**
 {
-  "content": "苏清月终于发现，之前一直帮助她的神秘人竟然是她的亲生父亲。第1章中提到的'那个总在暗中观察她的中年男人'、第5章中'匿名打款的陌生账户'，所有线索在此刻串联起来，真相大白。",
+  "content": "神秘人身份揭晓：竟是女主亲生父亲",
   "type": "resolved",
-  "tags": ["身世", "父女", "真相揭晓"],
+  "duration": "long_term",
+  "tags": ["身世", "真相揭晓"],
   "notes": "回收了第1章和第5章的伏笔"
 }
 
@@ -429,9 +448,12 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
       id: f.id || `foreshadow-${Date.now()}-${idx}`,
       content: f.content || '',
       type: f.type || 'planted',
+      duration: f.duration || 'mid_term',
       tags: f.tags || [],
       source: 'chapter_analysis',  // 标记来源为章节分析
-      relatedChapters: [],
+      sourceRef: '',  // 将在 store 中填充
+      developedRefs: [],
+      resolvedRef: undefined,
       notes: f.notes
     }));
 
@@ -880,9 +902,12 @@ export function applyMergeActions(
           id: newId,
           content: action.data?.content || '',
           type: action.data?.type || 'planted',
+          duration: action.data?.duration || 'mid_term',
           tags: action.data?.tags || [],
           source: 'chapter_analysis',  // 标记来源为章节分析
-          relatedChapters: [],
+          sourceRef: chapterPath,
+          developedRefs: [],
+          resolvedRef: undefined,
           notes: action.data?.notes
         });
       } else if (action.action === 'update') {
