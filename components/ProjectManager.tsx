@@ -7,6 +7,7 @@ import { exportProject, importProject } from '../services/projectService';
 import { getDisplayVersion } from '../utils/version';
 import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
+import { getAllPresets, GenrePreset } from '../services/resources/presets';
 
 interface ProjectManagerProps {
   onSelectProject: (id: string) => void | Promise<void>;
@@ -19,20 +20,29 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   const createProject = useProjectStore(state => state.createProject);
   const deleteProject = useProjectStore(state => state.deleteProject);
   const refreshProjects = useProjectStore(state => state.refreshProjects);
-  
+
   // AI Config for Polishing
   const aiConfig = useAgentStore(state => state.aiConfig);
   const setAiConfig = useAgentStore(state => state.setAiConfig);
 
   const [isCreating, setIsCreating] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
+
   // Form State
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [genre, setGenre] = useState('');
   const [wordsPerChapter, setWordsPerChapter] = useState(3000);
   const [targetChapters, setTargetChapters] = useState(100);
+  const [chaptersPerVolume, setChaptersPerVolume] = useState(10);
+
+  // Preset State
+  const [selectedPreset, setSelectedPreset] = useState<GenrePreset | null>(null);
+  const [pleasureRhythm, setPleasureRhythm] = useState({
+    small: 3,
+    medium: 10,
+    large: 30
+  });
 
   // AI State
   const [isPolishing, setIsPolishing] = useState(false);
@@ -52,11 +62,41 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
     }
   }, [hasApiKey, isLoading]);
 
+  // Handle preset selection
+  const handlePresetChange = (presetId: string) => {
+    const presets = getAllPresets();
+    const preset = presets.find(p => p.id === presetId);
+
+    if (preset) {
+      setSelectedPreset(preset);
+      setGenre(preset.genre);
+      setWordsPerChapter(preset.defaultSettings.wordsPerChapter);
+      setTargetChapters(preset.defaultSettings.targetChapters);
+      setChaptersPerVolume(preset.defaultSettings.chaptersPerVolume);
+      setPleasureRhythm({
+        small: preset.pleasureRhythm.small,
+        medium: preset.pleasureRhythm.medium,
+        large: preset.pleasureRhythm.large
+      });
+    } else {
+      setSelectedPreset(null);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    
-    await createProject(name, description, genre, wordsPerChapter, targetChapters);
+
+    await createProject(
+      name,
+      description,
+      genre,
+      wordsPerChapter,
+      targetChapters,
+      chaptersPerVolume,
+      selectedPreset?.id,
+      pleasureRhythm
+    );
     resetForm();
   };
 
@@ -67,6 +107,9 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
     setGenre('');
     setWordsPerChapter(3000);
     setTargetChapters(100);
+    setChaptersPerVolume(10);
+    setSelectedPreset(null);
+    setPleasureRhythm({ small: 3, medium: 10, large: 30 });
     setPolishInstruction('');
   };
 
@@ -281,8 +324,8 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-sm text-gray-400 mb-1">书名 <span className="text-red-500">*</span></label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={name}
                       onChange={e => setName(e.target.value)}
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors"
@@ -291,11 +334,32 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                       required
                     />
                   </div>
-                  
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-gray-400 mb-1">题材预设</label>
+                    <select
+                      value={selectedPreset?.id || ''}
+                      onChange={e => handlePresetChange(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                    >
+                      <option value="">不使用预设（通用配置）</option>
+                      {getAllPresets().map(preset => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.name} - {preset.description}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedPreset && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {selectedPreset.pleasureRhythm.description}
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">题材类型</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={genre}
                       onChange={e => setGenre(e.target.value)}
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors"
@@ -306,8 +370,8 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                   <div className="flex gap-4">
                       <div className="flex-1">
                         <label className="block text-sm text-gray-400 mb-1">单章字数</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           value={wordsPerChapter}
                           onChange={e => setWordsPerChapter(parseInt(e.target.value) || 0)}
                           className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
@@ -315,8 +379,8 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                       </div>
                       <div className="flex-1">
                         <label className="block text-sm text-gray-400 mb-1">目标章节</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           value={targetChapters}
                           onChange={e => setTargetChapters(parseInt(e.target.value) || 0)}
                           className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
@@ -324,9 +388,59 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                       </div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">每卷章节数</label>
+                    <input
+                      type="number"
+                      value={chaptersPerVolume}
+                      onChange={e => setChaptersPerVolume(parseInt(e.target.value) || 0)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                      placeholder="例如：10"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm text-gray-400 mb-2">爽点节奏配置</label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">小爽间隔（章）</label>
+                        <input
+                          type="number"
+                          value={pleasureRhythm.small}
+                          onChange={e => setPleasureRhythm({...pleasureRhythm, small: parseInt(e.target.value) || 1})}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">中爽间隔（章）</label>
+                        <input
+                          type="number"
+                          value={pleasureRhythm.medium}
+                          onChange={e => setPleasureRhythm({...pleasureRhythm, medium: parseInt(e.target.value) || 1})}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">大爽间隔（章）</label>
+                        <input
+                          type="number"
+                          value={pleasureRhythm.large}
+                          onChange={e => setPleasureRhythm({...pleasureRhythm, large: parseInt(e.target.value) || 1})}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
+                          min="1"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      小爽：小收获、小胜利 | 中爽：阶段胜利、重要突破 | 大爽：重大转折、终极高潮
+                    </p>
+                  </div>
+
                   <div className="md:col-span-2">
                     <label className="block text-sm text-gray-400 mb-1">简介 / 核心梗 (可选)</label>
-                    <textarea 
+                    <textarea
                       value={description}
                       onChange={e => setDescription(e.target.value)}
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none resize-none h-24 placeholder-gray-600 transition-colors"

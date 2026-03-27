@@ -25,7 +25,13 @@ export function buildProjectOverviewPrompt(project: ProjectMeta | undefined): st
     `类型：${project.genre || '未定'}`,
     `单章字数：${project.wordsPerChapter || '未定'}`,
     `进度目标：${project.targetChapters || 0}章`,
+    `每卷章节数：${project.chaptersPerVolume || '未定'}章`,
   ];
+
+  // 添加爽点节奏配置
+  if (project.pleasureRhythm) {
+    lines.push(`爽点节奏：小爽每${project.pleasureRhythm.small}章，中爽每${project.pleasureRhythm.medium}章，大爽每${project.pleasureRhythm.large}章`);
+  }
 
   if (project.description) {
     lines.push(`核心梗：${project.description}`);
@@ -35,6 +41,7 @@ export function buildProjectOverviewPrompt(project: ProjectMeta | undefined): st
   lines.push('> ⚠️ 上述项目基础信息是创作地基，所有输出必须与之对齐：');
   lines.push('> - **类型**决定叙事风格和读者预期');
   lines.push('> - **核心梗**决定故事主线和卖点');
+  lines.push('> - **爽点节奏**决定剧情高潮的分布密度');
 
   return lines.join('\n');
 }

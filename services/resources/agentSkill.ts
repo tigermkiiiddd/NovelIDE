@@ -10,3 +10,4 @@ export * from './skills/humanizerStyle';
 export * from './skills/coreProtocol';
 export * from './skills/expectationManager';
 export * from './skills/constraintLayeredDesign';
+export * from './skills/pleasureRhythmManager';

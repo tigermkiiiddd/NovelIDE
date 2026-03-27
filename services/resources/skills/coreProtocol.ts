@@ -11,6 +11,7 @@
 import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
+import { buildProjectOverviewPrompt } from '../../../utils/projectContext';
 
 // Plan 模式已移除
 // export const PLAN_MODE_PROTOCOL = ...
@@ -332,10 +333,9 @@ export const constructSystemPrompt = (
 
   // --- 2. 上下文构建 (Context Construction) ---
 
-  // Project Info
-  const projectInfo = project
-    ? `书名：《${project.name}》\n类型：${project.genre || '未定'}\n单章字数：${project.wordsPerChapter || '未定'}\n进度目标：${project.targetChapters || 0}章\n核心梗：${project.description || '暂无'}`
-    : "无活跃项目";
+  // Project Info - 使用统一的工具函数
+  const projectOverview = buildProjectOverviewPrompt(project);
+  const projectInfo = projectOverview.replace('## 项目概览 ⚠️【核心约束】\n\n', '');
 
 
   // File Context (Folders Only)
@@ -473,7 +473,11 @@ export const constructSystemPrompt = (
         output += `### 🗺️ 长期伏笔（后期收尾）\n${longTerm.map(formatForeshadowing).join('\n')}\n\n`;
       }
 
-      output += `> 💡 **伏笔使用提示**：写正文时检查相关伏笔，适时埋设/发展/收尾。新章节可埋设新伏笔。\n`;
+      output += `> 💡 **伏笔使用提示**：
+> - 写正文时检查相关伏笔，适时埋设/发展/收尾。新章节可埋设新伏笔。
+> - **爽点追踪**：使用伏笔系统追踪爽点，在 tags 中添加 \`爽点:小\`、\`爽点:中\`、\`爽点:大\` 标签。
+> - 示例：\`tags: ["爽点:中", "突破"]\` 表示这是一个中爽点，类型是突破。
+`;
 
       return output;
     } catch (error) {

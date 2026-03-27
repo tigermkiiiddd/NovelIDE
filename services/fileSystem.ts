@@ -10,8 +10,11 @@ import {
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
   SKILL_HUMANIZER_STYLE,
-  SKILL_CONSTRAINT_LAYERED_DESIGN
+  SKILL_CONSTRAINT_LAYERED_DESIGN,
+  SKILL_EXPECTATION_MANAGER,
+  SKILL_PLEASURE_RHYTHM_MANAGER
 } from './templates';
+import { GenrePreset } from './resources/presets';
 
 // 生成唯一ID
 export const generateId = (): string => Math.random().toString(36).substring(2, 9);
@@ -101,14 +104,14 @@ export const getFileTreeStructure = (files: FileNode[]): string => {
 };
 
 // --- Factory Function for Fresh File Systems ---
-export const createInitialFileSystem = (): FileNode[] => {
+export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   const rootId = 'root';
 
   const infoFolder = createFolder('00_基础信息', rootId);
   const worldFolder = createFolder('01_世界观', rootId);
   const charFolder = createFolder('02_角色档案', rootId);
   const outlineFolder = createFolder('03_剧情大纲', rootId);
-  const inspirationFolder = createFolder('04_灵感碎片', rootId); 
+  const inspirationFolder = createFolder('04_灵感碎片', rootId);
   const draftFolder = createFolder('05_正文草稿', rootId);
   const skillFolder = createFolder('98_技能配置', rootId);
   const rulesFolder = createFolder('99_创作规范', rootId);
@@ -116,7 +119,20 @@ export const createInitialFileSystem = (): FileNode[] => {
   // 新增 subskill 文件夹 (Inside skillFolder)
   const subskillFolder = createFolder('subskill', skillFolder.id);
 
-  return [
+  // 技能文件映射
+  const SKILL_MAP: Record<string, string> = {
+    '技能_世界观构建.md': SKILL_WORLD_BUILDER,
+    '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
+    '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
+    '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
+    '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE,
+    '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+    '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
+    '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
+  };
+
+  // 基础文件列表
+  const files: FileNode[] = [
     { id: rootId, parentId: null, name: 'Root', type: FileType.FOLDER, lastModified: Date.now() },
 
     infoFolder,
@@ -148,24 +164,60 @@ export const createInitialFileSystem = (): FileNode[] => {
 
     // --- 98_技能配置 (Agent Skills) ---
     createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
+  ];
 
-    // --- Sub Skills (Enhanced) ---
-    createFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER),
-    createFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER),
-    createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
-    createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
-    createFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE),
-    createFile('技能_分层约束设计.md', subskillFolder.id, SKILL_CONSTRAINT_LAYERED_DESIGN),
+  // --- Sub Skills (根据预设选择性加载) ---
+  if (preset && preset.skills.length > 0) {
+    // 使用预设指定的技能
+    preset.skills.forEach(skillName => {
+      // 优先使用题材定制版本
+      const customContent = preset.customSkills?.[skillName];
+      const skillContent = customContent || SKILL_MAP[skillName];
+      if (skillContent) {
+        files.push(createFile(skillName, subskillFolder.id, skillContent));
+      }
+    });
+    // 爽点节奏管理技能始终加载
+    if (!preset.skills.includes('技能_爽点节奏管理.md')) {
+      const customRhythm = preset.customSkills?.['技能_爽点节奏管理.md'];
+      files.push(createFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER));
+    }
+  } else {
+    // 默认加载全部技能
+    files.push(
+      createFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER),
+      createFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER),
+      createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
+      createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
+      createFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE),
+      createFile('技能_分层约束设计.md', subskillFolder.id, SKILL_CONSTRAINT_LAYERED_DESIGN),
+      createFile('技能_期待感管理.md', subskillFolder.id, SKILL_EXPECTATION_MANAGER),
+      createFile('技能_爽点节奏管理.md', subskillFolder.id, SKILL_PLEASURE_RHYTHM_MANAGER)
+    );
+  }
 
-    // --- 99_创作规范 (Templates & Guides) ---
-    createFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE),
+  // --- 99_创作规范 (Templates & Guides) ---
+  // 文风规范：使用预设的或默认的
+  const styleGuide = preset?.styleGuide || STYLE_GUIDE_TEMPLATE;
+  files.push(createFile('指南_文风规范.md', rulesFolder.id, styleGuide));
 
+  // 基础模板
+  files.push(
     createFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE),
     createFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE),
     createFile('模板_世界线记录.md', rulesFolder.id, withMeta('# 世界线记录\n\n| 章节 | 事件 | 状态变更 | 伏笔 |\n|---|---|---|---|\n', '此文件为标准的世界线记录模板，提供了表格格式以供复制使用，旨在规范化记录剧情事件与状态变更。', ['模板'])),
-    createFile('模板_伏笔记录.md', rulesFolder.id, withMeta('# 伏笔记录\n\n- [ ] [章节名] 伏笔内容 (未回收)\n', '此文件为标准的伏笔追踪模板，采用了任务列表的格式，方便作者在创作过程中随时添加和勾选已回收的伏笔。', ['模板'])),
-  ];
+    createFile('模板_伏笔记录.md', rulesFolder.id, withMeta('# 伏笔记录\n\n使用伏笔工具追踪剧情伏笔和爽点节奏。\n\n## 爽点标签规范\n- `爽点:小` - 小爽点（+1~+2）\n- `爽点:中` - 中爽点（+3~+4）\n- `爽点:大` - 大爽点（+5）\n\n在伏笔的 tags 字段中添加爽点等级标签，通过伏笔界面筛选和查看爽点分布。', '此文件说明如何使用伏笔工具追踪爽点节奏。', ['模板']))
+  );
+
+  // 预设特定模板
+  if (preset && preset.templates) {
+    Object.entries(preset.templates).forEach(([fileName, content]) => {
+      files.push(createFile(fileName, rulesFolder.id, content));
+    });
+  }
+
+  return files;
 };
 
 // Deprecated: For backward compatibility if needed, but prefer createInitialFileSystem
-export const initialFileSystem = createInitialFileSystem();
+// export const initialFileSystem = createInitialFileSystem();

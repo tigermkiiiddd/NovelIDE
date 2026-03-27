@@ -63,6 +63,13 @@ export interface ProjectMeta {
   genre?: string;            // 题材类型
   wordsPerChapter?: number;  // 单章字数
   targetChapters?: number;   // 目标章节数
+  chaptersPerVolume?: number; // 每卷章节数
+  presetId?: string;         // 使用的预设ID
+  pleasureRhythm?: {         // 爽点节奏配置
+    small: number;           // 小爽点间隔（章数）
+    medium: number;          // 中爽点间隔（章数）
+    large: number;           // 大爽点间隔（章数）
+  };
   lastModified: number;
   createdAt: number;
 }

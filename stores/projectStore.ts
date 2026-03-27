@@ -5,6 +5,7 @@ import { dbAPI } from '../services/persistence';
 import { dataService } from '../services/dataService';
 import { generateId } from '../services/fileSystem';
 import { createInitialFileSystem } from '../services/fileSystem';
+import { getPresetById } from '../services/resources/presets';
 
 interface ProjectState {
   projects: ProjectMeta[];
@@ -14,7 +15,16 @@ interface ProjectState {
   // Actions
   loadProjects: () => Promise<void>;
   selectProject: (id: string | null) => Promise<void>; // Changed to async
-  createProject: (name: string, description: string, genre: string, wordsPerChapter: number, targetChapters: number) => Promise<void>;
+  createProject: (
+    name: string,
+    description: string,
+    genre: string,
+    wordsPerChapter: number,
+    targetChapters: number,
+    chaptersPerVolume?: number,
+    presetId?: string,
+    pleasureRhythm?: ProjectMeta['pleasureRhythm']
+  ) => Promise<void>;
   updateProject: (id: string, updates: Partial<ProjectMeta>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   refreshProjects: () => Promise<void>;
@@ -60,7 +70,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await dbAPI.saveCurrentProjectId(id);
   },
 
-  createProject: async (name, description, genre, wordsPerChapter, targetChapters) => {
+  createProject: async (name, description, genre, wordsPerChapter, targetChapters, chaptersPerVolume, presetId, pleasureRhythm) => {
     const newProject: ProjectMeta = {
       id: generateId(),
       name,
@@ -68,6 +78,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       genre,
       wordsPerChapter,
       targetChapters,
+      chaptersPerVolume,
+      presetId,
+      pleasureRhythm,
       createdAt: Date.now(),
       lastModified: Date.now()
     };
@@ -79,8 +92,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     // 2. Persist
     await dbAPI.saveProject(newProject);
-    // Init files with FRESH IDs
-    await dbAPI.saveFiles(newProject.id, createInitialFileSystem());
+
+    // 3. Init files with preset (if provided)
+    const preset = presetId ? getPresetById(presetId) : undefined;
+    await dbAPI.saveFiles(newProject.id, createInitialFileSystem(preset));
   },
 
   updateProject: async (id, updates) => {
