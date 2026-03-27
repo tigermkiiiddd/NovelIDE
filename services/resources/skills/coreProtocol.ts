@@ -8,8 +8,10 @@
  * 3. 简洁高效：每条规则一句话，避免冗余
  */
 
-import { FileNode, ProjectMeta, FileType, TodoItem } from '../../../types';
+import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
+// 延迟导入以避免循环依赖
+// import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 
 // Plan 模式已移除
 // export const PLAN_MODE_PROTOCOL = ...
@@ -175,16 +177,17 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - ❌ 串行（慢）：3轮，每轮1个工具
 - ✅ 并行（快）：1轮，3个工具同时调用
 
-- **🚨 工具全部执行完毕后**：必须立即输出纯文字总结（不调用任何工具），告知用户完成了什么、结果如何。**这一步是强制要求，不能省略。**
+- **🚨 任务完成后输出总结**：只有当**整个任务目标达成**时，才输出纯文字总结告知用户结果。**任务未完成时禁止输出”完成总结”，只需继续执行下一步工具调用。**
 - **绝不允许空输出**：任何一轮对话必须满足其一：
   1) 调用工具；或
-  2) 输出简短的自然语言进度/结论（当本轮不需要工具时）；或
-  3) 输出明确的错误/阻塞原因以及下一步建议。
-- 任务未完成时：不要给出“最终结论/最终交付”，但可以输出**进度、已完成事项、下一步动作**。
+  2) 任务真正完成时输出简短总结；或
+  3) 遇到阻塞时输出明确原因和下一步建议。
+- **禁止中间废话**：任务执行过程中不要输出”进度”、”已完成事项”、”下一步动作”等冗余信息，直接调用工具即可。
 
-**默认自主策略（先自查，后提问）**：
-- 信息不足时，优先使用只读工具自查（按优先级）：listFiles → readFile → searchFiles。
-- 只有在完成自查后仍缺少关键决策点，才向用户提问；提问必须具体到“需要用户选择/补充的最小信息”。
+**查询行为区分（两个独立维度）**：
+- **获取**：缺少完成任务所需的信息 → 使用工具获取
+- **核查**：已有信息但怀疑可能有误 → 仅在有明确怀疑理由时才核查
+- ⚠️ **禁止无理由核查**：如果工具返回”事件数量=0”，直接接受这个结果，不要再调用工具”确认一下”
 
 **� 工具并发调用（优先）**：
 - 同一轮中优先同时调用 **多个** 工具，它们会并发执行，提升效率
@@ -436,6 +439,53 @@ export const constructSystemPrompt = (
     return output;
   };
 
+  // Foreshadowing (未收尾伏笔) - 延迟加载以避免循环依赖
+  const getForeshadowingSection = () => {
+    try {
+      // 动态导入以避免循环依赖
+      const { useChapterAnalysisStore } = require('../../../stores/chapterAnalysisStore');
+      const analysisStore = useChapterAnalysisStore.getState();
+      const unresolvedForeshadowing = analysisStore.data.foreshadowing.filter(
+        (f: ForeshadowingItem) => f.type === 'planted' || f.type === 'developed'
+      );
+
+      if (unresolvedForeshadowing.length === 0) {
+        return '';
+      }
+
+      // 按时长分类
+      const shortTerm = unresolvedForeshadowing.filter(f => f.duration === 'short_term');
+      const midTerm = unresolvedForeshadowing.filter(f => f.duration === 'mid_term');
+      const longTerm = unresolvedForeshadowing.filter(f => f.duration === 'long_term');
+
+      let output = `\n## 🎭 未收尾伏笔索引\n> 共 ${unresolvedForeshadowing.length} 条待收尾伏笔（写作时注意呼应）\n\n`;
+
+      const formatForeshadowing = (f: ForeshadowingItem) => {
+        const statusEmoji = f.type === 'planted' ? '🌱' : '🌿';
+        const sourceLabel = f.source === 'chapter_analysis' ? '章节' : '时间线';
+        const developedCount = f.developedRefs?.length || 0;
+        return `- ${statusEmoji} **${f.content}**\n  - 来源: ${sourceLabel} \`${f.sourceRef}\`${developedCount > 0 ? ` | 已发展 ${developedCount} 次` : ''}${f.expectedResolution ? ` | 预期收尾: ${f.expectedResolution}` : ''}`;
+      };
+
+      if (shortTerm.length > 0) {
+        output += `### ⚡ 短期伏笔（近期收尾）\n${shortTerm.map(formatForeshadowing).join('\n')}\n\n`;
+      }
+      if (midTerm.length > 0) {
+        output += `### 🔄 中期伏笔（中段收尾）\n${midTerm.map(formatForeshadowing).join('\n')}\n\n`;
+      }
+      if (longTerm.length > 0) {
+        output += `### 🗺️ 长期伏笔（后期收尾）\n${longTerm.map(formatForeshadowing).join('\n')}\n\n`;
+      }
+
+      output += `> 💡 **伏笔使用提示**：写正文时检查相关伏笔，适时埋设/发展/收尾。新章节可埋设新伏笔。\n`;
+
+      return output;
+    } catch (error) {
+      console.warn('[coreProtocol] 获取伏笔失败:', error);
+      return '';
+    }
+  };
+
   // --- 3. 最终组装 (Final Assembly) ---
   // 替换占位符
   const wordsPerChapter = String(project?.wordsPerChapter || '未定');
@@ -444,6 +494,7 @@ export const constructSystemPrompt = (
     : "";
   const characterProfilesSection = getCharacterProfilesSection();
   const knowledgeGraphSection = getKnowledgeGraphSection();
+  const foreshadowingSection = getForeshadowingSection();
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
     .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
     .replace(/\{\{PENDING_TODOS\}\}/g, pendingTodos)
@@ -457,5 +508,6 @@ export const constructSystemPrompt = (
 ${processedAgentInstruction}
 ${characterProfilesSection}
 ${knowledgeGraphSection}
+${foreshadowingSection}
 `;
 };
