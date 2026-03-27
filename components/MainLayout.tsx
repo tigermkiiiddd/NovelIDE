@@ -1,27 +1,27 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { FileNode } from '../types';
-import { LoaderCircle, Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit } from 'lucide-react';
+import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
-import Editor from './EditorRefactored';
-import AgentChat from './AgentChat';
 import Sidebar from './Sidebar';
-import ProjectOverview from './ProjectOverview';
 import StatusBar from './StatusBar';
-import PlanNoteViewer from './PlanNoteViewer';
-import OutlineViewer from './OutlineViewer';
-import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { useAgent } from '../hooks/useAgent';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
-import { usePlanStore } from '../stores/planStore';
 import { useChapterAnalysisStore, ChapterAnalysisState } from '../stores/chapterAnalysisStore';
 import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useShallow } from 'zustand/react/shallow';
-import { generateId, getNodePath } from '../services/fileSystem';
+import { getNodePath } from '../services/fileSystem';
+// Extracted layout modules
+import { usePanelResize, ResizeHandle } from './layout/PanelManager';
+import EditorArea from './layout/EditorArea';
+import AppModals, { AppModalsRef } from './layout/AppModals';
+
+// Lazy-loaded heavy components
+const AgentChat = lazy(() => import('./AgentChat'));
 
 interface MainLayoutProps {
     projectId: string;
@@ -30,15 +30,13 @@ interface MainLayoutProps {
 
 const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   // --- UI Store (Persisted State) ---
-  const { 
-      isSidebarOpen, 
-      isChatOpen, 
-      sidebarWidth, 
-      agentWidth, 
-      setSidebarOpen, 
-      setChatOpen, 
-      setSidebarWidth, 
-      setAgentWidth,
+  const {
+      isSidebarOpen,
+      isChatOpen,
+      sidebarWidth,
+      agentWidth,
+      setSidebarOpen,
+      setChatOpen,
       toggleChat,
       toggleSidebar
   } = useUiStore(useShallow(state => ({
@@ -48,17 +46,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       agentWidth: state.agentWidth,
       setSidebarOpen: state.setSidebarOpen,
       setChatOpen: state.setChatOpen,
-      setSidebarWidth: state.setSidebarWidth,
-      setAgentWidth: state.setAgentWidth,
       toggleChat: state.toggleChat,
       toggleSidebar: state.toggleSidebar
   })));
 
-  const [isProjectOverviewOpen, setIsProjectOverviewOpen] = useState(false);
-  const [isResizing, setIsResizing] = useState<'sidebar' | 'agent' | null>(null);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
+  const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
 
-  // Use Store Hooks (Single Source of Truth)
+  // --- Refs ---
+  const appModalsRef = useRef<AppModalsRef>(null);
+
+  // --- Panel Resize ---
+  const { startResize } = usePanelResize();
+
+  // --- Store Hooks ---
   const currentProject = useProjectStore(state => state.getCurrentProject());
   const updateProject = useProjectStore(state => state.updateProject);
   const loadFiles = useFileStore(state => state.loadFiles);
@@ -68,23 +70,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const ensureKnowledgeGraphInitialized = useKnowledgeGraphStore(state => state.ensureInitialized);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
-  // Initialize Files and Chapter Analyses when Project Changes
+  // --- Data Initialization ---
   useEffect(() => {
     if (projectId) {
-        // 先加载文件，等完成后再加载章节分析、知识图谱
         loadFiles(projectId).then(() => {
           loadProjectAnalyses(projectId);
           loadProjectCharacterProfiles(projectId);
-          // 在文件加载完成后再初始化知识图谱，避免读取空文件列表
           ensureKnowledgeGraphInitialized(projectId);
         });
     }
   }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized]);
 
-  // File System State & Actions
-  const { 
-      files, 
-      activeFileId, 
+  // --- File System State & Actions ---
+  const {
+      files,
+      activeFileId,
       deleteFile,
       createFile,
       updateFile,
@@ -108,41 +108,29 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     }))
   );
 
-  const fileSystemActions = {
-      createFile,
-      updateFile,
-      patchFile,
-      readFile,
-      searchFiles,
-      listFiles,
-      renameFile
+  const activeFile = files.find(f => f.id === activeFileId) || null;
+
+  // --- Callbacks ---
+  const handleAgentUpdateProject = (updates: Record<string, unknown>) => {
+      if (!projectId) return "Error: No active project.";
+      updateProject(projectId, updates as any);
+      return `Successfully updated project metadata: ${JSON.stringify(updates)}`;
   };
 
-  // 手动触发章节分析
   const handleAnalyzeFile = async (file: FileNode) => {
-    console.log('[MainLayout] 开始分析文件:', file.name);
-
-    // 使用 getNodePath 获取完整路径
     const filePath = getNodePath(file, files);
-    console.log('[MainLayout] 文件路径:', filePath);
-
     try {
       await triggerExtraction(filePath, 'manual', currentProjectId || '');
-      console.log('[MainLayout] 章节分析完成');
     } catch (error) {
       console.error('[MainLayout] 章节分析失败:', error);
     }
   };
 
-  const handleAgentUpdateProject = (updates: any) => {
-      if (!projectId) return "Error: No active project.";
-      updateProject(projectId, updates);
-      return `Successfully updated project metadata: ${JSON.stringify(updates)}`;
-  };
+  const handleSendFeedbackToAI = useCallback((feedback: string) => {
+    sendMessage(`[Plan审批反馈] ${feedback}`);
+  }, []);
 
-  const activeFile = files.find(f => f.id === activeFileId) || null;
-
-  // Initialize Agent Hook (No longer manages UI open state)
+  // --- Agent Hook ---
   const {
     messages, isLoading,
     sendMessage,
@@ -157,180 +145,58 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     // Plan Mode
     planMode,
     togglePlanMode,
-    planNotes,
     currentPlanNote,
-    submitPlanForReview,
     approvePlanNote,
     rejectPlanNote
   } = useAgent(files, currentProject, activeFile, {
-      ...fileSystemActions,
+      createFile, updateFile, patchFile, readFile, searchFiles, listFiles, renameFile,
       deleteFile,
       updateProjectMeta: handleAgentUpdateProject
   });
 
-  // Plan Viewer State
-  const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
-
-  // Outline Viewer State
-  const [isOutlineViewerOpen, setIsOutlineViewerOpen] = useState(false);
-
-  // Knowledge Graph Viewer State
-  const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
-
-  // Auto-open/close OutlineViewer based on active file
+  // --- Responsive Layout ---
   useEffect(() => {
-    if (!activeFile) return;
-
-    const shouldBeOpen = activeFile.name === 'outline.json';
-
-    // 使用函数式更新避免依赖 isOutlineViewerOpen
-    setIsOutlineViewerOpen(prev => {
-      if (shouldBeOpen && !prev) return true;
-      if (!shouldBeOpen && prev) return false;
-      return prev;
-    });
-  }, [activeFile]);
-
-  // Plan Store Actions
-  const planStore = usePlanStore();
-  const addAnnotation = planStore.addAnnotation;
-  const updateAnnotation = planStore.updateAnnotation;
-  const deleteAnnotation = planStore.deleteAnnotation;
-
-  // Send feedback to AI handler
-  const handleSendFeedbackToAI = useCallback((feedback: string) => {
-    // Add a system message to trigger AI response
-    sendMessage(`[Plan审批反馈] ${feedback}`);
-  }, [sendMessage]);
-
-  // Responsive Layout Handler
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    // Initial check
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     handleResize();
-    
-    // Initial Mobile Check on Mount: Close sidebars to ensure clean state
     if (window.innerWidth < 768) {
         setSidebarOpen(false);
         setChatOpen(false);
-    } 
-
+    }
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []); // Empty dependency array ensures this only runs on mount/unmount
+  }, []);
 
-  // Swipe Gesture Support (Mobile Only)
   useSwipeGesture({
-    onSwipeRight: () => {
-      if (isMobile && !isSidebarOpen) {
-        setSidebarOpen(true);
-      }
-    },
-    onSwipeLeft: () => {
-      if (isMobile && !isChatOpen) {
-        setChatOpen(true);
-      }
-    },
+    onSwipeRight: () => { if (isMobile && !isSidebarOpen) setSidebarOpen(true); },
+    onSwipeLeft: () => { if (isMobile && !isChatOpen) setChatOpen(true); },
     enabled: isMobile
   });
 
-  // --- Resizing Logic ---
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      e.preventDefault();
-
-      if (isResizing === 'sidebar') {
-         // Sidebar: Min 180px, Max 600px
-         const newWidth = Math.max(180, Math.min(e.clientX, 600));
-         setSidebarWidth(newWidth);
-      } else if (isResizing === 'agent') {
-         // Agent: Min 250px, Max 800px
-         const newWidth = Math.max(250, Math.min(window.innerWidth - e.clientX, 800));
-         setAgentWidth(newWidth);
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isResizing) return;
-      e.preventDefault();
-
-      const touch = e.touches[0];
-      if (isResizing === 'sidebar') {
-         // Sidebar: Min 180px, Max 600px
-         const newWidth = Math.max(180, Math.min(touch.clientX, 600));
-         setSidebarWidth(newWidth);
-      } else if (isResizing === 'agent') {
-         // Agent: Min 250px, Max 800px
-         const newWidth = Math.max(250, Math.min(window.innerWidth - touch.clientX, 800));
-         setAgentWidth(newWidth);
-      }
-    };
-
-    const handleMouseUp = () => {
-        setIsResizing(null);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-    };
-
-    const handleTouchEnd = () => {
-        setIsResizing(null);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-    };
-
-    if (isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove, { passive: false });
-      window.addEventListener('touchend', handleTouchEnd);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
-    };
-  }, [isResizing, setSidebarWidth, setAgentWidth]);
-
+  // --- Helpers ---
   if (!currentProject) return <div className="h-screen w-full flex items-center justify-center bg-gray-900 text-gray-500">Loading Context...</div>;
+
+  const openProjectOverview = () => appModalsRef.current?.openProjectOverview();
 
   return (
     <div className="flex h-[100dvh] bg-gray-950 text-gray-100 font-sans overflow-hidden relative selection:bg-blue-500/30">
-      
+
       <ErrorBoundary>
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setSidebarOpen(false)}
           onBackToProjects={onBack}
-          onOpenSettings={() => {
-              setIsProjectOverviewOpen(true);
-              if (isMobile) setSidebarOpen(false);
-          }}
+          onOpenSettings={() => { openProjectOverview(); if (isMobile) setSidebarOpen(false); }}
           width={sidebarWidth}
           isMobile={isMobile}
           onAnalyzeFile={handleAnalyzeFile}
         />
       </ErrorBoundary>
 
-      {/* Sidebar Resizer (Desktop Only) */}
-      {isSidebarOpen && !isMobile && (
-          <div
-             className="w-1 hover:w-1.5 h-full bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-all z-40 shrink-0 touch-none"
-             onMouseDown={() => setIsResizing('sidebar')}
-             onTouchStart={() => setIsResizing('sidebar')}
-          />
-      )}
+      {isSidebarOpen && !isMobile && <ResizeHandle panel="sidebar" onStart={startResize} />}
 
       {/* Main Content Area */}
-      <main className={`flex-1 flex flex-col min-w-0 relative transition-all duration-300`}>
-        
+      <main className="flex-1 flex flex-col min-w-0 relative transition-all duration-300">
+
         {/* Mobile Header */}
         <header className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 md:hidden shrink-0 select-none">
           <button onClick={() => setSidebarOpen(true)} className="p-1 -ml-1 text-gray-400 active:text-white">
@@ -375,42 +241,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             </div>
         </div>
 
-        {/* Editor Container */}
+        {/* Editor Area */}
         <ErrorBoundary>
         <div className="flex-1 overflow-hidden relative bg-[#0d1117]">
-          {isKnowledgeGraphOpen ? (
-            <KnowledgeTreeView
-              onSelectNode={(node) => {
-                console.log('Selected knowledge node:', node);
-              }}
-              className="h-full"
-            />
-          ) : isOutlineViewerOpen ? (
-            <OutlineViewer
-              isOpen={isOutlineViewerOpen}
-              onClose={() => setIsOutlineViewerOpen(false)}
-            />
-          ) : isPlanViewerOpen ? (
-            <PlanNoteViewer
-              planNote={currentPlanNote || null}
-              isOpen={isPlanViewerOpen}
-              onClose={() => setIsPlanViewerOpen(false)}
-              onAddAnnotation={addAnnotation}
-              onUpdateAnnotation={updateAnnotation}
-              onDeleteAnnotation={deleteAnnotation}
-              onApprove={(planId) => {
-                approvePlanNote(planId);
-                // Close plan mode after approval
-                togglePlanMode();
-              }}
-              onReject={rejectPlanNote}
-              onSendFeedback={handleSendFeedbackToAI}
-              isMobile={isMobile}
-              onOpenChat={() => setChatOpen(true)}
-            />
-          ) : (
-            <Editor className="w-full h-full" />
-          )}
+          <EditorArea
+            activeFile={activeFile}
+            isKnowledgeGraphOpen={isKnowledgeGraphOpen}
+            isPlanViewerOpen={isPlanViewerOpen}
+            onClosePlanViewer={() => setIsPlanViewerOpen(false)}
+            currentPlanNote={currentPlanNote || null}
+            planMode={planMode}
+            togglePlanMode={togglePlanMode}
+            approvePlanNote={approvePlanNote}
+            rejectPlanNote={rejectPlanNote}
+            onSendFeedbackToAI={handleSendFeedbackToAI}
+            isMobile={isMobile}
+            onOpenChat={() => setChatOpen(true)}
+          />
         </div>
         </ErrorBoundary>
 
@@ -419,11 +266,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             project={currentProject}
             files={files}
             activeFile={activeFile}
-            onOpenSettings={() => setIsProjectOverviewOpen(true)}
+            onOpenSettings={openProjectOverview}
             isAgentThinking={isLoading}
         />
 
-        {/* Mobile Floating Action Button (Only if chat is closed) */}
+        {/* Mobile Floating Action Button */}
         {!isChatOpen && isMobile && (
             <button
             onClick={() => setChatOpen(true)}
@@ -434,17 +281,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         )}
       </main>
 
-      {/* Agent Chat Resizer (Desktop Only) */}
-      {isChatOpen && !isMobile && (
-          <div
-             className="w-1 hover:w-1.5 h-full bg-gray-800 hover:bg-blue-500 cursor-col-resize transition-all z-40 shrink-0 touch-none"
-             onMouseDown={() => setIsResizing('agent')}
-             onTouchStart={() => setIsResizing('agent')}
-          />
-      )}
+      {isChatOpen && !isMobile && <ResizeHandle panel="agent" onStart={startResize} />}
 
       {/* Agent Panel */}
       <ErrorBoundary>
+      <Suspense fallback={<div className="w-full h-full flex items-center justify-center bg-gray-950 text-gray-500 text-sm">Loading Agent...</div>}>
       <AgentChat
         messages={messages}
         onSendMessage={sendMessage}
@@ -466,7 +307,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         isMobile={isMobile}
         tokenUsage={tokenUsage}
         messageWindowInfo={messageWindowInfo}
-        // Plan Mode Props
         planMode={planMode}
         onTogglePlanMode={togglePlanMode}
         currentPlanNote={currentPlanNote}
@@ -475,14 +315,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         if (isMobile) setChatOpen(false);
       }}
       />
+      </Suspense>
       </ErrorBoundary>
 
-      <ProjectOverview
+      {/* Modals */}
+      <AppModals
+        ref={appModalsRef}
         project={currentProject}
         files={files}
-        isOpen={isProjectOverviewOpen}
-        onClose={() => setIsProjectOverviewOpen(false)}
-        onUpdate={(updated) => updateProject(updated.id, updated)}
+        onUpdateProject={updateProject}
         aiConfig={aiConfig}
         onUpdateAIConfig={updateAiConfig}
       />

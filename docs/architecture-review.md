@@ -175,27 +175,23 @@ export const eventBus = new EventBus();
 
 **严重度**: 🟠 高
 **影响范围**: 代码可维护性
-**状态**: 🟡 部分完成（死代码已清理，MainLayout 拆分待做）
+**状态**: ✅ 已完成（2026-03-28）
 
 **已完成**:
 - ✅ 删除 `Editor.tsx`（1178 行）和 `EditorNew.tsx`（345 行），共 **-1523 行**死代码
 - ✅ 确认 `EditorRefactored.tsx` 为唯一活跃编辑器
 - ✅ 统一 `Editor/` 目录大小写导入（`./editor/` → `./Editor/`）
+- ✅ 拆分 MainLayout（493行 → 244行），提取 3 个独立模块:
+  - `components/layout/PanelManager.tsx` (77行) — 面板 resize hook + ResizeHandle 组件
+  - `components/layout/EditorArea.tsx` (105行) — 内容路由（知识图谱/大纲/计划/编辑器）
+  - `components/layout/AppModals.tsx` (49行) — ProjectOverview 弹窗（forwardRef + useImperativeHandle）
 
 **待完成**:
-- ⬜ 拆分 MainLayout（486行）:
-  ```
-  MainLayout.tsx (486行)
-  → LayoutShell.tsx       (~80行) - 布局框架和面板编排
-  → PanelManager.tsx      (~100行) - 面板大小、拖拽、分割
-  → KeyboardShortcuts.tsx (~60行) - 全局快捷键
-  → AppModals.tsx         (~80行) - 弹窗集合
-  ```
 - ⬜ 统一组件范式: 逐步将 class 组件迁移为 function 组件
 
-**关键文件**: `components/MainLayout.tsx`
+**关键文件**: `components/MainLayout.tsx`, `components/layout/`
 
-**预估工作量**: 2 天（剩余）
+**预估工作量**: 1 天（剩余，仅组件范式迁移）
 
 ---
 
@@ -371,9 +367,8 @@ set(produce((state) => {
 
 | 任务 | 状态 | 预估 |
 |------|------|------|
-| MainLayout 拆分（LayoutShell/PanelManager/KeyboardShortcuts） | ⬜ 待做 | 2天 |
-| React.memo + useMemo + useCallback 渲染优化 | ⬜ 待做 | 2天 |
-| React.lazy 懒加载（AgentChat/DiffViewer/Settings） | ⬜ 待做 | 1天 |
+| MainLayout 拆分（PanelManager/EditorArea/AppModals） | ✅ 完成 | 2026-03-28 |
+| React.memo + useMemo + useCallback 渲染优化 | ✅ 完成 | 2026-03-28 || React.lazy 懒加载（AgentChat/OutlineViewer/PlanNoteViewer/ProjectOverview) | ✅ 完成 | 2026-03-28|
 | 状态归一化（worldTimelineStore, characterStore） | ⬜ 待做 | 3-5天 |
 | 拆分 agentStore + 事件总线解耦 Store | ⬜ 待做 | 3-5天 |
 

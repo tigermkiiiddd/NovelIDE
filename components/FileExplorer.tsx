@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { FileNode, FileType } from '../types';
 import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2, Download, Sparkles } from 'lucide-react';
 import { downloadSingleFile, downloadFolderAsZip } from '../utils/exportUtils';
@@ -43,72 +43,81 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     }
   }, [isModalOpen]);
 
-  const toggleFolder = (folderId: string) => {
-    const newSet = new Set(expandedFolders);
-    if (newSet.has(folderId)) {
-      newSet.delete(folderId);
-    } else {
-      newSet.add(folderId);
-    }
-    setExpandedFolders(newSet);
-  };
+  const toggleFolder = useCallback((folderId: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  }, []);
 
-  const handleCreateClick = (e: React.MouseEvent, parentId: string, type: 'FILE' | 'FOLDER') => {
+  const handleCreateClick = useCallback((e: React.MouseEvent, parentId: string, type: 'FILE' | 'FOLDER') => {
       e.stopPropagation();
       setModalType(type);
       setModalTargetId(parentId);
       setInputValue('');
       setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleRenameClick = (e: React.MouseEvent, node: FileNode) => {
+  const handleRenameClick = useCallback((e: React.MouseEvent, node: FileNode) => {
       e.stopPropagation();
       setModalType('RENAME');
       setModalTargetId(node.id);
       setInputValue(node.name);
       setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleDownloadClick = (e: React.MouseEvent, node: FileNode) => {
+  const handleDownloadClick = useCallback((e: React.MouseEvent, node: FileNode) => {
       e.stopPropagation();
       if (node.type === FileType.FILE) {
           downloadSingleFile(node);
       } else {
           downloadFolderAsZip(node, files);
       }
-  };
+  }, [files]);
 
-  const handleModalSubmit = (e?: React.FormEvent) => {
+  const handleModalSubmit = useCallback((e?: React.FormEvent) => {
       if (e) e.preventDefault();
       if (!inputValue.trim() || !modalTargetId) return;
 
       if (modalType === 'FILE' && onCreateFile) {
           onCreateFile(modalTargetId, inputValue.endsWith('.md') ? inputValue : `${inputValue}.md`);
-          // Auto expand
-          const newSet = new Set(expandedFolders);
-          newSet.add(modalTargetId);
-          setExpandedFolders(newSet);
+          setExpandedFolders(prev => new Set(prev).add(modalTargetId));
       } else if (modalType === 'FOLDER' && onCreateFolder) {
           onCreateFolder(modalTargetId, inputValue);
-          // Auto expand
-          const newSet = new Set(expandedFolders);
-          newSet.add(modalTargetId);
-          setExpandedFolders(newSet);
+          setExpandedFolders(prev => new Set(prev).add(modalTargetId));
       } else if (modalType === 'RENAME' && onRenameFile) {
           onRenameFile(modalTargetId, inputValue);
       }
-      
-      setIsModalOpen(false);
-  };
 
-  const renderTree = (parentId: string | null, depth: number = 0) => {
-    const children = files
-      .filter(f => f.parentId === parentId)
-      .sort((a, b) => {
-        // 文件夹优先，然后按名称排序
+      setIsModalOpen(false);
+  }, [inputValue, modalTargetId, modalType, onCreateFile, onCreateFolder, onRenameFile]);
+
+  // Memoize sorted children lookup for tree rendering
+  const sortedTree = useMemo(() => {
+    const map = new Map<string | null, FileNode[]>();
+    for (const f of files) {
+      const children = map.get(f.parentId) || [];
+      children.push(f);
+      map.set(f.parentId, children);
+    }
+    // Sort each group: folders first, then by name
+    for (const [key, arr] of map) {
+      arr.sort((a, b) => {
         if (a.type === b.type) return a.name.localeCompare(b.name);
         return a.type === FileType.FOLDER ? -1 : 1;
       });
+      map.set(key, arr);
+    }
+    return map;
+  }, [files]);
+
+  const renderTree = (parentId: string | null, depth: number = 0) => {
+    const children = sortedTree.get(parentId) || [];
 
     if (children.length === 0 && parentId === 'root') {
        return <div className="p-4 text-gray-500 text-sm text-center">暂无文件</div>
@@ -305,4 +314,4 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   );
 };
 
-export default FileExplorer;
+export default React.memo(FileExplorer);

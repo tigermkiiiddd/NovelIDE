@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers, Wifi, Key, Clock, AlertTriangle, Zap, WifiOff, Ban, Cpu } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
@@ -690,22 +690,22 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
     }
   }, [messages.length, isLoading, editingId]); 
 
-  const startEdit = (msg: ChatMessage) => {
+  const startEdit = useCallback((msg: ChatMessage) => {
       setEditingId(msg.id);
       setEditText(msg.text);
-  };
+  }, []);
 
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
       setEditingId(null);
       setEditText('');
-  };
+  }, []);
 
-  const saveEdit = (id: string) => {
+  const saveEdit = useCallback((id: string) => {
       if (onEditMessage && editText.trim()) {
           onEditMessage(id, editText);
           setEditingId(null);
       }
-  };
+  }, [onEditMessage, editText]);
 
   return (
     <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 sm:space-y-6 bg-gray-900/95 overscroll-contain pb-24 sm:pb-20">
@@ -968,4 +968,4 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
   );
 };
 
-export default AgentMessageList;
+export default React.memo(AgentMessageList);

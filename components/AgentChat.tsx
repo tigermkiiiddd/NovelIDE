@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
@@ -16,6 +16,14 @@ import { downloadChatSession } from '../utils/exportUtils';
 
 // AgentChat receives everything from MainLayout which calls useAgent
 // We need to extend props to include the new handlers
+
+// Pure helper - moved outside component to avoid recreation
+const formatTokenCount = (num: number) => {
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+    return num.toString();
+};
+
 interface AgentChatProps {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
@@ -89,11 +97,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const isDebugMode = useUiStore(state => state.isDebugMode);
   const toggleDebugMode = useUiStore(state => state.toggleDebugMode);
 
-  if (!isOpen) return null;
-
   const pendingApprovalsCount = pendingChanges.length;
 
-  const handleReviewClick = (change: PendingChange) => {
+  const handleReviewClick = useCallback((change: PendingChange) => {
       // Navigate to the file
       if (change.fileId) {
           setActiveFileId(change.fileId);
@@ -133,34 +139,29 @@ const AgentChat: React.FC<AgentChatProps> = ({
       if (isMobile) {
           onClose();
       }
-  };
+  }, [files, setActiveFileId, setVirtualFile, setReviewingChangeId, isMobile, onClose]);
 
-  const handleDeleteSession = (e: React.MouseEvent, id: string) => {
+  const handleDeleteSession = useCallback((e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       // Simple confirm is effective for preventing accidental mobile deletions
       if (window.confirm("确定要删除此会话吗？")) {
           onDeleteSession(id);
       }
-  };
+  }, [onDeleteSession]);
 
-  const handleExportSession = (e: React.MouseEvent, session: ChatSession) => {
+  const handleExportSession = useCallback((e: React.MouseEvent, session: ChatSession) => {
       e.stopPropagation();
       downloadChatSession(session);
-  };
+  }, []);
 
-  const handleExportCurrentSession = () => {
+  const handleExportCurrentSession = useCallback(() => {
       const current = sessions.find(s => s.id === currentSessionId);
       if (current) {
           downloadChatSession(current);
       }
-  };
+  }, [sessions, currentSessionId]);
 
-  // Helper to format large numbers
-  const formatTokenCount = (num: number) => {
-      if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-      if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
-      return num.toString();
-  };
+  if (!isOpen) return null;
 
   return (
     <div 
@@ -431,4 +432,4 @@ const AgentChat: React.FC<AgentChatProps> = ({
   );
 };
 
-export default AgentChat;
+export default React.memo(AgentChat);
