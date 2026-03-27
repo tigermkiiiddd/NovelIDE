@@ -18,6 +18,7 @@ import { useEntityVersionStore } from './entityVersionStore';
 import { AIService } from '../services/geminiService';
 import { runChapterAnalysisAgent, applyMergeActions } from '../services/subAgents/chapterAnalysisAgent';
 import { getNodePath } from '../services/fileSystem';
+import { getOfficialCharacterList } from '../utils/characterUtils';
 
 // ============================================
 // 数据迁移函数：旧格式 → 新格式
@@ -444,6 +445,10 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
         const projectStore = useProjectStore.getState();
         const project = projectStore.getCurrentProject();
 
+        // 6.5 获取正式角色列表（使用公共方法）
+        const characterList = getOfficialCharacterList();
+        console.log('[ChapterAnalysisStore] 正式角色列表:', characterList);
+
         // 7. 调用分析代理（使用新格式）
         const analysisResult = await runChapterAnalysisAgent(
           aiService,
@@ -456,6 +461,7 @@ export const useChapterAnalysisStore = createPersistingStore<ChapterAnalysisStat
           },
           project,
           unresolvedForeshadowing,
+          characterList,  // 传递角色列表
           (msg) => console.log(msg)
         );
 

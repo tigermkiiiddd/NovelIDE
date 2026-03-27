@@ -11,6 +11,7 @@ import {
 import { ToolDefinition } from '../agent/types';
 import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
 import { buildProjectOverviewPrompt } from '../../utils/projectContext';
+import { formatCharacterListForPrompt } from '../../utils/characterUtils';
 
 // --- 工具定义 ---
 const submitAnalysisTool: ToolDefinition = {
@@ -173,6 +174,7 @@ interface ChapterAnalysisInput {
   };
   project?: ProjectMeta;
   unresolvedForeshadowing?: ForeshadowingItem[]; // 未完结的伏笔列表
+  characterList?: string[]; // 项目中的正式角色列表（用于约束角色提取）
 }
 
 interface ChapterAnalysisOutput {
@@ -209,6 +211,23 @@ const chapterAnalysisConfig: SubAgentConfig<ChapterAnalysisInput, ChapterAnalysi
 \`\`\`
 ${input.chapterContent}
 \`\`\`
+
+${input.characterList && input.characterList.length > 0 ? `
+## ⚠️ 角色提取约束（CRITICAL）
+**只允许提取以下列表中的角色，禁止提取其他任何角色！**
+
+### 允许提取的角色列表（共 ${input.characterList.length} 个）
+${formatCharacterListForPrompt(input.characterList)}
+
+### 🚨 严禁提取的角色类型
+以下类型的"角色"**绝对不能**出现在 characterStates 中：
+- **泛指群体**：如"流氓们"、"路人"、"年轻女孩"、"村民们"、"士兵们"等
+- **描述性称呼**：如"神秘人"、"老者"、"年轻女子"、"黑衣人"等
+- **一次性龙套**：只在一个场景出现、没有后续剧情意义的角色
+- **未在上述列表中的任何角色**
+
+如果章节中出现了不在列表中的角色，**直接忽略**，不要提取其状态。
+` : '（未提供角色列表，请谨慎提取主要角色）'}
 
 ${input.existingData ? `
 ## 当前章节已有数据（${input.chapterRef}）
@@ -833,13 +852,14 @@ export async function runChapterAnalysisAgent(
   },
   project?: ProjectMeta,
   unresolvedForeshadowing?: ForeshadowingItem[],
+  characterList?: string[],  // 添加角色列表参数
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<ChapterAnalysisOutput> {
   const agent = new BaseSubAgent(chapterAnalysisConfig);
   return agent.run(
     aiService,
-    { chapterContent, chapterTitle, chapterRef, existingData, project, unresolvedForeshadowing },
+    { chapterContent, chapterTitle, chapterRef, existingData, project, unresolvedForeshadowing, characterList },
     undefined,
     onLog,
     signal
