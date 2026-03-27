@@ -56,7 +56,6 @@ interface KnowledgeGraphState {
   // 记忆智能操作
   recallNode: (id: string) => KnowledgeNode | undefined;
   reinforceNode: (id: string) => KnowledgeNode | undefined;
-  getReviewQueue: () => KnowledgeNode[];
   getNodeDynamicState: (id: string) => KnowledgeNodeDynamicState | null;
 
   // 查询方法
@@ -216,19 +215,6 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
     }));
     setTimeout(() => saveToFile(get()), 1000);
     return updatedNode;
-  },
-
-  getReviewQueue: () => {
-    const now = Date.now();
-    return get().nodes.filter((node) => {
-      if (!node.metadata) return false;
-      const state = getKnowledgeNodeDynamicState(node, now);
-      return state.isDueForReview;
-    }).sort((a, b) => {
-      const stateA = getKnowledgeNodeDynamicState(a, now);
-      const stateB = getKnowledgeNodeDynamicState(b, now);
-      return stateB.reviewUrgency - stateA.reviewUrgency;
-    });
   },
 
   getNodeDynamicState: (id: string) => {
@@ -430,14 +416,12 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   triggerDocumentExtraction: async (filePath: string, content: string) => {
     const state = get();
 
-    // 只处理正文草稿（05_）- 只有正文才需要触发长期记忆/知识图谱
-    // 角色档案（02_）由档案系统管理，不在这里提取
-    const isDraftFile = filePath.startsWith('05_正文草稿/');
+    // 只处理设定、规则、风格等文档，不处理正文和角色档案
+    // 正文（05_）由章节分析系统处理，角色档案（02_）由档案系统管理
+    const isExcluded = filePath.startsWith('05_正文草稿/') || filePath.startsWith('02_角色档案/');
     const eligibleExtension = /\.(md|txt)$/i.test(filePath);
 
-    const isEligible = isDraftFile && eligibleExtension;
-
-    if (!isEligible || !content.trim()) return null;
+    if (isExcluded || !eligibleExtension || !content.trim()) return null;
 
     // 防止重复提取
     if (state.isExtracting) return null;

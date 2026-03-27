@@ -1,6 +1,6 @@
 
 import { openDB, DBSchema, IDBPDatabase, IDBPObjectStore } from 'idb';
-import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, FileType, KnowledgeNode } from '../types';
+import { ProjectMeta, FileNode, ChatSession, AIConfig, DiffSessionState, PlanNote, PendingChange, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, FileType, KnowledgeNode, CharacterProfileVersion, ChapterAnalysisVersion } from '../types';
 import { FileVersion } from '../stores/versionStore';
 
 interface UiSettings {
@@ -84,10 +84,22 @@ interface NovelGenieDB extends DBSchema {
     key: string; // '{projectId}-{key}'
     value: any;
   };
+  // 新增：角色档案版本历史
+  characterProfileVersions: {
+    key: string; // version.id
+    value: CharacterProfileVersion & { projectId: string };
+    indexes: { 'by-project': string; 'by-entity': string };
+  };
+  // 新增：章节分析版本历史
+  chapterAnalysisVersions: {
+    key: string; // version.id
+    value: ChapterAnalysisVersion & { projectId: string };
+    indexes: { 'by-project': string; 'by-entity': string };
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 12;
+const DB_VERSION = 13;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -159,6 +171,18 @@ export const initDB = () => {
           db.createObjectStore('projectMeta');
         }
 
+        // Version 13: Add entity version history tables
+        if (!db.objectStoreNames.contains('characterProfileVersions')) {
+          const store = db.createObjectStore('characterProfileVersions', { keyPath: 'id' });
+          store.createIndex('by-project', 'projectId');
+          store.createIndex('by-entity', 'entityId');
+        }
+        if (!db.objectStoreNames.contains('chapterAnalysisVersions')) {
+          const store = db.createObjectStore('chapterAnalysisVersions', { keyPath: 'id' });
+          store.createIndex('by-project', 'projectId');
+          store.createIndex('by-entity', 'entityId');
+        }
+
         // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
         // No new object stores required for these versions.
       },
@@ -212,6 +236,8 @@ export const dbAPI = {
       'planNotes',
       'pendingChanges',
       'diffSessions',
+      'characterProfileVersions',
+      'chapterAnalysisVersions',
     ], 'readwrite');
 
     // 删除主表
@@ -223,6 +249,8 @@ export const dbAPI = {
     await clearByProjectIndex(tx.objectStore('characterProfiles'), projectId);
     await clearByProjectIndex(tx.objectStore('longTermMemories'), projectId);
     await clearByProjectIndex(tx.objectStore('memoryEdges'), projectId);
+    await clearByProjectIndex(tx.objectStore('characterProfileVersions'), projectId);
+    await clearByProjectIndex(tx.objectStore('chapterAnalysisVersions'), projectId);
     await tx.objectStore('chapterAnalyses').delete(`chapter-analyses-${projectId}`);
     await tx.objectStore('versions').delete(`versions-${projectId}`);
     await tx.objectStore('planNotes').delete(`novel-plan-notes-${projectId}`);
@@ -741,6 +769,137 @@ export const dbAPI = {
       await db.delete('characterProfiles', characterId);
     } catch (error) {
       console.error('[dbAPI.deleteCharacterProfile] 删除失败:', error);
+    }
+  },
+
+  // ============================================
+  // 角色档案版本历史 API
+  // ============================================
+
+  getCharacterProfileVersions: async (projectId: string): Promise<CharacterProfileVersion[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('characterProfileVersions')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('characterProfileVersions', 'by-project', projectId);
+      // 移除 projectId 字段
+      return all.map(({ projectId: _, ...version }) => version as CharacterProfileVersion);
+    } catch (error) {
+      console.error('[dbAPI.getCharacterProfileVersions] 读取失败:', error);
+      return [];
+    }
+  },
+
+  getCharacterProfileVersionsByEntity: async (characterId: string): Promise<CharacterProfileVersion[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('characterProfileVersions')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('characterProfileVersions', 'by-entity', characterId);
+      return all.map(({ projectId: _, ...version }) => version as CharacterProfileVersion);
+    } catch (error) {
+      console.error('[dbAPI.getCharacterProfileVersionsByEntity] 读取失败:', error);
+      return [];
+    }
+  },
+
+  saveCharacterProfileVersion: async (version: CharacterProfileVersion, projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.put('characterProfileVersions', { ...version, projectId, entityId: version.entityId });
+    } catch (error) {
+      console.error('[dbAPI.saveCharacterProfileVersion] 保存失败:', error);
+    }
+  },
+
+  deleteCharacterProfileVersion: async (versionId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('characterProfileVersions', versionId);
+    } catch (error) {
+      console.error('[dbAPI.deleteCharacterProfileVersion] 删除失败:', error);
+    }
+  },
+
+  clearCharacterProfileVersions: async (characterId: string) => {
+    try {
+      const db = await initDB();
+      const tx = db.transaction('characterProfileVersions', 'readwrite');
+      const index = tx.store.index('by-entity');
+      const all = await index.getAll(characterId);
+      for (const item of all) {
+        await tx.store.delete(item.id);
+      }
+      await tx.done;
+    } catch (error) {
+      console.error('[dbAPI.clearCharacterProfileVersions] 清理失败:', error);
+    }
+  },
+
+  // ============================================
+  // 章节分析版本历史 API
+  // ============================================
+
+  getChapterAnalysisVersions: async (projectId: string): Promise<ChapterAnalysisVersion[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('chapterAnalysisVersions')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('chapterAnalysisVersions', 'by-project', projectId);
+      return all.map(({ projectId: _, ...version }) => version as ChapterAnalysisVersion);
+    } catch (error) {
+      console.error('[dbAPI.getChapterAnalysisVersions] 读取失败:', error);
+      return [];
+    }
+  },
+
+  getChapterAnalysisVersionsByEntity: async (analysisId: string): Promise<ChapterAnalysisVersion[]> => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('chapterAnalysisVersions')) {
+        return [];
+      }
+      const all = await db.getAllFromIndex('chapterAnalysisVersions', 'by-entity', analysisId);
+      return all.map(({ projectId: _, ...version }) => version as ChapterAnalysisVersion);
+    } catch (error) {
+      console.error('[dbAPI.getChapterAnalysisVersionsByEntity] 读取失败:', error);
+      return [];
+    }
+  },
+
+  saveChapterAnalysisVersion: async (version: ChapterAnalysisVersion, projectId: string) => {
+    try {
+      const db = await initDB();
+      await db.put('chapterAnalysisVersions', { ...version, projectId, entityId: version.entityId });
+    } catch (error) {
+      console.error('[dbAPI.saveChapterAnalysisVersion] 保存失败:', error);
+    }
+  },
+
+  deleteChapterAnalysisVersion: async (versionId: string) => {
+    try {
+      const db = await initDB();
+      await db.delete('chapterAnalysisVersions', versionId);
+    } catch (error) {
+      console.error('[dbAPI.deleteChapterAnalysisVersion] 删除失败:', error);
+    }
+  },
+
+  clearChapterAnalysisVersions: async (analysisId: string) => {
+    try {
+      const db = await initDB();
+      const tx = db.transaction('chapterAnalysisVersions', 'readwrite');
+      const index = tx.store.index('by-entity');
+      const all = await index.getAll(analysisId);
+      for (const item of all) {
+        await tx.store.delete(item.id);
+      }
+      await tx.done;
+    } catch (error) {
+      console.error('[dbAPI.clearChapterAnalysisVersions] 清理失败:', error);
     }
   },
 

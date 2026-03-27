@@ -122,23 +122,26 @@ const submitAnalysisTool: ToolDefinition = {
               id: { type: 'string', description: '唯一标识符（如果是新增则留空）' },
               content: {
                 type: 'string',
-                description: '伏笔内容描述（必须详细，至少30字）。例如："苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。"'
+                description: '伏笔内容的详细描述（至少30字）。必须包含：1) 伏笔的具体内容是什么 2) 为什么这是伏笔（暗示了什么） 3) 可能的后续发展。示例："苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。酒会的时间地点都很模糊，增加了悬念感。"'
               },
               type: {
                 type: 'string',
                 enum: ['planted', 'developed', 'resolved'],
-                description: 'planted=新埋下的伏笔（本章首次出现），developed=推进中的伏笔（之前埋下，本章有进展），resolved=回收的伏笔（本章揭晓答案）'
+                description: '伏笔类型：planted=新埋下（本章首次出现的线索、暗示、未解释的细节），developed=推进中（之前埋下的伏笔本章有新进展、新信息），resolved=已回收（本章揭晓答案、谜底揭开、预言成真）'
               },
               tags: {
                 type: 'array',
                 items: { type: 'string' },
-                description: '伏笔标签（至少1个），如：["身世"]、["宝物", "玄学"]、["预言"]、["感情线"]等'
+                description: '伏笔标签（至少1个）。常见类型：["身世"]、["物品/宝物"]、["能力/力量"]、["关系/恩怨"]、["事件/阴谋"]、["预言/梦境"]、["感情线"]、["反转铺垫"]等'
               },
-              notes: { type: 'string', description: '补充说明（可选），如："这个伏笔将在第10章回收"' }
+              notes: {
+                type: 'string',
+                description: '补充说明（可选）。如：预计回收时间、与其他伏笔的关联、重要性评估等。示例："预计在第10章回收"、"与第3章的梦境伏笔呼应"、"这是全文最重要的身世伏笔"'
+              }
             },
             required: ['content', 'type', 'tags']
           },
-          description: '伏笔跟踪列表（如果本章有伏笔则必须填写，每个content至少30字；如果确实没有伏笔可以为空数组）'
+          description: '伏笔跟踪列表。仔细识别：1) 角色提到但未出场的人物 2) 神秘物品/未解释的现象 3) 反常行为/未说明的动机 4) 预言/梦境/暗示 5) 刻意强调的细节。如果本章确实没有伏笔，可以为空数组。每个content至少30字。'
         }
       },
       required: ['thinking', 'mergeActions', 'plotSummary', 'characterStates', 'foreshadowing']
@@ -152,6 +155,7 @@ interface ChapterAnalysisInput {
   chapterTitle: string;
   existingAnalysis?: ChapterAnalysis;
   project?: ProjectMeta;
+  unresolvedForeshadowing?: ForeshadowingItem[]; // 未完结的伏笔列表
 }
 
 interface ChapterAnalysisOutput {
@@ -209,6 +213,20 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
 3. **保留 ID**：如果是对现有数据的更新，必须保留原 ID
 ` : '（无现有数据，将创建新记录）'}
 
+${input.unresolvedForeshadowing && input.unresolvedForeshadowing.length > 0 ? `
+## ⚠️ 待回收/推进的伏笔（重要参考）
+以下是项目中尚未完结的伏笔，请仔细阅读本章内容，判断是否有相关进展：
+
+\`\`\`
+${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${f.notes ? ` (备注: ${f.notes})` : ''}`).join('\n')}
+\`\`\`
+
+**处理规则**：
+- 如果本章中有某个伏笔的新进展，应该将其 type 更新为 \`developed\`，并更新内容
+- 如果本章揭晓了某个伏笔的答案，应该将其 type 更新为 \`resolved\`
+- 更新伏笔时，**必须保留原 ID**，在 mergeActions 中使用 \`update\` 操作
+` : ''}
+
 ## 合并操作规范
 - **add**: 新增内容，需要完整数据
 - **update**: 更新现有内容，需要指定 ID 和新数据
@@ -251,15 +269,90 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
 ### 3. 伏笔（foreshadowing）
 - **content长度**：每个至少30字
 - **tags数量**：至少1个
-- **示例**：
-  \`\`\`json
-  {
-    "content": "苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。",
-    "type": "planted",
-    "tags": ["感情线", "男主登场"],
-    "notes": "预计在第5章回收"
-  }
-  \`\`\`
+
+#### 什么是伏笔？
+伏笔是作者在前文中埋下的线索、暗示或铺垫，为后续情节发展做准备。好的伏笔识别需要：
+1. **敏锐的观察力**：注意看似不经意的细节、对话、描写
+2. **前后关联**：思考这个细节可能在后续如何展开
+3. **类型判断**：区分是新埋下、正在推进、还是已经回收
+
+#### 伏笔的三种类型
+**planted（新埋下）**：本章首次出现的线索
+- 角色提到某个未出场的人物
+- 出现神秘物品但未说明用途
+- 角色做出反常行为但未解释原因
+- 提及未来的事件或计划
+- 环境中的异常细节
+
+**developed（推进中）**：之前埋下的伏笔，本章有新进展
+- 再次提到之前出现的线索
+- 线索有了新的信息补充
+- 角色对之前的疑问有了新的认识
+- 伏笔的影响开始显现
+
+**resolved（已回收）**：本章揭晓答案，谜底揭开
+- 之前的疑问得到解答
+- 神秘事物的真相大白
+- 角色的真实身份/动机暴露
+- 预言/暗示成为现实
+
+#### 常见伏笔类型（参考）
+1. **身世伏笔**：角色的真实身份、家族秘密、血缘关系
+2. **物品伏笔**：神秘宝物、关键道具、信物
+3. **能力伏笔**：隐藏的技能、未觉醒的力量、特殊体质
+4. **关系伏笔**：人物间的隐藏关系、过往恩怨
+5. **事件伏笔**：即将发生的重大事件、阴谋计划
+6. **预言伏笔**：预言、梦境、占卜的暗示
+7. **情感伏笔**：感情线的铺垫、情愫萌芽
+8. **反转伏笔**：为后续剧情反转埋下的误导性线索
+
+#### 识别伏笔的关键问题
+在阅读章节时，问自己：
+- 这个细节为什么要写？是否有深层含义？
+- 角色的这句话/行为是否暗示了什么？
+- 这个未解释的现象后续会如何展开？
+- 作者是否在刻意强调某个看似不重要的信息？
+- 这个线索与之前的哪些内容有关联？
+
+#### 示例对比
+
+**❌ 错误示例（太简单）**
+{
+  "content": "提到了酒会",
+  "type": "planted",
+  "tags": ["酒会"]
+}
+
+**✅ 正确示例（详细且有分析）**
+{
+  "content": "苏清月提到了一个神秘的商业酒会，暗示她将在那里遇到一个改变命运的人。这个人很可能就是男主顾明远，为后续的相遇埋下伏笔。酒会的时间地点都很模糊，增加了悬念感。",
+  "type": "planted",
+  "tags": ["感情线", "男主登场", "命运转折"],
+  "notes": "预计在第5章回收，可能是两人的初次见面"
+}
+
+**✅ 推进中的伏笔示例**
+{
+  "content": "苏清月再次梦到了那个神秘的红衣女子，这次女子开口说话了，警告她'不要相信身边最亲近的人'。这个伏笔在第3章首次出现，本章有了新进展，暗示闺蜜秦雨薇可能是背叛者。",
+  "type": "developed",
+  "tags": ["预言", "背叛", "梦境"],
+  "notes": "与第3章的梦境呼应，伏笔逐渐明朗"
+}
+
+**✅ 已回收的伏笔示例**
+{
+  "content": "苏清月终于发现，之前一直帮助她的神秘人竟然是她的亲生父亲。第1章中提到的'那个总在暗中观察她的中年男人'、第5章中'匿名打款的陌生账户'，所有线索在此刻串联起来，真相大白。",
+  "type": "resolved",
+  "tags": ["身世", "父女", "真相揭晓"],
+  "notes": "回收了第1章和第5章的伏笔"
+}
+
+#### 注意事项
+- 不是所有章节都有伏笔，如果确实没有，可以返回空数组
+- 不要把普通的剧情发展误认为伏笔
+- 伏笔必须是"埋下线索"而不是"直接说明"
+- 同一个伏笔可能跨越多个章节，要追踪其发展状态
+
 
 ## ❌ 禁止的错误输出
 
@@ -337,6 +430,7 @@ ${input.existingAnalysis.foreshadowing.map(f => `- [${f.id}] [${f.type}] ${f.con
       content: f.content || '',
       type: f.type || 'planted',
       tags: f.tags || [],
+      source: 'chapter_analysis',  // 标记来源为章节分析
       relatedChapters: [],
       notes: f.notes
     }));
@@ -695,13 +789,14 @@ export async function runChapterAnalysisAgent(
   chapterTitle: string,
   existingAnalysis?: ChapterAnalysis,
   project?: ProjectMeta,
+  unresolvedForeshadowing?: ForeshadowingItem[],
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<ChapterAnalysisOutput> {
   const agent = new BaseSubAgent(chapterAnalysisConfig);
   return agent.run(
     aiService,
-    { chapterContent, chapterTitle, existingAnalysis, project },
+    { chapterContent, chapterTitle, existingAnalysis, project, unresolvedForeshadowing },
     undefined,
     onLog,
     signal
@@ -786,6 +881,7 @@ export function applyMergeActions(
           content: action.data?.content || '',
           type: action.data?.type || 'planted',
           tags: action.data?.tags || [],
+          source: 'chapter_analysis',  // 标记来源为章节分析
           relatedChapters: [],
           notes: action.data?.notes
         });
@@ -804,8 +900,13 @@ export function applyMergeActions(
     }
   });
 
-  // If no merge actions, use new data directly
-  if (newAnalysis.mergeActions.length === 0) {
+  // If no merge actions OR merge actions don't have data, use new data directly
+  const hasFullMergeData = newAnalysis.mergeActions.every(
+    action => action.action === 'skip' || (action.data && Object.keys(action.data).length > 0)
+  );
+
+  if (newAnalysis.mergeActions.length === 0 || !hasFullMergeData) {
+    // mergeActions 只是策略指示，实际数据在 plotSummary/characterStates/foreshadowing 中
     plotSummary = newAnalysis.plotSummary;
     characterStates = newAnalysis.characterStates;
     foreshadowing = newAnalysis.foreshadowing;

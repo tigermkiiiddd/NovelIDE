@@ -112,26 +112,12 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
   const mergedPendingChange = useMemo(() => {
     if (!activeFile) {
-      console.log('[useEditorDiff] mergedPendingChange: no activeFile');
       return null;
     }
 
     // 对于虚拟文件，使用 metadata.virtualFilePath 匹配
     const filePath = activeFile.metadata?.virtualFilePath || getNodePath(activeFile, files);
     const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
-
-    console.log('[useEditorDiff] mergedPendingChange:', {
-      activeFileId: activeFile.id,
-      activeFileName: activeFile.name,
-      activeFileMetadata: activeFile.metadata,
-      isVirtual: !!activeFile.metadata?.virtualFilePath,
-      virtualFilePath: activeFile.metadata?.virtualFilePath,
-      computedFilePath: filePath,
-      pendingChangesCount: pendingChanges.length,
-      fileChangesCount: fileChanges.length,
-      pendingChangeFileNames: pendingChanges.map(c => c.fileName),
-      fileChangeToolNames: fileChanges.map(c => c.toolName)
-    });
 
     if (fileChanges.length === 0) return null;
 
@@ -178,7 +164,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       description: `${fileChanges.length}个待审变更`,
       metadata: { sourceChanges: fileChanges }
     };
-  }, [activeFile?.id, activeFile?.metadata?.virtualFilePath, pendingChanges, files]);
+  }, [activeFile?.id, activeFile?.content, activeFile?.metadata?.virtualFilePath, pendingChanges]);
 
   const activeEditDiffs = useMemo(() => {
     if (!activeFile) return [];
@@ -195,7 +181,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     }
 
     return allEdits;
-  }, [activeFile?.id, activeFile?.metadata?.virtualFilePath, pendingChanges, files]);
+  }, [activeFile?.id, activeFile?.content, activeFile?.metadata?.virtualFilePath, pendingChanges]);
 
   const pendingEditCount = useMemo(() => {
     return activeEditDiffs.filter(edit =>
@@ -351,23 +337,26 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
         }
 
         documentExtractionTimeoutRef.current = setTimeout(() => {
-          useKnowledgeGraphStore
-            .getState()
-            .triggerDocumentExtraction(filePath, computedContent)
-            .then((result) => {
-              if (!result || result.added + result.updated + result.linked === 0) return;
+          // 正文文件由章节分析处理，不进入知识图谱
+          if (!filePath.startsWith('05_正文草稿/')) {
+            useKnowledgeGraphStore
+              .getState()
+              .triggerDocumentExtraction(filePath, computedContent)
+              .then((result) => {
+                if (!result || result.added + result.updated + result.linked === 0) return;
 
-              addMessage({
-                id: Math.random().toString(),
-                role: 'system',
-                text: `🧠 已从文档提取知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
-                timestamp: Date.now(),
-                metadata: { logType: 'success', extractionSummary: result.summary, filePath }
+                addMessage({
+                  id: Math.random().toString(),
+                  role: 'system',
+                  text: `🧠 已从文档提取知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
+                  timestamp: Date.now(),
+                  metadata: { logType: 'success', extractionSummary: result.summary, filePath }
+                });
+              })
+              .catch((error: Error) => {
+                console.error('[DocumentMemory] auto extraction failed', error);
               });
-            })
-            .catch((error: Error) => {
-              console.error('[DocumentMemory] auto extraction failed', error);
-            });
+          }
         }, 1500);
 
         autoSaveTimeoutRef.current = null;
@@ -761,6 +750,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     };
 
     if (targetChange?.toolName === 'createFile') {
+      isApplyingBatchRef.current = true;
       if (activeFile) {
         const { deleteFile } = useFileStore.getState();
         deleteFile(activeFile.id);

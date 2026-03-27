@@ -249,6 +249,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       '规则': 0,
       '禁止': 0,
       '风格': 0,
+      '用户偏好': 0,
     };
     const bySubCategory: Record<string, number> = {};
 

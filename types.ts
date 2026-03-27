@@ -332,6 +332,7 @@ export interface ForeshadowingItem {
   content: string;
   type: 'planted' | 'developed' | 'resolved';
   tags: string[];
+  source: 'timeline' | 'chapter_analysis';  // 伏笔来源
   relatedChapters?: string[];
   notes?: string;
 }
@@ -653,6 +654,7 @@ export interface TimelineEvent {
   characters?: string[];
   emotion?: string;
   chapterId?: string;          // 所属章节（可选）
+  foreshadowingIds?: string[]; // 关联的伏笔ID列表
 
   // 合并自 SceneNode 的属性
   purpose?: string;            // 场景作用/目的
@@ -811,4 +813,33 @@ export interface CharacterProfileInitRequest {
     subCategory: string;
     value: EntryValue;  // 支持字符串或结构化值
   }[];
+}
+
+// --- Entity Version Types ---
+
+// 版本来源类型
+export type EntityVersionSource = 'user' | 'agent' | 'auto' | 'manual';
+
+// 角色档案版本
+export interface CharacterProfileVersion {
+  id: string;
+  entityId: string;              // characterId
+  entityName: string;            // characterName
+  snapshot: CharacterProfileV2;  // 完整快照
+  timestamp: number;
+  source: EntityVersionSource;
+  description?: string;
+  changedCategories?: CharacterCategoryName[];
+}
+
+// 章节分析版本
+export interface ChapterAnalysisVersion {
+  id: string;
+  entityId: string;              // analysis.id
+  entityName: string;            // chapterTitle
+  chapterPath: string;
+  snapshot: ChapterAnalysis;     // 完整快照
+  timestamp: number;
+  source: EntityVersionSource;
+  description?: string;
 }

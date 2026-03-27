@@ -18,7 +18,11 @@ import {
   X,
   Trash2,
   Plus,
+  History,
 } from 'lucide-react';
+import { EntityVersionHistory } from './EntityVersionHistory';
+import { useEntityVersionStore } from '../stores/entityVersionStore';
+import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
 import {
   CharacterProfileV2,
   CharacterCategoryName,
@@ -29,7 +33,6 @@ import {
   SkillValue,
   AttributeValue,
 } from '../types';
-import { useCharacterMemoryStore } from '../stores/characterMemoryStore';
 
 interface CharacterProfileViewProps {
   filePath: string;
@@ -1239,6 +1242,8 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
       ) || fallbackProfile,
     [characterName, fallbackProfile, profiles]
   );
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const restoreProfileFromVersion = useCharacterMemoryStore((state) => state.restoreProfileFromVersion);
 
   if (!profile) {
     return (
@@ -1349,6 +1354,25 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                   创建于 {formatTime(profile.createdAt)} · 最后更新 {formatTime(profile.updatedAt)}
                 </div>
               </div>
+              <button
+                onClick={() => setShowVersionHistory(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '8px 12px',
+                  backgroundColor: 'rgba(56, 189, 248, 0.12)',
+                  border: '1px solid rgba(56, 189, 248, 0.2)',
+                  borderRadius: 8,
+                  color: '#bae6fd',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <History size={16} />
+                版本历史
+              </button>
             </div>
 
             <div
@@ -1416,6 +1440,21 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
           ))}
         </div>
       </div>
+
+      {/* 版本历史弹窗 */}
+      <EntityVersionHistory
+        isOpen={showVersionHistory}
+        onClose={() => setShowVersionHistory(false)}
+        entityType="character_profile"
+        entityId={profile.characterId}
+        entityName={profile.characterName}
+        onRestore={(versionId) => {
+          const restored = restoreProfileFromVersion(versionId);
+          if (restored) {
+            setShowVersionHistory(false);
+          }
+        }}
+      />
     </div>
   );
 };

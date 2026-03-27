@@ -22,6 +22,7 @@ const CATEGORY_OPTIONS: { value: KnowledgeCategory; label: string }[] = [
   { value: '规则', label: '规则 - 必须遵守的创作规则' },
   { value: '禁止', label: '禁止 - 不能做的事情' },
   { value: '风格', label: '风格 - 文风、写作风格' },
+  { value: '用户偏好', label: '用户偏好 - 个人写作习惯（全局）' },
 ];
 
 const IMPORTANCE_OPTIONS = [

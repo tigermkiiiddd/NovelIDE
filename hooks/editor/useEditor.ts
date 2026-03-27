@@ -16,6 +16,7 @@ import { useChapterAnalysisStore } from '../../stores/chapterAnalysisStore';
 import { useUiStore } from '../../stores/uiStore';
 import { useDiffStore } from '../../stores/diffStore';
 import { useVersionStore } from '../../stores/versionStore';
+import { useEntityVersionStore } from '../../stores/entityVersionStore';
 
 // Utils
 import { getNodePath } from '../../services/fileSystem';
@@ -130,7 +131,7 @@ export const useEditor = (options: UseEditorOptions = {}): EditorHookResult => {
       activeFileId,
       virtualFileId: virtualFile?.id,
       isVirtualFile,
-      activeFileId: activeFile?.id,
+      activeFile: activeFile?.id,
       activeFileName: activeFile?.name,
       virtualFilePath: activeFile?.metadata?.virtualFilePath
     });
@@ -248,6 +249,8 @@ export const useEditor = (options: UseEditorOptions = {}): EditorHookResult => {
     const currentProject = useProjectStore.getState().getCurrentProject();
     if (currentProject?.id) {
       versionStore.loadVersions(currentProject.id);
+      // 加载实体版本（角色档案、章节分析）
+      useEntityVersionStore.getState().loadVersions(currentProject.id);
     }
   }, []);
 

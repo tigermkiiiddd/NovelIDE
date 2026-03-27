@@ -247,7 +247,35 @@ export const manageEventsTool: ToolDefinition = {
               location: { type: 'string' },
               characters: { type: 'array', items: { type: 'string' } },
               emotion: { type: 'string' },
-              purpose: { type: 'string' }
+              purpose: { type: 'string' },
+              foreshadowing: {
+                type: 'array',
+                description: '要创建的伏笔列表（自动创建并关联到此事件）',
+                items: {
+                  type: 'object',
+                  properties: {
+                    content: {
+                      type: 'string',
+                      description: '伏笔内容的详细描述（至少30字）'
+                    },
+                    type: {
+                      type: 'string',
+                      enum: ['planted', 'developed', 'resolved'],
+                      description: 'planted=新埋下, developed=推进中, resolved=已回收'
+                    },
+                    tags: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: '伏笔标签（如 ["身世"]、["物品/宝物"]）'
+                    },
+                    notes: {
+                      type: 'string',
+                      description: '补充说明（可选，如预计回收时间）'
+                    }
+                  },
+                  required: ['content', 'type', 'tags']
+                }
+              }
             },
             required: ['timestamp', 'title', 'content']
           }
@@ -281,7 +309,35 @@ export const manageEventsTool: ToolDefinition = {
                   location: { type: 'string' },
                   characters: { type: 'array', items: { type: 'string' } },
                   emotion: { type: 'string' },
-                  purpose: { type: 'string' }
+                  purpose: { type: 'string' },
+                  foreshadowing: {
+                    type: 'array',
+                    description: '要创建的伏笔列表（自动创建并关联到此事件）',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        content: {
+                          type: 'string',
+                          description: '伏笔内容的详细描述（至少30字）'
+                        },
+                        type: {
+                          type: 'string',
+                          enum: ['planted', 'developed', 'resolved'],
+                          description: 'planted=新埋下, developed=推进中, resolved=已回收'
+                        },
+                        tags: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description: '伏笔标签（如 ["身世"]、["物品/宝物"]）'
+                        },
+                        notes: {
+                          type: 'string',
+                          description: '补充说明（可选，如预计回收时间）'
+                        }
+                      },
+                      required: ['content', 'type', 'tags']
+                    }
+                  }
                 },
                 required: ['title', 'content', 'duration']
               }

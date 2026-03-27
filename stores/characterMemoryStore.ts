@@ -16,6 +16,7 @@ import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
 import { dbAPI } from '../services/persistence';
 import { toast } from './toastStore';
+import { useEntityVersionStore } from './entityVersionStore';
 
 interface CharacterMemoryState {
   profiles: CharacterProfileV2[];
@@ -33,6 +34,7 @@ interface CharacterMemoryState {
   upsertStateSnapshots: (analysis: ChapterAnalysis) => void;
   upsertMemoryFromLongTerm: (memory: LongTermMemory, characterName: string) => void;
   removeMemoryRef: (memoryId: string, characterName: string) => void;
+  restoreProfileFromVersion: (versionId: string) => boolean;
   _syncToFiles: () => Promise<void>;
 }
 
@@ -461,6 +463,16 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
         profiles: upsertProfile(state.profiles, characterName, () => profile),
       }));
 
+      // 创建版本记录
+      const versionStore = useEntityVersionStore.getState();
+      const normalizedProfile = normalizeProfile(profile);
+      versionStore.createProfileVersion(
+        normalizedProfile,
+        'agent',
+        'AI 初始化角色档案',
+        Object.keys(request.initialSubCategories || {}) as CharacterCategoryName[]
+      );
+
       console.log('[CharacterMemoryStore] 当前 profiles 数量:', useCharacterMemoryStore.getState().profiles.length);
       return profile;
     },
@@ -523,6 +535,19 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
           return { ...profile, updatedAt: now };
         }),
       }));
+
+      // 创建版本记录
+      const versionStore = useEntityVersionStore.getState();
+      const updatedProfile = useCharacterMemoryStore.getState().getByName(characterName);
+      if (updatedProfile) {
+        const changedCategories = [...new Set(request.updates.map(u => u.category))] as CharacterCategoryName[];
+        versionStore.createProfileVersion(
+          updatedProfile,
+          'agent',
+          `AI 更新: ${request.chapterRef}`,
+          changedCategories
+        );
+      }
     },
 
     // 删除角色档案
@@ -703,6 +728,20 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
           });
         }, state.profiles),
       }));
+
+      // 为每个更新的角色创建版本记录
+      const versionStore = useEntityVersionStore.getState();
+      const currentState = useCharacterMemoryStore.getState();
+      for (const charState of analysis.characterStates) {
+        const profile = currentState.getByName(charState.characterName);
+        if (profile) {
+          versionStore.createProfileVersion(
+            profile,
+            'auto',
+            `章节分析同步: ${chapterRef}`
+          );
+        }
+      }
     },
 
     // 从长期记忆添加记忆条目
@@ -752,6 +791,33 @@ export const useCharacterMemoryStore = createPersistingStore<CharacterMemoryStat
           return { ...profile, updatedAt: Date.now() };
         }),
       }));
+    },
+
+    // 从版本恢复角色档案
+    restoreProfileFromVersion: (versionId: string) => {
+      const versionStore = useEntityVersionStore.getState();
+      const snapshot = versionStore.restoreProfileVersion(versionId);
+      if (!snapshot) return false;
+
+      // 创建当前状态的备份版本
+      const currentProfile = useCharacterMemoryStore.getState().getByName(snapshot.characterName);
+      if (currentProfile) {
+        versionStore.createProfileVersion(
+          currentProfile,
+          'manual',
+          `恢复前备份 (恢复到 ${new Date(snapshot.updatedAt).toLocaleString()})`
+        );
+      }
+
+      // 应用快照
+      useCharacterMemoryStore.setState((state) => ({
+        profiles: state.profiles.map((p) =>
+          p.characterId === snapshot.characterId ? { ...snapshot, updatedAt: Date.now() } : p
+        ),
+      }));
+
+      console.log(`[CharacterMemoryStore] 已恢复角色档案版本: ${snapshot.characterName}`);
+      return true;
     },
 
     _syncToFiles: async () => {

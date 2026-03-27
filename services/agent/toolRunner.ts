@@ -9,7 +9,6 @@ import {
   executeManageKnowledge,
   executeLinkKnowledge,
   executeListKnowledgeMetadata,
-  executeListReviewQueue,
 } from './tools/knowledgeGraphTools';
 import { executeOutlineTool, executeProcessOutlineInput } from './tools/timelineTools';
 import {
@@ -469,9 +468,6 @@ export const executeTool = async (
                     break;
                 case 'list_knowledge_metadata':
                     result = await executeListKnowledgeMetadata();
-                    break;
-                case 'list_review_queue':
-                    result = await executeListReviewQueue(args);
                     break;
                 // --- CHARACTER PROFILE TOOLS ---
                 case 'init_character_profile':

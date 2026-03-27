@@ -1,6 +1,6 @@
 /**
  * @file knowledgeIntelligence.ts
- * @description 知识图谱节点的记忆智能算法 - 激活度衰减、间隔重复、复习队列
+ * @description 知识图谱节点的记忆智能算法 - 激活度衰减、间隔重复
  */
 
 import { KnowledgeNode, KnowledgeNodeMetadata, KnowledgeNodeDynamicState } from '../types';
@@ -273,22 +273,5 @@ export const sortKnowledgeNodesForPrompt = (nodes: KnowledgeNode[], now = Date.n
     const leftScore = scoreKnowledgeNodeRecall(left, left.name, now).total;
     const rightScore = scoreKnowledgeNodeRecall(right, right.name, now).total;
     return rightScore - leftScore;
-  });
-};
-
-export const sortKnowledgeNodesForReview = (nodes: KnowledgeNode[], now = Date.now()): KnowledgeNode[] => {
-  return [...nodes].sort((left, right) => {
-    const leftState = getKnowledgeNodeDynamicState(left, now);
-    const rightState = getKnowledgeNodeDynamicState(right, now);
-
-    if (leftState.isDueForReview !== rightState.isDueForReview) {
-      return leftState.isDueForReview ? -1 : 1;
-    }
-
-    if (leftState.reviewUrgency !== rightState.reviewUrgency) {
-      return rightState.reviewUrgency - leftState.reviewUrgency;
-    }
-
-    return left.updatedAt - right.updatedAt;
   });
 };

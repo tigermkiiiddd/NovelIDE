@@ -7,6 +7,7 @@ import { runTimelineSubAgent, TimelineInput } from '../../subAgents/timelineAgen
 import { useAgentStore } from '../../../stores/agentStore';
 import { useWorldTimelineStore, toHours } from '../../../stores/worldTimelineStore';
 import { useProjectStore } from '../../../stores/projectStore';
+import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 import { TimelineEvent, ChapterGroup } from '../../../types';
 
 // ============================================
@@ -60,6 +61,40 @@ const ensureLoaded = async () => {
     if (projectId) await store.loadTimeline(projectId);
   }
   return store.timeline !== null;
+};
+
+/**
+ * 创建伏笔并返回 ID 列表
+ * 伏笔存储在特殊的 'timeline_foreshadowing' 章节分析中
+ */
+const createForeshadowings = (
+  foreshadowingData: Array<{
+    content: string;
+    type: 'planted' | 'developed' | 'resolved';
+    tags: string[];
+    notes?: string;
+  }>
+): string[] => {
+  if (!foreshadowingData || foreshadowingData.length === 0) {
+    return [];
+  }
+
+  const chapterAnalysisStore = useChapterAnalysisStore.getState();
+  const createdIds: string[] = [];
+  const TIMELINE_CHAPTER_PATH = 'timeline_foreshadowing';
+
+  for (const item of foreshadowingData) {
+    const id = chapterAnalysisStore.addForeshadowing(TIMELINE_CHAPTER_PATH, {
+      content: item.content,
+      type: item.type,
+      tags: item.tags,
+      notes: item.notes,
+      source: 'timeline'
+    });
+    createdIds.push(id);
+  }
+
+  return createdIds;
 };
 
 // ============================================
@@ -347,8 +382,20 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
             if (chapter) eventData.chapterId = chapter.id;
             delete eventData.chapterIndex;
           }
+
+          // 创建伏笔并关联
+          if (e.foreshadowing && e.foreshadowing.length > 0) {
+            const foreshadowingIds = createForeshadowings(e.foreshadowing);
+            eventData.foreshadowingIds = foreshadowingIds;
+            delete eventData.foreshadowing;
+          }
+
           const r = JSON.parse(store.addEvent(eventData));
-          result.added.push({ title: e.title, eventIndex: r.eventIndex });
+          result.added.push({
+            title: e.title,
+            eventIndex: r.eventIndex,
+            foreshadowingCount: eventData.foreshadowingIds?.length || 0
+          });
         }
       }
 
@@ -449,8 +496,18 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           if (e.emotion) eventData.emotion = e.emotion;
           if (e.purpose) eventData.purpose = e.purpose;
 
+          // 创建伏笔并关联
+          if (e.foreshadowing && e.foreshadowing.length > 0) {
+            const foreshadowingIds = createForeshadowings(e.foreshadowing);
+            eventData.foreshadowingIds = foreshadowingIds;
+          }
+
           const r = JSON.parse(store.addEvent(eventData));
-          result.inserted.push({ title: e.title, eventIndex: r.eventIndex });
+          result.inserted.push({
+            title: e.title,
+            eventIndex: r.eventIndex,
+            foreshadowingCount: eventData.foreshadowingIds?.length || 0
+          });
 
           currentHours += durationHours;
         }

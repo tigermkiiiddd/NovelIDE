@@ -2,10 +2,85 @@ import React, { useState, useMemo } from 'react';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
+import { useEntityVersionStore } from '../stores/entityVersionStore';
 import { ChapterAnalysis, PlotKeyPoint, CharacterState, ForeshadowingItem } from '../types';
-import { Plus, Trash2, Edit2, X, ChevronDown, ChevronRight, BookOpen, User, Sparkles, Zap } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, ChevronDown, ChevronRight, BookOpen, User, Sparkles, Zap, History } from 'lucide-react';
+import { EntityVersionHistory } from './EntityVersionHistory';
 
 type ViewMode = 'plot' | 'character' | 'foreshadowing';
+
+// ==================== 样式常量（与 CharacterProfileView 统一） ====================
+
+// 视图颜色映射
+const VIEW_COLORS: Record<ViewMode, string> = {
+  foreshadowing: '#f59e0b', // 伏笔 - 橙色
+  character: '#38bdf8',     // 角色 - 蓝色
+  plot: '#a78bfa',          // 剧情 - 紫色
+};
+
+// 卡片样式
+const cardStyle: React.CSSProperties = {
+  background: 'linear-gradient(180deg, rgba(35,39,46,0.96) 0%, rgba(24,27,33,0.96) 100%)',
+  border: '1px solid rgba(148, 163, 184, 0.16)',
+  borderRadius: 16,
+  boxShadow: '0 18px 40px rgba(0, 0, 0, 0.22)',
+};
+
+// 章节卡片样式
+const chapterCardStyle: React.CSSProperties = {
+  background: 'linear-gradient(180deg, rgba(35,39,46,0.96) 0%, rgba(24,27,33,0.96) 100%)',
+  border: '1px solid rgba(148, 163, 184, 0.16)',
+  borderRadius: 14,
+  overflow: 'hidden',
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+};
+
+// Pill 按钮样式（版本历史等）
+const pillButtonStyle = (color: string): React.CSSProperties => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '6px 10px',
+  backgroundColor: `${color}14`,
+  border: `1px solid ${color}33`,
+  borderRadius: 6,
+  color: color,
+  fontSize: 12,
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+});
+
+// 图标容器样式
+const iconContainerStyle = (color: string): React.CSSProperties => ({
+  width: 36,
+  height: 36,
+  borderRadius: 12,
+  display: 'grid',
+  placeItems: 'center',
+  background: `${color}14`,
+  color: color,
+});
+
+// 输入框样式
+const inputStyle: React.CSSProperties = {
+  background: 'rgba(15, 23, 42, 0.8)',
+  border: '1px solid rgba(148, 163, 184, 0.3)',
+  borderRadius: 6,
+  padding: '6px 10px',
+  color: '#f8fafc',
+  fontSize: 13,
+  outline: 'none',
+  width: '100%',
+};
+
+// 标签样式
+const tagStyle: React.CSSProperties = {
+  padding: '2px 6px',
+  backgroundColor: 'rgba(148, 163, 184, 0.1)',
+  borderRadius: 4,
+  color: '#94a3b8',
+  fontSize: 11,
+};
 
 export const ReadingLightView: React.FC = () => {
   const getCurrentProject = useProjectStore(state => state.getCurrentProject);
@@ -16,6 +91,7 @@ export const ReadingLightView: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('foreshadowing');
   const [editMode, setEditMode] = useState<'none' | 'add' | 'edit'>('none');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [versionHistoryAnalysis, setVersionHistoryAnalysis] = useState<ChapterAnalysis | null>(null);
 
   // 可用的章节列表
   const availableChapters = useMemo(() => {
@@ -28,6 +104,14 @@ export const ReadingLightView: React.FC = () => {
   const sortedAnalyses = useMemo(() => {
     return [...analyses].sort((a, b) => a.extractedAt - b.extractedAt);
   }, [analyses]);
+
+  // 统计数据
+  const stats = useMemo(() => ({
+    foreshadowing: analyses.reduce((sum, a) => sum + a.foreshadowing.length, 0),
+    characters: analyses.reduce((sum, a) => sum + a.characterStates.length, 0),
+    plots: analyses.reduce((sum, a) => sum + a.plotSummary.length, 0),
+    chapters: analyses.length,
+  }), [analyses]);
 
   const handleAddNew = () => {
     setEditMode('add');
@@ -61,58 +145,119 @@ export const ReadingLightView: React.FC = () => {
   };
 
   if (!project) {
-    return <div style={{ padding: '20px', color: '#888' }}>请先打开一个项目</div>;
+    return (
+      <div style={{
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#64748b',
+        background: 'linear-gradient(180deg, #0f172a 0%, #111827 100%)',
+      }}>
+        请先打开一个项目
+      </div>
+    );
   }
 
   return (
     <div style={{
       height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      backgroundColor: '#1e1e1e',
-      color: '#d4d4d4'
+      overflowY: 'auto',
+      padding: 24,
+      background: `radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 34%),
+                   radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 28%),
+                   linear-gradient(180deg, #0f172a 0%, #111827 100%)`,
     }}>
-      {/* Header */}
+      {/* 内容容器 */}
       <div style={{
-        padding: '16px',
-        borderBottom: '1px solid #333',
-        backgroundColor: '#252526'
+        maxWidth: 1280,
+        margin: '0 auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 18,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>📖 阅读灯视图</h2>
-          <button onClick={handleAddNew} style={addButtonStyle}>
-            <Plus size={16} /> 添加分析
-          </button>
+        {/* Header 卡片 */}
+        <div style={{ ...cardStyle, padding: 18 }}>
+          {/* 标题行 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {/* 图标容器 */}
+              <div style={iconContainerStyle(VIEW_COLORS[viewMode])}>
+                <Zap size={18} />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: '#f8fafc' }}>
+                  阅读灯视图
+                </h2>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  章节分析与伏笔跟踪
+                </div>
+              </div>
+            </div>
+            {/* 添加按钮 */}
+            <button
+              onClick={handleAddNew}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '8px 14px',
+                backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                border: '1px solid rgba(34, 197, 94, 0.2)',
+                borderRadius: 8,
+                color: '#4ade80',
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <Plus size={16} />
+              添加分析
+            </button>
+          </div>
+
+          {/* 统计指标 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 12,
+            marginTop: 16,
+          }}>
+            <MetricCard label="章节" value={stats.chapters} color="#38bdf8" />
+            <MetricCard label="伏笔" value={stats.foreshadowing} color="#f59e0b" />
+            <MetricCard label="角色状态" value={stats.characters} color="#a78bfa" />
+            <MetricCard label="剧情点" value={stats.plots} color="#4ade80" />
+          </div>
+
+          {/* Tab 行 */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <TabButton
+              active={viewMode === 'foreshadowing'}
+              onClick={() => setViewMode('foreshadowing')}
+              icon={<Zap size={14} />}
+              label="伏笔跟踪"
+              count={stats.foreshadowing}
+              color={VIEW_COLORS.foreshadowing}
+            />
+            <TabButton
+              active={viewMode === 'character'}
+              onClick={() => setViewMode('character')}
+              icon={<User size={14} />}
+              label="角色状态"
+              count={stats.characters}
+              color={VIEW_COLORS.character}
+            />
+            <TabButton
+              active={viewMode === 'plot'}
+              onClick={() => setViewMode('plot')}
+              icon={<Sparkles size={14} />}
+              label="剧情关键点"
+              count={stats.plots}
+              color={VIEW_COLORS.plot}
+            />
+          </div>
         </div>
 
-        {/* View Mode Tabs */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <TabButton
-            active={viewMode === 'foreshadowing'}
-            onClick={() => setViewMode('foreshadowing')}
-            icon={<Zap size={14} />}
-            label="伏笔跟踪"
-            count={analyses.reduce((sum, a) => sum + a.foreshadowing.length, 0)}
-          />
-          <TabButton
-            active={viewMode === 'character'}
-            onClick={() => setViewMode('character')}
-            icon={<User size={14} />}
-            label="角色状态"
-            count={analyses.reduce((sum, a) => sum + a.characterStates.length, 0)}
-          />
-          <TabButton
-            active={viewMode === 'plot'}
-            onClick={() => setViewMode('plot')}
-            icon={<Sparkles size={14} />}
-            label="剧情关键点"
-            count={analyses.reduce((sum, a) => sum + a.plotSummary.length, 0)}
-          />
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         {/* 添加/编辑表单 */}
         {editMode !== 'none' && (
           <AnalysisForm
@@ -124,27 +269,82 @@ export const ReadingLightView: React.FC = () => {
           />
         )}
 
+        {/* 内容区 */}
         {analyses.length === 0 && editMode === 'none' ? (
-          <div style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>
-            暂无章节分析数据。<br />点击右上角"添加分析"按钮手动添加。
+          <div style={{
+            ...cardStyle,
+            padding: 40,
+            textAlign: 'center',
+            color: '#64748b',
+          }}>
+            <div style={{ marginBottom: 12 }}>暂无章节分析数据</div>
+            <div style={{ fontSize: 13 }}>点击右上角"添加分析"按钮手动添加</div>
           </div>
         ) : (
           <>
             {viewMode === 'foreshadowing' && (
-              <ForeshadowingView analyses={sortedAnalyses} onEdit={handleEdit} onDelete={handleDelete} />
+              <ForeshadowingView
+                analyses={sortedAnalyses}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onVersionHistory={(analysis) => setVersionHistoryAnalysis(analysis)}
+              />
             )}
             {viewMode === 'character' && (
-              <CharacterView analyses={sortedAnalyses} onEdit={handleEdit} onDelete={handleDelete} />
+              <CharacterView
+                analyses={sortedAnalyses}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onVersionHistory={(analysis) => setVersionHistoryAnalysis(analysis)}
+              />
             )}
             {viewMode === 'plot' && (
-              <PlotView analyses={sortedAnalyses} onEdit={handleEdit} onDelete={handleDelete} />
+              <PlotView
+                analyses={sortedAnalyses}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onVersionHistory={(analysis) => setVersionHistoryAnalysis(analysis)}
+              />
             )}
           </>
         )}
       </div>
+
+      {/* 版本历史弹窗 */}
+      {versionHistoryAnalysis && (
+        <EntityVersionHistory
+          isOpen={true}
+          onClose={() => setVersionHistoryAnalysis(null)}
+          entityType="chapter_analysis"
+          entityId={versionHistoryAnalysis.id}
+          entityName={versionHistoryAnalysis.chapterTitle}
+          onRestore={(versionId) => {
+            const versionStore = useEntityVersionStore.getState();
+            const restored = versionStore.restoreAnalysisVersion(versionId);
+            if (restored) {
+              updateAnalysis(versionHistoryAnalysis.id, restored);
+              setVersionHistoryAnalysis(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };
+
+// --- Metric Card ---
+
+const MetricCard: React.FC<{ label: string; value: number; color: string }> = ({ label, value, color }) => (
+  <div style={{
+    padding: 14,
+    borderRadius: 12,
+    background: 'rgba(15, 23, 42, 0.5)',
+    border: '1px solid rgba(148, 163, 184, 0.1)',
+  }}>
+    <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>{label}</div>
+    <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
+  </div>
+);
 
 // --- Tab Button ---
 
@@ -154,137 +354,132 @@ const TabButton: React.FC<{
   icon: React.ReactNode;
   label: string;
   count: number;
-}> = ({ active, onClick, icon, label, count }) => (
+  color: string;
+}> = ({ active, onClick, icon, label, count, color }) => (
   <button
     onClick={onClick}
     style={{
       display: 'flex',
       alignItems: 'center',
-      gap: '6px',
-      padding: '8px 16px',
-      backgroundColor: active ? '#2563eb' : '#3c3c3c',
-      color: active ? 'white' : '#d4d4d4',
-      border: 'none',
-      borderRadius: '6px',
+      gap: 6,
+      padding: '8px 14px',
+      backgroundColor: active ? `${color}1a` : 'transparent',
+      border: active ? `1px solid ${color}33` : '1px solid transparent',
+      borderRadius: 8,
+      color: active ? color : '#94a3b8',
       cursor: 'pointer',
-      fontSize: '13px',
-      transition: 'all 0.2s'
+      fontSize: 13,
+      transition: 'all 0.2s',
     }}
   >
     {icon}
     <span>{label}</span>
     <span style={{
-      backgroundColor: active ? 'rgba(255,255,255,0.2)' : '#555',
+      backgroundColor: active ? `${color}22` : 'rgba(148, 163, 184, 0.1)',
       padding: '2px 6px',
-      borderRadius: '10px',
-      fontSize: '11px'
-    }}>{count}</span>
+      borderRadius: 6,
+      fontSize: 11,
+      fontWeight: 500,
+    }}>
+      {count}
+    </span>
   </button>
 );
 
-// --- Foreshadowing View (跨章节) ---
+// --- Foreshadowing View (按章节) ---
 
 const ForeshadowingView: React.FC<{
   analyses: ChapterAnalysis[];
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-}> = ({ analyses, onEdit, onDelete }) => {
-  // 收集所有伏笔，按内容分组
-  const allForeshadowing = useMemo(() => {
-    const map = new Map<string, ForeshadowingItem & { chapterTitle: string; chapterPath: string }[]>();
-
-    analyses.forEach(analysis => {
-      analysis.foreshadowing.forEach(item => {
-        const key = item.content;
-        if (!map.has(key)) {
-          map.set(key, []);
-        }
-        map.get(key)!.push({
-          ...item,
-          chapterTitle: analysis.chapterTitle,
-          chapterPath: analysis.chapterPath
-        });
-      });
-    });
-
-    return Array.from(map.entries()).map(([content, items]) => ({
-      content,
-      items: items.sort((a, b) => {
-        const order = { planted: 0, developed: 1, resolved: 2 };
-        return order[a.type] - order[b.type];
-      })
-    }));
-  }, [analyses]);
-
+  onVersionHistory: (analysis: ChapterAnalysis) => void;
+}> = ({ analyses, onEdit, onDelete, onVersionHistory }) => {
   const typeColors = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
   const typeLabels = { planted: '埋下', developed: '推进', resolved: '收回' };
 
-  if (allForeshadowing.length === 0) {
+  const chaptersWithForeshadowing = analyses.filter(a => a.foreshadowing.length > 0);
+
+  if (chaptersWithForeshadowing.length === 0) {
     return <EmptyState message="暂无伏笔数据" />;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {allForeshadowing.map((group, idx) => (
-        <div key={idx} style={{
-          backgroundColor: '#252526',
-          border: '1px solid #3c3c3c',
-          borderRadius: '8px',
-          overflow: 'hidden'
-        }}>
-          {/* 伏笔主题 */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {chaptersWithForeshadowing.map((analysis) => (
+        <div key={analysis.id} style={chapterCardStyle}>
+          {/* 章节标题 + 操作按钮 */}
           <div style={{
-            padding: '12px 16px',
-            backgroundColor: '#2d2d30',
-            borderBottom: '1px solid #3c3c3c'
+            padding: '14px 18px',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}>
-            <div style={{ fontSize: '14px', fontWeight: 500 }}>{group.content}</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
+              {analysis.chapterTitle}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {/* 版本历史按钮 - 醒目的 pill 样式 */}
+              <button
+                onClick={() => onVersionHistory(analysis)}
+                style={pillButtonStyle('#38bdf8')}
+                title="版本历史"
+              >
+                <History size={14} />
+                版本
+              </button>
+              <button onClick={() => onEdit(analysis.id)} style={actionButtonStyle} title="编辑">
+                <Edit2 size={14} />
+              </button>
+              <button onClick={() => onDelete(analysis.id)} style={{ ...actionButtonStyle, color: '#f87171' }} title="删除">
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
 
-          {/* 时间线 */}
-          <div style={{ padding: '12px 16px' }}>
-            {group.items.map((item, i) => (
-              <div key={i} style={{
+          {/* 伏笔列表 */}
+          <div style={{ padding: '12px 18px' }}>
+            {analysis.foreshadowing.map((item, i) => (
+              <div key={item.id || i} style={{
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: '12px',
-                marginBottom: i < group.items.length - 1 ? '12px' : 0
-              }}>
-                {/* 时间线点和连线 */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '20px' }}>
-                  <div style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '50%',
-                    backgroundColor: typeColors[item.type],
-                    flexShrink: 0
-                  }} />
-                  {i < group.items.length - 1 && (
-                    <div style={{
-                      width: '2px',
-                      flex: 1,
-                      backgroundColor: '#3c3c3c',
-                      marginTop: '4px'
-                    }} />
-                  )}
-                </div>
-
-                {/* 内容 */}
+                gap: 12,
+                marginBottom: i < analysis.foreshadowing.length - 1 ? 12 : 0,
+                padding: '10px 12px',
+                borderRadius: 10,
+                backgroundColor: 'rgba(30, 41, 59, 0.4)',
+                transition: 'background-color 0.2s',
+              }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.6)'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.4)'}
+              >
+                <div style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  backgroundColor: typeColors[item.type],
+                  flexShrink: 0,
+                  marginTop: 5,
+                }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{
-                    display: 'inline-block',
-                    padding: '2px 8px',
-                    backgroundColor: typeColors[item.type],
-                    color: '#1e1e1e',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    marginBottom: '4px'
-                  }}>
-                    {typeLabels[item.type]} - {item.chapterTitle}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{
+                      padding: '2px 8px',
+                      backgroundColor: `${typeColors[item.type]}22`,
+                      border: `1px solid ${typeColors[item.type]}33`,
+                      borderRadius: 4,
+                      color: typeColors[item.type],
+                      fontSize: 11,
+                      fontWeight: 500,
+                    }}>
+                      {typeLabels[item.type]}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, marginBottom: 6, lineHeight: 1.6, color: '#cbd5e1' }}>
+                    {item.content}
                   </div>
                   {item.tags.length > 0 && (
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {item.tags.map(tag => (
                         <span key={tag} style={tagStyle}>{tag}</span>
                       ))}
@@ -300,102 +495,104 @@ const ForeshadowingView: React.FC<{
   );
 };
 
-// --- Character View (跨章节) ---
+// --- Character View (按章节) ---
 
 const CharacterView: React.FC<{
   analyses: ChapterAnalysis[];
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-}> = ({ analyses, onEdit, onDelete }) => {
-  // 按角色分组，展示状态变化
-  const characters = useMemo(() => {
-    const charMap = new Map<string, {
-      name: string;
-      states: (CharacterState & { chapterTitle: string; chapterPath: string })[];
-    }>();
+  onVersionHistory: (analysis: ChapterAnalysis) => void;
+}> = ({ analyses, onEdit, onDelete, onVersionHistory }) => {
+  const chaptersWithCharacters = analyses.filter(a => a.characterStates.length > 0);
 
-    analyses.forEach(analysis => {
-      analysis.characterStates.forEach(state => {
-        if (!charMap.has(state.characterName)) {
-          charMap.set(state.characterName, { name: state.characterName, states: [] });
-        }
-        charMap.get(state.characterName)!.states.push({
-          ...state,
-          chapterTitle: analysis.chapterTitle,
-          chapterPath: analysis.chapterPath
-        });
-      });
-    });
-
-    return Array.from(charMap.values());
-  }, [analyses]);
-
-  if (characters.length === 0) {
+  if (chaptersWithCharacters.length === 0) {
     return <EmptyState message="暂无角色数据" />;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {characters.map((char, idx) => (
-        <div key={idx} style={{
-          backgroundColor: '#252526',
-          border: '1px solid #3c3c3c',
-          borderRadius: '8px',
-          overflow: 'hidden'
-        }}>
-          {/* 角色名 */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {chaptersWithCharacters.map((analysis) => (
+        <div key={analysis.id} style={chapterCardStyle}>
+          {/* 章节标题 + 操作按钮 */}
           <div style={{
-            padding: '12px 16px',
-            backgroundColor: '#2d2d30',
-            borderBottom: '1px solid #3c3c3c',
+            padding: '14px 18px',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
             display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            gap: '8px'
           }}>
-            <span style={{ fontSize: '16px' }}>👤</span>
-            <span style={{ fontSize: '15px', fontWeight: 600, color: '#dcdcaa' }}>{char.name}</span>
-            <span style={{ fontSize: '12px', color: '#888' }}>({char.states.length} 个章节记录)</span>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
+              {analysis.chapterTitle}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => onVersionHistory(analysis)}
+                style={pillButtonStyle('#38bdf8')}
+                title="版本历史"
+              >
+                <History size={14} />
+                版本
+              </button>
+              <button onClick={() => onEdit(analysis.id)} style={actionButtonStyle} title="编辑">
+                <Edit2 size={14} />
+              </button>
+              <button onClick={() => onDelete(analysis.id)} style={{ ...actionButtonStyle, color: '#f87171' }} title="删除">
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
 
-          {/* 状态时间线 */}
-          <div style={{ padding: '12px 16px' }}>
-            {char.states.map((state, i) => (
+          {/* 角色状态列表 */}
+          <div style={{ padding: '12px 18px' }}>
+            {analysis.characterStates.map((state, i) => (
               <div key={i} style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                marginBottom: i < char.states.length - 1 ? '16px' : 0
+                marginBottom: i < analysis.characterStates.length - 1 ? 16 : 0,
+                paddingBottom: i < analysis.characterStates.length - 1 ? 16 : 0,
+                borderBottom: i < analysis.characterStates.length - 1 ? '1px solid rgba(148, 163, 184, 0.1)' : 'none',
               }}>
-                {/* 时间线点 */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '20px' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  marginBottom: 8,
+                }}>
                   <div style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '50%',
-                    backgroundColor: '#4ec9b0',
-                    flexShrink: 0
-                  }} />
-                  {i < char.states.length - 1 && (
-                    <div style={{
-                      width: '2px',
-                      flex: 1,
-                      backgroundColor: '#3c3c3c',
-                      marginTop: '4px'
-                    }} />
-                  )}
-                </div>
-
-                {/* 内容 */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '12px', color: '#888', marginBottom: '6px' }}>
-                    {state.chapterTitle}
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    background: 'rgba(56, 189, 248, 0.12)',
+                    display: 'grid',
+                    placeItems: 'center',
+                    color: '#38bdf8',
+                  }}>
+                    <User size={14} />
                   </div>
-                  <div style={{ fontSize: '14px', marginBottom: '8px' }}>{state.stateDescription}</div>
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '12px', color: '#888' }}>
-                    {state.emotionalState && <span>😊 {state.emotionalState}</span>}
-                    {state.location && <span>📍 {state.location}</span>}
-                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#dcdcaa' }}>
+                    {state.characterName}
+                  </span>
                 </div>
+                <div style={{ fontSize: 13, marginBottom: 8, color: '#cbd5e1', paddingLeft: 36 }}>
+                  {state.stateDescription}
+                </div>
+                {state.emotionalState && (
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, paddingLeft: 36 }}>
+                    情绪: <span style={{ color: '#94a3b8' }}>{state.emotionalState}</span>
+                  </div>
+                )}
+                {state.location && (
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4, paddingLeft: 36 }}>
+                    位置: <span style={{ color: '#94a3b8' }}>{state.location}</span>
+                  </div>
+                )}
+                {state.relationships && state.relationships.length > 0 && (
+                  <div style={{ marginTop: 8, paddingLeft: 36 }}>
+                    {state.relationships.map((rel, j) => (
+                      <div key={j} style={{ fontSize: 12, color: '#9cdcfe', marginBottom: 2 }}>
+                        与 {rel.with}: {rel.status}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -411,65 +608,88 @@ const PlotView: React.FC<{
   analyses: ChapterAnalysis[];
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-}> = ({ analyses, onEdit, onDelete }) => {
-  // 收集所有剧情点
-  const allPlotPoints = useMemo(() => {
-    const points: (PlotKeyPoint & { chapterTitle: string; chapterPath: string })[] = [];
-    analyses.forEach(analysis => {
-      analysis.plotSummary.forEach(point => {
-        points.push({
-          ...point,
-          chapterTitle: analysis.chapterTitle,
-          chapterPath: analysis.chapterPath
-        });
-      });
-    });
-    return points.sort((a, b) => {
-      const order = { high: 0, medium: 1, low: 2 };
-      return order[a.importance] - order[b.importance];
-    });
-  }, [analyses]);
-
+  onVersionHistory: (analysis: ChapterAnalysis) => void;
+}> = ({ analyses, onEdit, onDelete, onVersionHistory }) => {
   const importanceColors = { high: '#f48771', medium: '#dcdcaa', low: '#9cdcfe' };
   const importanceLabels = { high: '重要', medium: '一般', low: '次要' };
 
-  if (allPlotPoints.length === 0) {
+  const chaptersWithPlot = analyses.filter(a => a.plotSummary.length > 0);
+
+  if (chaptersWithPlot.length === 0) {
     return <EmptyState message="暂无剧情数据" />;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {allPlotPoints.map((point, idx) => (
-        <div key={idx} style={{
-          padding: '12px 16px',
-          backgroundColor: '#252526',
-          border: '1px solid #3c3c3c',
-          borderLeft: `3px solid ${importanceColors[point.importance]}`,
-          borderRadius: '6px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-            <span style={{
-              padding: '2px 8px',
-              backgroundColor: importanceColors[point.importance],
-              color: '#1e1e1e',
-              borderRadius: '4px',
-              fontSize: '11px',
-              fontWeight: 600
-            }}>
-              {importanceLabels[point.importance]}
-            </span>
-            <span style={{ fontSize: '12px', color: '#888' }}>{point.chapterTitle}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {chaptersWithPlot.map((analysis) => (
+        <div key={analysis.id} style={chapterCardStyle}>
+          {/* 章节标题 + 操作按钮 */}
+          <div style={{
+            padding: '14px 18px',
+            borderBottom: '1px solid rgba(148, 163, 184, 0.1)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: '#e2e8f0' }}>
+              {analysis.chapterTitle}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => onVersionHistory(analysis)}
+                style={pillButtonStyle('#38bdf8')}
+                title="版本历史"
+              >
+                <History size={14} />
+                版本
+              </button>
+              <button onClick={() => onEdit(analysis.id)} style={actionButtonStyle} title="编辑">
+                <Edit2 size={14} />
+              </button>
+              <button onClick={() => onDelete(analysis.id)} style={{ ...actionButtonStyle, color: '#f87171' }} title="删除">
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
-          <div style={{ fontSize: '14px', marginBottom: '8px' }}>{point.description}</div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {point.tags.map(tag => (
-              <span key={tag} style={tagStyle}>{tag}</span>
+
+          {/* 剧情点列表 */}
+          <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {analysis.plotSummary.map((point, idx) => (
+              <div key={idx} style={{
+                padding: '12px 14px',
+                backgroundColor: 'rgba(30, 41, 59, 0.4)',
+                border: '1px solid rgba(148, 163, 184, 0.1)',
+                borderLeft: `3px solid ${importanceColors[point.importance]}`,
+                borderRadius: 10,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{
+                    padding: '2px 8px',
+                    backgroundColor: `${importanceColors[point.importance]}22`,
+                    border: `1px solid ${importanceColors[point.importance]}33`,
+                    borderRadius: 4,
+                    color: importanceColors[point.importance],
+                    fontSize: 11,
+                    fontWeight: 500,
+                  }}>
+                    {importanceLabels[point.importance]}
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, marginBottom: 8, color: '#cbd5e1' }}>
+                  {point.description}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {point.tags.map(tag => (
+                    <span key={tag} style={tagStyle}>{tag}</span>
+                  ))}
+                  {point.relatedCharacters.length > 0 && (
+                    <span style={{ color: '#64748b', fontSize: 12 }}>
+                      👤 {point.relatedCharacters.join(', ')}
+                    </span>
+                  )}
+                </div>
+              </div>
             ))}
-            {point.relatedCharacters.length > 0 && (
-              <span style={{ color: '#888', fontSize: '12px' }}>
-                👤 {point.relatedCharacters.join(', ')}
-              </span>
-            )}
           </div>
         </div>
       ))}
@@ -480,8 +700,30 @@ const PlotView: React.FC<{
 // --- Empty State ---
 
 const EmptyState: React.FC<{ message: string }> = ({ message }) => (
-  <div style={{ color: '#888', textAlign: 'center', marginTop: '40px' }}>{message}</div>
+  <div style={{
+    ...cardStyle,
+    padding: 40,
+    textAlign: 'center',
+    color: '#64748b',
+  }}>
+    {message}
+  </div>
 );
+
+// --- Action Button Style ---
+
+const actionButtonStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 6,
+  backgroundColor: 'transparent',
+  border: '1px solid rgba(148, 163, 184, 0.16)',
+  borderRadius: 6,
+  color: '#94a3b8',
+  cursor: 'pointer',
+  transition: 'all 0.2s',
+};
 
 // --- Analysis Form ---
 
@@ -498,7 +740,12 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
   const [chapterTitle, setChapterTitle] = useState(editingData?.chapterTitle || '');
   const [plotSummary, setPlotSummary] = useState<PlotKeyPoint[]>(editingData?.plotSummary || []);
   const [characterStates, setCharacterStates] = useState<CharacterState[]>(editingData?.characterStates || []);
-  const [foreshadowing, setForeshadowing] = useState<ForeshadowingItem[]>(editingData?.foreshadowing || []);
+  const [foreshadowing, setForeshadowing] = useState<ForeshadowingItem[]>(
+    (editingData?.foreshadowing || []).map(f => ({
+      ...f,
+      source: f.source || 'chapter_analysis'
+    }))
+  );
 
   const handleSave = () => {
     const now = Date.now();
@@ -519,20 +766,16 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
   };
 
   return (
-    <div style={{
-      backgroundColor: '#252526',
-      border: '1px solid #3c3c3c',
-      borderRadius: '6px',
-      padding: '16px',
-      marginBottom: '16px'
-    }}>
-      <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600 }}>
+    <div style={{ ...cardStyle, padding: 18 }}>
+      <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
         {mode === 'add' ? '添加章节分析' : '编辑章节分析'}
       </h3>
 
       {/* 章节选择 */}
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#888' }}>选择章节</label>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+          选择章节
+        </label>
         <select
           value={chapterPath}
           onChange={(e) => {
@@ -542,7 +785,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
               setChapterTitle(chapter.name.replace('.md', ''));
             }
           }}
-          style={selectStyle}
+          style={{ ...inputStyle, cursor: 'pointer' }}
         >
           <option value="">-- 选择章节 --</option>
           {availableChapters.map(ch => (
@@ -553,7 +796,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
       </div>
 
       {chapterPath === '手动添加' && (
-        <div style={{ marginBottom: '16px' }}>
+        <div style={{ marginBottom: 16 }}>
           <input
             type="text"
             value={chapterTitle}
@@ -578,7 +821,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
                 newItems[idx] = { ...item, type: e.target.value as any };
                 setForeshadowing(newItems);
               }}
-              style={{ ...inputStyle, width: '100px' }}
+              style={{ ...inputStyle, width: 100, cursor: 'pointer' }}
             >
               <option value="planted">新埋下</option>
               <option value="developed">推进中</option>
@@ -615,7 +858,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
                 setCharacterStates(newItems);
               }}
               placeholder="角色名"
-              style={{ ...inputStyle, width: '100px' }}
+              style={{ ...inputStyle, width: 100 }}
             />
             <input
               type="text"
@@ -646,7 +889,7 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
                 newItems[idx] = { ...item, importance: e.target.value as any };
                 setPlotSummary(newItems);
               }}
-              style={{ ...inputStyle, width: '80px' }}
+              style={{ ...inputStyle, width: 80, cursor: 'pointer' }}
             >
               <option value="high">重要</option>
               <option value="medium">一般</option>
@@ -668,9 +911,35 @@ const AnalysisForm: React.FC<AnalysisFormProps> = ({ mode, editingData, availabl
       />
 
       {/* 操作按钮 */}
-      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
-        <button onClick={onCancel} style={cancelButtonStyle}>取消</button>
-        <button onClick={handleSave} style={saveButtonStyle}>保存</button>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button
+          onClick={onCancel}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: 'rgba(148, 163, 184, 0.1)',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            borderRadius: 6,
+            color: '#94a3b8',
+            cursor: 'pointer',
+            fontSize: 13,
+          }}
+        >
+          取消
+        </button>
+        <button
+          onClick={handleSave}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: 'rgba(34, 197, 94, 0.12)',
+            border: '1px solid rgba(34, 197, 94, 0.2)',
+            borderRadius: 6,
+            color: '#4ade80',
+            cursor: 'pointer',
+            fontSize: 13,
+          }}
+        >
+          保存
+        </button>
       </div>
     </div>
   );
@@ -684,22 +953,40 @@ const SectionEditor: React.FC<{
   onChange: (items: any[]) => void;
   renderItem: (item: any, idx: number) => React.ReactNode;
 }> = ({ title, items, onChange, renderItem }) => (
-  <div style={{ marginBottom: '16px' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-      <label style={{ fontSize: '13px', color: '#888' }}>{title}</label>
+  <div style={{ marginBottom: 16 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+      <label style={{ fontSize: 13, color: '#94a3b8' }}>{title}</label>
       <button
-        onClick={() => onChange([...items, { id: `${Date.now()}-${Math.random()}`, content: '', type: 'planted', tags: [] }])}
-        style={addButtonStyle}
+        onClick={() => onChange([...items, { id: `${Date.now()}-${Math.random()}`, content: '', type: 'planted', tags: [], source: 'chapter_analysis' }])}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '4px 8px',
+          backgroundColor: 'rgba(148, 163, 184, 0.1)',
+          border: '1px solid rgba(148, 163, 184, 0.16)',
+          borderRadius: 6,
+          color: '#94a3b8',
+          cursor: 'pointer',
+          fontSize: 12,
+        }}
       >
         <Plus size={14} /> 添加
       </button>
     </div>
     {items.map((item, idx) => (
-      <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+      <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
         {renderItem(item, idx)}
         <button
           onClick={() => onChange(items.filter((_, i) => i !== idx))}
-          style={deleteButtonStyle}
+          style={{
+            padding: 6,
+            backgroundColor: 'transparent',
+            border: '1px solid rgba(248, 113, 113, 0.2)',
+            borderRadius: 6,
+            color: '#f87171',
+            cursor: 'pointer',
+          }}
         >
           <Trash2 size={14} />
         </button>
@@ -707,69 +994,3 @@ const SectionEditor: React.FC<{
     ))}
   </div>
 );
-
-// --- Styles ---
-
-const addButtonStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '4px',
-  padding: '4px 8px',
-  backgroundColor: '#3c3c3c',
-  color: '#d4d4d4',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '12px'
-};
-
-const deleteButtonStyle: React.CSSProperties = {
-  padding: '6px',
-  backgroundColor: 'transparent',
-  color: '#f48771',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer'
-};
-
-const cancelButtonStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  backgroundColor: '#3c3c3c',
-  color: '#d4d4d4',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '13px'
-};
-
-const saveButtonStyle: React.CSSProperties = {
-  padding: '8px 16px',
-  backgroundColor: '#2563eb',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '13px'
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '8px',
-  backgroundColor: '#3c3c3c',
-  color: '#d4d4d4',
-  border: '1px solid #555',
-  borderRadius: '4px',
-  fontSize: '13px'
-};
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle,
-  width: '100%'
-};
-
-const tagStyle: React.CSSProperties = {
-  padding: '2px 6px',
-  backgroundColor: '#3c3c3c',
-  borderRadius: '3px',
-  color: '#888',
-  fontSize: '11px'
-};

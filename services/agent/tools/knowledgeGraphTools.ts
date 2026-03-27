@@ -16,7 +16,6 @@ import {
 } from '../../../types';
 import {
   scoreKnowledgeNodeRecall,
-  sortKnowledgeNodesForReview,
 } from '../../../utils/knowledgeIntelligence';
 
 // ============================================
@@ -47,7 +46,6 @@ export const queryKnowledgeTool: ToolDefinition = {
 ## 排序策略
 - **relevance**: 按相关性排序（默认）
 - **activation**: 按激活度排序（优先返回常用知识）
-- **review_urgency**: 按复习紧急度排序（优先返回需要复习的知识）
 `,
     parameters: {
       type: 'object',
@@ -72,7 +70,7 @@ export const queryKnowledgeTool: ToolDefinition = {
         },
         sortBy: {
           type: 'string',
-          enum: ['relevance', 'activation', 'review_urgency'],
+          enum: ['relevance', 'activation'],
           default: 'relevance',
           description: '排序策略',
         },
@@ -236,39 +234,6 @@ export const listKnowledgeMetadataTool: ToolDefinition = {
   },
 };
 
-/**
- * 获取复习队列
- */
-export const listReviewQueueTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'list_review_queue',
-    description: `【复习队列】获取待复习的知识节点列表。
-
-## 记忆智能算法
-基于间隔重复算法，返回需要复习的知识节点：
-- 激活度衰减的节点
-- 到达复习时间的节点
-- 优先返回紧急度最高的节点
-
-## 用途
-- 定期复习重要知识
-- 保持长期记忆
-- 强化关键设定和规则
-`,
-    parameters: {
-      type: 'object',
-      properties: {
-        limit: {
-          type: 'number',
-          default: 5,
-          description: '返回结果数量上限',
-        },
-      },
-    },
-  },
-};
-
 // ============================================
 // 执行函数
 // ============================================
@@ -278,7 +243,7 @@ export const executeQueryKnowledge = async (args: {
   category?: KnowledgeCategory;
   subCategory?: string;
   tags?: string[];
-  sortBy?: 'relevance' | 'activation' | 'review_urgency';
+  sortBy?: 'relevance' | 'activation';
   limit?: number;
 }) => {
   const store = useKnowledgeGraphStore.getState();
@@ -324,9 +289,6 @@ export const executeQueryKnowledge = async (args: {
         const scoreB = scoreKnowledgeNodeRecall(b, query || b.name, now);
         return scoreB.activation - scoreA.activation;
       });
-      break;
-    case 'review_urgency':
-      nodes = sortKnowledgeNodesForReview(nodes, now);
       break;
     default:
       if (query) {
@@ -616,39 +578,6 @@ export const executeListKnowledgeMetadata = async () => {
   });
 };
 
-export const executeListReviewQueue = async (args: { limit?: number } = {}) => {
-  const store = useKnowledgeGraphStore.getState();
-  await store.ensureInitialized();
-
-  const { limit = 5 } = args;
-  const reviewQueue = store.getReviewQueue();
-  const results = reviewQueue.slice(0, limit);
-
-  return JSON.stringify({
-    success: true,
-    count: results.length,
-    totalDue: reviewQueue.length,
-    nodes: results.map((n) => {
-      const dynamicState = store.getNodeDynamicState(n.id);
-      return {
-        id: n.id,
-        name: n.name,
-        category: n.category,
-        subCategory: n.subCategory,
-        summary: n.summary,
-        importance: n.importance,
-        dynamicState: dynamicState ? {
-          activation: dynamicState.activation.toFixed(2),
-          strength: dynamicState.strength.toFixed(2),
-          reviewUrgency: dynamicState.reviewUrgency.toFixed(2),
-          isDueForReview: dynamicState.isDueForReview,
-          state: dynamicState.state,
-        } : null,
-      };
-    }),
-  });
-};
-
 // ============================================
 // 导出
 // ============================================
@@ -658,5 +587,4 @@ export const knowledgeGraphToolDefinitions = [
   manageKnowledgeTool,
   linkKnowledgeTool,
   listKnowledgeMetadataTool,
-  listReviewQueueTool,
 ];

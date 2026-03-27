@@ -8,12 +8,15 @@
  * 重构后: ~400 行
  */
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useEditor } from '../hooks/editor/useEditor';
 import { useCharacterProfileActions } from '../hooks/useCharacterProfileActions';
+import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
+import { useAgentStore } from '../stores/agentStore';
+import { useProjectStore } from '../stores/projectStore';
 import { getNodePath } from '../services/fileSystem';
 import { FileNode } from '../types';
 import DiffViewer from './DiffViewer';
@@ -44,6 +47,7 @@ import {
   UserPlus,
   RefreshCw,
   Loader2,
+  FileScan,
 } from 'lucide-react';
 
 interface EditorProps {
@@ -174,6 +178,30 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
       console.log('角色档案更新成功');
     }
   }, [activeFile, isDraftFile, filePath, chapterRef, profileActions]);
+
+  // 处理手动章节分析
+  const [isAnalyzingChapter, setIsAnalyzingChapter] = useState(false);
+  const handleAnalyzeChapter = useCallback(async () => {
+    if (!activeFile || !isDraftFile || !filePath) return;
+
+    setIsAnalyzingChapter(true);
+    try {
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+      const agentStore = useAgentStore.getState();
+      const projectStore = useProjectStore.getState();
+
+      await chapterAnalysisStore.triggerExtraction(
+        filePath,
+        agentStore.currentSessionId || 'manual',
+        projectStore.getCurrentProject()?.id || ''
+      );
+      console.log('章节分析完成');
+    } catch (error) {
+      console.error('章节分析失败:', error);
+    } finally {
+      setIsAnalyzingChapter(false);
+    }
+  }, [activeFile, isDraftFile, filePath]);
 
   // ==================== Search Highlight ====================
   const highlightedContent = useMemo(() => {
@@ -500,6 +528,22 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
                 <Loader2 size={14} className="animate-spin" />
               ) : (
                 <RefreshCw size={14} />
+              )}
+            </button>
+          )}
+
+          {/* Analyze Chapter - Only for draft files */}
+          {isDraftFile && (
+            <button
+              onClick={handleAnalyzeChapter}
+              disabled={isAnalyzingChapter}
+              className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-cyan-400 hover:text-white hover:bg-cyan-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="分析章节"
+            >
+              {isAnalyzingChapter ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <FileScan size={14} />
               )}
             </button>
           )}

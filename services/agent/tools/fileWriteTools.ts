@@ -77,17 +77,21 @@ export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'patchFile',
-    description: `修改已有文件，基于字符串精确匹配。
+    description: `修改已有文件，支持一次修改多处。
 
-【🔥 批量操作优先】
-- **同一文件的多处修改应该打包到一个 patchFile 调用中**
+【🔥 核心原则：打包修改】
+- **同一文件有多处修改？全部打包到一个 patchFile 调用！**
 - 每批最多 10 个 edits，超过则分多次调用
 - 只有一处修改时，正常传入单个 edit 即可
+
+【"精确匹配"是什么意思？】
+- 指 oldContent 必须**精确复制**原文（空格、换行、标点完全一致）
+- **不是说只能改一处！** 多处修改请打包到 edits 数组
 
 【三种操作模式】
 
 📌 **single** - 单点替换
-- 精确匹配一处，多处匹配会报错
+- oldContent 在文件中只能匹配一处，多处匹配会报错
 - 需要：oldContent, newContent
 
 📌 **global** - 全局替换
@@ -99,7 +103,7 @@ export const patchFileTool: ToolDefinition = {
 - before="某内容" 在其前插入
 - 需要：after 或 before, newContent
 
-【示例 - 批量修改】
+【示例 - 批量修改同一文件】
 
 \`\`\`json
 {
@@ -107,15 +111,16 @@ export const patchFileTool: ToolDefinition = {
   "edits": [
     { "mode": "single", "oldContent": "*去死吧！*", "newContent": "*去死吧，怪物！*" },
     { "mode": "single", "oldContent": "*怪物……*", "newContent": "*还能站起来……*" },
-    { "mode": "single", "oldContent": "*该出发了。*", "newContent": "*时间到了。*" }
+    { "mode": "global", "oldContent": "景天", "newContent": "景田" },
+    { "mode": "insert", "after": "第一章结束", "newContent": "\\n\\n第二章开始" }
   ]
 }
 \`\`\`
 
 【关键规则】
-- 定位内容必须**精确匹配**原文（空格、换行、标点完全一致）
+- oldContent 必须**精确复制**原文（空格、换行、标点完全一致）
 - 多处修改打包到一个调用，减少审批次数
-- 每批最多10个 edits
+- 每批最多 10 个 edits
 
 [WRITE TOOL]`,
     parameters: {
