@@ -9,6 +9,7 @@ import { formatWordCount } from '../utils/wordCount';
 import { useVersionStore, VersionSource } from './versionStore';
 import { applyEdits } from '../utils/patchUtils';
 import { dataService } from '../services/dataService';
+import { useProjectStore } from './projectStore';
 
 // Lazy-init FileService to avoid circular dependency issues
 let _fileService: FileService | null = null;
@@ -111,8 +112,14 @@ export const useFileStore = create<FileState>((set, get) => ({
   _restoreSystemFiles: () => {
     const { files, _saveToDB } = get();
 
+    // 从 projectStore 获取 presetId，用于恢复题材特定的模板和技能
+    const { currentProjectId } = get();
+    const projects = useProjectStore.getState().projects;
+    const currentProject = projects?.find(p => p.id === currentProjectId);
+    const presetId = currentProject?.presetId;
+
     // Delegate to FileService for domain logic
-    const updatedFiles = getFileService().restoreSystemFiles(files);
+    const updatedFiles = getFileService().restoreSystemFiles(files, presetId);
 
     // Check if any changes were made
     if (updatedFiles.length !== files.length) {

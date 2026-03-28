@@ -25,18 +25,23 @@ import {
   URBAN_SKILL_CHARACTER_DESIGNER,
   URBAN_SKILL_EXPECTATION_MANAGER,
   URBAN_SKILL_PLEASURE_RHYTHM,
+  URBAN_SKILL_WORLD_BUILDER,
   SYSTEM_SKILL_CHARACTER_DESIGNER,
   SYSTEM_SKILL_EXPECTATION_MANAGER,
   SYSTEM_SKILL_PLEASURE_RHYTHM,
+  SYSTEM_SKILL_WORLD_BUILDER,
   PALACE_SKILL_CHARACTER_DESIGNER,
   PALACE_SKILL_EXPECTATION_MANAGER,
   PALACE_SKILL_PLEASURE_RHYTHM,
+  PALACE_SKILL_WORLD_BUILDER,
   MYSTERY_SKILL_CHARACTER_DESIGNER,
   MYSTERY_SKILL_EXPECTATION_MANAGER,
   MYSTERY_SKILL_PLEASURE_RHYTHM,
+  MYSTERY_SKILL_WORLD_BUILDER,
   ROMANCE_SKILL_CHARACTER_DESIGNER,
   ROMANCE_SKILL_EXPECTATION_MANAGER,
   ROMANCE_SKILL_PLEASURE_RHYTHM,
+  ROMANCE_SKILL_WORLD_BUILDER,
   SCIFI_SKILL_CHARACTER_DESIGNER,
   SCIFI_SKILL_EXPECTATION_MANAGER,
   SCIFI_SKILL_PLEASURE_RHYTHM,
@@ -48,6 +53,7 @@ import {
   GAME_SKILL_CHARACTER_DESIGNER,
   GAME_SKILL_EXPECTATION_MANAGER,
   GAME_SKILL_PLEASURE_RHYTHM,
+  GAME_SKILL_WORLD_BUILDER,
   HISTORY_SKILL_CHARACTER_DESIGNER,
   HISTORY_SKILL_EXPECTATION_MANAGER,
   HISTORY_SKILL_PLEASURE_RHYTHM,
@@ -360,8 +366,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
-      '技能_分层约束设计.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
@@ -393,12 +397,13 @@ export const PRESETS: GenrePreset[] = [
     genre: '都市',
     styleGuide: URBAN_STYLE,
     skills: [
+      '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
       '技能_期待感管理.md',
       '技能_爽点节奏管理.md'
     ],
     customSkills: {
+      '技能_世界观构建.md': URBAN_SKILL_WORLD_BUILDER,
       '技能_角色设计.md': URBAN_SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': URBAN_SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': URBAN_SKILL_PLEASURE_RHYTHM
@@ -425,12 +430,13 @@ export const PRESETS: GenrePreset[] = [
     genre: '系统',
     styleGuide: SYSTEM_STYLE,
     skills: [
+      '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
     customSkills: {
+      '技能_世界观构建.md': SYSTEM_SKILL_WORLD_BUILDER,
       '技能_角色设计.md': SYSTEM_SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': SYSTEM_SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': SYSTEM_SKILL_PLEASURE_RHYTHM
@@ -457,12 +463,13 @@ export const PRESETS: GenrePreset[] = [
     genre: '宫斗',
     styleGuide: PALACE_STYLE,
     skills: [
+      '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_分层约束设计.md',
       '技能_期待感管理.md',
       '技能_爽点节奏管理.md'
     ],
     customSkills: {
+      '技能_世界观构建.md': PALACE_SKILL_WORLD_BUILDER,
       '技能_角色设计.md': PALACE_SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': PALACE_SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': PALACE_SKILL_PLEASURE_RHYTHM
@@ -489,12 +496,13 @@ export const PRESETS: GenrePreset[] = [
     genre: '悬疑',
     styleGuide: MYSTERY_STYLE,
     skills: [
-      '技能_分层约束设计.md',
+      '技能_世界观构建.md',
       '技能_期待感管理.md',
       '技能_爽点节奏管理.md',
       '技能_角色设计.md'
     ],
     customSkills: {
+      '技能_世界观构建.md': MYSTERY_SKILL_WORLD_BUILDER,
       '技能_角色设计.md': MYSTERY_SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': MYSTERY_SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': MYSTERY_SKILL_PLEASURE_RHYTHM
@@ -521,12 +529,13 @@ export const PRESETS: GenrePreset[] = [
     genre: '言情',
     styleGuide: ROMANCE_STYLE,
     skills: [
+      '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
       '技能_期待感管理.md',
       '技能_爽点节奏管理.md'
     ],
     customSkills: {
+      '技能_世界观构建.md': ROMANCE_SKILL_WORLD_BUILDER,
       '技能_角色设计.md': ROMANCE_SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': ROMANCE_SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': ROMANCE_SKILL_PLEASURE_RHYTHM
@@ -555,10 +564,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
-      '技能_编辑审核.md',
-      '技能_去AI化文风.md',
-      '技能_分层约束设计.md',
       '技能_期待感管理.md',
       '技能_爽点节奏管理.md'
     ],
@@ -586,7 +591,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_分层约束设计.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
@@ -620,7 +624,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
@@ -652,12 +655,13 @@ export const PRESETS: GenrePreset[] = [
     genre: '游戏',
     styleGuide: GAME_STYLE,
     skills: [
+      '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_正文扩写.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
     customSkills: {
+      '技能_世界观构建.md': GAME_SKILL_WORLD_BUILDER,
       '技能_角色设计.md': GAME_SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': GAME_SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': GAME_SKILL_PLEASURE_RHYTHM
@@ -686,7 +690,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_分层约束设计.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
@@ -720,7 +723,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_分层约束设计.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],
@@ -754,7 +756,6 @@ export const PRESETS: GenrePreset[] = [
     skills: [
       '技能_世界观构建.md',
       '技能_角色设计.md',
-      '技能_分层约束设计.md',
       '技能_爽点节奏管理.md',
       '技能_期待感管理.md'
     ],

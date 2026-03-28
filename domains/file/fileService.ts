@@ -17,14 +17,18 @@ import {
   DEFAULT_AGENT_SKILL,
   STYLE_GUIDE_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
+  PROJECT_PROFILE_TEMPLATE,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
   SKILL_HUMANIZER_STYLE,
   SKILL_EXPECTATION_MANAGER,
-  SKILL_CONSTRAINT_LAYERED_DESIGN
+  SKILL_CONSTRAINT_LAYERED_DESIGN,
+  SKILL_PLEASURE_RHYTHM_MANAGER,
+  SKILL_OUTLINE_ARCHITECT
 } from '../../services/templates';
+import { getPresetById } from '../../services/resources/presets';
 
 // 内联模板（用于世界线记录和伏笔记录）
 const withMeta = (content: string, summary: string, tags: string[] = []) => {
@@ -115,8 +119,10 @@ export class FileService {
   /**
    * 系统文件恢复 - 确保系统文件和文件夹存在
    * 使用与 fileSystem.ts 初始化时相同的模板常量
+   * @param files 当前文件列表
+   * @param presetId 可选的预设ID，用于恢复题材特定的模板和技能
    */
-  restoreSystemFiles(files: FileNode[]): FileNode[] {
+  restoreSystemFiles(files: FileNode[], presetId?: string): FileNode[] {
     const updatedFiles = [...files];
     const generateId = this.generateId;
 
@@ -165,6 +171,9 @@ export class FileService {
       return file;
     };
 
+    // 查找预设（如果提供了 presetId）
+    const preset = presetId ? getPresetById(presetId) : undefined;
+
     // 1. 确保 98_技能配置 文件夹
     const skillFolder = ensureFolder('98_技能配置', 'root');
 
@@ -175,22 +184,70 @@ export class FileService {
     const rulesFolder = ensureFolder('99_创作规范', 'root');
 
     // 4. 确保创作规范文件（使用正确的模板常量）
-    ensureFile('指南_文风规范.md', rulesFolder.id, STYLE_GUIDE_TEMPLATE);
+    // 文风规范：优先使用预设版本
+    const styleGuide = preset?.styleGuide || STYLE_GUIDE_TEMPLATE;
+    ensureFile('指南_文风规范.md', rulesFolder.id, styleGuide);
+    ensureFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE);
     ensureFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE);
     ensureFile('模板_世界线记录.md', rulesFolder.id, TIMELINE_TEMPLATE);
     ensureFile('模板_伏笔记录.md', rulesFolder.id, FORESHADOW_TEMPLATE);
 
+    // 4.1 恢复预设特定模板到 99_创作规范
+    if (preset && preset.templates) {
+      Object.entries(preset.templates).forEach(([fileName, content]) => {
+        ensureFile(fileName, rulesFolder.id, content);
+      });
+    }
+
     // 5. 确保 subskill 子文件夹
     const subskillFolder = ensureFolder('subskill', skillFolder.id);
 
-    // 6. 确保 subskill 文件（使用正确的文件名和模板常量）
-    ensureFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER);
-    ensureFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER);
-    ensureFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER);
-    ensureFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW);
-    ensureFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE);
-    ensureFile('技能_期待感管理.md', subskillFolder.id, SKILL_EXPECTATION_MANAGER);
-    ensureFile('技能_分层约束设计.md', subskillFolder.id, SKILL_CONSTRAINT_LAYERED_DESIGN);
+    // 6. 技能文件映射（通用 + 题材分离）
+    // 通用技能 - 与题材无关，始终创建/恢复
+    const UNIVERSAL_SKILLS: Record<string, string> = {
+      '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+      '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
+      '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
+      '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE,
+      '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+    };
+
+    // 题材技能 - 根据预设选择性加载
+    const GENRE_SKILL_MAP: Record<string, string> = {
+      '技能_世界观构建.md': SKILL_WORLD_BUILDER,
+      '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
+      '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
+      '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
+    };
+
+    // 始终恢复通用技能
+    Object.entries(UNIVERSAL_SKILLS).forEach(([name, content]) => {
+      ensureFile(name, subskillFolder.id, content);
+    });
+
+    // 恢复题材技能
+    if (preset && preset.skills.length > 0) {
+      // 恢复预设指定的技能，优先使用定制版本
+      preset.skills.forEach(skillName => {
+        // 跳过通用技能（已恢复）
+        if (UNIVERSAL_SKILLS[skillName]) return;
+        const customContent = preset.customSkills?.[skillName];
+        const skillContent = customContent || GENRE_SKILL_MAP[skillName];
+        if (skillContent) {
+          ensureFile(skillName, subskillFolder.id, skillContent);
+        }
+      });
+      // 爽点节奏管理始终恢复
+      if (!preset.skills.includes('技能_爽点节奏管理.md')) {
+        const customRhythm = preset.customSkills?.['技能_爽点节奏管理.md'];
+        ensureFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER);
+      }
+    } else {
+      // 无预设时恢复全部题材技能
+      Object.entries(GENRE_SKILL_MAP).forEach(([name, content]) => {
+        ensureFile(name, subskillFolder.id, content);
+      });
+    }
 
     // 7. 确保 00_基础信息 文件夹存在
     const infoFolder = ensureFolder('00_基础信息', 'root');

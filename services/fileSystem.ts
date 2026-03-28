@@ -12,7 +12,8 @@ import {
   SKILL_HUMANIZER_STYLE,
   SKILL_CONSTRAINT_LAYERED_DESIGN,
   SKILL_EXPECTATION_MANAGER,
-  SKILL_PLEASURE_RHYTHM_MANAGER
+  SKILL_PLEASURE_RHYTHM_MANAGER,
+  SKILL_OUTLINE_ARCHITECT
 } from './templates';
 import { GenrePreset } from './resources/presets';
 
@@ -119,14 +120,20 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   // 新增 subskill 文件夹 (Inside skillFolder)
   const subskillFolder = createFolder('subskill', skillFolder.id);
 
-  // 技能文件映射
-  const SKILL_MAP: Record<string, string> = {
-    '技能_世界观构建.md': SKILL_WORLD_BUILDER,
-    '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
+  // 技能文件映射（通用 + 题材分离）
+  // 通用技能 - 与题材无关，始终创建
+  const UNIVERSAL_SKILLS: Record<string, string> = {
+    '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
     '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
     '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
     '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE,
     '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+  };
+
+  // 题材技能 - 根据预设选择性加载
+  const GENRE_SKILL_MAP: Record<string, string> = {
+    '技能_世界观构建.md': SKILL_WORLD_BUILDER,
+    '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
     '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
     '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
   };
@@ -166,13 +173,21 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
   ];
 
-  // --- Sub Skills (根据预设选择性加载) ---
+  // --- Sub Skills (通用技能始终创建 + 题材技能根据预设加载) ---
+  // 始终创建通用技能
+  Object.entries(UNIVERSAL_SKILLS).forEach(([name, content]) => {
+    files.push(createFile(name, subskillFolder.id, content));
+  });
+
+  // 根据预设创建题材技能
   if (preset && preset.skills.length > 0) {
     // 使用预设指定的技能
     preset.skills.forEach(skillName => {
+      // 跳过通用技能（已创建）
+      if (UNIVERSAL_SKILLS[skillName]) return;
       // 优先使用题材定制版本
       const customContent = preset.customSkills?.[skillName];
-      const skillContent = customContent || SKILL_MAP[skillName];
+      const skillContent = customContent || GENRE_SKILL_MAP[skillName];
       if (skillContent) {
         files.push(createFile(skillName, subskillFolder.id, skillContent));
       }
@@ -183,17 +198,10 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       files.push(createFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER));
     }
   } else {
-    // 默认加载全部技能
-    files.push(
-      createFile('技能_世界观构建.md', subskillFolder.id, SKILL_WORLD_BUILDER),
-      createFile('技能_角色设计.md', subskillFolder.id, SKILL_CHARACTER_DESIGNER),
-      createFile('技能_正文扩写.md', subskillFolder.id, SKILL_DRAFT_EXPANDER),
-      createFile('技能_编辑审核.md', subskillFolder.id, SKILL_EDITOR_REVIEW),
-      createFile('技能_去AI化文风.md', subskillFolder.id, SKILL_HUMANIZER_STYLE),
-      createFile('技能_分层约束设计.md', subskillFolder.id, SKILL_CONSTRAINT_LAYERED_DESIGN),
-      createFile('技能_期待感管理.md', subskillFolder.id, SKILL_EXPECTATION_MANAGER),
-      createFile('技能_爽点节奏管理.md', subskillFolder.id, SKILL_PLEASURE_RHYTHM_MANAGER)
-    );
+    // 默认加载全部题材技能
+    Object.entries(GENRE_SKILL_MAP).forEach(([name, content]) => {
+      files.push(createFile(name, subskillFolder.id, content));
+    });
   }
 
   // --- 99_创作规范 (Templates & Guides) ---
