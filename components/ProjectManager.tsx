@@ -7,7 +7,7 @@ import { exportProject, importProject } from '../services/projectService';
 import { getDisplayVersion } from '../utils/version';
 import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
-import { getAllPresets, GenrePreset } from '../services/resources/presets';
+import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
 
 interface ProjectManagerProps {
   onSelectProject: (id: string) => void | Promise<void>;
@@ -37,8 +37,8 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   const [chaptersPerVolume, setChaptersPerVolume] = useState(10);
 
   // Preset State
-  const [selectedPreset, setSelectedPreset] = useState<GenrePreset | null>(null);
-  const [pleasureRhythm, setPleasureRhythm] = useState({
+  const [selectedPresetId, setSelectedPresetId] = useState('');
+  const [pleasureRhythm, setPleasureRhythm] = useState<PleasureRhythm>({
     small: 3,
     medium: 10,
     large: 30
@@ -79,27 +79,6 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
     }
   }, [hasApiKey, isLoading]);
 
-  // Handle preset selection
-  const handlePresetChange = (presetId: string) => {
-    const presets = getAllPresets();
-    const preset = presets.find(p => p.id === presetId);
-
-    if (preset) {
-      setSelectedPreset(preset);
-      setGenre(preset.genre);
-      setWordsPerChapter(preset.defaultSettings.wordsPerChapter);
-      setTargetChapters(preset.defaultSettings.targetChapters);
-      setChaptersPerVolume(preset.defaultSettings.chaptersPerVolume);
-      setPleasureRhythm({
-        small: preset.pleasureRhythm.small,
-        medium: preset.pleasureRhythm.medium,
-        large: preset.pleasureRhythm.large
-      });
-    } else {
-      setSelectedPreset(null);
-    }
-  };
-
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -111,7 +90,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
       wordsPerChapter,
       targetChapters,
       chaptersPerVolume,
-      selectedPreset?.id,
+      selectedPresetId || undefined,
       pleasureRhythm
     );
     resetForm();
@@ -125,7 +104,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
     setWordsPerChapter(3000);
     setTargetChapters(100);
     setChaptersPerVolume(10);
-    setSelectedPreset(null);
+    setSelectedPresetId('');
     setPleasureRhythm({ small: 3, medium: 10, large: 30 });
     setPolishInstruction('');
   };
@@ -143,7 +122,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
           const jsonStr = await exportProject(id);
           const blob = new Blob([jsonStr], { type: 'application/json' });
           const url = URL.createObjectURL(blob);
-          
+
           const a = document.createElement('a');
           a.href = url;
           const project = projects.find(p => p.id === id);
@@ -197,7 +176,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
       setIsPolishing(true);
       try {
           const service = new AIService(aiConfig);
-          
+
           const userPrompt = `
 请作为一名资深网文编辑，帮我完善以下小说项目的设定。
 
@@ -226,29 +205,29 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
 }`;
 
           const response = await service.sendMessage(
-              [], 
-              userPrompt, 
-              '你是一个专门输出 JSON 格式的小说设定辅助工具。请只输出 JSON，不要包含 ```json 前缀。', 
+              [],
+              userPrompt,
+              '你是一个专门输出 JSON 格式的小说设定辅助工具。请只输出 JSON，不要包含 ```json 前缀。',
               []
           );
 
           let text = response.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          
+
           text = text.replace(/```json|```/g, '').trim();
           const start = text.indexOf('{');
           const end = text.lastIndexOf('}');
-          
+
           if (start !== -1 && end !== -1) {
               const jsonStr = text.substring(start, end + 1);
               const data = JSON.parse(jsonStr);
-              
+
               // Direct state updates
               if (data.name) setName(data.name);
               if (data.genre) setGenre(data.genre);
               if (data.description) setDescription(data.description);
               if (data.targetChapters) setTargetChapters(Number(data.targetChapters));
               if (data.wordsPerChapter) setWordsPerChapter(Number(data.wordsPerChapter));
-              
+
               // Close modal on success
               setShowPolishModal(false);
           } else {
@@ -267,10 +246,23 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
     return <div className="h-screen flex items-center justify-center bg-gray-950 text-gray-500">Loading Projects...</div>;
   }
 
+  // Shared form props
+  const formProps = {
+    mode: 'create' as const,
+    name, setName,
+    description, setDescription,
+    genre, setGenre,
+    wordsPerChapter, setWordsPerChapter,
+    targetChapters, setTargetChapters,
+    chaptersPerVolume, setChaptersPerVolume,
+    pleasureRhythm, setPleasureRhythm,
+    selectedPresetId, setSelectedPresetId,
+  };
+
   return (
     <div className="flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-gray-950 p-4 text-gray-100 sm:p-6 md:h-screen md:overflow-hidden safe-area-top safe-area-bottom">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col md:min-h-0">
-        
+
         <header className="flex flex-col items-start gap-3 mb-4 md:gap-4 md:mb-8 md:flex-row md:justify-between md:items-center">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
@@ -292,21 +284,21 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
              >
                 <Settings size={20} />
              </button>
-             <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                className="hidden" 
+             <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
                 accept=".json"
              />
-             <button 
+             <button
                 onClick={handleImportClick}
                 className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
               >
                 <Upload size={20} />
                 <span className="hidden sm:inline">导入</span>
               </button>
-              <button 
+              <button
                 onClick={() => setIsCreating(true)}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 rounded-lg transition-colors shadow-lg min-h-[44px]"
               >
@@ -318,7 +310,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
 
         {isCreating && (
           isMobile ? (
-            /* Mobile: Full-screen overlay — use dvh + fixed positioning to avoid keyboard white edge */
+            /* Mobile: Full-screen overlay */
             <div className="fixed inset-x-0 top-0 z-50 flex flex-col bg-gray-950 safe-area-top safe-area-bottom animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ height: '100dvh' }}>
               <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
@@ -342,130 +334,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
               </div>
               <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 <form onSubmit={handleCreate} className="space-y-4" autoComplete="off">
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="md:col-span-2">
-                      <label className="block text-sm text-gray-400 mb-1">书名 <span className="text-red-500">*</span></label>
-                      <textarea
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors resize-none overflow-hidden"
-                        placeholder="例如：赛博修仙传"
-                        rows={1}
-                        required
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm text-gray-400 mb-1">题材预设</label>
-                      <select
-                        value={selectedPreset?.id || ''}
-                        onChange={e => handlePresetChange(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                      >
-                        <option value="">不使用预设（通用配置）</option>
-                        {getAllPresets().map(preset => (
-                          <option key={preset.id} value={preset.id}>
-                            {preset.name} - {preset.description}
-                          </option>
-                        ))}
-                      </select>
-                      {selectedPreset && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          {selectedPreset.pleasureRhythm.description}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">题材类型</label>
-                      <textarea
-                        value={genre}
-                        onChange={e => setGenre(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors resize-none overflow-hidden"
-                        placeholder="例如：玄幻、悬疑、科幻"
-                        rows={1}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">单章字数</label>
-                        <textarea
-                          value={wordsPerChapter}
-                          onChange={e => setWordsPerChapter(parseInt(e.target.value) || 0)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
-                          inputMode="numeric"
-                          rows={1}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm text-gray-400 mb-1">目标章节</label>
-                        <textarea
-                          value={targetChapters}
-                          onChange={e => setTargetChapters(parseInt(e.target.value) || 0)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
-                          inputMode="numeric"
-                          rows={1}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">每卷章节数</label>
-                      <textarea
-                        value={chaptersPerVolume}
-                        onChange={e => setChaptersPerVolume(parseInt(e.target.value) || 0)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
-                        placeholder="例如：10"
-                        inputMode="numeric"
-                        rows={1}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm text-gray-400 mb-2">爽点节奏配置</label>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">小爽（章）</label>
-                          <textarea
-                            value={pleasureRhythm.small}
-                            onChange={e => setPleasureRhythm({...pleasureRhythm, small: parseInt(e.target.value) || 1})}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
-                            inputMode="numeric"
-                            rows={1}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">中爽（章）</label>
-                          <textarea
-                            value={pleasureRhythm.medium}
-                            onChange={e => setPleasureRhythm({...pleasureRhythm, medium: parseInt(e.target.value) || 1})}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
-                            inputMode="numeric"
-                            rows={1}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-gray-500 mb-1">大爽（章）</label>
-                          <textarea
-                            value={pleasureRhythm.large}
-                            onChange={e => setPleasureRhythm({...pleasureRhythm, large: parseInt(e.target.value) || 1})}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
-                            inputMode="numeric"
-                            rows={1}
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        小爽：小收获 | 中爽：阶段胜利 | 大爽：终极高潮
-                      </p>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm text-gray-400 mb-1">简介 / 核心梗 (可选)</label>
-                      <textarea
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none resize-none h-24 placeholder-gray-600 transition-colors"
-                        placeholder="写下一句话核心梗，点击 AI 润色，自动为您扩写..."
-                        autoComplete="off"
-                      />
-                    </div>
-                  </div>
+                  <ProjectMetaForm {...formProps} />
                   <div className="flex gap-3 pt-2 pb-4">
                     <button
                       type="button"
@@ -486,7 +355,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
               </div>
             </div>
           ) : (
-            /* Desktop: Inline section (unchanged style) */
+            /* Desktop: Inline section */
           <div className="relative mb-8 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 p-4 shadow-xl animate-in fade-in slide-in-from-top-4 sm:p-6">
             {/* Background Decoration */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
@@ -508,133 +377,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="md:col-span-2">
-                    <label className="block text-sm text-gray-400 mb-1">书名 <span className="text-red-500">*</span></label>
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={e => setName(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors"
-                      placeholder="例如：赛博修仙传 (输入关键词后点击右上角 AI 润色)"
-                      autoFocus
-                      required
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm text-gray-400 mb-1">题材预设</label>
-                    <select
-                      value={selectedPreset?.id || ''}
-                      onChange={e => handlePresetChange(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                    >
-                      <option value="">不使用预设（通用配置）</option>
-                      {getAllPresets().map(preset => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.name} - {preset.description}
-                        </option>
-                      ))}
-                    </select>
-                    {selectedPreset && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {selectedPreset.pleasureRhythm.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">题材类型</label>
-                    <input
-                      type="text"
-                      value={genre}
-                      onChange={e => setGenre(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors"
-                      placeholder="例如：玄幻、悬疑、科幻"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div className="flex-1">
-                        <label className="block text-sm text-gray-400 mb-1">单章字数</label>
-                        <input
-                          type="number"
-                          value={wordsPerChapter}
-                          onChange={e => setWordsPerChapter(parseInt(e.target.value) || 0)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-sm text-gray-400 mb-1">目标章节</label>
-                        <input
-                          type="number"
-                          value={targetChapters}
-                          onChange={e => setTargetChapters(parseInt(e.target.value) || 0)}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                        />
-                      </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">每卷章节数</label>
-                    <input
-                      type="number"
-                      value={chaptersPerVolume}
-                      onChange={e => setChaptersPerVolume(parseInt(e.target.value) || 0)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
-                      placeholder="例如：10"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm text-gray-400 mb-2">爽点节奏配置</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">小爽间隔（章）</label>
-                        <input
-                          type="number"
-                          value={pleasureRhythm.small}
-                          onChange={e => setPleasureRhythm({...pleasureRhythm, small: parseInt(e.target.value) || 1})}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
-                          min="1"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">中爽间隔（章）</label>
-                        <input
-                          type="number"
-                          value={pleasureRhythm.medium}
-                          onChange={e => setPleasureRhythm({...pleasureRhythm, medium: parseInt(e.target.value) || 1})}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
-                          min="1"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">大爽间隔（章）</label>
-                        <input
-                          type="number"
-                          value={pleasureRhythm.large}
-                          onChange={e => setPleasureRhythm({...pleasureRhythm, large: parseInt(e.target.value) || 1})}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
-                          min="1"
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      小爽：小收获、小胜利 | 中爽：阶段胜利、重要突破 | 大爽：重大转折、终极高潮
-                    </p>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm text-gray-400 mb-1">简介 / 核心梗 (可选)</label>
-                    <textarea
-                      value={description}
-                      onChange={e => setDescription(e.target.value)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none resize-none h-24 placeholder-gray-600 transition-colors"
-                      placeholder="写下一句话核心梗，点击 AI 润色，自动为您扩写成精彩简介..."
-                    />
-                  </div>
-              </div>
+              <ProjectMetaForm {...formProps} />
 
               <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
                 <button
@@ -666,7 +409,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {projects.map(project => (
-                <div 
+                <div
                   key={project.id}
                   onClick={() => onSelectProject(project.id)}
                   className="group relative bg-gray-900 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-850 rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 md:hover:-translate-y-1 shadow-md hover:shadow-xl flex flex-col active:bg-gray-800"
@@ -676,14 +419,14 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                       <FileText size={24} />
                     </div>
                     <div className="flex gap-1">
-                        <button 
+                        <button
                             onClick={(e) => handleExport(e, project.id)}
                             className="p-2.5 text-gray-500 hover:text-white hover:bg-gray-700 active:bg-gray-600 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="导出项目"
                         >
                             <Download size={16} />
                         </button>
-                        <button 
+                        <button
                             onClick={(e) => handleDelete(e, project.id)}
                             className="p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 active:bg-red-900/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="删除项目"
@@ -692,7 +435,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                         </button>
                     </div>
                   </div>
-                  
+
                   <h3 className="font-bold text-lg text-gray-100 mb-1 truncate">{project.name}</h3>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">
@@ -705,7 +448,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                   <p className="text-sm text-gray-500 mb-6 line-clamp-2 h-10">
                     {project.description || '暂无简介'}
                   </p>
-                  
+
                   <div className="mt-auto flex items-center text-xs text-gray-600 pt-3 border-t border-gray-800">
                     <Clock size={12} className="mr-1" />
                     <span>
@@ -801,7 +544,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                     >
                         取消
                     </button>
-                    <button 
+                    <button
                         onClick={handleRunPolish}
                         disabled={isPolishing}
                         className="px-6 py-2.5 text-sm bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20 min-h-[44px]"
