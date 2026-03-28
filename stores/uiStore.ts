@@ -17,6 +17,10 @@ interface UiState {
   // Debug Mode
   isDebugMode: boolean;
 
+  // Tutorial
+  hasSeenTutorial: boolean;
+  setHasSeenTutorial: (v: boolean) => void;
+
   setSidebarOpen: (open: boolean) => void;
   setChatOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
@@ -50,7 +54,8 @@ const indexedDBStorage = {
       isSplitView: parsed.isSplitView ?? false,
       showLineNumbers: parsed.showLineNumbers ?? true,
       wordWrap: parsed.wordWrap ?? true,
-      isDebugMode: parsed.isDebugMode ?? false
+      isDebugMode: parsed.isDebugMode ?? false,
+      hasSeenTutorial: parsed.hasSeenTutorial ?? false
     });
   },
   removeItem: async (name: string) => {
@@ -73,6 +78,9 @@ export const useUiStore = create<UiState>()(
       wordWrap: true,         // 默认开启换行（小说模式）
 
       isDebugMode: false,     // 默认关闭调试模式
+      hasSeenTutorial: false, // 默认未看过教程
+
+      setHasSeenTutorial: (v) => set({ hasSeenTutorial: v }),
 
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),
       setChatOpen: (open) => set({ isChatOpen: open }),
@@ -99,7 +107,8 @@ export const useUiStore = create<UiState>()(
         isSplitView: state.isSplitView,
         showLineNumbers: state.showLineNumbers,
         wordWrap: state.wordWrap,
-        isDebugMode: state.isDebugMode
+        isDebugMode: state.isDebugMode,
+        hasSeenTutorial: state.hasSeenTutorial
       }),
     }
   )

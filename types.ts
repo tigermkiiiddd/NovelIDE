@@ -247,6 +247,13 @@ export interface AIConfig {
   // Multi-Provider Support
   openAIBackends?: OpenAIBackend[];
   activeOpenAIBackendId?: string;
+
+  // 自动提取开关
+  autoExtraction?: {
+    conversation: boolean;    // 对话自动提取
+    document: boolean;        // 文档保存时自动提取
+    chapterAnalysis: boolean; // 章节分析
+  };
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {
@@ -286,7 +293,8 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
           modelName: 'gpt-4o'
       }
   ],
-  activeOpenAIBackendId: 'gemini'
+  activeOpenAIBackendId: 'gemini',
+  autoExtraction: { conversation: true, document: true, chapterAnalysis: true }
 };
 
 // --- Chapter Analysis Types ---

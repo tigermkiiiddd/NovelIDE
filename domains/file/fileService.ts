@@ -84,6 +84,11 @@ export class FileService {
         return false;
       }
 
+      // outline.json 文件禁止删除（剧情大纲系统文件）
+      if (file.name === 'outline.json') {
+        return false;
+      }
+
       // 99_创作规范 目录下的文件允许删除（用户可重置内容）
       if (filePath.startsWith('/99_创作规范/')) {
         return true;
@@ -249,13 +254,24 @@ export class FileService {
       });
     }
 
-    // 7. 确保 00_基础信息 文件夹存在
+    // 7. 确保 03_剧情大纲 文件夹存在及 outline.json 文件
+    const outlineFolder = ensureFolder('03_剧情大纲', 'root');
+    ensureFile('outline.json', outlineFolder.id, JSON.stringify({
+      timeStart: '第0天',
+      events: [],
+      chapters: [],
+      volumes: [],
+      storyLines: [{ id: 'main-storyline', name: '主线', color: '#4A90D9', isMain: true }],
+      lastModified: Date.now()
+    }, null, 2));
+
+    // 8. 确保 00_基础信息 文件夹存在
     const infoFolder = ensureFolder('00_基础信息', 'root');
 
-    // 8. 确保章节分析.json 文件存在
+    // 9. 确保章节分析.json 文件存在
     ensureFile('章节分析.json', infoFolder.id, '[]');
 
-    // 9. 确保长期记忆.json 文件存在（知识图谱存储）
+    // 10. 确保长期记忆.json 文件存在（知识图谱存储）
     ensureFile('长期记忆.json', infoFolder.id, JSON.stringify({
       nodes: [],
       edges: [],

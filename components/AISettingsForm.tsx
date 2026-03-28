@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { AIConfig, AIProvider, OpenAIBackend } from '../types';
-import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Zap } from 'lucide-react';
+import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Zap, Brain } from 'lucide-react';
 import { generateId } from '../services/fileSystem';
 
 interface AISettingsFormProps {
@@ -79,7 +79,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                         activeBackend?.baseUrl?.includes('generativelanguage.googleapis.com');
 
   return (
-     <div className="space-y-6 animate-in slide-in-from-right-4 duration-200">
+     <div className="space-y-4 sm:space-y-6 animate-in slide-in-from-right-4 duration-200">
         <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 mb-6">
             <h3 className="text-blue-300 font-bold flex items-center gap-2 mb-2">
                 <Cpu size={18}/> 模型配置
@@ -95,7 +95,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                  <div className="space-y-4 animate-in fade-in bg-gray-800/30 p-4 rounded-xl border border-gray-700">
 
                     {/* Provider Selector / Manager */}
-                    <div className="flex items-end gap-3 mb-2">
+                    <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-2">
                         <div className="flex-1">
                             <label className="block text-xs font-medium text-blue-400 mb-1 uppercase tracking-wide">选择供应商</label>
                             <div className="relative">
@@ -113,7 +113,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                         </div>
                         <button
                             onClick={handleAddBackend}
-                            className="p-2.5 bg-gray-800 border border-gray-600 hover:bg-gray-700 text-blue-400 rounded-lg"
+                            className="p-2.5 bg-gray-800 border border-gray-600 hover:bg-gray-700 active:bg-gray-600 text-blue-400 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="添加新供应商"
                         >
                             <Plus size={18} />
@@ -139,13 +139,13 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             ) : (
                                 <h4 className="text-sm font-bold text-white flex-1 flex items-center gap-2">
                                     {activeBackend.name}
-                                    <button onClick={() => setIsEditingName(true)} className="text-gray-500 hover:text-white"><Edit2 size={12}/></button>
+                                    <button onClick={() => setIsEditingName(true)} className="text-gray-500 hover:text-white active:text-white p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"><Edit2 size={12}/></button>
                                 </h4>
                             )}
 
                             <button
                                 onClick={handleDeleteBackend}
-                                className="text-gray-500 hover:text-red-400 text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-red-900/20"
+                                className="text-gray-500 hover:text-red-400 text-xs flex items-center gap-1 px-3 py-2 rounded hover:bg-red-900/20 active:bg-red-900/30 min-h-[44px]"
                             >
                                 <Trash2 size={14} /> 删除配置
                             </button>
@@ -178,7 +178,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                 />
                                 <button
                                     onClick={() => setShowKey(!showKey)}
-                                    className="absolute right-3 top-3 text-gray-500 hover:text-white"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white active:text-white px-2 py-1 min-h-[44px] flex items-center justify-center"
                                 >
                                     {showKey ? "隐藏" : "显示"}
                                 </button>
@@ -265,12 +265,59 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                     控制单次回复的最大长度。推荐: 8192。
                  </p>
             </div>
+
+            {/* Auto Extraction Toggles */}
+            <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
+                    <Brain size={16} className="text-purple-400" />
+                    自动提取开关
+                </h4>
+                <p className="text-xs text-gray-500 mb-4">
+                    控制知识图谱的自动提取行为。关闭后仍可手动触发提取。
+                </p>
+                <div className="space-y-3">
+                    {([
+                        { key: 'conversation' as const, label: '对话自动提取', desc: '从用户对话中自动提取知识沉淀到知识图谱' },
+                        { key: 'document' as const, label: '文档自动提取', desc: '保存文档时自动提取知识（设定、规则等）' },
+                        { key: 'chapterAnalysis' as const, label: '章节自动分析', desc: 'AI 创建/修改正文草稿后自动分析角色与剧情' },
+                    ]).map(item => {
+                        const enabled = tempConfig.autoExtraction?.[item.key] !== false;
+                        return (
+                            <label key={item.key} className="flex items-start gap-3 cursor-pointer group">
+                                <div className={`
+                                    mt-0.5 w-12 h-6 sm:w-10 sm:h-5 rounded-full relative transition-colors duration-200 flex-shrink-0
+                                    ${enabled ? 'bg-blue-600' : 'bg-gray-600'}
+                                `}
+                                    onClick={() => setTempConfig(prev => ({
+                                        ...prev,
+                                        autoExtraction: {
+                                            conversation: prev.autoExtraction?.conversation !== false,
+                                            document: prev.autoExtraction?.document !== false,
+                                            chapterAnalysis: prev.autoExtraction?.chapterAnalysis !== false,
+                                            [item.key]: !enabled,
+                                        }
+                                    }))}
+                                >
+                                    <div className={`
+                                        absolute top-0.5 w-[18px] h-[18px] sm:w-4 sm:h-4 bg-white rounded-full transition-transform duration-200 shadow
+                                        ${enabled ? 'translate-x-6 sm:translate-x-5' : 'translate-x-0.5'}
+                                    `} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-gray-300 group-hover:text-white transition-colors">{item.label}</div>
+                                    <div className="text-xs text-gray-500">{item.desc}</div>
+                                </div>
+                            </label>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
 
-        <div className="pt-6 border-t border-gray-800 flex justify-end">
+        <div className="pt-4 sm:pt-6 border-t border-gray-800 flex justify-center sm:justify-end">
             <button
                 onClick={handleSave}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium flex items-center gap-2 transition-transform hover:scale-105 shadow-lg shadow-blue-900/30"
+                className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-blue-900/30 min-h-[44px] w-full sm:w-auto justify-center"
             >
                 <Save size={18} />
                 保存并应用配置

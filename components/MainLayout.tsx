@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { FileNode } from '../types';
-import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit } from 'lucide-react';
+import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit, HelpCircle } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import StatusBar from './StatusBar';
+import TutorialModal from './TutorialModal';
 import { useAgent } from '../hooks/useAgent';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { useProjectStore } from '../stores/projectStore';
@@ -38,7 +39,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       setSidebarOpen,
       setChatOpen,
       toggleChat,
-      toggleSidebar
+      toggleSidebar,
+      hasSeenTutorial
   } = useUiStore(useShallow(state => ({
       isSidebarOpen: state.isSidebarOpen,
       isChatOpen: state.isChatOpen,
@@ -47,12 +49,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       setSidebarOpen: state.setSidebarOpen,
       setChatOpen: state.setChatOpen,
       toggleChat: state.toggleChat,
-      toggleSidebar: state.toggleSidebar
+      toggleSidebar: state.toggleSidebar,
+      hasSeenTutorial: state.hasSeenTutorial
   })));
+  const setHasSeenTutorial = useUiStore(state => state.setHasSeenTutorial);
 
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
   const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
 
   // --- Refs ---
   const appModalsRef = useRef<AppModalsRef>(null);
@@ -80,6 +85,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         });
     }
   }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized]);
+
+  // --- Tutorial Auto-popup ---
+  useEffect(() => {
+    if (!hasSeenTutorial && projectId) {
+      const timer = setTimeout(() => setIsTutorialOpen(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [hasSeenTutorial, projectId]);
+
+  const handleTutorialClose = useCallback(() => {
+    setIsTutorialOpen(false);
+    setHasSeenTutorial(true);
+  }, [setHasSeenTutorial]);
+
+  const handleOpenTutorial = useCallback(() => {
+    setIsTutorialOpen(true);
+  }, []);
 
   // --- File System State & Actions ---
   const {
@@ -186,6 +208,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           onClose={() => setSidebarOpen(false)}
           onBackToProjects={onBack}
           onOpenSettings={() => { openProjectOverview(); if (isMobile) setSidebarOpen(false); }}
+          onOpenTutorial={() => { handleOpenTutorial(); if (isMobile) setSidebarOpen(false); }}
           width={sidebarWidth}
           isMobile={isMobile}
           onAnalyzeFile={handleAnalyzeFile}
@@ -202,15 +225,24 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           <button onClick={() => setSidebarOpen(true)} className="p-1 -ml-1 text-gray-400 active:text-white">
             <Menu size={24} />
           </button>
-          <span className="font-bold text-gray-200 truncate max-w-[200px] text-sm">
+          <span className="font-bold text-gray-200 truncate max-w-[160px] text-sm">
             {activeFile ? activeFile.name : currentProject.name}
           </span>
-          <button
-            onClick={toggleChat}
-            className={`p-1 -mr-1 ${isChatOpen ? 'text-blue-400' : 'text-gray-400'}`}
-          >
-            <MessageSquare size={24} />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleOpenTutorial}
+              className="p-1 text-gray-400 active:text-white"
+              title="新手指南"
+            >
+              <HelpCircle size={20} />
+            </button>
+            <button
+              onClick={toggleChat}
+              className={`p-1 -mr-1 ${isChatOpen ? 'text-blue-400' : 'text-gray-400'}`}
+            >
+              <MessageSquare size={24} />
+            </button>
+          </div>
         </header>
 
         {/* Desktop Header / Toolbar */}
@@ -267,6 +299,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             files={files}
             activeFile={activeFile}
             onOpenSettings={openProjectOverview}
+            onOpenTutorial={handleOpenTutorial}
             isAgentThinking={isLoading}
         />
 
@@ -326,6 +359,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         onUpdateProject={updateProject}
         aiConfig={aiConfig}
         onUpdateAIConfig={updateAiConfig}
+      />
+
+      {/* Tutorial */}
+      <TutorialModal
+        isOpen={isTutorialOpen}
+        onClose={handleTutorialClose}
       />
     </div>
   );

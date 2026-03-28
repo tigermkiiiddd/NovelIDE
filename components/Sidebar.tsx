@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Menu, ArrowLeft, Settings, Search } from 'lucide-react';
+import { Menu, ArrowLeft, Settings, Search, HelpCircle } from 'lucide-react';
 import FileExplorer from './FileExplorer';
 import FileSearch from './FileSearch';
 import { useFileStore } from '../stores/fileStore';
@@ -13,6 +13,7 @@ interface SidebarProps {
   onClose: () => void;
   onBackToProjects: () => void;
   onOpenSettings: () => void;
+  onOpenTutorial?: () => void;
   className?: string;
   width?: number; // 新增：支持动态宽度
   isMobile: boolean;
@@ -24,6 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClose,
   onBackToProjects,
   onOpenSettings,
+  onOpenTutorial,
   className = '',
   width = 256, // 默认宽度
   isMobile,
@@ -131,7 +133,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Footer Settings */}
-        <div className="p-4 border-t border-gray-800">
+        <div className="p-4 border-t border-gray-800 space-y-1">
             <button
                 onClick={onOpenSettings}
                 className="flex items-center space-x-2 w-full p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
@@ -139,6 +141,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <Settings size={16} />
                 <span>项目概览 & 设置</span>
             </button>
+            {onOpenTutorial && (
+              <button
+                  onClick={onOpenTutorial}
+                  className="flex items-center space-x-2 w-full p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                  <HelpCircle size={16} />
+                  <span>新手指南</span>
+              </button>
+            )}
         </div>
       </aside>
 

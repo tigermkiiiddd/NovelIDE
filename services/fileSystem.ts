@@ -154,6 +154,16 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
 
     // --- 00-05 业务文件夹初始为空 (用户要求) ---
 
+    // --- 03_剧情大纲/outline.json (剧情大纲系统文件，必须初始化) ---
+    createFile('outline.json', outlineFolder.id, JSON.stringify({
+      timeStart: '第0天',
+      events: [],
+      chapters: [],
+      volumes: [],
+      storyLines: [{ id: 'main-storyline', name: '主线', color: '#4A90D9', isMain: true }],
+      lastModified: Date.now()
+    }, null, 2)),
+
     // --- 00_基础信息/长期记忆.json (知识图谱存储) ---
     createFile('长期记忆.json', infoFolder.id, JSON.stringify({
       nodes: [],

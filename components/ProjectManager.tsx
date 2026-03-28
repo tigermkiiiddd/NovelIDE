@@ -52,6 +52,23 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Mobile detection (matches MainLayout pattern)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Lock body scroll when mobile creation overlay is open to prevent white edge on keyboard
+  useEffect(() => {
+    if (isMobile && isCreating) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = originalOverflow; };
+    }
+  }, [isMobile, isCreating]);
+
   // Check for effective API Key (Custom or Environment)
   const hasApiKey = !!(aiConfig.apiKey || process.env.API_KEY);
 
@@ -251,13 +268,13 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-950 text-gray-100 p-6">
-      <div className="max-w-4xl mx-auto w-full flex flex-col flex-1 min-h-0">
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-gray-950 p-4 text-gray-100 sm:p-6 md:h-screen md:overflow-hidden safe-area-top safe-area-bottom">
+      <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col md:min-h-0">
         
-        <header className="flex flex-col items-start gap-4 mb-8 md:flex-row md:justify-between md:items-center">
+        <header className="flex flex-col items-start gap-3 mb-4 md:gap-4 md:mb-8 md:flex-row md:justify-between md:items-center">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
+              <h1 className="text-2xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-teal-400">
                 NovelGenie Projects
               </h1>
               <span className="text-xs text-gray-600 bg-gray-900 px-2 py-1 rounded border border-gray-800 flex items-center gap-1">
@@ -267,10 +284,10 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
             </div>
             <p className="text-gray-500 mt-2">选择一个项目开始创作，或创建一个新的世界。</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex w-full gap-2 md:w-auto md:gap-3">
              <button
                 onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors border border-gray-700"
+                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-3 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
                 title="全局 AI 设置"
              >
                 <Settings size={20} />
@@ -284,14 +301,14 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
              />
              <button 
                 onClick={handleImportClick}
-                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-lg transition-colors border border-gray-700"
+                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
               >
                 <Upload size={20} />
                 <span className="hidden sm:inline">导入</span>
               </button>
               <button 
                 onClick={() => setIsCreating(true)}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors shadow-lg"
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 rounded-lg transition-colors shadow-lg min-h-[44px]"
               >
                 <Plus size={20} />
                 <span>新建项目</span>
@@ -300,11 +317,181 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
         </header>
 
         {isCreating && (
-          <div className="mb-8 bg-gray-900 border border-gray-700 rounded-xl p-6 shadow-xl animate-in fade-in slide-in-from-top-4 relative overflow-hidden">
+          isMobile ? (
+            /* Mobile: Full-screen overlay — use dvh + fixed positioning to avoid keyboard white edge */
+            <div className="fixed inset-x-0 top-0 z-50 flex flex-col bg-gray-950 safe-area-top safe-area-bottom animate-in fade-in slide-in-from-bottom-4 duration-300" style={{ height: '100dvh' }}>
+              <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Book size={20} className="text-blue-400" />
+                  创建新项目
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenPolishModal}
+                    title={!hasApiKey ? "需要先配置 API Key" : "AI 智能润色"}
+                    className="text-xs flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1.5 rounded-full min-h-[36px]"
+                  >
+                    <Sparkles size={12} />
+                    润色
+                  </button>
+                  <button onClick={resetForm} className="p-2 text-gray-400 active:text-white min-h-[44px] min-w-[44px] flex items-center justify-center">
+                    <X size={24} />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <form onSubmit={handleCreate} className="space-y-4" autoComplete="off">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <label className="block text-sm text-gray-400 mb-1">书名 <span className="text-red-500">*</span></label>
+                      <textarea
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors resize-none overflow-hidden"
+                        placeholder="例如：赛博修仙传"
+                        rows={1}
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm text-gray-400 mb-1">题材预设</label>
+                      <select
+                        value={selectedPreset?.id || ''}
+                        onChange={e => handlePresetChange(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors"
+                      >
+                        <option value="">不使用预设（通用配置）</option>
+                        {getAllPresets().map(preset => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.name} - {preset.description}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedPreset && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          {selectedPreset.pleasureRhythm.description}
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">题材类型</label>
+                      <textarea
+                        value={genre}
+                        onChange={e => setGenre(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors resize-none overflow-hidden"
+                        placeholder="例如：玄幻、悬疑、科幻"
+                        rows={1}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">单章字数</label>
+                        <textarea
+                          value={wordsPerChapter}
+                          onChange={e => setWordsPerChapter(parseInt(e.target.value) || 0)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
+                          inputMode="numeric"
+                          rows={1}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-400 mb-1">目标章节</label>
+                        <textarea
+                          value={targetChapters}
+                          onChange={e => setTargetChapters(parseInt(e.target.value) || 0)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
+                          inputMode="numeric"
+                          rows={1}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">每卷章节数</label>
+                      <textarea
+                        value={chaptersPerVolume}
+                        onChange={e => setChaptersPerVolume(parseInt(e.target.value) || 0)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
+                        placeholder="例如：10"
+                        inputMode="numeric"
+                        rows={1}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm text-gray-400 mb-2">爽点节奏配置</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">小爽（章）</label>
+                          <textarea
+                            value={pleasureRhythm.small}
+                            onChange={e => setPleasureRhythm({...pleasureRhythm, small: parseInt(e.target.value) || 1})}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
+                            inputMode="numeric"
+                            rows={1}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">中爽（章）</label>
+                          <textarea
+                            value={pleasureRhythm.medium}
+                            onChange={e => setPleasureRhythm({...pleasureRhythm, medium: parseInt(e.target.value) || 1})}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
+                            inputMode="numeric"
+                            rows={1}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">大爽（章）</label>
+                          <textarea
+                            value={pleasureRhythm.large}
+                            onChange={e => setPleasureRhythm({...pleasureRhythm, large: parseInt(e.target.value) || 1})}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors resize-none overflow-hidden"
+                            inputMode="numeric"
+                            rows={1}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        小爽：小收获 | 中爽：阶段胜利 | 大爽：终极高潮
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm text-gray-400 mb-1">简介 / 核心梗 (可选)</label>
+                      <textarea
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none resize-none h-24 placeholder-gray-600 transition-colors"
+                        placeholder="写下一句话核心梗，点击 AI 润色，自动为您扩写..."
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-2 pb-4">
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      className="flex-1 px-4 py-2.5 text-gray-400 transition-colors active:text-white rounded-lg border border-gray-700 min-h-[44px]"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!name.trim()}
+                      className="flex-1 rounded-lg bg-blue-600 px-6 py-2.5 text-white shadow-lg shadow-blue-900/20 transition-all active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
+                    >
+                      创建
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : (
+            /* Desktop: Inline section (unchanged style) */
+          <div className="relative mb-8 overflow-hidden rounded-xl border border-gray-700 bg-gray-900 p-4 shadow-xl animate-in fade-in slide-in-from-top-4 sm:p-6">
             {/* Background Decoration */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
 
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                     <Book size={20} className="text-blue-400" />
                     创建新项目
@@ -321,7 +508,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="md:col-span-2">
                     <label className="block text-sm text-gray-400 mb-1">书名 <span className="text-red-500">*</span></label>
                     <input
@@ -367,7 +554,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                     />
                   </div>
 
-                  <div className="flex gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div className="flex-1">
                         <label className="block text-sm text-gray-400 mb-1">单章字数</label>
                         <input
@@ -449,27 +636,28 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                   </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2">
-                <button 
-                  type="button" 
+              <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
                   onClick={resetForm}
-                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                  className="w-full px-4 py-2 text-gray-400 transition-colors hover:text-white sm:w-auto"
                 >
                   取消
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={!name.trim()}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20 transition-all"
+                  className="w-full rounded-lg bg-blue-600 px-6 py-2 text-white shadow-lg shadow-blue-900/20 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                 >
                   创建
                 </button>
               </div>
             </form>
           </div>
+          )
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-2">
+        <div className="flex-1 min-h-0 overflow-visible pb-2 pr-0 md:overflow-y-auto md:pr-2">
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl">
               <Book size={48} className="mb-4 opacity-20" />
@@ -481,7 +669,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                 <div 
                   key={project.id}
                   onClick={() => onSelectProject(project.id)}
-                  className="group relative bg-gray-900 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-850 rounded-xl p-5 cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-md hover:shadow-xl flex flex-col"
+                  className="group relative bg-gray-900 border border-gray-800 hover:border-blue-500/50 hover:bg-gray-850 rounded-xl p-4 sm:p-5 cursor-pointer transition-all duration-200 md:hover:-translate-y-1 shadow-md hover:shadow-xl flex flex-col active:bg-gray-800"
                 >
                   <div className="flex justify-between items-start mb-3">
                     <div className="p-2 bg-blue-900/20 rounded-lg text-blue-400">
@@ -490,14 +678,14 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                     <div className="flex gap-1">
                         <button 
                             onClick={(e) => handleExport(e, project.id)}
-                            className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-full transition-colors"
+                            className="p-2.5 text-gray-500 hover:text-white hover:bg-gray-700 active:bg-gray-600 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="导出项目"
                         >
                             <Download size={16} />
                         </button>
                         <button 
                             onClick={(e) => handleDelete(e, project.id)}
-                            className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-full transition-colors"
+                            className="p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 active:bg-red-900/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="删除项目"
                         >
                             <Trash2 size={16} />
@@ -529,30 +717,43 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
             </div>
           )}
         </div>
-        
+
       </div>
+
+      {/* Mobile FAB for creating new project */}
+      {isMobile && !isCreating && (
+        <button
+          onClick={() => setIsCreating(true)}
+          className="fixed bottom-6 right-6 p-4 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-full shadow-lg shadow-blue-900/50 z-30 transition-transform active:scale-95 md:hidden"
+          style={{ minHeight: 56, minWidth: 56 }}
+        >
+          <Plus size={24} color="white" />
+        </button>
+      )}
 
       {/* AI Settings Modal */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-in fade-in duration-200">
-            <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl relative">
-                <button 
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className={`bg-gray-900 border border-gray-700 rounded-xl w-full flex flex-col shadow-2xl relative ${
+              isMobile ? 'h-full max-h-[100dvh] rounded-none border-0 safe-area-top safe-area-bottom' : 'max-w-2xl max-h-[90vh]'
+            }`}>
+                <button
                     onClick={() => setIsSettingsOpen(false)}
-                    className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
+                    className="absolute top-4 right-4 text-gray-500 hover:text-white active:text-white transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                     <X size={24} />
                 </button>
-                <div className="p-6 overflow-y-auto custom-scrollbar">
+                <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar">
                     <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-100">
                         <Settings className="text-blue-400" />
                         全局 AI 配置
                     </h2>
-                    <AISettingsForm 
-                        config={aiConfig} 
+                    <AISettingsForm
+                        config={aiConfig}
                         onSave={(newConfig) => {
                             setAiConfig(newConfig);
                             setIsSettingsOpen(false);
-                        }} 
+                        }}
                     />
                 </div>
             </div>
@@ -562,38 +763,40 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
       {/* AI Instruction Modal */}
       {showPolishModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-md bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-6 transform animate-in zoom-in-95 duration-200">
+            <div className={`w-full bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-4 sm:p-6 transform animate-in zoom-in-95 duration-200 ${
+              isMobile ? 'h-full max-h-[100dvh] rounded-none border-0 safe-area-top safe-area-bottom flex flex-col' : 'max-w-md'
+            }`}>
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Sparkles size={18} className="text-purple-400" />
                         AI 设定助手
                     </h3>
-                    <button 
+                    <button
                         onClick={() => setShowPolishModal(false)}
-                        className="text-gray-500 hover:text-white transition-colors"
+                        className="text-gray-500 hover:text-white active:text-white transition-colors p-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
                         disabled={isPolishing}
                     >
                         <X size={20} />
                     </button>
                 </div>
 
-                <div className="mb-4">
+                <div className="mb-4 flex-1">
                     <label className="block text-sm text-gray-400 mb-2">
                         额外指令 / 修改需求 (可选)
                     </label>
-                    <textarea 
+                    <textarea
                         value={polishInstruction}
                         onChange={e => setPolishInstruction(e.target.value)}
                         placeholder="例如：把主角改成反派、风格要更黑暗一点、或者将背景设定在赛博朋克世界..."
                         className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white focus:border-purple-500 focus:outline-none resize-none h-32 text-sm placeholder-gray-600"
-                        autoFocus
+                        autoComplete="off"
                     />
                 </div>
 
                 <div className="flex justify-end gap-3">
-                    <button 
+                    <button
                         onClick={() => setShowPolishModal(false)}
-                        className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                        className="px-4 py-2.5 text-sm text-gray-400 hover:text-white transition-colors min-h-[44px]"
                         disabled={isPolishing}
                     >
                         取消
@@ -601,7 +804,7 @@ ${polishInstruction || '(无额外指令，请根据上述信息进行专业优�
                     <button 
                         onClick={handleRunPolish}
                         disabled={isPolishing}
-                        className="px-6 py-2 text-sm bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20"
+                        className="px-6 py-2.5 text-sm bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20 min-h-[44px]"
                     >
                         {isPolishing ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16} />}
                         {isPolishing ? 'AI 正在构思...' : '开始生成'}

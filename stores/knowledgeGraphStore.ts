@@ -23,7 +23,7 @@ import {
   applyKnowledgeNodeEvent,
   scoreKnowledgeNodeRecall,
 } from '../utils/knowledgeIntelligence';
-import { extractKnowledgeFromDocument, KnowledgeOperation } from '../services/subAgents/knowledgeExtractionAgent';
+import { extractKnowledgeFromDocument, extractKnowledgeFromDialogue, KnowledgeOperation } from '../services/subAgents/knowledgeExtractionAgent';
 import { AIService } from '../services/geminiService';
 import { useAgentStore } from './agentStore';
 
@@ -93,6 +93,11 @@ interface KnowledgeGraphState {
   triggerDocumentExtraction: (
     filePath: string,
     content: string
+  ) => Promise<{ added: number; updated: number; linked: number; skipped: number; summary: string } | null>;
+
+  triggerConversationExtraction: (
+    userMessage: string,
+    recentMessages: Array<{ role: string; text: string }>
   ) => Promise<{ added: number; updated: number; linked: number; skipped: number; summary: string } | null>;
 }
 
@@ -510,6 +515,97 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
     } catch (error: any) {
       console.error('[KnowledgeGraph] 文档提取失败:', error);
       set({ extractionError: error?.message || '文档知识提取失败' });
+      return null;
+    } finally {
+      set({ isExtracting: false });
+    }
+  },
+
+  triggerConversationExtraction: async (userMessage, recentMessages) => {
+    const state = get();
+    if (state.isExtracting) return null;
+
+    const projectId = state.currentProjectId || resolveActiveProjectId();
+    if (!projectId) return null;
+
+    try {
+      set({ isExtracting: true, extractionError: null });
+
+      const agentStore = useAgentStore.getState();
+      const aiConfig = agentStore.aiConfig;
+      const lightConfig = {
+        ...aiConfig,
+        modelName: aiConfig.lightweightModelName || aiConfig.modelName,
+      };
+      const aiService = new AIService(lightConfig);
+
+      const result = await extractKnowledgeFromDialogue(
+        aiService,
+        userMessage,
+        recentMessages,
+        state.nodes,
+        state.edges,
+        (msg) => console.log(`[ConversationExtraction] ${msg}`)
+      );
+
+      if (!result.shouldExtract || result.operations.length === 0) {
+        return {
+          added: 0,
+          updated: 0,
+          linked: 0,
+          skipped: result.operations.length,
+          summary: result.summary,
+        };
+      }
+
+      // 检查项目是否切换
+      if (get().currentProjectId !== projectId) {
+        console.warn('[KnowledgeGraph] 项目已切换，丢弃对话提取结果');
+        return null;
+      }
+
+      let added = 0;
+      let updated = 0;
+      let linked = 0;
+      let skipped = 0;
+
+      for (const op of result.operations) {
+        switch (op.action) {
+          case 'add':
+            if (op.node) {
+              get().addNode(op.node);
+              added++;
+            }
+            break;
+          case 'update':
+            if (op.nodeId && op.node) {
+              get().updateNode(op.nodeId, op.node);
+              updated++;
+            }
+            break;
+          case 'link':
+            if (op.from && op.to && op.edgeType) {
+              get().addEdge(op.from, op.to, op.edgeType);
+              linked++;
+            }
+            break;
+          case 'skip':
+          default:
+            skipped++;
+            break;
+        }
+      }
+
+      return {
+        added,
+        updated,
+        linked,
+        skipped,
+        summary: result.summary,
+      };
+    } catch (error: any) {
+      console.error('[KnowledgeGraph] 对话提取失败:', error);
+      set({ extractionError: error?.message || '对话知识提取失败' });
       return null;
     } finally {
       set({ isExtracting: false });

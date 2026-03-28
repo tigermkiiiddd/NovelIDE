@@ -12,6 +12,7 @@ interface UiSettings {
   showLineNumbers: boolean;
   wordWrap: boolean;
   isDebugMode: boolean;
+  hasSeenTutorial: boolean;
 }
 
 interface NovelGenieDB extends DBSchema {

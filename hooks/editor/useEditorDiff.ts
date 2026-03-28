@@ -338,7 +338,8 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
         documentExtractionTimeoutRef.current = setTimeout(() => {
           // 正文文件由章节分析处理，不进入知识图谱
-          if (!filePath.startsWith('05_正文草稿/')) {
+          const { autoExtraction } = useAgentStore.getState().aiConfig;
+          if (!filePath.startsWith('05_正文草稿/') && autoExtraction?.document !== false) {
             useKnowledgeGraphStore
               .getState()
               .triggerDocumentExtraction(filePath, computedContent)
@@ -572,6 +573,9 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [addMessage]);
 
   const triggerDocumentMemoryExtraction = useCallback((filePath: string, content: string) => {
+    const { autoExtraction } = useAgentStore.getState().aiConfig;
+    if (autoExtraction?.document === false) return;
+
     useKnowledgeGraphStore
       .getState()
       .triggerDocumentExtraction(filePath, content)

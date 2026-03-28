@@ -2,13 +2,14 @@
 import React from 'react';
 import { ProjectMeta, FileNode, FileType } from '../types';
 import { useProjectStats } from '../hooks/useProjectStats';
-import { Settings, FileText, CheckCircle, Target, GitBranch, AlertCircle } from 'lucide-react';
+import { Settings, FileText, CheckCircle, Target, GitBranch, AlertCircle, HelpCircle } from 'lucide-react';
 
 interface StatusBarProps {
   project: ProjectMeta;
   files: FileNode[];
   activeFile: FileNode | null;
   onOpenSettings: () => void;
+  onOpenTutorial?: () => void;
   isAgentThinking?: boolean;
 }
 
@@ -17,6 +18,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
   files,
   activeFile,
   onOpenSettings,
+  onOpenTutorial,
   isAgentThinking
 }) => {
   const stats = useProjectStats(project, files);
@@ -95,6 +97,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
              </div>
 
              <Settings size={12} className="text-gray-500 hover:text-white ml-1 sm:ml-2 shrink-0 cursor-pointer" onClick={onOpenSettings} />
+             {onOpenTutorial && (
+               <HelpCircle
+                 size={12}
+                 className="hidden sm:block text-gray-500 hover:text-white shrink-0 cursor-pointer"
+                 onClick={onOpenTutorial}
+                 title="新手指南"
+               />
+             )}
          </div>
 
          <div className="ml-1 sm:ml-2 pl-1 sm:pl-2 border-l border-gray-700 flex items-center gap-1 sm:gap-2">
