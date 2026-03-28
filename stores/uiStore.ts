@@ -109,7 +109,7 @@ export const useUiStore = create<UiState>()(
         wordWrap: state.wordWrap,
         isDebugMode: state.isDebugMode,
         hasSeenTutorial: state.hasSeenTutorial
-      }),
+      })
     }
   )
 );

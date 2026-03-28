@@ -8,6 +8,12 @@ import {
   ChapterPlotKeyPoint,
   FileType,
   SourceRef,
+  HookType,
+  HookStrength,
+  HookEmotionReward,
+  STRENGTH_SCORES,
+  DURATION_WINDOW_MAP,
+  DEFAULT_EMOTION_REWARD,
 } from '../types';
 import { createPersistingStore } from './createPersistingStore';
 import { dbAPI } from '../services/persistence';
@@ -233,7 +239,19 @@ export const useChapterAnalysisStore: UseBoundStore<StoreApi<ChapterAnalysisStat
       const state = useChapterAnalysisStore.getState();
       const id = `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      const newItem: ForeshadowingItem = { ...item, id };
+      // 自动填充钩子扩展字段
+      const mapped = DURATION_WINDOW_MAP[item.duration];
+      const newItem: ForeshadowingItem = {
+        ...item,
+        id,
+        // 钩子扩展字段（新建 planted 时自动填充）
+        hookType: item.hookType ?? 'mystery',
+        strength: item.strength ?? mapped.strength,
+        window: item.window ?? mapped.window,
+        rewardScore: item.rewardScore ?? STRENGTH_SCORES[item.strength ?? mapped.strength],
+        emotionReward: item.emotionReward ?? DEFAULT_EMOTION_REWARD
+      };
+
       const newData = {
         ...state.data,
         foreshadowing: [...state.data.foreshadowing, newItem],

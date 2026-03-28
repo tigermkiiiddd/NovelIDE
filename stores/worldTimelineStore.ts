@@ -17,12 +17,25 @@ import {
   StoryLine,
   StoryTimeStamp,
   QuantizedTime,
-  FileType
+  FileType,
+  ForeshadowingItem,
+  HookType,
+  HookStrength,
+  EmotionItem,
+  EmotionScore,
+  NodeEmotionCurvePoint,
+  HookEmotionCurvePoint,
+  ForeshadowingStats,
+  HookEmotionReward,
+  STRENGTH_SCORES,
+  DURATION_WINDOW_MAP,
+  DEFAULT_EMOTION_REWARD,
 } from '../types';
 import { createPersistingStore } from './createPersistingStore';
 import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
+import { useChapterAnalysisStore } from './chapterAnalysisStore';
 
 export interface WorldTimelineState {
   timeline: WorldTimeline | null;
@@ -64,6 +77,20 @@ export interface WorldTimelineState {
   getVolumes: () => VolumeGroup[];
   getStoryLines: () => StoryLine[];
   getTimeRange: () => string;
+
+  // === Hook/Foreshadowing Extension Methods ===
+  // duration → 窗口/强度映射
+  mapDurationToWindow: (duration: string) => number;
+  mapDurationToStrength: (duration: string) => HookStrength;
+
+  // 伏笔统计查询（需要传入 chapterAnalysisStore 的伏笔数据）
+  getForeshadowingStats: (foreshadowings: ForeshadowingItem[], currentChapter?: number) => ForeshadowingStats;
+  getOverdueForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number) => ForeshadowingItem[];
+  getExpiringForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number, withinChapters: number) => ForeshadowingItem[];
+
+  // 情绪曲线（两条独立曲线）
+  getNodeEmotionCurve: () => NodeEmotionCurvePoint[];
+  getHookEmotionCurve: () => HookEmotionCurvePoint[];
 }
 
 const generateId = () => `timeline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -462,6 +489,7 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
         location: eventData.location,
         characters: eventData.characters,
         emotion: eventData.emotion,
+        emotions: eventData.emotions,
         chapterId: eventData.chapterId,
         purpose: eventData.purpose
       };
@@ -978,6 +1006,160 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
     getTimeRange: () => {
       const state = useWorldTimelineStore.getState();
       return state.timeline?.totalTimeRange || '';
+    },
+
+    // === Hook/Foreshadowing Extension Methods ===
+
+    mapDurationToWindow: (duration: string) => {
+      const mapped = DURATION_WINDOW_MAP[duration as keyof typeof DURATION_WINDOW_MAP];
+      return mapped?.window ?? 10;
+    },
+
+    mapDurationToStrength: (duration: string) => {
+      const mapped = DURATION_WINDOW_MAP[duration as keyof typeof DURATION_WINDOW_MAP];
+      return mapped?.strength ?? 'medium';
+    },
+
+    getForeshadowingStats: (foreshadowings: ForeshadowingItem[], currentChapter: number = 1) => {
+      const stats: ForeshadowingStats = {
+        total: foreshadowings.length,
+        pending: 0,
+        fulfilled: 0,
+        overdue: 0,
+        totalRewardScore: 0,
+        fulfilledRewardScore: 0,
+        overdueRate: 0,
+        byHookType: { crisis: { total: 0, fulfilled: 0, pending: 0 }, mystery: { total: 0, fulfilled: 0, pending: 0 }, emotion: { total: 0, fulfilled: 0, pending: 0 }, choice: { total: 0, fulfilled: 0, pending: 0 }, desire: { total: 0, fulfilled: 0, pending: 0 } },
+        byStrength: { strong: { total: 0, fulfilled: 0, pending: 0 }, medium: { total: 0, fulfilled: 0, pending: 0 }, weak: { total: 0, fulfilled: 0, pending: 0 } }
+      };
+
+      for (const f of foreshadowings) {
+        if (f.type === 'planted' || f.type === 'developed') {
+          stats.pending++;
+          // 计算状态
+          const dueChapter = f.dueChapter ?? (f.window ? (f.sourceRef ? currentChapter : currentChapter) : currentChapter + (f.window ?? 10));
+          if (dueChapter < currentChapter) {
+            stats.overdue++;
+          }
+        } else if (f.type === 'resolved') {
+          stats.fulfilled++;
+        }
+
+        // 奖励分
+        if (f.rewardScore) {
+          stats.totalRewardScore += f.rewardScore;
+          if (f.type === 'resolved') {
+            stats.fulfilledRewardScore += f.actualScore ?? f.rewardScore;
+          }
+        }
+
+        // 按钩子类型统计
+        if (f.hookType) {
+          if (!stats.byHookType[f.hookType]) {
+            stats.byHookType[f.hookType] = { total: 0, fulfilled: 0, pending: 0 };
+          }
+          stats.byHookType[f.hookType].total++;
+          if (f.type === 'resolved') stats.byHookType[f.hookType].fulfilled++;
+          else stats.byHookType[f.hookType].pending++;
+        }
+
+        // 按强度统计
+        if (f.strength) {
+          stats.byStrength[f.strength].total++;
+          if (f.type === 'resolved') stats.byStrength[f.strength].fulfilled++;
+          else stats.byStrength[f.strength].pending++;
+        }
+      }
+
+      stats.overdueRate = stats.total > 0 ? stats.overdue / stats.total : 0;
+      return stats;
+    },
+
+    getOverdueForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number) => {
+      return foreshadowings.filter(f => {
+        if (f.type === 'resolved') return false;
+        const dueChapter = f.dueChapter ?? (currentChapter + (f.window ?? 10));
+        return dueChapter < currentChapter;
+      });
+    },
+
+    getExpiringForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number, withinChapters: number) => {
+      return foreshadowings.filter(f => {
+        if (f.type === 'resolved') return false;
+        const dueChapter = f.dueChapter ?? (currentChapter + (f.window ?? 10));
+        return dueChapter >= currentChapter && dueChapter <= currentChapter + withinChapters;
+      });
+    },
+
+    // === 情绪曲线 ===
+
+    getNodeEmotionCurve: () => {
+      const state = useWorldTimelineStore.getState();
+      if (!state.timeline) return [];
+
+      return state.timeline.events
+        .filter(e => e.emotions && e.emotions.length > 0)
+        .map((e) => {
+          const emotions = e.emotions as EmotionItem[];
+          const totalScore = emotions.reduce((sum: number, item: EmotionItem) => sum + item.score, 0) as EmotionScore;
+          const chapter = e.chapterId
+            ? state.timeline!.chapters.find(c => c.id === e.chapterId)
+            : undefined;
+
+          return {
+            eventId: e.id,
+            chapterIndex: chapter?.chapterIndex ?? 0,
+            eventIndex: e.eventIndex,
+            emotions,
+            totalScore,
+            timestamp: e.timestamp
+          } as NodeEmotionCurvePoint;
+        });
+    },
+
+    getHookEmotionCurve: () => {
+      const state = useWorldTimelineStore.getState();
+      if (!state.timeline) return [];
+
+      // 从 chapterAnalysisStore 获取伏笔数据
+      const foreshadowings = useChapterAnalysisStore.getState().data.foreshadowing;
+      const points: HookEmotionCurvePoint[] = [];
+
+      for (const f of foreshadowings) {
+        if (f.type === 'resolved' && !f.emotionReward) continue;
+
+        const reward = f.emotionReward ?? DEFAULT_EMOTION_REWARD;
+        const event = state.timeline.events.find(e => e.id === f.sourceRef);
+        if (!event) continue;
+
+        const chapter = event.chapterId
+          ? state.timeline!.chapters.find(c => c.id === event.chapterId)
+          : undefined;
+        const dueChapter = f.dueChapter ?? (chapter?.chapterIndex ?? 0 + (f.window ?? 10));
+        const isOverdue = f.type === 'resolved' && dueChapter < (chapter?.chapterIndex ?? 0);
+
+        // 埋下时的情绪奖励
+        if (f.type === 'planted' || f.type === 'developed' || f.type === 'resolved') {
+          points.push({
+            foreshadowingId: f.id,
+            eventId: event.id,
+            chapterIndex: chapter?.chapterIndex ?? 0,
+            eventIndex: event.eventIndex,
+            action: f.type === 'resolved' ? 'fulfilled' : (f.parentId ? 'advanced' : 'planted'),
+            bonus: f.type === 'resolved'
+              ? (isOverdue ? reward.fulfilled - 3 : reward.fulfilled)
+              : (f.parentId ? reward.advanced : reward.planted),
+            timestamp: event.timestamp,
+            isOverdue
+          });
+        }
+      }
+
+      return points.sort((a, b) => {
+        const aTime = a.chapterIndex * 1000 + a.eventIndex;
+        const bTime = b.chapterIndex * 1000 + b.eventIndex;
+        return aTime - bTime;
+      });
     }
   },
   async (state) => {

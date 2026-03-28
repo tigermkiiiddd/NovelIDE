@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { FileNode } from '../types';
-import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit, HelpCircle } from 'lucide-react';
+import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit, HelpCircle, Zap } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import StatusBar from './StatusBar';
@@ -57,7 +57,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
   const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
+  const [isForeshadowingTrackerOpen, setIsForeshadowingTrackerOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+  // 防止 effect 多次触发弹窗
+  const tutorialShownRef = useRef(false);
 
   // --- Refs ---
   const appModalsRef = useRef<AppModalsRef>(null);
@@ -88,10 +91,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   // --- Tutorial Auto-popup ---
   useEffect(() => {
-    if (!hasSeenTutorial && projectId) {
-      const timer = setTimeout(() => setIsTutorialOpen(true), 800);
-      return () => clearTimeout(timer);
-    }
+    if (hasSeenTutorial || !projectId || tutorialShownRef.current) return;
+    tutorialShownRef.current = true;
+    const timer = setTimeout(() => setIsTutorialOpen(true), 800);
+    return () => clearTimeout(timer);
   }, [hasSeenTutorial, projectId]);
 
   const handleTutorialClose = useCallback(() => {

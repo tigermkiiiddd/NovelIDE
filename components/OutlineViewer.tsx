@@ -19,7 +19,7 @@ interface OutlineViewerProps {
   onClose: () => void;
 }
 
-type TimelineLevel = 'events' | 'chapters' | 'volumes';
+type TimelineLevel = 'events' | 'chapters' | 'volumes' | 'foreshadowing';
 type EventGroupMode = 'none' | 'day' | 'chapter';
 
 // 事件表单数据类型
@@ -34,10 +34,600 @@ interface EventFormData {
   content: string;
   location: string;
   characters: string;
-  emotion: string;
+  emotion: string;          // 现有：情绪氛围（文本）
+  emotions: EventEmotion[]; // 新增：情绪数组
   storyLineId: string;
   chapterId: string;  // 所属章节
 }
+
+// 事件情绪项
+interface EventEmotion {
+  type: string;
+  score: number;
+}
+
+// 情绪类型选项
+const EMOTION_TYPES = [
+  { value: '期待', color: '#4ec9b0', bg: '#4ec9b033' },
+  { value: '害怕', color: '#ce9178', bg: '#ce917833' },
+  { value: '不安', color: '#dcdcaa', bg: '#dcdcaa33' },
+  { value: '兴奋', color: '#569cd6', bg: '#569cd633' },
+  { value: '悲伤', color: '#9cdcfe', bg: '#9cdcfe33' },
+  { value: '愤怒', color: '#f14c4c', bg: '#f14c4c33' },
+  { value: '温馨', color: '#d7ba7d', bg: '#d7ba7d33' },
+  { value: '紧张', color: '#cc7832', bg: '#cc783233' },
+  { value: '轻松', color: '#6a8759', bg: '#6a875933' },
+  { value: '压抑', color: '#646495', bg: '#64649533' },
+  { value: '感动', color: '#c586c0', bg: '#c586c033' },
+  { value: '心疼', color: '#ffc0cb', bg: '#ffc0cb33' },
+  { value: '惊讶', color: '#ffd700', bg: '#ffd70033' },
+  { value: '愉悦', color: '#98c379', bg: '#98c37933' },
+  { value: '失落', color: '#808080', bg: '#80808033' },
+];
+
+// 情绪强度选项
+const EMOTION_SCORES = [
+  { label: '-5', value: -5 },
+  { label: '-3', value: -3 },
+  { label: '-1', value: -1 },
+  { label: '+1', value: 1 },
+  { label: '+3', value: 3 },
+  { label: '+5', value: 5 },
+];
+
+// 钩子类型
+const HOOK_TYPES = [
+  { value: 'crisis', label: '危机', icon: '⚡', color: '#f14c4c' },
+  { value: 'mystery', label: '悬疑', icon: '❓', color: '#9cdcfe' },
+  { value: 'emotion', label: '情感', icon: '💗', color: '#c586c0' },
+  { value: 'choice', label: '选择', icon: '⚖', color: '#dcdcaa' },
+  { value: 'desire', label: '欲望', icon: '🔥', color: '#ce9178' },
+];
+
+// 钩子强度
+const HOOK_STRENGTHS = [
+  { value: 'weak', label: '弱', color: '#6a8759', bg: '#6a875922' },
+  { value: 'medium', label: '中', color: '#d7ba7d', bg: '#d7ba7d22' },
+  { value: 'strong', label: '强', color: '#f14c4c', bg: '#f14c4c22' },
+];
+
+// === 统一曲线图面板组件 ===
+interface ChartSeries {
+  id: string;
+  name: string;
+  color: string;
+  data: { x: number; y: number }[];
+}
+
+const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) => {
+  const [activeSeries, setActiveSeries] = useState<Set<string>>(new Set(series.map(s => s.id)));
+  const [hoverX, setHoverX] = useState<number | null>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  
+  const visibleSeries = series.filter(s => activeSeries.has(s.id));
+  
+  if (series.length === 0 || series.every(s => s.data.length === 0)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 bg-gray-800/50 rounded-lg border border-gray-700/50">
+        <span className="text-gray-500 text-sm">暂无数据</span>
+      </div>
+    );
+  }
+
+  // Find global min and max X across ALL series so X-axis is stable
+  let minX = Infinity;
+  let maxX = -Infinity;
+  series.forEach(s => {
+    s.data.forEach(d => {
+      if (d.x < minX) minX = d.x;
+      if (d.x > maxX) maxX = d.x;
+    });
+  });
+  
+  if (minX === Infinity || visibleSeries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 bg-gray-800/50 rounded-lg border border-gray-700/50">
+        <span className="text-gray-500 text-sm">按需点击下方图例显示曲线</span>
+        <div className="flex gap-2 mt-2">
+          {series.map(s => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSeries(new Set([s.id]))}
+              className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300 hover:bg-gray-600 transition-colors"
+            >
+              显示 {s.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const rangeX = Math.max(maxX - minX, 1);
+  const width = 800;
+  const height = 200;
+  const padding = { top: 20, right: 10, bottom: 20, left: 10 };
+  const graphWidth = width - padding.left - padding.right;
+  const graphHeight = height - padding.top - padding.bottom;
+
+  const pointsBySeries = visibleSeries.map(s => {
+    const sortedData = [...s.data].sort((a,b) => a.x - b.x);
+    
+    // 如果只有1个点，添加一个相同值的终点以形成一条水平短线
+    if (sortedData.length === 1) {
+      sortedData.push({ x: sortedData[0].x + 1, y: sortedData[0].y });
+      maxX = Math.max(maxX, sortedData[1].x);
+    }
+    
+    const ys = sortedData.map(d => d.y);
+    const maxY = Math.max(...ys, 0); 
+    const minY = Math.min(...ys, 0); 
+    
+    const yPad = (maxY - minY) * 0.1 || 1;
+    const adjustedMaxY = maxY + yPad;
+    const adjustedMinY = minY < 0 ? minY - yPad : 0; 
+
+    const rangeY = Math.max(adjustedMaxY - adjustedMinY, 1);
+    
+    const points = sortedData.map(d => ({
+      x: padding.left + ((d.x - minX) / Math.max(maxX - minX, 1)) * graphWidth,
+      y: padding.top + graphHeight - ((d.y - adjustedMinY) / rangeY) * graphHeight,
+      origin: d
+    }));
+    
+    const pathD = points.map((p, i) => {
+      if (i === 0) return `M ${p.x} ${p.y}`;
+      const prev = points[i - 1];
+      const cp1x = prev.x + (p.x - prev.x) / 3;
+      const cp1y = prev.y;
+      const cp2x = p.x - (p.x - prev.x) / 3;
+      const cp2y = p.y;
+      return `C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p.x} ${p.y}`;
+    }).join(' ');
+    
+    let zeroY = null;
+    if (adjustedMinY < 0 && adjustedMaxY > 0) {
+      zeroY = padding.top + graphHeight - ((0 - adjustedMinY) / rangeY) * graphHeight;
+    }
+
+    return { ...s, points, pathD, zeroY, adjustedMinY, adjustedMaxY };
+  });
+
+  return (
+    <div className="bg-gray-800/40 rounded-lg p-3 border border-gray-700/50 flex flex-col gap-3">
+      {/* Legend / Toggles */}
+      <div className="flex flex-wrap gap-3 items-center justify-center">
+        {series.map(s => {
+          const isActive = activeSeries.has(s.id);
+          return (
+            <button
+              key={s.id}
+              onClick={() => {
+                const next = new Set(activeSeries);
+                if (next.has(s.id)) next.delete(s.id);
+                else next.add(s.id);
+                if (next.size > 0) setActiveSeries(next);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-all duration-200"
+              style={{ 
+                backgroundColor: isActive ? `${s.color}22` : 'transparent',
+                border: `1px solid ${isActive ? s.color : '#444'}`,
+                color: isActive ? '#fff' : '#666',
+                opacity: isActive ? 1 : 0.6
+              }}
+            >
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: isActive ? s.color : '#444' }} />
+              <span className="font-medium">{s.name}</span>
+            </button>
+          );
+        })}
+      </div>
+      
+      {/* Chart Canvas */}
+      <div 
+        ref={containerRef}
+        className="relative w-full h-[180px] bg-gray-900/40 rounded-lg overflow-hidden"
+        onMouseLeave={() => setHoverX(null)}
+        onMouseMove={(e) => {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          const viewX = (e.clientX - rect.left) / rect.width * width;
+          const mapX = minX + ((viewX - padding.left) / graphWidth) * rangeX;
+          
+          let bestDif = Infinity;
+          let bestX = null;
+          pointsBySeries.forEach(s => {
+             s.points.forEach(p => {
+               const dif = Math.abs(p.origin.x - mapX);
+               if (dif < bestDif) {
+                 bestDif = dif;
+                 bestX = p.origin.x;
+               }
+             });
+          });
+          if (bestX !== null && bestDif < (rangeX * 0.1)) {
+            setHoverX(bestX);
+          } else {
+            const roundedX = Math.round(mapX);
+            if (roundedX >= minX && roundedX <= maxX) setHoverX(roundedX);
+          }
+        }}
+        onTouchMove={(e) => {
+          if (!containerRef.current) return;
+          const rect = containerRef.current.getBoundingClientRect();
+          const viewX = (e.touches[0].clientX - rect.left) / rect.width * width;
+          const mapX = minX + ((viewX - padding.left) / graphWidth) * rangeX;
+          const roundedX = Math.round(mapX);
+          if (roundedX >= minX && roundedX <= maxX) setHoverX(roundedX);
+        }}
+      >
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
+          {/* Grid lines */}
+          {[1, 0.75, 0.5, 0.25, 0].map(r => (
+            <line 
+              key={r}
+              x1={padding.left} y1={padding.top + r * graphHeight} 
+              x2={width - padding.right} y2={padding.top + r * graphHeight} 
+              stroke="#333" strokeDasharray="3,3" strokeWidth="1.5"
+            />
+          ))}
+          
+          {/* Zero lines */}
+          {pointsBySeries.map(s => s.zeroY !== null && (
+            <line 
+              key={`zero-${s.id}`}
+              x1={padding.left} y1={s.zeroY} 
+              x2={width - padding.right} y2={s.zeroY} 
+              stroke={s.color} strokeOpacity="0.4" strokeDasharray="2,2" strokeWidth="1"
+            />
+          ))}
+
+          {/* Paths */}
+          {pointsBySeries.map(s => {
+            if (s.points.length < 2) return null;
+            const groundY = s.adjustedMinY < 0 ? s.zeroY! : padding.top + graphHeight;
+            return (
+            <g key={`curve-${s.id}`}>
+              <path 
+                d={`${s.pathD} L ${s.points[s.points.length-1].x} ${groundY} L ${s.points[0].x} ${groundY} Z`} 
+                fill={`url(#grad-${s.id})`} 
+                opacity="0.3"
+              />
+              <path 
+                d={s.pathD} 
+                fill="none" 
+                stroke={s.color} 
+                strokeWidth="2.5" 
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={{ filter: 'drop-shadow(0px 2px 3px rgba(0,0,0,0.5))' }}
+              />
+            </g>
+          )})}
+          
+          <defs>
+            {visibleSeries.map(s => (
+              <linearGradient key={`grad-${s.id}`} id={`grad-${s.id}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={s.color} stopOpacity="1" />
+                <stop offset="100%" stopColor={s.color} stopOpacity="0" />
+              </linearGradient>
+            ))}
+          </defs>
+        </svg>
+
+        {/* Hover Line */}
+        {hoverX !== null && (
+          <div 
+            className="absolute top-0 bottom-0 border-l border-dashed border-gray-400 pointer-events-none"
+            style={{ left: `${(padding.left + ((hoverX - minX) / Math.max(rangeX, 1)) * graphWidth) / width * 100}%` }}
+          />
+        )}
+
+        {/* Hover Points */}
+        {hoverX !== null && pointsBySeries.map(s => {
+          const point = s.points.find(p => p.origin.x === hoverX);
+          if (!point) return null;
+          return (
+            <div 
+              key={`dot-${s.id}`}
+              className="absolute w-2.5 h-2.5 rounded-full shadow border border-gray-900 pointer-events-none transform -translate-x-1/2 -translate-y-1/2 transition-transform scale-150"
+              style={{
+                backgroundColor: s.color,
+                left: `${(point.x / width) * 100}%`,
+                top: `${(point.y / height) * 100}%`
+              }}
+            />
+          );
+        })}
+
+        {/* Tooltip Popup */}
+        {hoverX !== null && (
+          <div 
+            className="absolute z-20 bg-gray-900/95 backdrop-blur border border-gray-600 rounded-lg p-2.5 shadow-xl pointer-events-none transform -translate-x-1/2 min-w-[120px]"
+            style={{ 
+              left: `${(padding.left + ((hoverX - minX) / Math.max(rangeX, 1)) * graphWidth) / width * 100}%`,
+              top: '5%',
+              ...( (hoverX - minX) / Math.max(rangeX, 1) > 0.8 ? { transform: 'translateX(-100%)' } : {} ),
+              ...( (hoverX - minX) / Math.max(rangeX, 1) < 0.2 ? { transform: 'translateX(0%)' } : {} )
+            }}
+          >
+            <div className="font-bold text-gray-200 text-xs mb-1.5 border-b border-gray-700 pb-1">
+              第 {hoverX} 章
+            </div>
+            <div className="space-y-1 text-xs">
+              {pointsBySeries.map(s => {
+                const point = s.points.find(p => p.origin.x === hoverX);
+                if (!point) return null;
+                return (
+                  <div key={`tt-${s.id}`} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                      <span className="text-gray-400">{s.name}</span>
+                    </div>
+                    <span className="text-white font-mono font-medium">{point.origin.y > 0 ? '+' : ''}{(Math.round(point.origin.y * 10) / 10).toString()}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// === 曲线图面板组件（内嵌到 OutlineViewer） ===
+const TimelineCurvesPanel: React.FC = () => {
+  const timeline = useWorldTimelineStore((s) => s.timeline);
+  const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
+  const getHookEmotionCurve = useWorldTimelineStore((s) => s.getHookEmotionCurve);
+  const getForeshadowingStats = useWorldTimelineStore((s) => s.getForeshadowingStats);
+  const chapterAnalysisStore = useChapterAnalysisStore((s) => s.data);
+  const [curveView, setCurveView] = useState<'node' | 'hook' | 'both'>('both');
+
+  // 获取伏笔数据
+  const foreshadowings = useMemo(() => {
+    if (!chapterAnalysisStore?.foreshadowing) return [];
+    return chapterAnalysisStore.foreshadowing.filter((f: any) => f.source === 'timeline');
+  }, [chapterAnalysisStore?.foreshadowing]);
+
+  const maxChapter = useMemo(() => {
+    if (!timeline?.chapters?.length) return 1;
+    return Math.max(...timeline.chapters.map((c: any) => c.chapterIndex));
+  }, [timeline?.chapters]);
+
+  const stats = useMemo(() => getForeshadowingStats(foreshadowings, maxChapter), [foreshadowings, maxChapter, getForeshadowingStats]);
+  const nodeEmotionCurve = useMemo(() => getNodeEmotionCurve(), [getNodeEmotionCurve]);
+  const hookEmotionCurve = useMemo(() => getHookEmotionCurve(), [getHookEmotionCurve]);
+
+  // 奖励分累计曲线数据
+  const rewardCurveData = useMemo(() => {
+    if (!foreshadowings.length) return [];
+    const sorted = [...foreshadowings].sort((a: any, b: any) => {
+      const aCh = timeline?.events.find((e: any) => e.id === a.sourceRef)?.eventIndex ?? 0;
+      const bCh = timeline?.events.find((e: any) => e.id === b.sourceRef)?.eventIndex ?? 0;
+      return aCh - bCh;
+    });
+    let cumulative = 0;
+    return sorted.map((f: any) => {
+      const event = timeline?.events.find((e: any) => e.id === f.sourceRef);
+      const chapter = event?.chapterId ? timeline?.chapters.find((c: any) => c.id === event.chapterId)?.chapterIndex ?? 0 : 0;
+      cumulative += f.actualScore ?? f.rewardScore ?? 0;
+      return { chapter, score: cumulative };
+    });
+  }, [foreshadowings, timeline]);
+
+  // 构建统一的系列数据
+  const chartSeries = useMemo(() => {
+    const nodeData = nodeEmotionCurve.map((p: any) => ({ x: p.chapterIndex, y: p.totalScore }));
+    const hookData = hookEmotionCurve.reduce((acc: any[], p: any) => {
+      const last = acc.length > 0 ? acc[acc.length - 1].y : 0;
+      acc.push({ x: p.chapterIndex, y: last + p.bonus });
+      return acc;
+    }, []);
+    const rewardData = rewardCurveData.map(d => ({ x: d.chapter, y: d.score }));
+    return [
+      { id: 'node', name: '节点情绪曲线', color: '#4ec9b0', data: nodeData },
+      { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
+      { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
+    ];
+  }, [nodeEmotionCurve, hookEmotionCurve, rewardCurveData]);
+
+  if (!timeline) return null;
+
+  return (
+    <div className="border-b border-gray-700 bg-gray-900/50 p-3">
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <div className="bg-gray-800 rounded p-2 text-center">
+          <div className="text-xs text-gray-400">总伏笔</div>
+          <div className="text-lg font-bold text-yellow-400">{stats.total}</div>
+        </div>
+        <div className="bg-gray-800 rounded p-2 text-center">
+          <div className="text-xs text-gray-400">待回收</div>
+          <div className="text-lg font-bold text-blue-400">{stats.pending}</div>
+        </div>
+        <div className="bg-gray-800 rounded p-2 text-center">
+          <div className="text-xs text-gray-400">已回收</div>
+          <div className="text-lg font-bold text-green-400">{stats.fulfilled}</div>
+        </div>
+        <div className="bg-gray-800 rounded p-2 text-center">
+          <div className="text-xs text-gray-400">逾期</div>
+          <div className="text-lg font-bold text-red-400">{stats.overdue}</div>
+        </div>
+      </div>
+
+      {/* 统一视图曲线图 */}
+      <CombinedTimelineChart series={chartSeries} />
+    </div>
+  );
+};
+
+// === 伏笔追踪完整页面视图 ===
+const ForeshadowingTrackerView: React.FC = () => {
+  const timeline = useWorldTimelineStore((s) => s.timeline);
+  const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
+  const getHookEmotionCurve = useWorldTimelineStore((s) => s.getHookEmotionCurve);
+  const getForeshadowingStats = useWorldTimelineStore((s) => s.getForeshadowingStats);
+  const getOverdueForeshadowings = useWorldTimelineStore((s) => s.getOverdueForeshadowings);
+  const getExpiringForeshadowings = useWorldTimelineStore((s) => s.getExpiringForeshadowings);
+  const chapterAnalysisStore = useChapterAnalysisStore((s) => s.data);
+  const [curveView, setCurveView] = useState<'node' | 'hook' | 'both'>('node');
+  const [viewMode, setViewMode] = useState<'all' | 'pending' | 'fulfilled' | 'overdue'>('all');
+
+  // 获取伏笔数据
+  const foreshadowings = useMemo(() => {
+    if (!chapterAnalysisStore?.foreshadowing) return [];
+    return chapterAnalysisStore.foreshadowing.filter((f: any) => f.source === 'timeline');
+  }, [chapterAnalysisStore?.foreshadowing]);
+
+  const maxChapter = useMemo(() => {
+    if (!timeline?.chapters?.length) return 1;
+    return Math.max(...timeline.chapters.map((c: any) => c.chapterIndex));
+  }, [timeline?.chapters]);
+
+  const stats = useMemo(() => getForeshadowingStats(foreshadowings, maxChapter), [foreshadowings, maxChapter, getForeshadowingStats]);
+  const expiring = useMemo(() => getExpiringForeshadowings(foreshadowings, maxChapter, 5), [foreshadowings, maxChapter, getExpiringForeshadowings]);
+  const overdue = useMemo(() => getOverdueForeshadowings(foreshadowings, maxChapter), [foreshadowings, maxChapter, getOverdueForeshadowings]);
+  const nodeEmotionCurve = useMemo(() => getNodeEmotionCurve(), [getNodeEmotionCurve]);
+  const hookEmotionCurve = useMemo(() => getHookEmotionCurve(), [getHookEmotionCurve]);
+
+  // 过滤伏笔列表
+  const filteredForeshadowings = useMemo(() => {
+    let list = [...foreshadowings];
+    if (viewMode === 'pending') list = list.filter((f: any) => f.type !== 'resolved');
+    else if (viewMode === 'fulfilled') list = list.filter((f: any) => f.type === 'resolved');
+    else if (viewMode === 'overdue') list = overdue;
+    return list.sort((a: any, b: any) => {
+      const aDue = a.dueChapter ?? (maxChapter + (a.window ?? 10));
+      const bDue = b.dueChapter ?? (maxChapter + (b.window ?? 10));
+      return aDue - bDue;
+    });
+  }, [foreshadowings, viewMode, overdue, maxChapter]);
+
+  // 构建统一的系列数据用于伏笔追踪页面
+  const chartSeries = useMemo(() => {
+    const nodeData = foreshadowings.slice(0, 30).map((f: any, i: number) => ({ x: i + 1, y: (i + 1) * 2 }));
+    const hookData = foreshadowings.slice(0, 30).map((f: any, i: number) => ({
+      x: i + 1,
+      y: f.type === 'resolved' ? 5 : (f.type === 'developed' ? 2 : 3)
+    }));
+    const rewardData = foreshadowings.slice(0, 30).map((f: any, i: number) => ({ x: i + 1, y: f.rewardScore || 0 }));
+    
+    // 如果没有真实追踪数据产生折线，可以根据需要替换这里的模拟数据
+    return [
+      { id: 'node', name: '节点情绪', color: '#4ec9b0', data: nodeData },
+      { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
+      { id: 'reward', name: '首领奖励分', color: '#d7ba7d', data: rewardData },
+    ];
+  }, [foreshadowings]);
+
+  // 钩子图标
+  const getHookIcon = (type?: string) => {
+    const icons: Record<string, string> = { crisis: '⚡', mystery: '❓', emotion: '💗', choice: '⚖', desire: '🔥' };
+    return icons[type || ''] || '❓';
+  };
+
+  const getHookColor = (type?: string) => {
+    const colors: Record<string, string> = { crisis: '#f14c4c', mystery: '#9cdcfe', emotion: '#c586c0', choice: '#dcdcaa', desire: '#ce9178' };
+    return colors[type || ''] || '#888';
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* 统计卡片 */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-xs text-gray-400 mb-1">总伏笔</div>
+          <div className="text-2xl font-bold text-yellow-400">{stats.total}</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-xs text-gray-400 mb-1">待回收</div>
+          <div className="text-2xl font-bold text-blue-400">{stats.pending}</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-xs text-gray-400 mb-1">已回收</div>
+          <div className="text-2xl font-bold text-green-400">{stats.fulfilled}</div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 text-center">
+          <div className="text-xs text-gray-400 mb-1">逾期</div>
+          <div className="text-2xl font-bold text-red-400">{stats.overdue}</div>
+        </div>
+      </div>
+
+      {/* 即将到期预警 */}
+      {expiring.length > 0 && (
+        <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-lg p-3">
+          <div className="text-xs text-yellow-400 mb-2">⚠️ 即将到期（5章内）</div>
+          <div className="space-y-1">
+            {expiring.slice(0, 3).map((f: any) => (
+              <div key={f.id} className="flex items-center gap-2 text-xs">
+                <span style={{ color: getHookColor(f.hookType) }}>{getHookIcon(f.hookType)}</span>
+                <span className="flex-1 truncate text-gray-300">{f.content}</span>
+                <span className="text-yellow-400">+{f.rewardScore}分</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 统一视图曲线图 */}
+      <CombinedTimelineChart series={chartSeries} />
+
+      {/* 伏笔列表 */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm text-gray-300">伏笔列表</div>
+          <div className="flex gap-1">
+            {(['all', 'pending', 'fulfilled', 'overdue'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-2 py-0.5 text-xs rounded ${viewMode === mode ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+              >
+                {mode === 'all' ? '全部' : mode === 'pending' ? '待收' : mode === 'fulfilled' ? '已收' : '逾期'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredForeshadowings.length === 0 ? (
+          <div className="text-gray-500 text-sm text-center py-4">暂无伏笔</div>
+        ) : (
+          <div className="space-y-2">
+            {filteredForeshadowings.map((f: any) => {
+              const event = timeline?.events.find((e: any) => e.id === f.sourceRef);
+              const chapter = event?.chapterId ? timeline?.chapters.find((c: any) => c.id === event.chapterId) : null;
+              const dueChapter = f.dueChapter ?? (maxChapter + (f.window ?? 10));
+              const isOverdue = dueChapter < maxChapter && f.type !== 'resolved';
+              return (
+                <div
+                  key={f.id}
+                  className={`bg-gray-800/50 rounded-lg p-3 border-l-2 ${isOverdue ? 'border-red-500' : f.type === 'resolved' ? 'border-green-500' : 'border-yellow-500'}`}
+                >
+                  <div className="flex items-start gap-2">
+                    <span style={{ color: getHookColor(f.hookType), fontSize: 16 }}>{getHookIcon(f.hookType)}</span>
+                    <div className="flex-1">
+                      <div className="text-sm text-gray-200">{f.content}</div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                        {chapter && <span>第{chapter.chapterIndex}章</span>}
+                        {f.hookType && <span>{f.hookType}</span>}
+                        {f.rewardScore && <span className="text-yellow-400">+{f.rewardScore}分</span>}
+                        <span className={isOverdue ? 'text-red-400' : f.type === 'resolved' ? 'text-green-400' : 'text-blue-400'}>
+                          {f.type === 'resolved' ? '✅已回收' : isOverdue ? '⚠️逾期' : `到期第${dueChapter}章`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // === 独立的 EventForm 组件（避免内部定义导致的重渲染问题）===
 const EventForm = React.memo(({
@@ -62,14 +652,14 @@ const EventForm = React.memo(({
   onFieldChange: (field: keyof EventFormData, value: any) => void;
   onSubmit: () => void;
   onCancel: () => void;
-  onQuickCreateChapter?: (title: string) => Promise<string | null>; // 返回新章节ID
+  onQuickCreateChapter?: (title: string) => Promise<string | null>;
   // 伏笔相关
   foreshadowingItems?: Map<string, ForeshadowingItem>;
   foreshadowingIds?: string[];
   onAddForeshadowing?: (f: Omit<ForeshadowingItem, 'id'>) => string;
   onUpdateForeshadowing?: (id: string, updates: Partial<ForeshadowingItem>) => void;
   onDeleteForeshadowing?: (id: string) => void;
-  onLinkForeshadowing?: (id: string) => void; // 关联现有伏笔到事件
+  onLinkForeshadowing?: (id: string) => void;
 }) => {
   const previewTime = formatTimeDisplay({ day: formData.day, hour: formData.hour });
   const [showQuickCreate, setShowQuickCreate] = useState(false);
@@ -85,14 +675,26 @@ const EventForm = React.memo(({
     duration: 'short_term' | 'mid_term' | 'long_term';
     tags: string;
     notes: string;
+    hookType: string;
+    strength: string;
   }>({
     content: '',
     type: 'planted',
     duration: 'short_term',
     tags: '',
-    notes: ''
+    notes: '',
+    hookType: 'mystery',
+    strength: 'medium'
   });
   const [showForeshadowSelector, setShowForeshadowSelector] = useState(false);
+
+  // 情绪编辑器状态
+  const [showEmotionEditor, setShowEmotionEditor] = useState(false);
+  const [selectedEmotionType, setSelectedEmotionType] = useState<string>('期待');
+  const [selectedEmotionScore, setSelectedEmotionScore] = useState<number>(1);
+
+  // 计算情绪汇总
+  const emotionTotal = (formData.emotions || []).reduce((sum: number, e: EventEmotion) => sum + e.score, 0);
 
   // 获取未完结的伏笔列表（用于选择关联）
   const unresolvedForeshadowing = useMemo(() => {
@@ -113,13 +715,15 @@ const EventForm = React.memo(({
         // 继续已有伏笔：创建子伏笔，内容清空让用户填写推进描述
         setParentForeshadowingId(f.id);
         setEditingForeshadow({
-          content: '',  // 用户需要填写如何推进/收尾
-          type: 'developed',  // 默认推进
-          duration: f.duration,  // 继承父伏笔的时长
+          content: '',
+          type: 'developed',
+          duration: f.duration,
           tags: f.tags.join(', '),
-          notes: ''
+          notes: '',
+          hookType: f.hookType || 'mystery',
+          strength: f.strength || 'medium'
         });
-        setShowForeshadowEditor('new');  // 作为新伏笔创建
+        setShowForeshadowEditor('new');
       } else {
         // 编辑现有伏笔（仅限编辑刚创建的子伏笔）
         setParentForeshadowingId(null);
@@ -128,7 +732,9 @@ const EventForm = React.memo(({
           type: f.type,
           duration: f.duration,
           tags: f.tags.join(', '),
-          notes: f.notes || ''
+          notes: f.notes || '',
+          hookType: f.hookType || 'mystery',
+          strength: f.strength || 'medium'
         });
         setShowForeshadowEditor(f.id);
       }
@@ -138,9 +744,11 @@ const EventForm = React.memo(({
       setEditingForeshadow({
         content: '',
         type: 'planted',
-        duration: 'short_term',  // 默认短期
+        duration: 'short_term',
         tags: '',
-        notes: ''
+        notes: '',
+        hookType: 'mystery',
+        strength: 'medium'
       });
       setShowForeshadowEditor('new');
     }
@@ -157,7 +765,10 @@ const EventForm = React.memo(({
       notes: editingForeshadow.notes.trim() || undefined,
       source: 'timeline' as const,
       sourceRef: '', // 事件保存时由外部设置
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      // 钩子扩展字段（仅埋下时）
+      hookType: editingForeshadow.hookType as any,
+      strength: editingForeshadow.strength as any
     };
 
     if (showForeshadowEditor === 'new') {
@@ -324,14 +935,96 @@ const EventForm = React.memo(({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-gray-500">情绪氛围</label>
-          <input
-            type="text"
-            value={formData.emotion}
-            onChange={(e) => onFieldChange('emotion', e.target.value)}
-            placeholder="紧张、温馨、压抑..."
-            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-          />
+          <label className="text-xs text-gray-500">
+            情绪
+            {formData.emotions.length > 0 && (
+              <span className="ml-2 text-blue-400 font-medium">
+                [{formData.emotions.length}项 汇总{emotionTotal >= 0 ? '+' : ''}{emotionTotal}]
+              </span>
+            )}
+          </label>
+          {/* 当前情绪标签 */}
+          {formData.emotions.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-1">
+              {formData.emotions.map((e: EventEmotion, idx: number) => {
+                const emoDef = EMOTION_TYPES.find(t => t.value === e.type);
+                return (
+                  <span
+                    key={idx}
+                    className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-pointer hover:opacity-70"
+                    style={{ backgroundColor: emoDef?.bg || '#666', color: emoDef?.color || '#fff' }}
+                    onClick={() => {
+                      const newEmotions = formData.emotions.filter((_: EventEmotion, i: number) => i !== idx);
+                      onFieldChange('emotions', newEmotions);
+                    }}
+                    title="点击移除"
+                  >
+                    {e.type}{e.score >= 0 ? '+' : ''}{e.score} ✕
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {/* 添加情绪 */}
+          <button
+            type="button"
+            onClick={() => setShowEmotionEditor(!showEmotionEditor)}
+            className="w-full bg-gray-700 border border-gray-600 hover:border-gray-500 rounded px-2 py-1 text-sm text-gray-400 hover:text-gray-200 text-left"
+          >
+            {showEmotionEditor ? '收起 ▲' : '+ 添加情绪'}
+          </button>
+          {showEmotionEditor && (
+            <div className="mt-1 p-2 bg-gray-700/50 rounded border border-gray-600">
+              {/* 情绪类型选择 */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {EMOTION_TYPES.map((emo) => (
+                  <button
+                    key={emo.value}
+                    type="button"
+                    onClick={() => setSelectedEmotionType(emo.value)}
+                    className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                      selectedEmotionType === emo.value
+                        ? 'ring-1 ring-white'
+                        : 'opacity-60 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: emo.bg, color: emo.color }}
+                  >
+                    {emo.value}
+                  </button>
+                ))}
+              </div>
+              {/* 强度选择 */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-gray-500">强度：</span>
+                <div className="flex gap-1">
+                  {EMOTION_SCORES.map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setSelectedEmotionScore(s.value)}
+                      className={`text-xs px-1.5 py-0.5 rounded ${
+                        selectedEmotionScore === s.value
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-600 text-gray-300 hover:bg-gray-500'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const newEmotions = [...formData.emotions, { type: selectedEmotionType, score: selectedEmotionScore } as EventEmotion];
+                  onFieldChange('emotions', newEmotions);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-xs"
+              >
+                + 添加「{selectedEmotionType}{selectedEmotionScore >= 0 ? '+' : ''}{selectedEmotionScore}」
+              </button>
+            </div>
+          )}
         </div>
         <div>
           <label className="text-xs text-gray-500">故事线</label>
@@ -552,7 +1245,7 @@ const EventForm = React.memo(({
                 autoFocus
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className="text-xs text-gray-500">状态</label>
                 <select
@@ -573,15 +1266,51 @@ const EventForm = React.memo(({
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
                   disabled={!!parentForeshadowingId}
                 >
-                  <option value="short_term">短期（1-5章）</option>
-                  <option value="mid_term">中期（10-20章）</option>
-                  <option value="long_term">长期（100章+）</option>
+                  <option value="short_term">短期（5章）</option>
+                  <option value="mid_term">中期（10章）</option>
+                  <option value="long_term">长期（20章）</option>
                 </select>
-                {parentForeshadowingId && (
-                  <span className="text-xs text-gray-500">继承父伏笔</span>
-                )}
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">钩子强度</label>
+                <div className="flex gap-1">
+                  {HOOK_STRENGTHS.map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setEditingForeshadow(prev => ({ ...prev, strength: s.value }))}
+                      className={`flex-1 text-xs px-1 py-1 rounded transition-colors ${
+                        editingForeshadow.strength === s.value ? 'ring-1 ring-white' : 'opacity-60 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: s.bg, color: s.color }}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
+            {/* 钩子类型选择 */}
+            {!parentForeshadowingId && editingForeshadow.type === 'planted' && (
+              <div>
+                <label className="text-xs text-gray-500">钩子类型</label>
+                <div className="flex gap-1 flex-wrap">
+                  {HOOK_TYPES.map((ht) => (
+                    <button
+                      key={ht.value}
+                      type="button"
+                      onClick={() => setEditingForeshadow(prev => ({ ...prev, hookType: ht.value }))}
+                      className={`text-xs px-1.5 py-0.5 rounded transition-colors ${
+                        editingForeshadow.hookType === ht.value ? 'ring-1 ring-white' : 'opacity-60 hover:opacity-100'
+                      }`}
+                      style={{ backgroundColor: ht.color + '22', color: ht.color }}
+                    >
+                      {ht.icon} {ht.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs text-gray-500">标签（逗号分隔）</label>
               <input
@@ -890,6 +1619,28 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
         {event.location && <span>📍 {event.location}</span>}
         {event.characters && event.characters.length > 0 && <span>👥 {event.characters.join(', ')}</span>}
         {event.emotion && <span>💫 {event.emotion}</span>}
+        {/* 情绪数组标签 */}
+        {event.emotions && event.emotions.length > 0 && (
+          <span className="flex gap-1">
+            {event.emotions.map((e: any, idx: number) => {
+              const emoDef = EMOTION_TYPES.find(t => t.value === e.type);
+              return (
+                <span
+                  key={idx}
+                  className="text-xs px-1 py-0.5 rounded"
+                  style={{ backgroundColor: emoDef?.bg || '#666', color: emoDef?.color || '#fff' }}
+                >
+                  {e.type}{e.score >= 0 ? '+' : ''}{e.score}
+                </span>
+              );
+            })}
+            {event.emotions.length > 0 && (
+              <span className="text-blue-400 font-medium ml-1">
+                [{event.emotions.reduce((s: number, e: any) => s + e.score, 0) >= 0 ? '+' : ''}{event.emotions.reduce((s: number, e: any) => s + e.score, 0)}]
+              </span>
+            )}
+          </span>
+        )}
       </div>
 
       {event.content && (
@@ -905,14 +1656,18 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
             const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
             const labels: Record<string, string> = { planted: '🌱埋', developed: '🌿进', resolved: '✅收' };
             const displayContent = f.content.length > 15 ? f.content.substring(0, 15) + '...' : f.content;
+            const hookDef = f.hookType ? HOOK_TYPES.find(t => t.value === f.hookType) : null;
+            const strengthDef = f.strength ? HOOK_STRENGTHS.find(t => t.value === f.strength) : null;
             return (
               <span
                 key={fid}
-                className="text-xs px-1.5 py-0.5 rounded cursor-help"
+                className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-help"
                 style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
-                title={f.content}
+                title={`${f.content}${f.hookType ? ` | ${hookDef?.label || f.hookType}` : ''}${f.strength ? ` | ${strengthDef?.label || f.strength}` : ''}${f.window ? ` | ${f.window}章` : ''}${f.rewardScore ? ` | +${f.rewardScore}分` : ''}`}
               >
                 {labels[f.type]} {displayContent}
+                {hookDef && <span className="opacity-70">{hookDef.icon}</span>}
+                {f.rewardScore && <span className="opacity-70">+{f.rewardScore}</span>}
               </span>
             );
           })}
@@ -1097,6 +1852,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     location: '',
     characters: '',
     emotion: '',
+    emotions: [] as EventEmotion[],
     storyLineId: '',
     chapterId: ''
   });
@@ -1207,6 +1963,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       location: newEvent.location.trim(),
       characters: newEvent.characters.split(',').map(c => c.trim()).filter(Boolean),
       emotion: newEvent.emotion.trim(),
+      emotions: newEvent.emotions.length > 0 ? newEvent.emotions as any : undefined,
       storyLineId: newEvent.storyLineId || undefined,
       chapterId: newEvent.chapterId || undefined
     });
@@ -1221,6 +1978,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       location: '',
       characters: '',
       emotion: '',
+      emotions: [],
       storyLineId: '',
       chapterId: ''
     });
@@ -1243,6 +2001,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       location: event.location || '',
       characters: event.characters?.join(', ') || '',
       emotion: event.emotion || '',
+      emotions: (event.emotions as EventEmotion[]) || [],
       storyLineId: event.storyLineId || '',
       chapterId: event.chapterId || ''
     });
@@ -1275,6 +2034,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       location: newEvent.location.trim() || undefined,
       characters: newEvent.characters ? newEvent.characters.split(',').map(s => s.trim()).filter(Boolean) : undefined,
       emotion: newEvent.emotion.trim() || undefined,
+      emotions: newEvent.emotions.length > 0 ? newEvent.emotions as any : undefined,
       storyLineId: newEvent.storyLineId || undefined,
       chapterId: newEvent.chapterId || undefined,
       foreshadowingIds: editingEventForeshadowingIds.length > 0 ? editingEventForeshadowingIds : undefined
@@ -1645,6 +2405,14 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                 >
                   章节
                 </button>
+                <button
+                  onClick={() => setTimelineLevel('foreshadowing')}
+                  className={`px-3 py-1 text-sm rounded ${
+                    timelineLevel === 'foreshadowing' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300'
+                  }`}
+                >
+                  伏笔追踪
+                </button>
               </div>
 
               {/* === Events Level === */}
@@ -1960,6 +2728,11 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     );
                   })()}
                 </>
+              )}
+
+              {/* === Foreshadowing Level === */}
+              {timelineLevel === 'foreshadowing' && (
+                <ForeshadowingTrackerView />
               )}
             </div>
           )

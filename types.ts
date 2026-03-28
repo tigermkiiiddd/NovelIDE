@@ -369,6 +369,122 @@ export interface CharacterProfile {
   updatedAt: number;
 }
 
+// ============================================
+// 钩子/伏笔扩展类型（伏笔升级版）
+// ============================================
+
+// 钩子/伏笔类型
+export type HookType = 'crisis' | 'mystery' | 'emotion' | 'choice' | 'desire';
+
+// 钩子强度（参考 webnovel-writer）
+export type HookStrength = 'strong' | 'medium' | 'weak';
+
+// 伏笔状态（基于 type + 章节进度计算）
+export type ForeshadowingStatus = 'pending' | 'fulfilled' | 'overdue';
+
+// 情绪奖励（钩子生命周期中的正面情绪效果）
+export interface HookEmotionReward {
+  planted: number;    // 埋下时 +3
+  advanced: number;   // 推进时 +2
+  fulfilled: number;  // 回收时 +5（按时）/ +2（逾期）
+}
+
+// 强度分数映射
+export const STRENGTH_SCORES: Record<HookStrength, number> = {
+  strong: 30,
+  medium: 20,
+  weak: 10
+};
+
+// 默认情绪奖励
+export const DEFAULT_EMOTION_REWARD: HookEmotionReward = {
+  planted: 3,
+  advanced: 2,
+  fulfilled: 5
+};
+
+// duration → 窗口/强度映射
+export const DURATION_WINDOW_MAP: Record<ForeshadowingDuration, { window: number; strength: HookStrength }> = {
+  short_term: { window: 5, strength: 'weak' },
+  mid_term: { window: 10, strength: 'medium' },
+  long_term: { window: 20, strength: 'strong' }
+};
+
+// 根据类型推荐窗口（可调整）
+export const TYPE_WINDOWS: Record<HookType, number> = {
+  crisis: 3,    // 危机需要快节奏回收
+  mystery: 10,  // 悬疑需要铺垫
+  emotion: 5,   // 情感适中
+  choice: 3,    // 选择需要快速决策
+  desire: 8     // 欲望需要铺垫
+};
+
+// 题材配置（参考 webnovel-writer 的 13 种内置配置）
+export interface GenreProfile {
+  id: string;
+  name: string;
+
+  // 钩子配置
+  hookConfig: {
+    preferredTypes: HookType[];   // 偏好的钩子类型
+    strengthBaseline: HookStrength;  // 默认强度
+  };
+
+  // 节奏配置
+  pacingConfig: {
+    stagnationThreshold: number;   // 停滞阈值（连续几章无进展触发警告）
+    maxConsecutiveTransition: number; // 最大连续过渡章节数
+  };
+
+  // 逾期容忍
+  gracePeriod: number;             // 逾期宽限期（章数）
+  debtMultiplier: number;         // 债务乘数（0.8-2.0）
+}
+
+// 内置题材配置
+export const DEFAULT_GENRE_PROFILES: Record<string, GenreProfile> = {
+  '爽文': {
+    id: 'shuangwen',
+    name: '爽文/系统流',
+    hookConfig: { preferredTypes: ['desire', 'crisis'], strengthBaseline: 'medium' },
+    pacingConfig: { stagnationThreshold: 3, maxConsecutiveTransition: 2 },
+    gracePeriod: 2,
+    debtMultiplier: 1.0
+  },
+  '玄幻': {
+    id: 'xuanhuan',
+    name: '修仙/玄幻',
+    hookConfig: { preferredTypes: ['crisis', 'desire'], strengthBaseline: 'medium' },
+    pacingConfig: { stagnationThreshold: 4, maxConsecutiveTransition: 3 },
+    gracePeriod: 3,
+    debtMultiplier: 0.9
+  },
+  '言情': {
+    id: 'romance',
+    name: '言情/甜宠',
+    hookConfig: { preferredTypes: ['emotion', 'desire'], strengthBaseline: 'medium' },
+    pacingConfig: { stagnationThreshold: 4, maxConsecutiveTransition: 2 },
+    gracePeriod: 2,
+    debtMultiplier: 1.0
+  },
+  '悬疑': {
+    id: 'mystery',
+    name: '悬疑/推理',
+    hookConfig: { preferredTypes: ['mystery', 'crisis'], strengthBaseline: 'medium' },
+    pacingConfig: { stagnationThreshold: 3, maxConsecutiveTransition: 2 },
+    gracePeriod: 2,
+    debtMultiplier: 0.8
+  },
+  '都市': {
+    id: 'urban',
+    name: '都市异能',
+    hookConfig: { preferredTypes: ['crisis', 'emotion'], strengthBaseline: 'medium' },
+    pacingConfig: { stagnationThreshold: 3, maxConsecutiveTransition: 2 },
+    gracePeriod: 2,
+    debtMultiplier: 1.0
+  }
+};
+
 // 伏笔时长类型
 export type ForeshadowingDuration = 'short_term' | 'mid_term' | 'long_term';
 
@@ -395,6 +511,22 @@ export interface ForeshadowingItem {
   notes?: string;
   expectedResolution?: string;    // 预期收尾方式
   createdAt: number;              // 创建时间
+
+  // === 钩子扩展（升级版伏笔） ===
+  // 钩子类型（crisis/mystery/emotion/choice/desire）
+  hookType?: HookType;
+  // 钩子强度
+  strength?: HookStrength;
+  // 回收窗口（章数），从 duration 映射或手动指定
+  window?: number;
+  // 到期章节（计算得出：plantedChapter + window）
+  dueChapter?: number;
+  // 奖励分（自动计算 = strength分数 × 10）
+  rewardScore?: number;
+  // 实际获得分（含逾期惩罚）
+  actualScore?: number;
+  // 情绪奖励
+  emotionReward?: HookEmotionReward;
 }
 
 export interface ChapterAnalysis {
@@ -735,7 +867,66 @@ export interface StoryLine {
   isMain: boolean;
 }
 
-// 时间线事件（原子单位）- 合并自 storyOutline 的 SceneNode
+// ============================================
+// 情绪类型定义（节点情绪曲线）
+// ============================================
+
+// 情绪分类型（-10 到 +10）
+export type EmotionScore = number;  // -10 ~ +10
+
+// 情绪类型（中文枚举，覆盖常见情绪）
+export type EmotionCategory =
+  | '期待' | '害怕' | '不安' | '兴奋' | '悲伤' | '愤怒'
+  | '温馨' | '紧张' | '轻松' | '压抑' | '感动' | '心疼'
+  | '惊讶' | '讽刺' | '释然' | '愉悦' | '失落';
+
+// 单个情绪项（类型+分数）
+export interface EmotionItem {
+  type: EmotionCategory;
+  score: number;  // -5 ~ +5（单个情绪的强度）
+}
+
+// 情绪数组（节点可叠加多个情绪）
+export type EmotionList = EmotionItem[];
+
+// 节点情绪曲线数据点
+export interface NodeEmotionCurvePoint {
+  eventId: string;
+  chapterIndex: number;
+  eventIndex: number;
+  emotions: EmotionItem[];           // 节点的情绪数组（类型+分数组）
+  totalScore: EmotionScore;          // 汇总分 = emotions.reduce((sum, e) => sum + e.score, 0)
+  timestamp: StoryTimeStamp;
+}
+
+// 钩子情绪奖励曲线数据点
+export interface HookEmotionCurvePoint {
+  foreshadowingId: string;
+  eventId: string;
+  chapterIndex: number;
+  eventIndex: number;
+  action: 'planted' | 'advanced' | 'fulfilled';
+  bonus: number;                 // 情绪奖励值
+  timestamp: StoryTimeStamp;
+  isOverdue: boolean;            // 回收时是否逾期
+}
+
+// 伏笔统计
+export interface ForeshadowingStats {
+  total: number;
+  pending: number;
+  fulfilled: number;
+  overdue: number;
+  totalRewardScore: number;      // 总奖励分
+  fulfilledRewardScore: number;  // 已回收奖励分
+  overdueRate: number;           // 逾期率
+  // 按钩子类型统计
+  byHookType: Record<HookType, { total: number; fulfilled: number; pending: number }>;
+  // 按强度统计
+  byStrength: Record<HookStrength, { total: number; fulfilled: number; pending: number }>;
+}
+
+// 时间线事件（原子单位）
 export interface TimelineEvent {
   id: string;
   eventIndex: number;          // 序号（用于显示，按时间戳自动排序）
@@ -745,14 +936,13 @@ export interface TimelineEvent {
   content: string;
   storyLineId: string;         // 所属故事线（默认主线）
 
-  // 可选属性（来自原 Timeline）
+  // 可选属性
   location?: string;
   characters?: string[];
-  emotion?: string;
+  emotion?: string;            // 现有：情绪氛围（文本，如"紧张、温馨"）
+  emotions?: EmotionItem[];     // 新增：情绪数组（类型+分数，可叠加多个）
   chapterId?: string;          // 所属章节（可选）
   foreshadowingIds?: string[]; // 关联的伏笔ID列表
-
-  // 合并自 SceneNode 的属性
   purpose?: string;            // 场景作用/目的
 }
 
