@@ -247,13 +247,33 @@ export const manageEventsTool: ToolDefinition = {
               location: { type: 'string' },
               characters: { type: 'array', items: { type: 'string' } },
               emotion: { type: 'string' },
+              emotions: {
+                type: 'array',
+                description: `情绪数组（类型+分数），可叠加多个情绪。
+可用类型：期待/害怕/不安/兴奋/悲伤/愤怒/温馨/紧张/轻松/压抑/感动/心疼/惊讶/讽刺/释然/愉悦/失落
+分数范围：-5 到 +5`,
+                items: {
+                  type: 'object',
+                  properties: {
+                    type: {
+                      type: 'string',
+                      enum: ['期待', '害怕', '不安', '兴奋', '悲伤', '愤怒', '温馨', '紧张', '轻松', '压抑', '感动', '心疼', '惊讶', '讽刺', '释然', '愉悦', '失落']
+                    },
+                    score: { type: 'number', description: '情绪强度分数（-5 到 +5）' }
+                  },
+                  required: ['type', 'score']
+                }
+              },
               purpose: { type: 'string' },
               foreshadowing: {
                 type: 'array',
                 description: `伏笔操作：
-- 创建新伏笔：提供 content, type='planted', duration, tags
+- 创建新伏笔：提供 content, type='planted', duration, tags, hookType(可选), strength(可选)
 - 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type='developed'
-- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'`,
+- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'
+
+钩子类型：crisis=危机(⚡), mystery=悬疑(❓), emotion=情感(💗), choice=选择(⚖), desire=欲望(🔥)
+钩子强度：strong=强(30分), medium=中(20分), weak=弱(10分)`,
                 items: {
                   type: 'object',
                   properties: {
@@ -276,6 +296,20 @@ export const manageEventsTool: ToolDefinition = {
                       type: 'string',
                       enum: ['planted', 'developed', 'resolved'],
                       description: 'planted=新埋下, developed=推进中, resolved=已回收'
+                    },
+                    hookType: {
+                      type: 'string',
+                      enum: ['crisis', 'mystery', 'emotion', 'choice', 'desire'],
+                      description: '钩子类型（可选）：crisis=危机, mystery=悬疑, emotion=情感, choice=选择, desire=欲望'
+                    },
+                    strength: {
+                      type: 'string',
+                      enum: ['strong', 'medium', 'weak'],
+                      description: '钩子强度（可选，不填则从 duration 推断）：strong=强(30分), medium=中(20分), weak=弱(10分)'
+                    },
+                    window: {
+                      type: 'number',
+                      description: '回收窗口（章数，可选），不填则使用默认值'
                     },
                     tags: {
                       type: 'array',
@@ -323,13 +357,33 @@ export const manageEventsTool: ToolDefinition = {
                   location: { type: 'string' },
                   characters: { type: 'array', items: { type: 'string' } },
                   emotion: { type: 'string' },
+                  emotions: {
+                    type: 'array',
+                    description: `情绪数组（类型+分数），可叠加多个情绪。
+可用类型：期待/害怕/不安/兴奋/悲伤/愤怒/温馨/紧张/轻松/压抑/感动/心疼/惊讶/讽刺/释然/愉悦/失落
+分数范围：-5 到 +5`,
+                    items: {
+                      type: 'object',
+                      properties: {
+                        type: {
+                          type: 'string',
+                          enum: ['期待', '害怕', '不安', '兴奋', '悲伤', '愤怒', '温馨', '紧张', '轻松', '压抑', '感动', '心疼', '惊讶', '讽刺', '释然', '愉悦', '失落']
+                        },
+                        score: { type: 'number', description: '情绪强度分数（-5 到 +5）' }
+                      },
+                      required: ['type', 'score']
+                    }
+                  },
                   purpose: { type: 'string' },
                   foreshadowing: {
                     type: 'array',
                     description: `伏笔操作：
-- 创建新伏笔：提供 content, type='planted', duration, tags
+- 创建新伏笔：提供 content, type='planted', duration, tags, hookType(可选), strength(可选)
 - 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type='developed'
-- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'`,
+- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'
+
+钩子类型：crisis=危机(⚡), mystery=悬疑(❓), emotion=情感(💗), choice=选择(⚖), desire=欲望(🔥)
+钩子强度：strong=强(30分), medium=中(20分), weak=弱(10分)`,
                     items: {
                       type: 'object',
                       properties: {
@@ -352,6 +406,20 @@ export const manageEventsTool: ToolDefinition = {
                           type: 'string',
                           enum: ['planted', 'developed', 'resolved'],
                           description: 'planted=新埋下, developed=推进中, resolved=已回收'
+                        },
+                        hookType: {
+                          type: 'string',
+                          enum: ['crisis', 'mystery', 'emotion', 'choice', 'desire'],
+                          description: '钩子类型（可选）：crisis=危机, mystery=悬疑, emotion=情感, choice=选择, desire=欲望'
+                        },
+                        strength: {
+                          type: 'string',
+                          enum: ['strong', 'medium', 'weak'],
+                          description: '钩子强度（可选，不填则从 duration 推断）：strong=强(30分), medium=中(20分), weak=弱(10分)'
+                        },
+                        window: {
+                          type: 'number',
+                          description: '回收窗口（章数，可选），不填则使用默认值'
                         },
                         tags: {
                           type: 'array',
@@ -570,7 +638,9 @@ export const getUnresolvedForeshadowingTool: ToolDefinition = {
   function: {
     name: 'outline_getUnresolvedForeshadowing',
     description: `获取所有未完结的伏笔列表（type 为 planted 或 developed）。
-可用于查找可以继续或回收的伏笔。`,
+可用于查找可以继续或回收的伏笔。
+
+支持按标签、钩子类型、状态筛选。`,
     parameters: {
       type: 'object',
       properties: {
@@ -579,6 +649,16 @@ export const getUnresolvedForeshadowingTool: ToolDefinition = {
           type: 'array',
           items: { type: 'string' },
           description: '按标签筛选（可选）'
+        },
+        hookType: {
+          type: 'string',
+          enum: ['crisis', 'mystery', 'emotion', 'choice', 'desire'],
+          description: '按钩子类型筛选（可选）：crisis=危机，mystery=悬疑，emotion=情感，choice=选择，desire=欲望'
+        },
+        status: {
+          type: 'string',
+          enum: ['planted', 'developed', 'all'],
+          description: '按状态筛选（可选）：planted=新埋，developed=推进中，all=全部未完结'
         }
       },
       required: ['thinking']
@@ -587,9 +667,30 @@ export const getUnresolvedForeshadowingTool: ToolDefinition = {
 };
 
 // ============================================
+// 获取伏笔详情工具
+// ============================================
+
+export const getForeshadowingDetailTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'outline_getForeshadowingDetail',
+    description: `获取单个伏笔的详细信息，包括钩子类型、强度、奖励分、到期章节等。
+- foreshadowingId: 伏笔 ID（必填）`,
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        foreshadowingId: { type: 'string', description: '伏笔 ID' }
+      },
+      required: ['thinking', 'foreshadowingId']
+    }
+  }
+};
+
+// ============================================
 // 导出
 // ============================================
 
-export const readTools = [getEventsTool, getChaptersTool, getVolumesTool, getStoryLinesTool, getUnresolvedForeshadowingTool];
+export const readTools = [getEventsTool, getChaptersTool, getVolumesTool, getStoryLinesTool, getUnresolvedForeshadowingTool, getForeshadowingDetailTool];
 export const writeTools = [manageVolumesTool, manageChaptersTool, manageEventsTool, manageStoryLinesTool];
 export const allOutlineTools = [...readTools, ...writeTools, processOutlineInputTool];

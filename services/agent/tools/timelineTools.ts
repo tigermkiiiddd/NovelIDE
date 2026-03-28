@@ -24,6 +24,8 @@ export {
   manageEventsTool,
   manageStoryLinesTool,
   processOutlineInputTool,
+  getUnresolvedForeshadowingTool,
+  getForeshadowingDetailTool,
   allOutlineTools
 } from '../toolDefinitions/timeline';
 
@@ -80,6 +82,10 @@ const processForeshadowings = (
     type: 'planted' | 'developed' | 'resolved';
     tags: string[];
     notes?: string;
+    // 新增字段
+    hookType?: 'crisis' | 'mystery' | 'emotion' | 'choice' | 'desire';
+    strength?: 'strong' | 'medium' | 'weak';
+    window?: number;
   }>,
   eventId: string
 ): string[] => {
@@ -120,7 +126,13 @@ const processForeshadowings = (
         notes: item.notes,
         source: TIMELINE_SOURCE,
         sourceRef: eventId,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        // 新增字段
+        hookType: item.hookType,
+        strength: item.strength,
+        window: item.window,
+        // 自动计算奖励分
+        rewardScore: item.strength ? (item.strength === 'strong' ? 30 : item.strength === 'medium' ? 20 : 10) : undefined
       });
       processedIds.push(id);
     }
@@ -186,7 +198,13 @@ export const executeProcessOutlineInput = async (
       tags: f.tags,
       source: f.source,
       sourceRef: f.sourceRef,
-      notes: f.notes
+      notes: f.notes,
+      // 新增字段
+      hookType: f.hookType,
+      strength: f.strength,
+      rewardScore: f.rewardScore,
+      dueChapter: f.dueChapter,
+      window: f.window
     }))
   };
 
@@ -336,6 +354,20 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         );
       }
 
+      // 按钩子类型筛选
+      if (args.hookType) {
+        unresolvedWithChildren = unresolvedWithChildren.filter((f: ForeshadowingItem & { children: ForeshadowingItem[] }) =>
+          f.hookType === args.hookType
+        );
+      }
+
+      // 按状态筛选
+      if (args.status && args.status !== 'all') {
+        unresolvedWithChildren = unresolvedWithChildren.filter((f: ForeshadowingItem & { children: ForeshadowingItem[] }) =>
+          f.type === args.status
+        );
+      }
+
       return JSON.stringify({
         total: unresolvedWithChildren.length,
         foreshadowing: unresolvedWithChildren.map((f: ForeshadowingItem & { children: ForeshadowingItem[] }) => ({
@@ -347,6 +379,12 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           source: f.source,
           sourceRef: f.sourceRef,
           notes: f.notes,
+          // 新增字段
+          hookType: f.hookType,
+          strength: f.strength,
+          rewardScore: f.rewardScore,
+          dueChapter: f.dueChapter,
+          window: f.window,
           // 子伏笔（推进/收尾记录）
           children: f.children.map((c: ForeshadowingItem) => ({
             id: c.id,
@@ -356,6 +394,48 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
             createdAt: c.createdAt
           }))
         }))
+      });
+    }
+
+    case 'outline_getForeshadowingDetail': {
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+      const foreshadowing = chapterAnalysisStore.getForeshadowingById(args.foreshadowingId);
+
+      if (!foreshadowing) {
+        return JSON.stringify({ error: '伏笔不存在' });
+      }
+
+      // 获取相关事件
+      const event = store.timeline?.events.find(e => e.id === foreshadowing.sourceRef);
+      const chapter = event?.chapterId
+        ? store.timeline?.chapters.find(c => c.id === event.chapterId)
+        : undefined;
+
+      // 获取父伏笔信息
+      const parentForeshadowing = foreshadowing.parentId
+        ? chapterAnalysisStore.getForeshadowingById(foreshadowing.parentId)
+        : null;
+
+      return JSON.stringify({
+        foreshadowing: {
+          ...foreshadowing,
+          chapterIndex: chapter?.chapterIndex,
+          chapterTitle: chapter?.title,
+          dueChapter: foreshadowing.dueChapter ?? (chapter?.chapterIndex ?? 0 + (foreshadowing.window ?? 10)),
+          parent: parentForeshadowing ? {
+            id: parentForeshadowing.id,
+            content: parentForeshadowing.content,
+            type: parentForeshadowing.type
+          } : null,
+          // 子伏笔（推进/收尾记录）
+          children: foreshadowing.children.map((c: ForeshadowingItem) => ({
+            id: c.id,
+            content: c.content,
+            type: c.type,
+            sourceRef: c.sourceRef,
+            createdAt: c.createdAt
+          }))
+        }
       });
     }
 

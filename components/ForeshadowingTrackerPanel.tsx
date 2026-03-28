@@ -500,28 +500,41 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
                 return (
                   <div
                     key={f.id}
-                    className="bg-gray-800 rounded p-2 flex items-center gap-2"
+                    className="bg-gray-800 rounded p-2 flex flex-col gap-1"
                     style={{ borderLeft: `3px solid ${typeColors[f.type] || '#555'}` }}
                   >
-                    <span className="text-xs" style={{ color: typeColors[f.type] }}>
-                      {typeLabels[f.type]}
-                    </span>
-                    <span className="flex-1 text-sm text-gray-200 truncate">{f.content}</span>
-                    {chapter && <span className="text-xs text-gray-500">第{chapter.chapterIndex}章</span>}
-                    {f.hookType && hookDef && (
-                      <span className="text-xs" style={{ color: hookDef.color }}>{hookDef.icon}</span>
-                    )}
-                    {f.strength && strengthDef && (
-                      <span className="text-xs" style={{ color: strengthDef.color }}>{strengthDef.label}</span>
-                    )}
-                    {f.rewardScore && (
-                      <span className="text-xs text-yellow-400">+{f.rewardScore}</span>
-                    )}
-                    {f.type !== 'resolved' && (
-                      <span className={`text-xs ${isOverdue ? 'text-red-400' : 'text-gray-500'}`}>
-                        {isOverdue ? `逾期${Math.abs(remaining)}章` : `剩${remaining}章`}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs" style={{ color: typeColors[f.type] }}>
+                        {typeLabels[f.type]}
                       </span>
-                    )}
+                      <span className="flex-1 text-sm text-gray-200 truncate">{f.content}</span>
+                      {chapter && <span className="text-xs text-gray-500">第{chapter.chapterIndex}章</span>}
+                      {f.hookType && hookDef && (
+                        <span className="text-xs" style={{ color: hookDef.color }}>{hookDef.icon}</span>
+                      )}
+                      {f.strength && strengthDef && (
+                        <span className="text-xs" style={{ color: strengthDef.color }}>{strengthDef.label}</span>
+                      )}
+                      {f.rewardScore && (
+                        <span className="text-xs text-yellow-400">+{f.rewardScore}</span>
+                      )}
+                      {f.type !== 'resolved' && (
+                        <span className={`text-xs ${isOverdue ? 'text-red-400' : 'text-gray-500'}`}>
+                          {isOverdue ? `逾期${Math.abs(remaining)}章` : `剩${remaining}章`}
+                        </span>
+                      )}
+                    </div>
+                    {/* 父伏笔上下文（子伏笔时显示） */}
+                    {f.parentId && (() => {
+                      const parent = foreshadowings.find((p: ForeshadowingItem) => p.id === f.parentId);
+                      if (!parent) return null;
+                      return (
+                        <div className="flex items-center gap-1 text-xs text-orange-400 bg-orange-500/10 rounded px-2 py-1">
+                          <span>↳ 推进自：</span>
+                          <span className="truncate">{parent.content}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })

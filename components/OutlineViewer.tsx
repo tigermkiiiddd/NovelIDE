@@ -1183,36 +1183,49 @@ const EventForm = React.memo(({
               return (
                 <div
                   key={fid}
-                  className="flex items-center gap-2 p-2 rounded bg-gray-700/50 border border-gray-600"
+                  className="flex flex-col gap-1 p-2 rounded bg-gray-700/50 border border-gray-600"
                 >
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded shrink-0"
-                    style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
-                  >
-                    {labels[f.type]}
-                  </span>
-                  <span className="text-xs text-gray-400 shrink-0">
-                    [{durationLabels[f.duration]}]
-                  </span>
-                  <span className="flex-1 text-sm text-gray-200 truncate">
-                    {f.content}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleStartEditForeshadow(f)}
-                    className="text-gray-500 hover:text-blue-400 p-1"
-                    title="编辑"
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteForeshadowing?.(fid)}
-                    className="text-gray-500 hover:text-red-400 p-1"
-                    title="取消关联"
-                  >
-                    <X size={12} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="text-xs px-1.5 py-0.5 rounded shrink-0"
+                      style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
+                    >
+                      {labels[f.type]}
+                    </span>
+                    <span className="text-xs text-gray-400 shrink-0">
+                      [{durationLabels[f.duration]}]
+                    </span>
+                    <span className="flex-1 text-sm text-gray-200 truncate">
+                      {f.content}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditForeshadow(f)}
+                      className="text-gray-500 hover:text-blue-400 p-1"
+                      title="编辑"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteForeshadowing?.(fid)}
+                      className="text-gray-500 hover:text-red-400 p-1"
+                      title="取消关联"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                  {/* 子伏笔显示父伏笔上下文 */}
+                  {f.parentId && (() => {
+                    const parent = foreshadowingItems.get(f.parentId);
+                    if (!parent) return null;
+                    return (
+                      <div className="flex items-center gap-1 text-xs text-orange-400 bg-orange-500/10 rounded px-2 py-1 ml-4">
+                        <span>↳ 推进自：</span>
+                        <span className="truncate">{parent.content}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -1222,15 +1235,25 @@ const EventForm = React.memo(({
         {/* 伏笔编辑器 */}
         {showForeshadowEditor && (
           <div className="bg-gray-700/50 rounded p-3 space-y-2 border border-gray-600">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-400">
-                {parentForeshadowingId ? '🌿 推进已有伏笔' : showForeshadowEditor === 'new' ? '🌱 新建伏笔' : '编辑伏笔'}
-              </span>
-              {parentForeshadowingId && foreshadowingItems?.get(parentForeshadowingId) && (
-                <span className="text-xs text-gray-500">
-                  原：{foreshadowingItems.get(parentForeshadowingId)?.content?.substring(0, 20)}...
-                </span>
-              )}
+            {/* 父伏笔上下文（推进时显示） */}
+            {parentForeshadowingId && foreshadowingItems?.get(parentForeshadowingId) && (() => {
+              const parent = foreshadowingItems.get(parentForeshadowingId)!;
+              const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
+              const labels: Record<string, string> = { planted: '🌱埋下', developed: '🌿推进', resolved: '✅收回' };
+              return (
+                <div className="mb-2 p-2 bg-orange-500/10 rounded border border-orange-500/30">
+                  <div className="text-xs text-orange-400 mb-1">正在推进的伏笔：</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: colors[parent.type] + '22', color: colors[parent.type] }}>
+                      {labels[parent.type]}
+                    </span>
+                    <span className="text-sm text-gray-200">{parent.content}</span>
+                  </div>
+                </div>
+              );
+            })()}
+            <div className="text-xs text-gray-400">
+              {parentForeshadowingId ? '🌿 推进/收尾' : showForeshadowEditor === 'new' ? '🌱 新建伏笔' : '编辑伏笔'}
             </div>
             <div>
               <label className="text-xs text-gray-500">
@@ -1253,9 +1276,18 @@ const EventForm = React.memo(({
                   onChange={(e) => setEditingForeshadow(prev => ({ ...prev, type: e.target.value as any }))}
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
                 >
-                  <option value="planted">🌱 埋下</option>
-                  <option value="developed">🌿 推进</option>
-                  <option value="resolved">✅ 收回</option>
+                  {parentForeshadowingId ? (
+                    <>
+                      <option value="developed">🌿 推进</option>
+                      <option value="resolved">✅ 收回</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="planted">🌱 埋下</option>
+                      <option value="developed">🌿 推进</option>
+                      <option value="resolved">✅ 收回</option>
+                    </>
+                  )}
                 </select>
               </div>
               <div>
@@ -1649,7 +1681,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
 
       {/* 伏笔显示 */}
       {event.foreshadowingIds && event.foreshadowingIds.length > 0 && foreshadowingItems && (
-        <div className="flex flex-wrap gap-1 mt-2 ml-6">
+        <div className="flex flex-col gap-1 mt-2 ml-6">
           {event.foreshadowingIds.map(fid => {
             const f = foreshadowingItems.get(fid);
             if (!f || !f.content) return null;
@@ -1659,16 +1691,27 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
             const hookDef = f.hookType ? HOOK_TYPES.find(t => t.value === f.hookType) : null;
             const strengthDef = f.strength ? HOOK_STRENGTHS.find(t => t.value === f.strength) : null;
             return (
-              <span
-                key={fid}
-                className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-help"
-                style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
-                title={`${f.content}${f.hookType ? ` | ${hookDef?.label || f.hookType}` : ''}${f.strength ? ` | ${strengthDef?.label || f.strength}` : ''}${f.window ? ` | ${f.window}章` : ''}${f.rewardScore ? ` | +${f.rewardScore}分` : ''}`}
-              >
-                {labels[f.type]} {displayContent}
-                {hookDef && <span className="opacity-70">{hookDef.icon}</span>}
-                {f.rewardScore && <span className="opacity-70">+{f.rewardScore}</span>}
-              </span>
+              <div key={fid} className="flex flex-col">
+                <span
+                  className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-help w-fit"
+                  style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
+                  title={`${f.content}${f.hookType ? ` | ${hookDef?.label || f.hookType}` : ''}${f.strength ? ` | ${strengthDef?.label || f.strength}` : ''}${f.window ? ` | ${f.window}章` : ''}${f.rewardScore ? ` | +${f.rewardScore}分` : ''}`}
+                >
+                  {labels[f.type]} {displayContent}
+                  {hookDef && <span className="opacity-70">{hookDef.icon}</span>}
+                  {f.rewardScore && <span className="opacity-70">+{f.rewardScore}</span>}
+                </span>
+                {/* 子伏笔时显示父伏笔上下文 */}
+                {f.parentId && (() => {
+                  const parent = foreshadowingItems.get(f.parentId);
+                  if (!parent) return null;
+                  return (
+                    <span className="text-xs text-orange-400 ml-2 mt-0.5">
+                      ↳ 推进自：{parent.content.length > 12 ? parent.content.substring(0, 12) + '...' : parent.content}
+                    </span>
+                  );
+                })()}
+              </div>
             );
           })}
         </div>
@@ -2476,6 +2519,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
               {showAddEvent && (
                 <EventForm
+                  key={`event-form-${foreshadowingList.length}`}
                   formData={newEvent}
                   storyLines={cachedStoryLines}
                   chapters={cachedChapters}
@@ -2522,6 +2566,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                       {editingEventId === event.id ? (
                         <div className="bg-gray-800 rounded-lg p-4 border border-blue-500">
                           <EventForm
+                            key={`event-form-${foreshadowingList.length}`}
                             formData={newEvent}
                             storyLines={cachedStoryLines}
                             chapters={cachedChapters}
@@ -2534,7 +2579,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                             onAddForeshadowing={handleAddForeshadowing}
                             onUpdateForeshadowing={handleUpdateForeshadowing}
                             onDeleteForeshadowing={handleDeleteForeshadowing}
-                  onLinkForeshadowing={handleLinkForeshadowing}
+                            onLinkForeshadowing={handleLinkForeshadowing}
                           />
                         </div>
                       ) : (

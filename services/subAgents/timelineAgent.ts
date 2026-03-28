@@ -15,6 +15,7 @@ import {
   getChaptersTool,
   getVolumesTool,
   getUnresolvedForeshadowingTool,
+  getForeshadowingDetailTool,
   manageVolumesTool,
   manageChaptersTool,
   manageEventsTool
@@ -42,6 +43,7 @@ const subAgentTools: ToolDefinition[] = [
   getChaptersTool,
   getEventsTool,
   getUnresolvedForeshadowingTool,
+  getForeshadowingDetailTool,
   manageVolumesTool,
   manageChaptersTool,
   manageEventsTool,
@@ -77,6 +79,12 @@ export interface TimelineContext {
     source: 'timeline' | 'chapter_analysis';
     sourceRef: string;
     notes?: string;
+    // 新增字段
+    hookType?: 'crisis' | 'mystery' | 'emotion' | 'choice' | 'desire';
+    strength?: 'strong' | 'medium' | 'weak';
+    rewardScore?: number;
+    dueChapter?: number;
+    window?: number;
   }>;
   project?: ProjectMeta;
 }
@@ -131,7 +139,7 @@ ${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0
 
 以下是项目中尚未完结的伏笔。在创建事件时，可以：
 1. **埋下新伏笔**：基于剧情发展和故事风格，在合适的事件中埋下新的伏笔
-   - 使用 \`content\` + \`type: "planted"\` + \`duration\` + \`tags\` 字段
+   - 使用 \`content\` + \`type: "planted"\` + \`duration\` + \`hookType\` + \`strength\` + \`tags\` 字段
 2. **继续已有伏笔**：将伏笔状态推进为 \`developed\`
    - 使用 \`existingForeshadowingId\` + \`type: "developed"\` + \`tags\` 字段
 3. **收尾已有伏笔**：将伏笔状态标记为 \`resolved\`
@@ -142,7 +150,8 @@ ${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0
 ${context.unresolvedForeshadowing.map(f =>
   `- [${f.id}] [${f.type}] [${f.duration}] ${f.content}
    来源: ${f.source === 'timeline' ? '时间线' : '章节分析'} - ${f.sourceRef}
-   标签: ${f.tags.join(', ')}${f.notes ? `\n   备注: ${f.notes}` : ''}`
+   ${f.hookType ? `钩子: ${f.hookType}${f.strength ? `(${f.strength})` : ''} | ` : ''}${f.rewardScore ? `奖励分: +${f.rewardScore} | ` : ''}标签: ${f.tags.join(', ')}
+   ${f.notes ? `备注: ${f.notes}` : ''}`
 ).join('\n\n')}
 \`\`\`
 ` : ''}
@@ -183,11 +192,27 @@ ${context.unresolvedForeshadowing.map(f =>
 | \`developed\` | 推进伏笔 | 揭示部分信息、制造悬念、加深谜团 |
 | \`resolved\` | 收尾伏笔 | 真相大白、呼应前文、闭环 |
 
-| 时长 | 跨度 | 示例 |
-|------|------|------|
-| \`short_term\` | 1-3章内回收 | 小悬念、临时困境 |
-| \`mid_term\` | 一卷内回收 | 支线剧情、次要谜团 |
-| \`long_term\` | 跨卷回收 | 核心谜题、主线伏笔 |
+| 时长 | 跨度 | 窗口 | 示例 |
+|------|------|------|------|
+| \`short_term\` | 1-5章回收 | 5章 | 小悬念、临时困境 |
+| \`mid_term\` | 10-20章回收 | 10章 | 支线剧情、次要谜团 |
+| \`long_term\` | 跨卷回收 | 20章 | 核心谜题、主线伏笔 |
+
+### 钩子类型与强度
+
+| 钩子类型 | 说明 | 建议时长 | emoji |
+|----------|------|----------|-------|
+| crisis | 危机/冲突 | 3-5章 | ⚡ |
+| mystery | 悬疑/谜题 | 10-20章 | ❓ |
+| emotion | 情感/关系 | 5-10章 | 💗 |
+| choice | 选择/决策 | 3-5章 | ⚖ |
+| desire | 欲望/目标 | 8-15章 | 🔥 |
+
+| 强度 | 奖励分 | 适用场景 |
+|------|--------|----------|
+| strong | 30分 | 核心谜题、重要转折 |
+| medium | 20分 | 支线伏笔、情感铺垫 |
+| weak | 10分 | 小悬念、临时困境 |
 
 ### 伏笔埋设原则
 
@@ -209,6 +234,11 @@ ${context.unresolvedForeshadowing.map(f =>
    - 示例：\`tags: ["爽点:中", "突破"]\`，\`tags: ["爽点:大", "终极对决"]\`
    - 爽点间隔参考项目配置：小爽/中爽/大爽的章节数间隔
 
+5. **情绪标注**（emotions 字段）：
+   - 使用 \`emotions\` 字段标注事件的情绪，支持多个情绪叠加
+   - 可用类型：期待/害怕/不安/兴奋/悲伤/愤怒/温馨/紧张/轻松/压抑/感动/心疼/惊讶/讽刺/释然/愉悦/失落
+   - 分数范围：-5 到 +5（正数正面情绪，负数负面情绪）
+
 ### 伏笔推进节奏
 
 \`\`\`
@@ -222,15 +252,19 @@ long_term:   planted → developed → developed → ... → resolved (跨卷)
 
 ### 实战示例
 
-**场景：主角发现身世线索**
+**场景：主角发现身世线索（含情绪标注）**
 \`\`\`json
 {
   "timestamp": { "day": 15, "hour": 20 },
   "title": "旧宅密室",
   "content": "在废弃的祖宅密室中，发现一封泛黄的信件",
   "chapterIndex": 5,
+  "emotions": [
+    { "type": "紧张", "score": 3 },
+    { "type": "期待", "score": 2 }
+  ],
   "foreshadowing": [
-    { "content": "信中提到'那个孩子'的称呼", "type": "planted", "duration": "long_term", "tags": ["身世"] },
+    { "content": "信中提到'那个孩子'的称呼", "type": "planted", "duration": "long_term", "hookType": "mystery", "strength": "strong", "tags": ["身世"] },
     { "existingForeshadowingId": "fore-001", "type": "developed", "tags": ["物品"] }
   ]
 }

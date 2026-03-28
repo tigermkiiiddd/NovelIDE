@@ -8,6 +8,8 @@ import {
   ForeshadowingDuration,
   ChapterCharacterState,
   ChapterPlotKeyPoint,
+  HookType,
+  HookStrength,
 } from '../types';
 import { Plus, Trash2, Edit2, X, User, Sparkles, Zap, History, Clock, Check } from 'lucide-react';
 import { EntityVersionHistory } from './EntityVersionHistory';
@@ -25,6 +27,22 @@ const DURATION_LABELS: Record<ForeshadowingDuration, string> = {
   short_term: '短期',
   mid_term: '中期',
   long_term: '长期',
+};
+
+// 钩子类型映射
+const HOOK_TYPE_CONFIG: Record<HookType, { label: string; emoji: string; color: string }> = {
+  crisis: { label: '危机', emoji: '⚡', color: '#f14c4c' },
+  mystery: { label: '悬疑', emoji: '❓', color: '#9cdcfe' },
+  emotion: { label: '情感', emoji: '💗', color: '#c586c0' },
+  choice: { label: '选择', emoji: '⚖', color: '#dcdcaa' },
+  desire: { label: '欲望', emoji: '🔥', color: '#ce9178' },
+};
+
+// 钩子强度映射
+const STRENGTH_CONFIG: Record<HookStrength, { label: string; color: string; bgColor: string }> = {
+  strong: { label: '强', color: '#f14c4c', bgColor: '#f14c4c22' },
+  medium: { label: '中', color: '#d7ba7d', bgColor: '#d7ba7d22' },
+  weak: { label: '弱', color: '#6a8759', bgColor: '#6a875922' },
 };
 
 // ==================== 样式常量 ====================
@@ -550,6 +568,8 @@ const ForeshadowingView: React.FC<{
         const duration = item.duration || 'mid_term';
         const durationColor = DURATION_COLORS[duration];
         const children = item.children || [];
+        const hookConfig = item.hookType ? HOOK_TYPE_CONFIG[item.hookType] : null;
+        const strengthConfig = item.strength ? STRENGTH_CONFIG[item.strength] : null;
 
         return (
           <div
@@ -560,7 +580,7 @@ const ForeshadowingView: React.FC<{
               borderLeft: `3px solid ${durationColor}`,
             }}
           >
-            {/* 顶部：状态 + 时长标签 + 操作按钮 */}
+            {/* 顶部：状态 + 时长标签 + 钩子类型/强度 + 操作按钮 */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
@@ -588,6 +608,37 @@ const ForeshadowingView: React.FC<{
                   <Clock size={12} />
                   {DURATION_LABELS[duration]}
                 </span>
+                {/* 钩子类型 */}
+                {hookConfig && (
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    backgroundColor: `${hookConfig.color}22`,
+                    border: `1px solid ${hookConfig.color}44`,
+                    borderRadius: 4,
+                    color: hookConfig.color,
+                    fontSize: 11,
+                  }}>
+                    {hookConfig.emoji} {hookConfig.label}
+                    {strengthConfig && <span style={{ opacity: 0.8 }}>({strengthConfig.label})</span>}
+                  </span>
+                )}
+                {/* 奖励分 */}
+                {item.rewardScore && (
+                  <span style={{
+                    padding: '3px 8px',
+                    backgroundColor: '#f59e0b22',
+                    border: '1px solid #f59e0b44',
+                    borderRadius: 4,
+                    color: '#f59e0b',
+                    fontSize: 11,
+                    fontWeight: 500,
+                  }}>
+                    +{item.rewardScore}分
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button onClick={() => onEdit(item)} style={actionButtonStyle} title="编辑">
@@ -608,9 +659,15 @@ const ForeshadowingView: React.FC<{
               {item.content}
             </div>
 
-            {/* 来源章节 */}
-            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-              📍 来源：{getChapterTitle(item.sourceRef || '')}
+            {/* 来源章节 + 到期章节 */}
+            <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+              <span>📍 来源：{getChapterTitle(item.sourceRef || '')}</span>
+              {item.dueChapter && (
+                <span>📅 到期：第{item.dueChapter}章</span>
+              )}
+              {item.window && (
+                <span>⏱️ 窗口：{item.window}章</span>
+              )}
             </div>
 
             {/* 标签 */}
@@ -932,6 +989,9 @@ const ForeshadowingForm: React.FC<{
   const [content, setContent] = useState(item?.content || '');
   const [type, setType] = useState<'planted' | 'developed' | 'resolved'>(item?.type || 'planted');
   const [duration, setDuration] = useState<ForeshadowingDuration>(item?.duration || 'mid_term');
+  const [hookType, setHookType] = useState<HookType | undefined>(item?.hookType);
+  const [strength, setStrength] = useState<HookStrength | undefined>(item?.strength);
+  const [window, setWindow] = useState<number | undefined>(item?.window);
   const [sourceRef, setSourceRef] = useState(item?.sourceRef || '');
   const [notes, setNotes] = useState(item?.notes || '');
   const [tags, setTags] = useState(item?.tags?.join(', ') || '');
@@ -941,6 +1001,10 @@ const ForeshadowingForm: React.FC<{
       alert('请填写伏笔内容和来源章节');
       return;
     }
+
+    // 自动计算奖励分
+    const rewardScore = strength ? (strength === 'strong' ? 30 : strength === 'medium' ? 20 : 10) : undefined;
+
     onSave({
       id: item?.id,
       content: content.trim(),
@@ -951,6 +1015,11 @@ const ForeshadowingForm: React.FC<{
       notes: notes.trim() || undefined,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
       createdAt: item?.createdAt || Date.now(),
+      // 新增字段
+      hookType,
+      strength,
+      window,
+      rewardScore,
     });
   };
 
@@ -990,6 +1059,45 @@ const ForeshadowingForm: React.FC<{
               <option value="short_term">短期（1-5章）</option>
               <option value="mid_term">中期（10-20章）</option>
               <option value="long_term">长期（100章+）</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 钩子类型 + 强度 */}
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>钩子类型</label>
+            <select
+              value={hookType || ''}
+              onChange={(e) => setHookType(e.target.value as HookType || undefined)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">-- 不指定 --</option>
+              <option value="crisis">⚡ 危机</option>
+              <option value="mystery">❓ 悬疑</option>
+              <option value="emotion">💗 情感</option>
+              <option value="choice">⚖ 选择</option>
+              <option value="desire">🔥 欲望</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
+              钩子强度
+              {strength && (
+                <span style={{ marginLeft: 8, color: STRENGTH_CONFIG[strength]?.color }}>
+                  → +{strength === 'strong' ? '30' : strength === 'medium' ? '20' : '10'}分
+                </span>
+              )}
+            </label>
+            <select
+              value={strength || ''}
+              onChange={(e) => setStrength(e.target.value as HookStrength || undefined)}
+              style={{ ...inputStyle, cursor: 'pointer' }}
+            >
+              <option value="">-- 不指定 --</option>
+              <option value="strong">强（30分）</option>
+              <option value="medium">中（20分）</option>
+              <option value="weak">弱（10分）</option>
             </select>
           </div>
         </div>

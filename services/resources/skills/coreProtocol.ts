@@ -410,29 +410,64 @@ export const constructSystemPrompt = (
       const midTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => f.duration === 'mid_term');
       const longTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => f.duration === 'long_term');
 
+      // 钩子类型emoji映射
+      const HOOK_TYPE_EMOJI: Record<string, string> = {
+        crisis: '⚡',
+        mystery: '❓',
+        emotion: '💗',
+        choice: '⚖',
+        desire: '🔥'
+      };
+
+      // 强度标签映射
+      const STRENGTH_LABELS: Record<string, string> = {
+        strong: '强',
+        medium: '中',
+        weak: '弱'
+      };
+
       let output = `\n## 🎭 未收尾伏笔索引\n> 共 ${unresolvedForeshadowing.length} 条待收尾伏笔（写作时注意呼应）\n\n`;
 
       const formatForeshadowing = (f: ForeshadowingItem) => {
         const statusEmoji = f.type === 'planted' ? '🌱' : '🌿';
         const sourceLabel = f.source === 'chapter_analysis' ? '章节' : '时间线';
         const typeLabel = f.type === 'planted' ? '新埋' : '推进中';
-        return `- ${statusEmoji} **${f.content}**\n  - 来源: ${sourceLabel} \`${f.sourceRef}\` | 状态: ${typeLabel}${f.expectedResolution ? ` | 预期收尾: ${f.expectedResolution}` : ''}`;
+        const hookTypeEmoji = f.hookType ? HOOK_TYPE_EMOJI[f.hookType] : '';
+        const strengthLabel = f.strength ? STRENGTH_LABELS[f.strength] : '';
+
+        let line = `- ${statusEmoji} **${f.content}**\n`;
+        line += `  - 来源: ${sourceLabel} | 状态: ${typeLabel}`;
+        if (f.hookType) {
+          line += ` | ${hookTypeEmoji}${f.hookType}${strengthLabel ? `(${strengthLabel})` : ''}`;
+        }
+        if (f.rewardScore) {
+          line += ` | 奖励分: +${f.rewardScore}`;
+        }
+        if (f.dueChapter) {
+          line += ` | 到期: 第${f.dueChapter}章`;
+        }
+        if (f.tags && f.tags.length > 0) {
+          line += `\n  - 标签: ${f.tags.join(', ')}`;
+        }
+        return line;
       };
 
       if (shortTerm.length > 0) {
-        output += `### ⚡ 短期伏笔（近期收尾）\n${shortTerm.map(formatForeshadowing).join('\n')}\n\n`;
+        output += `### ⚡ 短期伏笔（1-5章收尾）\n${shortTerm.map(formatForeshadowing).join('\n')}\n\n`;
       }
       if (midTerm.length > 0) {
-        output += `### 🔄 中期伏笔（中段收尾）\n${midTerm.map(formatForeshadowing).join('\n')}\n\n`;
+        output += `### 🔄 中期伏笔（10-20章收尾）\n${midTerm.map(formatForeshadowing).join('\n')}\n\n`;
       }
       if (longTerm.length > 0) {
-        output += `### 🗺️ 长期伏笔（后期收尾）\n${longTerm.map(formatForeshadowing).join('\n')}\n\n`;
+        output += `### 🗺️ 长期伏笔（跨卷收尾）\n${longTerm.map(formatForeshadowing).join('\n')}\n\n`;
       }
 
       output += `> 💡 **伏笔使用提示**：
-> - 写正文时检查相关伏笔，适时埋设/发展/收尾。新章节可埋设新伏笔。
-> - **爽点追踪**：使用伏笔系统追踪爽点，在 tags 中添加 \`爽点:小\`、\`爽点:中\`、\`爽点:大\` 标签。
-> - 示例：\`tags: ["爽点:中", "突破"]\` 表示这是一个中爽点，类型是突破。
+> - 钩子类型：⚡危机适合快节奏，❓悬疑需长线铺垫，💗情感适中，⚖选择需快速决策，🔥欲望需长线
+> - 强度决定奖励分：强=30分，中=20分，弱=10分
+> - 建议按 hookType 分类管理伏笔，便于追踪不同情绪弧线
+> - **爽点追踪**：使用伏笔系统追踪爽点，在 tags 中添加 \`爽点:小\`、\`爽点:中\`、\`爽点:大\` 标签
+> - **情绪曲线**：使用 outline_manageEvents 的 emotions 字段标注事件情绪（-5~+5分）
 `;
 
       return output;
