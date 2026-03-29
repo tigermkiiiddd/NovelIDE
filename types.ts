@@ -859,17 +859,76 @@ export interface StoryLine {
 }
 
 // ============================================
-// 情绪类型定义（节点情绪曲线）
+// 读者情绪类型定义（追读动力导向）
 // ============================================
 
 // 情绪分类型（-10 到 +10）
 export type EmotionScore = number;  // -10 ~ +10
 
-// 情绪类型（中文枚举，覆盖常见情绪）
+// 读者情绪分组（4 大驱动力维度）
+export type ReaderEmotionGroup = '追读钩子' | '爽感兑现' | '情绪施压' | '情感共鸣';
+
+// 读者情绪类型（20 种，面向读者的阅读体验情绪）
 export type EmotionCategory =
-  | '期待' | '害怕' | '不安' | '兴奋' | '悲伤' | '愤怒'
-  | '温馨' | '紧张' | '轻松' | '压抑' | '感动' | '心疼'
-  | '惊讶' | '讽刺' | '释然' | '愉悦' | '失落';
+  // 追读钩子 — "我为什么停不下来"
+  | '好奇' | '悬念' | '期待' | '担忧' | '渴望'
+  // 爽感兑现 — "我看到了想看的"
+  | '痛快' | '热血' | '甜蜜' | '得意' | '舒坦'
+  // 情绪施压 — "我心里堵得慌"
+  | '紧张' | '虐心' | '憋屈' | '窒息' | '恐惧'
+  // 情感共鸣 — "这一刻打动了我"
+  | '感动' | '震撼' | '恍然' | '心酸' | '共鸣';
+
+// 读者情绪分组定义
+export interface ReaderEmotionGroupDef {
+  key: ReaderEmotionGroup;
+  label: string;
+  hint: string;      // 读者内心视角的一句话提示
+  hueColor: string;  // 分类色调色
+}
+
+export const READER_EMOTION_GROUPS: ReaderEmotionGroupDef[] = [
+  { key: '追读钩子', label: '追读钩子', hint: '让读者停不下来的驱动力', hueColor: '#4ec9b0' },
+  { key: '爽感兑现', label: '爽感兑现', hint: '读者获得满足的回报时刻', hueColor: '#ffd700' },
+  { key: '情绪施压', label: '情绪施压', hint: '给读者施压（需后续释放）', hueColor: '#cc7832' },
+  { key: '情感共鸣', label: '情感共鸣', hint: '打动读者内心的时刻', hueColor: '#a855f7' },
+];
+
+// 读者情绪定义（含分类、颜色、读者视角描述）
+export interface ReaderEmotionDef {
+  value: EmotionCategory;
+  group: ReaderEmotionGroup;
+  color: string;
+  bg: string;
+  readerVoice: string;  // 读者内心独白
+}
+
+export const READER_EMOTIONS: ReaderEmotionDef[] = [
+  // 追读钩子
+  { value: '好奇', group: '追读钩子', color: '#4ec9b0', bg: '#4ec9b033', readerVoice: '接下来会怎样？' },
+  { value: '悬念', group: '追读钩子', color: '#2dd4bf', bg: '#2dd4bf33', readerVoice: '到底怎么回事？必须知道！' },
+  { value: '期待', group: '追读钩子', color: '#5eead4', bg: '#5eead433', readerVoice: '快让我看到！' },
+  { value: '担忧', group: '追读钩子', color: '#14b8a6', bg: '#14b8a633', readerVoice: '别出事啊...' },
+  { value: '渴望', group: '追读钩子', color: '#0d9488', bg: '#0d948833', readerVoice: '求求了，让我看到那幕' },
+  // 爽感兑现
+  { value: '痛快', group: '爽感兑现', color: '#ffd700', bg: '#ffd70033', readerVoice: '太爽了！就该这样！' },
+  { value: '热血', group: '爽感兑现', color: '#ff6347', bg: '#ff634733', readerVoice: '燃起来了！' },
+  { value: '甜蜜', group: '爽感兑现', color: '#ffc0cb', bg: '#ffc0cb33', readerVoice: '这也太甜了吧' },
+  { value: '得意', group: '爽感兑现', color: '#ffdb58', bg: '#ffdb5833', readerVoice: '我就知道！' },
+  { value: '舒坦', group: '爽感兑现', color: '#98c379', bg: '#98c37933', readerVoice: '舒服了~' },
+  // 情绪施压
+  { value: '紧张', group: '情绪施压', color: '#cc7832', bg: '#cc783233', readerVoice: '完了完了完了' },
+  { value: '虐心', group: '情绪施压', color: '#f14c4c', bg: '#f14c4c33', readerVoice: '太虐了，但我停不下来' },
+  { value: '憋屈', group: '情绪施压', color: '#a52a2a', bg: '#a52a2a33', readerVoice: '凭什么！不公平！' },
+  { value: '窒息', group: '情绪施压', color: '#646495', bg: '#64649533', readerVoice: '透不过气...' },
+  { value: '恐惧', group: '情绪施压', color: '#8b0000', bg: '#8b000033', readerVoice: '不敢看了但又想看' },
+  // 情感共鸣
+  { value: '感动', group: '情感共鸣', color: '#d8b4fe', bg: '#d8b4fe33', readerVoice: '眼眶湿了...' },
+  { value: '震撼', group: '情感共鸣', color: '#a855f7', bg: '#a855f733', readerVoice: '卧槽...' },
+  { value: '恍然', group: '情感共鸣', color: '#569cd6', bg: '#569cd633', readerVoice: '原来如此！' },
+  { value: '心酸', group: '情感共鸣', color: '#c586c0', bg: '#c586c033', readerVoice: '笑着笑着就哭了' },
+  { value: '共鸣', group: '情感共鸣', color: '#7c3aed', bg: '#7c3aed33', readerVoice: '这说的不就是我吗' },
+];
 
 // 单个情绪项（类型+分数）
 export interface EmotionItem {

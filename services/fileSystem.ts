@@ -9,11 +9,11 @@ import {
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
-  SKILL_HUMANIZER_STYLE,
   SKILL_CONSTRAINT_LAYERED_DESIGN,
   SKILL_EXPECTATION_MANAGER,
   SKILL_PLEASURE_RHYTHM_MANAGER,
-  SKILL_OUTLINE_ARCHITECT
+  SKILL_OUTLINE_ARCHITECT,
+  SKILL_TEXT_POLISH
 } from './templates';
 import { GenrePreset } from './resources/presets';
 
@@ -126,7 +126,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
     '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
     '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
-    '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE,
+    '技能_去AI化润色.md': SKILL_TEXT_POLISH,
     '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
   };
 

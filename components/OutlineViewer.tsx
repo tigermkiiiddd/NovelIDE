@@ -46,24 +46,13 @@ interface EventEmotion {
   score: number;
 }
 
-// 情绪类型选项
-const EMOTION_TYPES = [
-  { value: '期待', color: '#4ec9b0', bg: '#4ec9b033' },
-  { value: '害怕', color: '#ce9178', bg: '#ce917833' },
-  { value: '不安', color: '#dcdcaa', bg: '#dcdcaa33' },
-  { value: '兴奋', color: '#569cd6', bg: '#569cd633' },
-  { value: '悲伤', color: '#9cdcfe', bg: '#9cdcfe33' },
-  { value: '愤怒', color: '#f14c4c', bg: '#f14c4c33' },
-  { value: '温馨', color: '#d7ba7d', bg: '#d7ba7d33' },
-  { value: '紧张', color: '#cc7832', bg: '#cc783233' },
-  { value: '轻松', color: '#6a8759', bg: '#6a875933' },
-  { value: '压抑', color: '#646495', bg: '#64649533' },
-  { value: '感动', color: '#c586c0', bg: '#c586c033' },
-  { value: '心疼', color: '#ffc0cb', bg: '#ffc0cb33' },
-  { value: '惊讶', color: '#ffd700', bg: '#ffd70033' },
-  { value: '愉悦', color: '#98c379', bg: '#98c37933' },
-  { value: '失落', color: '#808080', bg: '#80808033' },
-];
+// 情绪类型选项（从 types 导入读者情绪定义）
+import { READER_EMOTIONS, READER_EMOTION_GROUPS, ReaderEmotionGroup, ReaderEmotionDef } from '../types';
+
+// 情绪查找 Map（value → 定义）
+const EMOTION_DEF_MAP = new Map<string, ReaderEmotionDef>(
+  READER_EMOTIONS.map(e => [e.value, e])
+);
 
 // 情绪强度选项
 const EMOTION_SCORES = [
@@ -427,7 +416,7 @@ const TimelineCurvesPanel: React.FC = () => {
     }, []);
     const rewardData = rewardCurveData.map(d => ({ x: d.chapter, y: d.score }));
     return [
-      { id: 'node', name: '节点情绪曲线', color: '#4ec9b0', data: nodeData },
+      { id: 'node', name: '读者情绪曲线', color: '#4ec9b0', data: nodeData },
       { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
       { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
     ];
@@ -512,13 +501,14 @@ const ForeshadowingTrackerView: React.FC = () => {
       x: i + 1,
       y: f.type === 'resolved' ? 5 : (f.type === 'developed' ? 2 : 3)
     }));
-    const rewardData = foreshadowings.slice(0, 30).map((f: any, i: number) => ({ x: i + 1, y: f.rewardScore || 0 }));
-    
-    // 如果没有真实追踪数据产生折线，可以根据需要替换这里的模拟数据
+    const rewardData = foreshadowings
+      .filter((f: any) => f.type === 'resolved' && f.rewardScore)
+      .map((f: any, i: number) => ({ x: i + 1, y: f.rewardScore || 0 }));
+
     return [
-      { id: 'node', name: '节点情绪', color: '#4ec9b0', data: nodeData },
+      { id: 'node', name: '读者情绪', color: '#4ec9b0', data: nodeData },
       { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
-      { id: 'reward', name: '首领奖励分', color: '#d7ba7d', data: rewardData },
+      { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
     ];
   }, [foreshadowings]);
 
@@ -690,8 +680,9 @@ const EventForm = React.memo(({
 
   // 情绪编辑器状态
   const [showEmotionEditor, setShowEmotionEditor] = useState(false);
-  const [selectedEmotionType, setSelectedEmotionType] = useState<string>('期待');
+  const [selectedEmotionType, setSelectedEmotionType] = useState<string>('好奇');
   const [selectedEmotionScore, setSelectedEmotionScore] = useState<number>(1);
+  const [selectedGroup, setSelectedGroup] = useState<ReaderEmotionGroup>('追读钩子');
 
   // 计算情绪汇总
   const emotionTotal = (formData.emotions || []).reduce((sum: number, e: EventEmotion) => sum + e.score, 0);
@@ -948,7 +939,7 @@ const EventForm = React.memo(({
           {formData.emotions.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-1">
               {formData.emotions.map((e: EventEmotion, idx: number) => {
-                const emoDef = EMOTION_TYPES.find(t => t.value === e.type);
+                const emoDef = EMOTION_DEF_MAP.get(e.type);
                 return (
                   <span
                     key={idx}
@@ -972,13 +963,40 @@ const EventForm = React.memo(({
             onClick={() => setShowEmotionEditor(!showEmotionEditor)}
             className="w-full bg-gray-700 border border-gray-600 hover:border-gray-500 rounded px-2 py-1 text-sm text-gray-400 hover:text-gray-200 text-left"
           >
-            {showEmotionEditor ? '收起 ▲' : '+ 添加情绪'}
+            {showEmotionEditor ? '收起 ▲' : '+ 添加读者情绪'}
           </button>
           {showEmotionEditor && (
             <div className="mt-1 p-2 bg-gray-700/50 rounded border border-gray-600">
-              {/* 情绪类型选择 */}
+              {/* 情绪分类标签页 */}
+              <div className="flex gap-1 mb-2">
+                {READER_EMOTION_GROUPS.map((g) => (
+                  <button
+                    key={g.key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedGroup(g.key);
+                      // 自动选中该分类第一个情绪
+                      const firstEmo = READER_EMOTIONS.find(e => e.group === g.key);
+                      if (firstEmo) setSelectedEmotionType(firstEmo.value);
+                    }}
+                    className={`text-xs px-2 py-1 rounded transition-colors ${
+                      selectedGroup === g.key
+                        ? 'ring-1 ring-white font-medium'
+                        : 'opacity-50 hover:opacity-80'
+                    }`}
+                    style={{
+                      backgroundColor: g.hueColor + '22',
+                      color: g.hueColor,
+                    }}
+                    title={g.hint}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+              {/* 当前分类下的情绪按钮 */}
               <div className="flex flex-wrap gap-1 mb-2">
-                {EMOTION_TYPES.map((emo) => (
+                {READER_EMOTIONS.filter(e => e.group === selectedGroup).map((emo) => (
                   <button
                     key={emo.value}
                     type="button"
@@ -989,11 +1007,21 @@ const EventForm = React.memo(({
                         : 'opacity-60 hover:opacity-100'
                     }`}
                     style={{ backgroundColor: emo.bg, color: emo.color }}
+                    title={emo.readerVoice}
                   >
                     {emo.value}
                   </button>
                 ))}
               </div>
+              {/* 读者内心独白提示 */}
+              {selectedEmotionType && (() => {
+                const def = EMOTION_DEF_MAP.get(selectedEmotionType);
+                return def ? (
+                  <div className="text-xs text-gray-500 mb-2 italic">
+                    💭 读者：「{def.readerVoice}」
+                  </div>
+                ) : null;
+              })()}
               {/* 强度选择 */}
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs text-gray-500">强度：</span>
@@ -1658,7 +1686,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
         {event.emotions && event.emotions.length > 0 && (
           <span className="flex gap-1">
             {event.emotions.map((e: any, idx: number) => {
-              const emoDef = EMOTION_TYPES.find(t => t.value === e.type);
+              const emoDef = EMOTION_DEF_MAP.get(e.type);
               return (
                 <span
                   key={idx}

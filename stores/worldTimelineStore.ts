@@ -1047,9 +1047,9 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
 
         // 奖励分
         if (f.rewardScore) {
-          stats.totalRewardScore += f.rewardScore;
+          stats.totalRewardScore += f.rewardScore; // 预期总奖励分（所有伏笔）
           if (f.type === 'resolved') {
-            stats.fulfilledRewardScore += f.actualScore ?? f.rewardScore;
+            stats.fulfilledRewardScore += f.actualScore ?? f.rewardScore; // 实际已回收分
           }
         }
 

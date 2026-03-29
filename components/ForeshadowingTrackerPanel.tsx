@@ -60,19 +60,32 @@ const HOOK_ICONS: Record<string, string> = {
   desire: '🔥',
 };
 
-// 情绪类型颜色
+// 读者情绪类型颜色
 const EMOTION_COLORS: Record<string, { color: string; bg: string }> = {
-  '期待': { color: '#4ec9b0', bg: '#4ec9b033' },
-  '害怕': { color: '#ce9178', bg: '#ce917833' },
-  '不安': { color: '#dcdcaa', bg: '#dcdcaa33' },
-  '兴奋': { color: '#569cd6', bg: '#569cd633' },
-  '悲伤': { color: '#9cdcfe', bg: '#9cdcfe33' },
-  '愤怒': { color: '#f14c4c', bg: '#f14c4c33' },
-  '温馨': { color: '#d7ba7d', bg: '#d7ba7d33' },
+  // 追读钩子（青绿色系）
+  '好奇': { color: '#4ec9b0', bg: '#4ec9b033' },
+  '悬念': { color: '#2dd4bf', bg: '#2dd4bf33' },
+  '期待': { color: '#5eead4', bg: '#5eead433' },
+  '担忧': { color: '#14b8a6', bg: '#14b8a633' },
+  '渴望': { color: '#0d9488', bg: '#0d948833' },
+  // 爽感兑现（金/暖色系）
+  '痛快': { color: '#ffd700', bg: '#ffd70033' },
+  '热血': { color: '#ff6347', bg: '#ff634733' },
+  '甜蜜': { color: '#ffc0cb', bg: '#ffc0cb33' },
+  '得意': { color: '#ffdb58', bg: '#ffdb5833' },
+  '舒坦': { color: '#98c379', bg: '#98c37933' },
+  // 情绪施压（红/暗色系）
   '紧张': { color: '#cc7832', bg: '#cc783233' },
-  '轻松': { color: '#6a8759', bg: '#6a875933' },
-  '压抑': { color: '#646495', bg: '#64649533' },
-  '感动': { color: '#c586c0', bg: '#c586c033' },
+  '虐心': { color: '#f14c4c', bg: '#f14c4c33' },
+  '憋屈': { color: '#a52a2a', bg: '#a52a2a33' },
+  '窒息': { color: '#646495', bg: '#64649533' },
+  '恐惧': { color: '#8b0000', bg: '#8b000033' },
+  // 情感共鸣（紫/蓝色系）
+  '感动': { color: '#d8b4fe', bg: '#d8b4fe33' },
+  '震撼': { color: '#a855f7', bg: '#a855f733' },
+  '恍然': { color: '#569cd6', bg: '#569cd633' },
+  '心酸': { color: '#c586c0', bg: '#c586c033' },
+  '共鸣': { color: '#7c3aed', bg: '#7c3aed33' },
 };
 
 const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ isOpen, onClose }) => {
@@ -128,7 +141,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
     [foreshadowings, maxChapter, getOverdueForeshadowings]
   );
 
-  // 节点情绪曲线
+  // 读者情绪曲线
   const nodeEmotionCurve = useMemo(() => getNodeEmotionCurve(), [getNodeEmotionCurve]);
 
   // 钩子情绪奖励曲线
@@ -336,7 +349,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
         {/* 图表切换 */}
         <div className="flex gap-1 text-xs">
           {([
-            ['node', '节点情绪'],
+            ['node', '读者情绪'],
             ['hook', '钩子奖励'],
             ['both', '全部']
           ] as [CurveView, string][]).map(([mode, label]) => (
@@ -352,12 +365,12 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
           ))}
         </div>
 
-        {/* 节点情绪曲线 */}
+        {/* 读者情绪曲线 */}
         {(curveView === 'node' || curveView === 'both') && nodeEmotionCurve.length > 0 && (
           <div className="bg-gray-800 rounded p-3">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp size={14} className="text-blue-400" />
-              <span className="text-sm font-medium text-blue-400">节点情绪曲线</span>
+              <span className="text-sm font-medium text-blue-400">读者情绪曲线</span>
             </div>
             {nodeCurveStats && (
               <div className="text-xs text-gray-500 mb-2">

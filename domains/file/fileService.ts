@@ -22,7 +22,6 @@ import {
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
-  SKILL_HUMANIZER_STYLE,
   SKILL_EXPECTATION_MANAGER,
   SKILL_CONSTRAINT_LAYERED_DESIGN,
   SKILL_PLEASURE_RHYTHM_MANAGER,
@@ -220,14 +219,13 @@ export class FileService {
       '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
       '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
       '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
-      '技能_去AI化文风.md': SKILL_HUMANIZER_STYLE,
+      '技能_去AI化润色.md': SKILL_TEXT_POLISH,
       '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
       // 写作技法 Skills
       '技能_对话写作.md': SKILL_DIALOGUE_WRITING,
       '技能_战斗场景.md': SKILL_COMBAT_SCENES,
       '技能_情绪渲染.md': SKILL_EMOTION_RENDERING,
       '技能_场景描写.md': SKILL_SCENE_DESCRIPTION,
-      '技能_文本润色.md': SKILL_TEXT_POLISH,
       '技能_线束编织.md': SKILL_STRAND_WEAVE,
       '技能_项目初始化.md': SKILL_PROJECT_INIT,
     };
