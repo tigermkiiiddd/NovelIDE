@@ -14,3 +14,7 @@ export * from './game';
 export * from './history';
 export * from './infinite';
 export * from './honghuang';
+export * from './gameLit';
+export * from './livestream';
+export * from './cosmicHorror';
+export * from './historyTravel';

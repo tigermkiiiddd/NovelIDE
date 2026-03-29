@@ -20,18 +20,24 @@ import { applyEditsSimple } from './patchUtils';
 export const applyPatchQueue = (session: DiffSessionState): string => {
   let result = session.sourceSnapshot;
 
-  // Sort patches by timestamp to ensure correct order
-  const sortedPatches = [...session.patchQueue].sort((a, b) => a.timestamp - b.timestamp);
+  // 稳定排序：时间戳 + ID
+  const sortedPatches = [...session.patchQueue].sort((a, b) => {
+    const timeDiff = a.timestamp - b.timestamp;
+    if (timeDiff !== 0) return timeDiff;
+    return a.id.localeCompare(b.id);
+  });
 
   for (const patch of sortedPatches) {
     if (patch.type === 'accept') {
-      // Accept: apply the new content
-      result = applyPatchInMemory(
-        result,
-        patch.startLineOriginal === 0 ? 1 : patch.startLineOriginal,
-        patch.endLineOriginal === 0 ? 0 : patch.endLineOriginal,
-        patch.newContent
-      );
+      // 使用字符串匹配替代行号定位
+      const index = result.indexOf(patch.oldContent);
+      if (index !== -1) {
+        result = result.slice(0, index) +
+                 patch.newContent +
+                 result.slice(index + patch.oldContent.length);
+      } else {
+        console.warn('[applyPatchQueue] 未找到匹配内容，跳过 patch:', patch.id);
+      }
     }
     // Reject: do nothing, keep original content
   }

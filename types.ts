@@ -210,8 +210,10 @@ export interface FilePatch {
   hunkId: string;
   startLineOriginal: number;
   endLineOriginal: number;
+  oldContent: string;  // 原始内容，用于字符串匹配
   newContent: string;
   timestamp: number;
+  sourceChangeId?: string;  // 关联的 PendingChange ID
 }
 
 export interface DiffSessionState {

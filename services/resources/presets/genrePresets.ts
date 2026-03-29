@@ -15,7 +15,11 @@ import {
   GAME_TEMPLATES,
   HISTORY_TEMPLATES,
   INFINITE_TEMPLATES,
-  HONGHUANG_TEMPLATES
+  HONGHUANG_TEMPLATES,
+  GAME_LIT_TEMPLATES,
+  LIVESTREAM_TEMPLATES,
+  COSMIC_HORROR_TEMPLATES,
+  HISTORY_TRAVEL_TEMPLATES
 } from './presetTemplates';
 import {
   XUANHUAN_SKILL_CHARACTER_DESIGNER,
@@ -65,7 +69,23 @@ import {
   HONGHUANG_SKILL_CHARACTER_DESIGNER,
   HONGHUANG_SKILL_EXPECTATION_MANAGER,
   HONGHUANG_SKILL_PLEASURE_RHYTHM,
-  HONGHUANG_SKILL_WORLD_BUILDER
+  HONGHUANG_SKILL_WORLD_BUILDER,
+  GAME_LIT_SKILL_CHARACTER_DESIGNER,
+  GAME_LIT_SKILL_EXPECTATION_MANAGER,
+  GAME_LIT_SKILL_PLEASURE_RHYTHM,
+  GAME_LIT_SKILL_WORLD_BUILDER,
+  LIVESTREAM_SKILL_CHARACTER_DESIGNER,
+  LIVESTREAM_SKILL_EXPECTATION_MANAGER,
+  LIVESTREAM_SKILL_PLEASURE_RHYTHM,
+  LIVESTREAM_SKILL_WORLD_BUILDER,
+  COSMIC_HORROR_SKILL_CHARACTER_DESIGNER,
+  COSMIC_HORROR_SKILL_EXPECTATION_MANAGER,
+  COSMIC_HORROR_SKILL_PLEASURE_RHYTHM,
+  COSMIC_HORROR_SKILL_WORLD_BUILDER,
+  HISTORY_TRAVEL_SKILL_CHARACTER_DESIGNER,
+  HISTORY_TRAVEL_SKILL_EXPECTATION_MANAGER,
+  HISTORY_TRAVEL_SKILL_PLEASURE_RHYTHM,
+  HISTORY_TRAVEL_SKILL_WORLD_BUILDER
 } from './skills';
 
 // 玄幻修仙文风规范
@@ -318,6 +338,93 @@ const HONGHUANG_STYLE = `# 洪荒封神文风规范
 - 法宝神通的威能
 - 因果业力的体现
 - 天道圣人的超然
+`;
+
+// 游戏文/LitRPG文风规范
+const GAME_LIT_STYLE = `# 游戏文/LitRPG文风规范
+
+## 叙事风格
+- 数据化呈现成长过程，属性面板有仪式感
+- 强调金手指的限制与代价，避免无限膨胀
+- 突出等级反差和以弱胜强的极致爽感
+- 注重系统/数值反馈的即时性
+
+## 对话风格
+- 主角：务实冷静，数值优先，偶尔吐槽系统
+- 系统：简洁机械，带偶尔的彩蛋提示
+- NPC/对手：震惊于主角的异常成长速度
+
+## 描写重点
+- 属性面板变化和技能效果的具体数值
+- 副本/战斗中的策略与操作细节
+- 等级突破的仪式感和数值飞跃
+- 排行榜变动和全服公告的冲击
+`;
+
+// 直播文文风规范
+const LIVESTREAM_STYLE = `# 直播文文风规范
+
+## 叙事风格
+- 实时反馈驱动，观众弹幕参与叙事
+- 强调数据可见性和增长曲线
+- 突出线上人格与线下真实的反差
+- 注重舆论反转和名场面制造
+
+## 对话风格
+- 直播中：互动感强，口头禅/梗多，情绪外放
+- 线下：真实、疲惫、策划下一场内容
+- 弹幕：多视角反馈，表情包化，节奏感强
+- 对手/同行：表面友好暗中竞争
+
+## 描写重点
+- 直播间数据变化的即时描写（在线人数跳动）
+- 弹幕互动的节奏感和名场面切片
+- 线上人设崩塌/建立的反差冲击
+- 礼物/打赏/热搜等外部反馈的爽感
+`;
+
+// 克苏鲁/宇宙恐怖文风规范
+const COSMIC_HORROR_STYLE = `# 克苏鲁/宇宙恐怖文风规范
+
+## 叙事风格
+- 压抑渐变，从日常到异常的缓慢渗透
+- 强调不可知、不可名状的恐惧
+- 突出理智的逐渐崩溃而非怪物描写
+- 注重暗示大于明写，留白大于解释
+
+## 对话风格
+- 正常时：日常对话，掩盖不安
+- 异常时：语无伦次、重复、自相矛盾
+- 知情者：欲言又止、暗示、警告
+- 不可描述：用"那个"、"它"代指，绝不直呼其名
+
+## 描写重点
+- 环境的微妙异常（光线不对、气味变化、时间扭曲）
+- 角色心理状态和理智值的渐变
+- 规则污染（物理法则失效的表现）
+- 真相揭示时的认知崩塌感
+`;
+
+// 历史穿越文风规范
+const HISTORY_TRAVEL_STYLE = `# 历史穿越文风规范
+
+## 叙事风格
+- 厚重扎实，历史感与爽感平衡
+- 强调现代知识在古代的实际应用
+- 突出蝴蝶效应和历史的惯性
+- 注重身份管理和文化冲突
+
+## 对话风格
+- 主角：文言白话混用，偶尔口误制造紧张感
+- 古人：符合时代特征，体现阶层差异
+- 互动：观念碰撞，价值观冲突
+- 朝堂：言外之意、暗藏机锋
+
+## 描写重点
+- 历史场景的还原感和代入感
+- 现代技术在古代的引入过程
+- 蝴蝶效应的连锁反应
+- 权谋布局的精妙和反转
 `;
 
 // 通用文风规范
@@ -776,6 +883,138 @@ export const PRESETS: GenrePreset[] = [
       wordsPerChapter: 3500,
       targetChapters: 200,
       chaptersPerVolume: 35
+    }
+  },
+
+  // 14. 游戏文/LitRPG
+  {
+    id: 'gameLit',
+    name: '游戏文/LitRPG',
+    description: '数值面板可见，金手指驱动成长，副本攻略升级。高频爽点，极致反差。',
+    genre: '游戏',
+    styleGuide: GAME_LIT_STYLE,
+    skills: [
+      '技能_世界观构建.md',
+      '技能_角色设计.md',
+      '技能_爽点节奏管理.md',
+      '技能_期待感管理.md'
+    ],
+    customSkills: {
+      '技能_世界观构建.md': GAME_LIT_SKILL_WORLD_BUILDER,
+      '技能_角色设计.md': GAME_LIT_SKILL_CHARACTER_DESIGNER,
+      '技能_期待感管理.md': GAME_LIT_SKILL_EXPECTATION_MANAGER,
+      '技能_爽点节奏管理.md': GAME_LIT_SKILL_PLEASURE_RHYTHM
+    },
+    pleasureRhythm: {
+      small: 1,
+      medium: 4,
+      large: 15,
+      description: '超高频节奏，适合游戏文/LitRPG。小爽配合属性提升，中爽配合副本通关/等级突破，大爽配合全服事件/终极对决。'
+    },
+    templates: GAME_LIT_TEMPLATES,
+    defaultSettings: {
+      wordsPerChapter: 2500,
+      targetChapters: 200,
+      chaptersPerVolume: 20
+    }
+  },
+
+  // 15. 直播文
+  {
+    id: 'livestream',
+    name: '直播文',
+    description: '实时互动，数据为王，舆论反转。高频节奏，观众弹幕参与叙事。',
+    genre: '直播',
+    styleGuide: LIVESTREAM_STYLE,
+    skills: [
+      '技能_世界观构建.md',
+      '技能_角色设计.md',
+      '技能_爽点节奏管理.md',
+      '技能_期待感管理.md'
+    ],
+    customSkills: {
+      '技能_世界观构建.md': LIVESTREAM_SKILL_WORLD_BUILDER,
+      '技能_角色设计.md': LIVESTREAM_SKILL_CHARACTER_DESIGNER,
+      '技能_期待感管理.md': LIVESTREAM_SKILL_EXPECTATION_MANAGER,
+      '技能_爽点节奏管理.md': LIVESTREAM_SKILL_PLEASURE_RHYTHM
+    },
+    pleasureRhythm: {
+      small: 1,
+      medium: 5,
+      large: 20,
+      description: '高频节奏，适合直播文。小爽配合数据增长/弹幕互动，中爽配合名场面/热搜，大爽配合全网爆红/舆论大反转。'
+    },
+    templates: LIVESTREAM_TEMPLATES,
+    defaultSettings: {
+      wordsPerChapter: 2500,
+      targetChapters: 150,
+      chaptersPerVolume: 20
+    }
+  },
+
+  // 16. 克苏鲁/宇宙恐怖
+  {
+    id: 'cosmicHorror',
+    name: '克苏鲁/宇宙恐怖',
+    description: '不可名状的恐惧，理智渐崩，真相代价。低频大爆发，压抑累积型。',
+    genre: '恐怖',
+    styleGuide: COSMIC_HORROR_STYLE,
+    skills: [
+      '技能_世界观构建.md',
+      '技能_角色设计.md',
+      '技能_爽点节奏管理.md',
+      '技能_期待感管理.md'
+    ],
+    customSkills: {
+      '技能_世界观构建.md': COSMIC_HORROR_SKILL_WORLD_BUILDER,
+      '技能_角色设计.md': COSMIC_HORROR_SKILL_CHARACTER_DESIGNER,
+      '技能_期待感管理.md': COSMIC_HORROR_SKILL_EXPECTATION_MANAGER,
+      '技能_爽点节奏管理.md': COSMIC_HORROR_SKILL_PLEASURE_RHYTHM
+    },
+    pleasureRhythm: {
+      small: 5,
+      medium: 20,
+      large: 60,
+      description: '低频大爆发节奏，适合宇宙恐怖。小爽配合生存逃脱/线索发现，中爽配合真相揭露/规则突破，大爽配合认知翻转/世界观重建。'
+    },
+    templates: COSMIC_HORROR_TEMPLATES,
+    defaultSettings: {
+      wordsPerChapter: 3000,
+      targetChapters: 100,
+      chaptersPerVolume: 25
+    }
+  },
+
+  // 17. 历史穿越
+  {
+    id: 'historyTravel',
+    name: '历史穿越',
+    description: '穿越古今，知识优势，种田争霸。中频节奏，注重蝴蝶效应和历史惯性。',
+    genre: '历史穿越',
+    styleGuide: HISTORY_TRAVEL_STYLE,
+    skills: [
+      '技能_世界观构建.md',
+      '技能_角色设计.md',
+      '技能_爽点节奏管理.md',
+      '技能_期待感管理.md'
+    ],
+    customSkills: {
+      '技能_世界观构建.md': HISTORY_TRAVEL_SKILL_WORLD_BUILDER,
+      '技能_角色设计.md': HISTORY_TRAVEL_SKILL_CHARACTER_DESIGNER,
+      '技能_期待感管理.md': HISTORY_TRAVEL_SKILL_EXPECTATION_MANAGER,
+      '技能_爽点节奏管理.md': HISTORY_TRAVEL_SKILL_PLEASURE_RHYTHM
+    },
+    pleasureRhythm: {
+      small: 3,
+      medium: 12,
+      large: 40,
+      description: '中频节奏，适合历史穿越。小爽配合知识应用成功，中爽配合势力扩张/历史改变，大爽配合改写历史大事件。'
+    },
+    templates: HISTORY_TRAVEL_TEMPLATES,
+    defaultSettings: {
+      wordsPerChapter: 3500,
+      targetChapters: 200,
+      chaptersPerVolume: 40
     }
   }
 ];

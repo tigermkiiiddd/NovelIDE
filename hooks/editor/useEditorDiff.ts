@@ -380,6 +380,11 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   useEffect(() => {
     if (!diffSession || !activeFile) return;
 
+    // 防止并发批处理
+    if (isApplyingBatchRef.current) {
+      return;
+    }
+
     const targetChange = activePendingChange || mergedPendingChange;
     if (!targetChange) return;
 
@@ -402,12 +407,14 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
       saveFileContent(activeFile.id, computedContent);
 
-      // 只移除已经处理的 pendingChanges（通过 timestamp 识别）
-      // 避免移除在处理过程中新添加的 changes
-      const processedTimestamp = targetChange.timestamp;
+      // 使用 ID 集合代替时间戳过滤
+      const processedChangeIds = new Set(
+        diffSession.patchQueue.map(p => p.sourceChangeId).filter(Boolean)
+      );
+
       const filePath = getNodePath(activeFile, files);
       pendingChanges
-        .filter(c => c.fileName === filePath && c.timestamp <= processedTimestamp)
+        .filter(c => c.fileName === filePath && processedChangeIds.has(c.id))
         .forEach(c => removePendingChange(c.id));
 
       addMessage({
@@ -480,18 +487,27 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   const handleAcceptHunk = useCallback((hunk: DiffHunk) => {
     const newContent = extractHunkContent(hunk.lines);
 
+    // 提取原始内容（remove 和 equal 行）
+    const oldContent = hunk.lines
+      .filter(l => l.type !== 'add')
+      .map(l => l.content)
+      .join('\n');
+
+    const targetChange = activePendingChange || mergedPendingChange;
+
     const newPatch: FilePatch = {
       id: generatePatchId(),
       type: 'accept',
       hunkId: hunk.id,
       startLineOriginal: hunk.startLineOriginal,
       endLineOriginal: hunk.endLineOriginal,
+      oldContent,
       newContent,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      sourceChangeId: targetChange?.id
     };
 
     if (!diffSession) {
-      const targetChange = activePendingChange || mergedPendingChange;
       const sourceSnapshot = targetChange?.originalContent || '';
       setDiffSession({
         sourceSnapshot,
@@ -507,18 +523,27 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [diffSession, mergedPendingChange, activePendingChange]);
 
   const handleRejectHunk = useCallback((hunk: DiffHunk) => {
+    // 提取原始内容（remove 和 equal 行）
+    const oldContent = hunk.lines
+      .filter(l => l.type !== 'add')
+      .map(l => l.content)
+      .join('\n');
+
+    const targetChange = activePendingChange || mergedPendingChange;
+
     const newPatch: FilePatch = {
       id: generatePatchId(),
       type: 'reject',
       hunkId: hunk.id,
       startLineOriginal: hunk.startLineOriginal,
       endLineOriginal: hunk.endLineOriginal,
+      oldContent,
       newContent: '',
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      sourceChangeId: targetChange?.id
     };
 
     if (!diffSession) {
-      const targetChange = activePendingChange || mergedPendingChange;
       const sourceSnapshot = targetChange?.originalContent || '';
       setDiffSession({
         sourceSnapshot,
@@ -640,14 +665,22 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     hunks.forEach(hunk => {
       if (hunk.type === 'change') {
         const hunkContent = extractHunkContent(hunk.lines);
+        // 提取原始内容（remove 和 equal 行）
+        const oldContent = hunk.lines
+          .filter(l => l.type !== 'add')
+          .map(l => l.content)
+          .join('\n');
+
         newPatches.push({
           id: generatePatchId(),
           type: 'accept',
           hunkId: hunk.id,
           startLineOriginal: hunk.startLineOriginal,
           endLineOriginal: hunk.endLineOriginal,
+          oldContent,
           newContent: hunkContent,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          sourceChangeId: targetChange.id
         });
       }
     });
