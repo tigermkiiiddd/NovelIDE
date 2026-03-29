@@ -405,10 +405,19 @@ export const constructSystemPrompt = (
         return '';
       }
 
-      // 按时长分类
-      const shortTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => f.duration === 'short_term');
-      const midTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => f.duration === 'mid_term');
-      const longTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => f.duration === 'long_term');
+      // 按跨度分类
+      const shortTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => {
+        const span = f.plannedChapter ? f.plannedChapter - f.plantedChapter : 10;
+        return span <= 5;
+      });
+      const midTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => {
+        const span = f.plannedChapter ? f.plannedChapter - f.plantedChapter : 10;
+        return span > 5 && span <= 15;
+      });
+      const longTerm = unresolvedForeshadowing.filter((f: ForeshadowingItem) => {
+        const span = f.plannedChapter ? f.plannedChapter - f.plantedChapter : 10;
+        return span > 15;
+      });
 
       // 钩子类型emoji映射
       const HOOK_TYPE_EMOJI: Record<string, string> = {
@@ -443,8 +452,8 @@ export const constructSystemPrompt = (
         if (f.rewardScore) {
           line += ` | 奖励分: +${f.rewardScore}`;
         }
-        if (f.dueChapter) {
-          line += ` | 到期: 第${f.dueChapter}章`;
+        if (f.plannedChapter) {
+          line += ` | 计划第${f.plannedChapter}章回收`;
         }
         if (f.tags && f.tags.length > 0) {
           line += `\n  - 标签: ${f.tags.join(', ')}`;

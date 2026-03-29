@@ -28,7 +28,7 @@ import {
   ForeshadowingStats,
   HookEmotionReward,
   STRENGTH_SCORES,
-  DURATION_WINDOW_MAP,
+  TYPE_SPAN_MAP,
   DEFAULT_EMOTION_REWARD,
 } from '../types';
 import { createPersistingStore } from './createPersistingStore';
@@ -79,9 +79,9 @@ export interface WorldTimelineState {
   getTimeRange: () => string;
 
   // === Hook/Foreshadowing Extension Methods ===
-  // duration → 窗口/强度映射
-  mapDurationToWindow: (duration: string) => number;
-  mapDurationToStrength: (duration: string) => HookStrength;
+  // hookType → 跨度/强度映射
+  mapHookTypeToSpan: (hookType: string) => number;
+  mapHookTypeToStrength: (hookType: string) => HookStrength;
 
   // 伏笔统计查询（需要传入 chapterAnalysisStore 的伏笔数据）
   getForeshadowingStats: (foreshadowings: ForeshadowingItem[], currentChapter?: number) => ForeshadowingStats;
@@ -1010,13 +1010,13 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
 
     // === Hook/Foreshadowing Extension Methods ===
 
-    mapDurationToWindow: (duration: string) => {
-      const mapped = DURATION_WINDOW_MAP[duration as keyof typeof DURATION_WINDOW_MAP];
-      return mapped?.window ?? 10;
+    mapHookTypeToSpan: (hookType: string) => {
+      const mapped = TYPE_SPAN_MAP[hookType as keyof typeof TYPE_SPAN_MAP];
+      return mapped?.span ?? 10;
     },
 
-    mapDurationToStrength: (duration: string) => {
-      const mapped = DURATION_WINDOW_MAP[duration as keyof typeof DURATION_WINDOW_MAP];
+    mapHookTypeToStrength: (hookType: string) => {
+      const mapped = TYPE_SPAN_MAP[hookType as keyof typeof TYPE_SPAN_MAP];
       return mapped?.strength ?? 'medium';
     },
 
@@ -1037,8 +1037,8 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
         if (f.type === 'planted' || f.type === 'developed') {
           stats.pending++;
           // 计算状态
-          const dueChapter = f.dueChapter ?? (f.window ? (f.sourceRef ? currentChapter : currentChapter) : currentChapter + (f.window ?? 10));
-          if (dueChapter < currentChapter) {
+          const planned = f.plannedChapter ?? (currentChapter + 10);
+          if (planned < currentChapter) {
             stats.overdue++;
           }
         } else if (f.type === 'resolved') {
@@ -1078,16 +1078,16 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
     getOverdueForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number) => {
       return foreshadowings.filter(f => {
         if (f.type === 'resolved') return false;
-        const dueChapter = f.dueChapter ?? (currentChapter + (f.window ?? 10));
-        return dueChapter < currentChapter;
+        const planned = f.plannedChapter ?? (currentChapter + 10);
+        return planned < currentChapter;
       });
     },
 
     getExpiringForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number, withinChapters: number) => {
       return foreshadowings.filter(f => {
         if (f.type === 'resolved') return false;
-        const dueChapter = f.dueChapter ?? (currentChapter + (f.window ?? 10));
-        return dueChapter >= currentChapter && dueChapter <= currentChapter + withinChapters;
+        const planned = f.plannedChapter ?? (currentChapter + 10);
+        return planned >= currentChapter && planned <= currentChapter + withinChapters;
       });
     },
 
@@ -1135,8 +1135,8 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
         const chapter = event.chapterId
           ? state.timeline!.chapters.find(c => c.id === event.chapterId)
           : undefined;
-        const dueChapter = f.dueChapter ?? (chapter?.chapterIndex ?? 0 + (f.window ?? 10));
-        const isOverdue = f.type === 'resolved' && dueChapter < (chapter?.chapterIndex ?? 0);
+        const planned = f.plannedChapter ?? (chapter?.chapterIndex ?? 0 + 10);
+        const isOverdue = f.type === 'resolved' && planned < (chapter?.chapterIndex ?? 0);
 
         // 埋下时的情绪奖励
         if (f.type === 'planted' || f.type === 'developed' || f.type === 'resolved') {

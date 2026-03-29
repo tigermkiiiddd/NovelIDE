@@ -5,7 +5,6 @@ import { useFileStore } from '../stores/fileStore';
 import { useEntityVersionStore } from '../stores/entityVersionStore';
 import {
   ForeshadowingItem,
-  ForeshadowingDuration,
   ChapterCharacterState,
   ChapterPlotKeyPoint,
   HookType,
@@ -15,19 +14,6 @@ import { Plus, Trash2, Edit2, X, User, Sparkles, Zap, History, Clock, Check } fr
 import { EntityVersionHistory } from './EntityVersionHistory';
 
 type ViewMode = 'foreshadowing' | 'character' | 'plot';
-
-// 伏笔时长颜色映射
-const DURATION_COLORS: Record<ForeshadowingDuration, string> = {
-  short_term: '#4ade80',  // 短期 - 绿色
-  mid_term: '#f59e0b',    // 中期 - 橙色
-  long_term: '#f472b6',   // 长期 - 粉色
-};
-
-const DURATION_LABELS: Record<ForeshadowingDuration, string> = {
-  short_term: '短期',
-  mid_term: '中期',
-  long_term: '长期',
-};
 
 // 钩子类型映射
 const HOOK_TYPE_CONFIG: Record<HookType, { label: string; emoji: string; color: string }> = {
@@ -565,11 +551,11 @@ const ForeshadowingView: React.FC<{
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {sortedItems.map((item) => {
-        const duration = item.duration || 'mid_term';
-        const durationColor = DURATION_COLORS[duration];
+        const spanColor = '#9cdcfe';  // 固定蓝色
         const children = item.children || [];
         const hookConfig = item.hookType ? HOOK_TYPE_CONFIG[item.hookType] : null;
         const strengthConfig = item.strength ? STRENGTH_CONFIG[item.strength] : null;
+        const span = item.plannedChapter ? item.plannedChapter - item.plantedChapter : null;
 
         return (
           <div
@@ -577,10 +563,10 @@ const ForeshadowingView: React.FC<{
             style={{
               ...chapterCardStyle,
               padding: '14px 18px',
-              borderLeft: `3px solid ${durationColor}`,
+              borderLeft: `3px solid ${hookConfig?.color || '#555'}`,
             }}
           >
-            {/* 顶部：状态 + 时长标签 + 钩子类型/强度 + 操作按钮 */}
+            {/* 顶部：状态 + 章节跨度 + 钩子类型/强度 + 操作按钮 */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
@@ -594,20 +580,22 @@ const ForeshadowingView: React.FC<{
                 }}>
                   {typeLabels[item.type]}
                 </span>
-                <span style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '3px 8px',
-                  backgroundColor: `${durationColor}14`,
-                  border: `1px solid ${durationColor}33`,
-                  borderRadius: 4,
-                  color: durationColor,
-                  fontSize: 11,
-                }}>
-                  <Clock size={12} />
-                  {DURATION_LABELS[duration]}
-                </span>
+                {span !== null && (
+                  <span style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: '3px 8px',
+                    backgroundColor: `${spanColor}14`,
+                    border: `1px solid ${spanColor}33`,
+                    borderRadius: 4,
+                    color: spanColor,
+                    fontSize: 11,
+                  }}>
+                    <Clock size={12} />
+                    第{item.plantedChapter}章埋 → 第{item.plannedChapter}章收（跨{span}章）
+                  </span>
+                )}
                 {/* 钩子类型 */}
                 {hookConfig && (
                   <span style={{
@@ -659,14 +647,11 @@ const ForeshadowingView: React.FC<{
               {item.content}
             </div>
 
-            {/* 来源章节 + 到期章节 */}
+            {/* 来源章节 + 计划回收章节 */}
             <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748b', marginBottom: 8 }}>
               <span>📍 来源：{getChapterTitle(item.sourceRef || '')}</span>
-              {item.dueChapter && (
-                <span>📅 到期：第{item.dueChapter}章</span>
-              )}
-              {item.window && (
-                <span>⏱️ 窗口：{item.window}章</span>
+              {item.plannedChapter && (
+                <span>📅 计划第{item.plannedChapter}章回收（跨{item.plannedChapter - item.plantedChapter}章）</span>
               )}
             </div>
 
@@ -983,15 +968,14 @@ const PlotView: React.FC<{
 const ForeshadowingForm: React.FC<{
   item: ForeshadowingItem | null;
   availableChapters: { name: string; id: string }[];
-  onSave: (item: Omit<ForeshadowingItem, 'id'> & { id?: string }) => void;
+  onSave: (item: Omit<ForeshadowingItem, 'id'> & { id?: string; plantedChapter?: number }) => void;
   onCancel: () => void;
 }> = ({ item, availableChapters, onSave, onCancel }) => {
   const [content, setContent] = useState(item?.content || '');
   const [type, setType] = useState<'planted' | 'developed' | 'resolved'>(item?.type || 'planted');
-  const [duration, setDuration] = useState<ForeshadowingDuration>(item?.duration || 'mid_term');
   const [hookType, setHookType] = useState<HookType | undefined>(item?.hookType);
   const [strength, setStrength] = useState<HookStrength | undefined>(item?.strength);
-  const [window, setWindow] = useState<number | undefined>(item?.window);
+  const [plannedChapter, setPlannedChapter] = useState<number | undefined>(item?.plannedChapter);
   const [sourceRef, setSourceRef] = useState(item?.sourceRef || '');
   const [notes, setNotes] = useState(item?.notes || '');
   const [tags, setTags] = useState(item?.tags?.join(', ') || '');
@@ -999,6 +983,10 @@ const ForeshadowingForm: React.FC<{
   const handleSave = () => {
     if (!content.trim() || !sourceRef) {
       alert('请填写伏笔内容和来源章节');
+      return;
+    }
+    if (item?.type === 'planted' && plannedChapter === undefined) {
+      alert('请填写计划回收章节');
       return;
     }
 
@@ -1009,16 +997,15 @@ const ForeshadowingForm: React.FC<{
       id: item?.id,
       content: content.trim(),
       type,
-      duration,
       source: 'chapter_analysis',
       sourceRef,
       notes: notes.trim() || undefined,
       tags: tags.split(',').map(t => t.trim()).filter(Boolean),
       createdAt: item?.createdAt || Date.now(),
-      // 新增字段
       hookType,
       strength,
-      window,
+      plannedChapter,
+      plantedChapter: item?.plantedChapter ?? 1,
       rewardScore,
     });
   };
@@ -1043,7 +1030,7 @@ const ForeshadowingForm: React.FC<{
           />
         </div>
 
-        {/* 类型 + 时长 */}
+        {/* 类型 + 计划回收章节 */}
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>状态</label>
@@ -1054,12 +1041,15 @@ const ForeshadowingForm: React.FC<{
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>时长类型</label>
-            <select value={duration} onChange={(e) => setDuration(e.target.value as any)} style={{ ...inputStyle, cursor: 'pointer' }}>
-              <option value="short_term">短期（1-5章）</option>
-              <option value="mid_term">中期（10-20章）</option>
-              <option value="long_term">长期（100章+）</option>
-            </select>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>计划回收章节</label>
+            <input
+              type="number"
+              value={plannedChapter ?? ''}
+              onChange={(e) => setPlannedChapter(e.target.value ? parseInt(e.target.value) : undefined)}
+              placeholder="填章节序号"
+              style={{ ...inputStyle }}
+              min={1}
+            />
           </div>
         </div>
 

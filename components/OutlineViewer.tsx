@@ -672,7 +672,7 @@ const EventForm = React.memo(({
   const [editingForeshadow, setEditingForeshadow] = useState<{
     content: string;
     type: 'planted' | 'developed' | 'resolved';
-    duration: 'short_term' | 'mid_term' | 'long_term';
+    plannedChapter?: number;
     tags: string;
     notes: string;
     hookType: string;
@@ -680,7 +680,7 @@ const EventForm = React.memo(({
   }>({
     content: '',
     type: 'planted',
-    duration: 'short_term',
+    plannedChapter: undefined,
     tags: '',
     notes: '',
     hookType: 'mystery',
@@ -717,7 +717,7 @@ const EventForm = React.memo(({
         setEditingForeshadow({
           content: '',
           type: 'developed',
-          duration: f.duration,
+          plannedChapter: f.plannedChapter ?? undefined,
           tags: f.tags.join(', '),
           notes: '',
           hookType: f.hookType || 'mystery',
@@ -730,7 +730,7 @@ const EventForm = React.memo(({
         setEditingForeshadow({
           content: f.content,
           type: f.type,
-          duration: f.duration,
+          plannedChapter: f.plannedChapter ?? undefined,
           tags: f.tags.join(', '),
           notes: f.notes || '',
           hookType: f.hookType || 'mystery',
@@ -744,7 +744,7 @@ const EventForm = React.memo(({
       setEditingForeshadow({
         content: '',
         type: 'planted',
-        duration: 'short_term',
+        plannedChapter: 5,
         tags: '',
         notes: '',
         hookType: 'mystery',
@@ -757,18 +757,19 @@ const EventForm = React.memo(({
   const handleSaveForeshadow = () => {
     if (!editingForeshadow.content.trim()) return;
 
-    const item: Omit<ForeshadowingItem, 'id'> = {
+    const item: Omit<ForeshadowingItem, 'id'> & { plannedChapter?: number } = {
       content: editingForeshadow.content.trim(),
       type: editingForeshadow.type,
-      duration: editingForeshadow.duration,
       tags: editingForeshadow.tags.split(',').map(t => t.trim()).filter(Boolean),
       notes: editingForeshadow.notes.trim() || undefined,
       source: 'timeline' as const,
       sourceRef: '', // 事件保存时由外部设置
       createdAt: Date.now(),
+      plantedChapter: 1,
       // 钩子扩展字段（仅埋下时）
       hookType: editingForeshadow.hookType as any,
-      strength: editingForeshadow.strength as any
+      strength: editingForeshadow.strength as any,
+      plannedChapter: editingForeshadow.plannedChapter
     };
 
     if (showForeshadowEditor === 'new') {
@@ -1151,7 +1152,7 @@ const EventForm = React.memo(({
                         {labels[f.type]}
                       </span>
                       <span className="text-xs text-gray-400 shrink-0">
-                        [{durationLabels[f.duration]}]
+                        {f.plannedChapter ? `第${f.plannedChapter}章` : '未设'}
                       </span>
                       <span className="flex-1 text-sm text-gray-200 truncate">
                         {f.content}
@@ -1193,7 +1194,7 @@ const EventForm = React.memo(({
                       {labels[f.type]}
                     </span>
                     <span className="text-xs text-gray-400 shrink-0">
-                      [{durationLabels[f.duration]}]
+                      {f.plannedChapter ? `第${f.plannedChapter}章` : '未设'}
                     </span>
                     <span className="flex-1 text-sm text-gray-200 truncate">
                       {f.content}
@@ -1291,17 +1292,19 @@ const EventForm = React.memo(({
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500">时长</label>
-                <select
-                  value={editingForeshadow.duration}
-                  onChange={(e) => setEditingForeshadow(prev => ({ ...prev, duration: e.target.value as any }))}
+                <label className="text-xs text-gray-500">计划回收章节</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editingForeshadow.plannedChapter ?? ''}
+                  onChange={(e) => setEditingForeshadow(prev => ({
+                    ...prev,
+                    plannedChapter: e.target.value ? parseInt(e.target.value) : undefined
+                  }))}
+                  placeholder="章"
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
                   disabled={!!parentForeshadowingId}
-                >
-                  <option value="short_term">短期（5章）</option>
-                  <option value="mid_term">中期（10章）</option>
-                  <option value="long_term">长期（20章）</option>
-                </select>
+                />
               </div>
               <div>
                 <label className="text-xs text-gray-500">钩子强度</label>
@@ -1695,7 +1698,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
                 <span
                   className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-help w-fit"
                   style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
-                  title={`${f.content}${f.hookType ? ` | ${hookDef?.label || f.hookType}` : ''}${f.strength ? ` | ${strengthDef?.label || f.strength}` : ''}${f.window ? ` | ${f.window}章` : ''}${f.rewardScore ? ` | +${f.rewardScore}分` : ''}`}
+                  title={`${f.content}${f.hookType ? ` | ${hookDef?.label || f.hookType}` : ''}${f.strength ? ` | ${strengthDef?.label || f.strength}` : ''}${f.plannedChapter ? ` | 第${f.plannedChapter}章收` : ''}${f.rewardScore ? ` | +${f.rewardScore}分` : ''}`}
                 >
                   {labels[f.type]} {displayContent}
                   {hookDef && <span className="opacity-70">{hookDef.icon}</span>}
@@ -2007,7 +2010,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       characters: newEvent.characters.split(',').map(c => c.trim()).filter(Boolean),
       emotion: newEvent.emotion.trim(),
       emotions: newEvent.emotions.length > 0 ? newEvent.emotions as any : undefined,
-      storyLineId: newEvent.storyLineId || undefined,
+      storyLineId: newEvent.storyLineId || '',
       chapterId: newEvent.chapterId || undefined
     });
     // 重置表单，保持时间设置
@@ -2078,7 +2081,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       characters: newEvent.characters ? newEvent.characters.split(',').map(s => s.trim()).filter(Boolean) : undefined,
       emotion: newEvent.emotion.trim() || undefined,
       emotions: newEvent.emotions.length > 0 ? newEvent.emotions as any : undefined,
-      storyLineId: newEvent.storyLineId || undefined,
+      storyLineId: newEvent.storyLineId || '',
       chapterId: newEvent.chapterId || undefined,
       foreshadowingIds: editingEventForeshadowingIds.length > 0 ? editingEventForeshadowingIds : undefined
     });
@@ -2094,6 +2097,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       location: '',
       characters: '',
       emotion: '',
+      emotions: [] as EventEmotion[],
       storyLineId: '',
       chapterId: ''
     });
@@ -2112,6 +2116,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       location: '',
       characters: '',
       emotion: '',
+      emotions: [] as EventEmotion[],
       storyLineId: '',
       chapterId: ''
     });
@@ -2147,9 +2152,9 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
     // 获取目标事件的位置
     const events = getEvents();
-    const targetIndex = events.findIndex((ev: TimelineEvent) => ev.id === targetEventId);
-    if (targetIndex !== -1) {
-      moveEvent(draggedEventId, targetIndex);
+    const targetEvent = events.find((ev: TimelineEvent) => ev.id === targetEventId);
+    if (targetEvent) {
+      moveEvent(draggedEventId, targetEvent.timestamp);
     }
 
     setDraggedEventId(null);

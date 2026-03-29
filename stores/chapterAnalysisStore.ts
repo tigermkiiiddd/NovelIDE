@@ -12,7 +12,7 @@ import {
   HookStrength,
   HookEmotionReward,
   STRENGTH_SCORES,
-  DURATION_WINDOW_MAP,
+  TYPE_SPAN_MAP,
   DEFAULT_EMOTION_REWARD,
 } from '../types';
 import { createPersistingStore } from './createPersistingStore';
@@ -60,15 +60,19 @@ function migrateOldData(oldAnalyses: ChapterAnalysis[]): ChapterAnalysisData {
       } else {
         // 旧格式迁移 - 使用 any 类型处理旧数据
         const oldF = f as any;
+        // 从 chapterPath 解析章节序号
+        const chapterMatch = analysis.chapterPath.match(/第(\d+)章/);
+        const chapterNum = chapterMatch ? parseInt(chapterMatch[1]) || 1 : 1;
+        const plannedChapter = oldF.plannedChapter ?? (chapterNum + (oldF.window ?? 10));
         foreshadowing.push({
           id: oldF.id || `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           content: oldF.content || '',
           type: oldF.type || 'planted',
-          duration: oldF.duration || 'mid_term',
           tags: oldF.tags || [],
           source: 'chapter_analysis' as const,
           sourceRef: analysis.chapterPath,
-          // 旧的 developedRefs 不再使用，迁移时不保留
+          plantedChapter: oldF.plantedChapter ?? chapterNum,
+          plannedChapter,
           notes: oldF.notes,
           createdAt: analysis.extractedAt || Date.now(),
         });
@@ -239,15 +243,17 @@ export const useChapterAnalysisStore: UseBoundStore<StoreApi<ChapterAnalysisStat
       const state = useChapterAnalysisStore.getState();
       const id = `foreshadow-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-      // 自动填充钩子扩展字段
-      const mapped = DURATION_WINDOW_MAP[item.duration];
+      // 自动填充钩子扩展字段（基于 hookType 推荐）
+      const hookType = item.hookType ?? 'mystery';
+      const mapped = TYPE_SPAN_MAP[hookType];
+      const plannedChapter = item.plannedChapter ?? (item.plantedChapter + mapped.span);
+
       const newItem: ForeshadowingItem = {
         ...item,
         id,
-        // 钩子扩展字段（新建 planted 时自动填充）
-        hookType: item.hookType ?? 'mystery',
+        hookType,
         strength: item.strength ?? mapped.strength,
-        window: item.window ?? mapped.window,
+        plannedChapter,
         rewardScore: item.rewardScore ?? STRENGTH_SCORES[item.strength ?? mapped.strength],
         emotionReward: item.emotionReward ?? DEFAULT_EMOTION_REWARD
       };

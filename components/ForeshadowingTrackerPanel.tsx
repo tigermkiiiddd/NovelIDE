@@ -141,8 +141,8 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
     else if (viewMode === 'fulfilled') list = list.filter((f: ForeshadowingItem) => f.type === 'resolved');
     else if (viewMode === 'overdue') list = overdue;
     return list.sort((a: ForeshadowingItem, b: ForeshadowingItem) => {
-      const aDue = a.dueChapter ?? (maxChapter + (a.window ?? 10));
-      const bDue = b.dueChapter ?? (maxChapter + (b.window ?? 10));
+      const aDue = a.plannedChapter ?? (maxChapter + 10);
+      const bDue = b.plannedChapter ?? (maxChapter + 10);
       return aDue - bDue;
     });
   }, [foreshadowings, viewMode, overdue, maxChapter]);
@@ -316,15 +316,15 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
               {expiring.slice(0, 3).map((f: ForeshadowingItem) => {
                 const event = timeline?.events.find(e => e.id === f.sourceRef);
                 const chapter = getEventChapter(f.sourceRef);
-                const dueChapter = f.dueChapter ?? (maxChapter + (f.window ?? 10));
-                const remaining = dueChapter - maxChapter;
+                const planned = f.plannedChapter ?? (maxChapter + 10);
+                const remaining = planned - maxChapter;
                 const hookDef = f.hookType ? HOOK_TYPES.find(t => t.value === f.hookType) : null;
                 return (
                   <div key={f.id} className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-900/20 rounded p-1.5">
                     <span>⏳</span>
                     <span className="flex-1 truncate">{f.content}</span>
-                    {chapter && <span>第{chapter.chapterIndex}章</span>}
-                    <span>剩{remaining}章</span>
+                    {chapter && <span>第{chapter.chapterIndex}章埋</span>}
+                    <span>计划第{planned}章收(剩{remaining}章)</span>
                     {hookDef && <span>{hookDef.icon}</span>}
                   </div>
                 );
@@ -489,8 +489,8 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
               filteredForeshadowings.map((f: ForeshadowingItem) => {
                 const event = timeline?.events.find(e => e.id === f.sourceRef);
                 const chapter = getEventChapter(f.sourceRef);
-                const dueChapter = f.dueChapter ?? (maxChapter + (f.window ?? 10));
-                const remaining = dueChapter - maxChapter;
+                const planned = f.plannedChapter ?? (maxChapter + 10);
+                const remaining = planned - maxChapter;
                 const isOverdue = remaining < 0 && f.type !== 'resolved';
                 const hookDef = f.hookType ? HOOK_TYPES.find(t => t.value === f.hookType) : null;
                 const strengthDef = f.strength ? HOOK_STRENGTHS.find(t => t.value === f.strength) : null;
@@ -520,8 +520,11 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
                       )}
                       {f.type !== 'resolved' && (
                         <span className={`text-xs ${isOverdue ? 'text-red-400' : 'text-gray-500'}`}>
-                          {isOverdue ? `逾期${Math.abs(remaining)}章` : `剩${remaining}章`}
+                          {isOverdue ? `逾期${Math.abs(remaining)}章` : `第${planned}章收(剩${remaining}章)`}
                         </span>
+                      )}
+                      {f.type === 'resolved' && f.resolvedChapter && (
+                        <span className="text-xs text-green-400">第{f.resolvedChapter}章收</span>
                       )}
                     </div>
                     {/* 父伏笔上下文（子伏笔时显示） */}

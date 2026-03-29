@@ -404,19 +404,13 @@ export const DEFAULT_EMOTION_REWARD: HookEmotionReward = {
 };
 
 // duration → 窗口/强度映射
-export const DURATION_WINDOW_MAP: Record<ForeshadowingDuration, { window: number; strength: HookStrength }> = {
-  short_term: { window: 5, strength: 'weak' },
-  mid_term: { window: 10, strength: 'medium' },
-  long_term: { window: 20, strength: 'strong' }
-};
-
-// 根据类型推荐窗口（可调整）
-export const TYPE_WINDOWS: Record<HookType, number> = {
-  crisis: 3,    // 危机需要快节奏回收
-  mystery: 10,  // 悬疑需要铺垫
-  emotion: 5,   // 情感适中
-  choice: 3,    // 选择需要快速决策
-  desire: 8     // 欲望需要铺垫
+// 根据钩子类型推荐回收跨度（跨度数 = plannedChapter - plantedChapter）
+export const TYPE_SPAN_MAP: Record<HookType, { span: number; strength: HookStrength }> = {
+  crisis:   { span: 3,  strength: 'weak' },
+  mystery:  { span: 10, strength: 'medium' },
+  emotion:  { span: 5,  strength: 'weak' },
+  choice:   { span: 3,  strength: 'weak' },
+  desire:   { span: 8,  strength: 'medium' },
 };
 
 // 题材配置（参考 webnovel-writer 的 13 种内置配置）
@@ -498,7 +492,6 @@ export interface ForeshadowingItem {
   id: string;
   content: string;                // 30字以内
   type: 'planted' | 'developed' | 'resolved';
-  duration: ForeshadowingDuration; // 时长类型
   tags: string[];
 
   // 来源（通用引用）
@@ -512,20 +505,16 @@ export interface ForeshadowingItem {
   expectedResolution?: string;    // 预期收尾方式
   createdAt: number;              // 创建时间
 
-  // === 钩子扩展（升级版伏笔） ===
-  // 钩子类型（crisis/mystery/emotion/choice/desire）
-  hookType?: HookType;
-  // 钩子强度
-  strength?: HookStrength;
-  // 回收窗口（章数），从 duration 映射或手动指定
-  window?: number;
-  // 到期章节（计算得出：plantedChapter + window）
-  dueChapter?: number;
-  // 奖励分（自动计算 = strength分数 × 10）
-  rewardScore?: number;
-  // 实际获得分（含逾期惩罚）
-  actualScore?: number;
-  // 情绪奖励
+  // === 章节量化（直接用章节数） ===
+  plantedChapter: number;         // 埋下章节（必填）
+  plannedChapter?: number;        // 计划回收章节（根伏笔必填，子伏笔可选）
+  resolvedChapter?: number;      // 实际回收章节（type=resolved 时填）
+
+  // === 钩子扩展 ===
+  hookType?: HookType;            // 钩子类型（crisis/mystery/emotion/choice/desire）
+  strength?: HookStrength;         // 钩子强度
+  rewardScore?: number;           // 奖励分
+  actualScore?: number;           // 实际获得分（含逾期惩罚）
   emotionReward?: HookEmotionReward;
 }
 

@@ -3,7 +3,7 @@
  */
 
 import { AIService } from '../../geminiService';
-import { runTimelineSubAgent, TimelineInput } from '../../subAgents/timelineAgent';
+import { runTimelineSubAgent, TimelineInput, TimelineContext } from '../../subAgents/timelineAgent';
 import { useAgentStore } from '../../../stores/agentStore';
 import { useWorldTimelineStore, toHours } from '../../../stores/worldTimelineStore';
 import { useProjectStore } from '../../../stores/projectStore';
@@ -69,6 +69,7 @@ const ensureLoaded = async () => {
  * 处理伏笔操作（创建新伏笔或继续已有伏笔）
  * @param foreshadowingData 伏笔数据列表
  * @param eventId 关联的事件 ID
+ * @param eventChapterIndex 事件所属章节序号
  * @returns 处理的伏笔 ID 列表
  */
 const processForeshadowings = (
@@ -77,17 +78,19 @@ const processForeshadowings = (
     existingForeshadowingId?: string;
     // 场景B：创建新伏笔
     content?: string;
-    duration?: 'short_term' | 'mid_term' | 'long_term';
     // 通用字段
     type: 'planted' | 'developed' | 'resolved';
     tags: string[];
     notes?: string;
-    // 新增字段
+    // 章节量化
+    plantedChapter?: number;
+    plannedChapter?: number;
+    // 钩子扩展
     hookType?: 'crisis' | 'mystery' | 'emotion' | 'choice' | 'desire';
     strength?: 'strong' | 'medium' | 'weak';
-    window?: number;
   }>,
-  eventId: string
+  eventId: string,
+  eventChapterIndex?: number
 ): string[] => {
   if (!foreshadowingData || foreshadowingData.length === 0) {
     return [];
@@ -106,7 +109,9 @@ const processForeshadowings = (
         const childId = chapterAnalysisStore.addForeshadowing({
           content: item.content || (item.type === 'resolved' ? '伏笔收尾' : '伏笔推进'),
           type: item.type,
-          duration: parent.duration,  // 继承父伏笔的时长
+          plantedChapter: parent.plantedChapter,
+          plannedChapter: item.type === 'resolved' ? eventChapterIndex : parent.plannedChapter,
+          resolvedChapter: item.type === 'resolved' ? eventChapterIndex : undefined,
           tags: item.tags && item.tags.length > 0 ? item.tags : parent.tags,
           notes: item.notes,
           source: TIMELINE_SOURCE,
@@ -121,17 +126,15 @@ const processForeshadowings = (
       const id = chapterAnalysisStore.addForeshadowing({
         content: item.content,
         type: item.type,
-        duration: item.duration || 'short_term',
+        plantedChapter: item.plantedChapter ?? eventChapterIndex ?? 1,
+        plannedChapter: item.plannedChapter,
         tags: item.tags,
         notes: item.notes,
         source: TIMELINE_SOURCE,
         sourceRef: eventId,
         createdAt: Date.now(),
-        // 新增字段
         hookType: item.hookType,
         strength: item.strength,
-        window: item.window,
-        // 自动计算奖励分
         rewardScore: item.strength ? (item.strength === 'strong' ? 30 : item.strength === 'medium' ? 20 : 10) : undefined
       });
       processedIds.push(id);
@@ -194,17 +197,24 @@ export const executeProcessOutlineInput = async (
       id: f.id,
       content: f.content,
       type: f.type as 'planted' | 'developed',
-      duration: f.duration,
+      plantedChapter: f.plantedChapter,
+      ...(f.plannedChapter !== undefined && { plannedChapter: f.plannedChapter }),
       tags: f.tags,
       source: f.source,
       sourceRef: f.sourceRef,
       notes: f.notes,
-      // 新增字段
       hookType: f.hookType,
       strength: f.strength,
       rewardScore: f.rewardScore,
-      dueChapter: f.dueChapter,
-      window: f.window
+      ...(f.children.length > 0 && {
+        children: f.children.map((c: ForeshadowingItem) => ({
+          id: c.id,
+          content: c.content,
+          type: c.type,
+          sourceRef: c.sourceRef,
+          createdAt: c.createdAt
+        }))
+      })
     }))
   };
 
@@ -217,7 +227,7 @@ export const executeProcessOutlineInput = async (
   };
 
   try {
-    const result = await runTimelineSubAgent(aiService, input, context, onUiLog, signal);
+    const result = await runTimelineSubAgent(aiService, input, context as TimelineContext, onUiLog, signal);
     return result.report;
   } catch (error: any) {
     return `大纲处理失败：${error.message}`;
@@ -374,22 +384,21 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           id: f.id,
           content: f.content,
           type: f.type,
-          duration: f.duration,
+          plantedChapter: f.plantedChapter,
+          plannedChapter: f.plannedChapter,
+          resolvedChapter: f.resolvedChapter,
           tags: f.tags,
           source: f.source,
           sourceRef: f.sourceRef,
           notes: f.notes,
-          // 新增字段
           hookType: f.hookType,
           strength: f.strength,
           rewardScore: f.rewardScore,
-          dueChapter: f.dueChapter,
-          window: f.window,
           // 子伏笔（推进/收尾记录）
           children: f.children.map((c: ForeshadowingItem) => ({
             id: c.id,
             content: c.content,
-            type: c.type,
+            type: c.type as 'developed' | 'resolved',
             sourceRef: c.sourceRef,
             createdAt: c.createdAt
           }))
@@ -421,14 +430,15 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           ...foreshadowing,
           chapterIndex: chapter?.chapterIndex,
           chapterTitle: chapter?.title,
-          dueChapter: foreshadowing.dueChapter ?? (chapter?.chapterIndex ?? 0 + (foreshadowing.window ?? 10)),
           parent: parentForeshadowing ? {
             id: parentForeshadowing.id,
             content: parentForeshadowing.content,
-            type: parentForeshadowing.type
+            type: parentForeshadowing.type,
+            plantedChapter: parentForeshadowing.plantedChapter,
+            plannedChapter: parentForeshadowing.plannedChapter
           } : null,
           // 子伏笔（推进/收尾记录）
-          children: foreshadowing.children.map((c: ForeshadowingItem) => ({
+          children: (chapterAnalysisStore.getAllForeshadowing().filter(f => f.parentId === foreshadowing.id) as ForeshadowingItem[]).map((c) => ({
             id: c.id,
             content: c.content,
             type: c.type,
@@ -552,7 +562,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           // 处理伏笔（创建新伏笔或继续已有伏笔）
           let foreshadowingIds: string[] = [];
           if (foreshadowingData && foreshadowingData.length > 0) {
-            foreshadowingIds = processForeshadowings(foreshadowingData, eventId);
+            foreshadowingIds = processForeshadowings(foreshadowingData, eventId, e.chapterIndex);
             // 如果有伏笔，更新事件的 foreshadowingIds
             if (foreshadowingIds.length > 0) {
               store.updateEvent(eventId, { foreshadowingIds });
@@ -674,7 +684,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           // 处理伏笔（创建新伏笔或继续已有伏笔）
           let foreshadowingIds: string[] = [];
           if (foreshadowingData && foreshadowingData.length > 0) {
-            foreshadowingIds = processForeshadowings(foreshadowingData, eventId);
+            foreshadowingIds = processForeshadowings(foreshadowingData, eventId, e.chapterIndex);
             // 如果有伏笔，更新事件的 foreshadowingIds
             if (foreshadowingIds.length > 0) {
               store.updateEvent(eventId, { foreshadowingIds });

@@ -200,21 +200,47 @@ export const manageEventsTool: ToolDefinition = {
   function: {
     name: 'outline_manageEvents',
     description: `管理事件。支持四种操作：
-- add: 添加事件（按时间戳排序）
+- add: 添加事件（按时间戳排序追加）
 - insert: 在指定位置插入事件，后续事件时间戳自动偏移
 - update: 更新事件
 - delete: 删除事件
 
 时间戳格式：{ "day": 1, "hour": 8 } 表示第1天8点
+duration 格式：{ "value": 2, "unit": "hour" } 表示持续2小时
+
+**add 示例（在时间线末尾追加）：**
+\`\`\`
+{ "add": [{
+  "timestamp": { "day": 1, "hour": 14 },
+  "title": "发现玉佩",
+  "content": "在山洞中发现一个神秘玉佩",
+  "duration": { "value": 1, "unit": "hour" },
+  "foreshadowing": [
+    { "content": "捡到神秘玉佩", "type": "planted", "plantedChapter": 1, "plannedChapter": 8, "hookType": "mystery", "tags": ["物品"] }
+  ]
+}] }
+\`\`\`
+
+**insert 示例（在指定位置插入，后续事件自动偏移）：**
+\`\`\`
+{ "insert": {
+  "afterEventIndex": 5,
+  "events": [{
+    "timestamp": { "day": 3, "hour": 10 },
+    "title": "回忆插入",
+    "content": "闪回到主角的童年",
+    "duration": { "value": 2, "unit": "hour" },
+    "foreshadowing": [
+      { "content": "父亲提到的那个名字", "type": "planted", "plantedChapter": 2, "plannedChapter": 10, "hookType": "mystery", "tags": ["身世"] }
+    ]
+  }]
+} }
+\`\`\`
 
 **insert 操作说明：**
-- 在 afterEventIndex 之后插入新事件
-- 插入后，后续所有事件的时间戳会自动向后偏移
-- 偏移量 = 新事件的总持续时间
-- duration 格式：{ "value": 2, "unit": "hour" } 表示2小时
-
-示例：
-{ "insert": { "afterEventIndex": 5, "events": [{ "title": "新事件", "content": "...", "duration": { "value": 2, "unit": "hour" } }] } }`,
+- afterEventIndex=-1 表示在最前面插入
+- 插入后，后续所有事件的时间戳自动向后偏移
+- 偏移量 = 新事件的总持续时间（所有 events 的 duration 之和）`,
     parameters: {
       type: 'object',
       properties: {
@@ -268,9 +294,11 @@ export const manageEventsTool: ToolDefinition = {
               foreshadowing: {
                 type: 'array',
                 description: `伏笔操作：
-- 创建新伏笔：提供 content, type='planted', duration, tags, hookType(可选), strength(可选)
-- 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type='developed'
-- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'
+- 创建新伏笔：提供 content, type="planted", plantedChapter, plannedChapter, tags, hookType(可选), strength(可选)
+- 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type="developed"
+- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type="resolved"
+
+**必须提供 plantedChapter 和 plannedChapter（章节数字）**
 
 钩子类型：crisis=危机(⚡), mystery=悬疑(❓), emotion=情感(💗), choice=选择(⚖), desire=欲望(🔥)
 钩子强度：strong=强(30分), medium=中(20分), weak=弱(10分)`,
@@ -287,15 +315,18 @@ export const manageEventsTool: ToolDefinition = {
                       type: 'string',
                       description: '伏笔内容（30字以内！必须简洁）。继续已有伏笔时，描述如何推进/收尾'
                     },
-                    duration: {
-                      type: 'string',
-                      enum: ['short_term', 'mid_term', 'long_term'],
-                      description: '伏笔时长（仅新伏笔需要）：short_term=1-5章，mid_term=10-20章，long_term=100章以上'
-                    },
                     type: {
                       type: 'string',
                       enum: ['planted', 'developed', 'resolved'],
                       description: 'planted=新埋下, developed=推进中, resolved=已回收'
+                    },
+                    plantedChapter: {
+                      type: 'number',
+                      description: '埋下伏笔的章节序号（planted 时必填）'
+                    },
+                    plannedChapter: {
+                      type: 'number',
+                      description: '计划回收伏笔的章节序号（planted 时必填），跨度=plannedChapter-plantedChapter'
                     },
                     hookType: {
                       type: 'string',
@@ -305,11 +336,7 @@ export const manageEventsTool: ToolDefinition = {
                     strength: {
                       type: 'string',
                       enum: ['strong', 'medium', 'weak'],
-                      description: '钩子强度（可选，不填则从 duration 推断）：strong=强(30分), medium=中(20分), weak=弱(10分)'
-                    },
-                    window: {
-                      type: 'number',
-                      description: '回收窗口（章数，可选），不填则使用默认值'
+                      description: '钩子强度（可选）：strong=强(30分), medium=中(20分), weak=弱(10分)'
                     },
                     tags: {
                       type: 'array',
@@ -318,7 +345,7 @@ export const manageEventsTool: ToolDefinition = {
                     },
                     notes: {
                       type: 'string',
-                      description: '补充说明（可选，如预计回收时间）'
+                      description: '补充说明（可选）'
                     }
                   },
                   required: ['type', 'content']
@@ -334,7 +361,7 @@ export const manageEventsTool: ToolDefinition = {
           properties: {
             afterEventIndex: {
               type: 'number',
-              description: '在哪个事件之后插入（-1表示在最前面插入）'
+              description: '在哪个事件之后插入（-1=最前面，0=第1个事件之后，N=第N+1个事件之后）'
             },
             events: {
               type: 'array',
@@ -377,13 +404,17 @@ export const manageEventsTool: ToolDefinition = {
                   purpose: { type: 'string' },
                   foreshadowing: {
                     type: 'array',
-                    description: `伏笔操作：
-- 创建新伏笔：提供 content, type='planted', duration, tags, hookType(可选), strength(可选)
-- 推进已有伏笔：提供 existingForeshadowingId, content（描述如何推进）, type='developed'
-- 收尾已有伏笔：提供 existingForeshadowingId, content（描述如何收尾）, type='resolved'
+                    description: `伏笔操作（foreshadowing）：
+**场景A - 埋下新伏笔（type="planted"）：**
+  { "content": "捡到神秘玉佩", "type": "planted", "plantedChapter": 1, "plannedChapter": 8, "hookType": "mystery", "tags": ["物品"] }
+**场景B - 推进已有伏笔（type="developed"）：**
+  { "existingForeshadowingId": "fore-xxx", "type": "developed", "content": "得知玉佩来历", "tags": ["物品"] }
+**场景C - 收尾已有伏笔（type="resolved"）：**
+  { "existingForeshadowingId": "fore-xxx", "type": "resolved", "content": "真相大白", "tags": ["身世"] }
 
 钩子类型：crisis=危机(⚡), mystery=悬疑(❓), emotion=情感(💗), choice=选择(⚖), desire=欲望(🔥)
-钩子强度：strong=强(30分), medium=中(20分), weak=弱(10分)`,
+钩子强度：strong=强(30分), medium=中(20分), weak=弱(10分)
+plantedChapter=埋下章节, plannedChapter=计划回收章节, 跨度=plannedChapter-plantedChapter`,
                     items: {
                       type: 'object',
                       properties: {
@@ -397,15 +428,18 @@ export const manageEventsTool: ToolDefinition = {
                           type: 'string',
                           description: '伏笔内容（30字以内！必须简洁）。继续已有伏笔时，描述如何推进/收尾'
                         },
-                        duration: {
-                          type: 'string',
-                          enum: ['short_term', 'mid_term', 'long_term'],
-                          description: '伏笔时长（仅新伏笔需要）：short_term=1-5章，mid_term=10-20章，long_term=100章以上'
-                        },
                         type: {
                           type: 'string',
                           enum: ['planted', 'developed', 'resolved'],
                           description: 'planted=新埋下, developed=推进中, resolved=已回收'
+                        },
+                        plantedChapter: {
+                          type: 'number',
+                          description: '埋下伏笔的章节序号（planted 时必填）'
+                        },
+                        plannedChapter: {
+                          type: 'number',
+                          description: '计划回收伏笔的章节序号（planted 时必填），跨度=plannedChapter-plantedChapter'
                         },
                         hookType: {
                           type: 'string',
@@ -415,11 +449,7 @@ export const manageEventsTool: ToolDefinition = {
                         strength: {
                           type: 'string',
                           enum: ['strong', 'medium', 'weak'],
-                          description: '钩子强度（可选，不填则从 duration 推断）：strong=强(30分), medium=中(20分), weak=弱(10分)'
-                        },
-                        window: {
-                          type: 'number',
-                          description: '回收窗口（章数，可选），不填则使用默认值'
+                          description: '钩子强度（可选）：strong=强(30分), medium=中(20分), weak=弱(10分)'
                         },
                         tags: {
                           type: 'array',
@@ -428,7 +458,7 @@ export const manageEventsTool: ToolDefinition = {
                         },
                         notes: {
                           type: 'string',
-                          description: '补充说明（可选，如预计回收时间）'
+                          description: '补充说明（可选）'
                         }
                       },
                       required: ['type', 'content']

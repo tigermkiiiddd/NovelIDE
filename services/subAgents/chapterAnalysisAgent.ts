@@ -138,10 +138,13 @@ const submitAnalysisTool: ToolDefinition = {
                 enum: ['planted', 'developed', 'resolved'],
                 description: '伏笔类型：planted=新埋下（本章首次出现的线索、暗示、未解释的细节），developed=推进中（之前埋下的伏笔本章有新进展、新信息），resolved=已回收（本章揭晓答案、谜底揭开、预言成真）'
               },
-              duration: {
-                type: 'string',
-                enum: ['short_term', 'mid_term', 'long_term'],
-                description: '伏笔时长类型：short_term=短期伏笔（预计1-5章内回收），mid_term=中期伏笔（预计10-20章回收），long_term=长期伏笔（预计100章以上回收，如身世之谜、世界观秘密）'
+              plantedChapter: {
+                type: 'number',
+                description: '埋下该伏笔的章节序号（必填）。从当前章节路径自动推断。'
+              },
+              plannedChapter: {
+                type: 'number',
+                description: '计划回收该伏笔的章节序号（必填）。根据钩子类型推荐：crisis=3章，emotion/choice=3-5章，desire=8章，mystery=10章。可根据伏笔重要性上下调整。'
               },
               tags: {
                 type: 'array',
@@ -150,10 +153,10 @@ const submitAnalysisTool: ToolDefinition = {
               },
               notes: {
                 type: 'string',
-                description: '补充说明（可选）。如：预计回收时间、与其他伏笔的关联、重要性评估等。示例："预计在第10章回收"、"与第3章的梦境伏笔呼应"、"这是全文最重要的身世伏笔"'
+                description: '补充说明（可选）。如：与其他伏笔的关联、重要性评估等。示例："与第3章的梦境伏笔呼应"、"这是全文最重要的身世伏笔"'
               }
             },
-            required: ['content', 'type', 'duration', 'tags']
+            required: ['content', 'type', 'plantedChapter', 'plannedChapter', 'tags']
           },
           description: '伏笔跟踪列表。仔细识别：1) 角色提到但未出场的人物 2) 神秘物品/未解释的现象 3) 反常行为/未说明的动机 4) 预言/梦境/暗示 5) 刻意强调的细节。如果本章确实没有伏笔，可以为空数组。content必须30字以内！'
         }
@@ -301,10 +304,11 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
 
 ### 3. 伏笔（foreshadowing）
 - **content长度**：每个**30字以内**（关键！必须简洁）
-- **duration**：必须选择时长类型
-  - short_term: 短期伏笔（1-5章内回收），如对话暗示、场景细节、角色小秘密
-  - mid_term: 中期伏笔（10-20章回收），如支线剧情、角色关系转变、物品用途
-  - long_term: 长期伏笔（100章以上回收），如身世之谜、世界观秘密、终极目标
+- **plantedChapter**：埋下伏笔的章节序号（必填）
+- **plannedChapter**：计划回收伏笔的章节序号（必填）。根据钩子类型推荐：
+  - crisis/emotion/choice: 3-5章
+  - desire: 8章
+  - mystery: 10章
 - **tags数量**：至少1个
 
 #### 什么是伏笔？
@@ -364,7 +368,8 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
 {
   "content": "提到了酒会",
   "type": "planted",
-  "duration": "mid_term",
+  "plantedChapter": 1,
+  "plannedChapter": 3,
   "tags": ["酒会"]
 }
 
@@ -378,16 +383,16 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
 {
   "content": "神秘酒会邀请：将在那里遇到改变命运的人",
   "type": "planted",
-  "duration": "short_term",
+  "plantedChapter": 1,
+  "plannedChapter": 5,
   "tags": ["感情线", "命运转折"],
-  "notes": "预计第5章回收，可能是男主初遇"
+  "notes": "可能是男主初遇"
 }
 
 **✅ 推进中的伏笔示例**
 {
   "content": "梦境预言：不要相信身边最亲近的人",
   "type": "developed",
-  "duration": "mid_term",
   "tags": ["预言", "背叛"],
   "notes": "与第3章梦境呼应，暗示闺蜜是背叛者"
 }
@@ -396,7 +401,6 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
 {
   "content": "神秘人身份揭晓：竟是女主亲生父亲",
   "type": "resolved",
-  "duration": "long_term",
   "tags": ["身世", "真相揭晓"],
   "notes": "回收了第1章和第5章的伏笔"
 }
@@ -449,7 +453,7 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
   parseTerminalResult: (args, input) => {
     console.log('[ChapterAnalysisAgent] LLM 返回的完整数据:', JSON.stringify(args, null, 2));
 
-    const chapterRef = input.chapterRef;
+    const chapterRef = input?.chapterRef || '';
 
     // Parse merge actions
     const mergeActions = (args.mergeActions || []).map((a: any) => ({
@@ -485,14 +489,19 @@ ${input.unresolvedForeshadowing.map(f => `- [${f.id}] [${f.type}] ${f.content}${
     }));
 
     // Parse foreshadowing - 填充 sourceRef
+    // 从 chapterRef 解析章节序号
+    const chapterMatch = chapterRef.match(/第(\d+)章/);
+    const chapterNum = chapterMatch ? parseInt(chapterMatch[1]) || 1 : 1;
+
     const foreshadowing: ForeshadowingItem[] = (args.foreshadowing || []).map((f: any, idx: number) => ({
       id: f.id || `foreshadow-${Date.now()}-${idx}`,
       content: f.content || '',
       type: f.type || 'planted',
-      duration: f.duration || 'mid_term',
       tags: f.tags || [],
       source: 'chapter_analysis' as const,
       sourceRef: chapterRef,  // 填充章节引用
+      plantedChapter: f.plantedChapter ?? chapterNum,
+      plannedChapter: f.plannedChapter ?? (chapterNum + 10),
       notes: f.notes,
       createdAt: Date.now()
     }));
@@ -945,14 +954,17 @@ export function applyMergeActions(
     } else if (action.target === 'foreshadowing') {
       if (action.action === 'add') {
         const newId = `foreshadow-${now}-${foreshadowing.length}`;
+        const addChapterMatch = chapterPath.match(/第(\d+)章/);
+        const addChapterNum = addChapterMatch ? parseInt(addChapterMatch[1]) || 1 : 1;
         foreshadowing.push({
           id: newId,
           content: action.data?.content || '',
           type: action.data?.type || 'planted',
-          duration: action.data?.duration || 'mid_term',
           tags: action.data?.tags || [],
-          source: 'chapter_analysis',  // 标记来源为章节分析
+          source: 'chapter_analysis',
           sourceRef: chapterPath,
+          plantedChapter: action.data?.plantedChapter ?? addChapterNum,
+          plannedChapter: action.data?.plannedChapter ?? (addChapterNum + 10),
           notes: action.data?.notes,
           createdAt: Date.now()
         });

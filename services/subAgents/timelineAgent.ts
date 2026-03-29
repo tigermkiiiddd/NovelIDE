@@ -74,17 +74,23 @@ export interface TimelineContext {
     id: string;
     content: string;
     type: 'planted' | 'developed';
-    duration: 'short_term' | 'mid_term' | 'long_term';
+    plantedChapter: number;
+    plannedChapter?: number;
     tags: string[];
     source: 'timeline' | 'chapter_analysis';
     sourceRef: string;
     notes?: string;
-    // 新增字段
+    // 钩子扩展
     hookType?: 'crisis' | 'mystery' | 'emotion' | 'choice' | 'desire';
     strength?: 'strong' | 'medium' | 'weak';
     rewardScore?: number;
-    dueChapter?: number;
-    window?: number;
+    children?: Array<{
+      id: string;
+      content: string;
+      type: 'developed' | 'resolved';
+      sourceRef: string;
+      createdAt: number;
+    }>;
   }>;
   project?: ProjectMeta;
 }
@@ -139,7 +145,7 @@ ${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0
 
 以下是项目中尚未完结的伏笔。在创建事件时，可以：
 1. **埋下新伏笔**：基于剧情发展和故事风格，在合适的事件中埋下新的伏笔
-   - 使用 \`content\` + \`type: "planted"\` + \`duration\` + \`hookType\` + \`strength\` + \`tags\` 字段
+   - 使用 \`content\` + \`type: "planted"\` + \`plantedChapter\` + \`plannedChapter\` + \`hookType\` + \`strength\` + \`tags\` 字段
 2. **继续已有伏笔**：将伏笔状态推进为 \`developed\`
    - 使用 \`existingForeshadowingId\` + \`type: "developed"\` + \`tags\` 字段
 3. **收尾已有伏笔**：将伏笔状态标记为 \`resolved\`
@@ -147,12 +153,15 @@ ${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0
 
 **未完结伏笔列表：**
 \`\`\`
-${context.unresolvedForeshadowing.map(f =>
-  `- [${f.id}] [${f.type}] [${f.duration}] ${f.content}
+${context.unresolvedForeshadowing.map(f => {
+  const span = f.plannedChapter ? `第${f.plantedChapter}章埋→第${f.plannedChapter}章收(跨${f.plannedChapter - f.plantedChapter}章)` : `第${f.plantedChapter}章埋`;
+  const childCount = f.children?.length ? ` | 已推进${f.children.length}次` : '';
+  return `- [${f.id}] [${f.type}] ${f.content}
+   ${span}${childCount}
    来源: ${f.source === 'timeline' ? '时间线' : '章节分析'} - ${f.sourceRef}
    ${f.hookType ? `钩子: ${f.hookType}${f.strength ? `(${f.strength})` : ''} | ` : ''}${f.rewardScore ? `奖励分: +${f.rewardScore} | ` : ''}标签: ${f.tags.join(', ')}
-   ${f.notes ? `备注: ${f.notes}` : ''}`
-).join('\n\n')}
+   ${f.notes ? `备注: ${f.notes}` : ''}`;
+}).join('\n\n')}\n\n')}
 \`\`\`
 ` : ''}
 ` : '（暂无数据）'}
@@ -192,21 +201,15 @@ ${context.unresolvedForeshadowing.map(f =>
 | \`developed\` | 推进伏笔 | 揭示部分信息、制造悬念、加深谜团 |
 | \`resolved\` | 收尾伏笔 | 真相大白、呼应前文、闭环 |
 
-| 时长 | 跨度 | 窗口 | 示例 |
-|------|------|------|------|
-| \`short_term\` | 1-5章回收 | 5章 | 小悬念、临时困境 |
-| \`mid_term\` | 10-20章回收 | 10章 | 支线剧情、次要谜团 |
-| \`long_term\` | 跨卷回收 | 20章 | 核心谜题、主线伏笔 |
+### 钩子类型与章节跨度
 
-### 钩子类型与强度
-
-| 钩子类型 | 说明 | 建议时长 | emoji |
-|----------|------|----------|-------|
-| crisis | 危机/冲突 | 3-5章 | ⚡ |
-| mystery | 悬疑/谜题 | 10-20章 | ❓ |
-| emotion | 情感/关系 | 5-10章 | 💗 |
-| choice | 选择/决策 | 3-5章 | ⚖ |
-| desire | 欲望/目标 | 8-15章 | 🔥 |
+| 钩子类型 | 建议跨度 | emoji |
+|----------|----------|-------|
+| crisis | 3章 | ⚡ |
+| emotion | 5章 | 💗 |
+| choice | 3章 | ⚖ |
+| desire | 8章 | 🔥 |
+| mystery | 10章 | ❓ |
 
 | 强度 | 奖励分 | 适用场景 |
 |------|--------|----------|
@@ -244,68 +247,24 @@ ${context.unresolvedForeshadowing.map(f =>
 \`\`\`
 planted → developed → developed → ... → resolved
   埋下      推进       再推进           收尾
-
-short_term:  planted → resolved (1-3章)
-mid_term:    planted → developed → resolved (一卷内)
-long_term:   planted → developed → developed → ... → resolved (跨卷)
-\`\`\`
-
-### 实战示例
-
-**场景：主角发现身世线索（含情绪标注）**
-\`\`\`json
-{
-  "timestamp": { "day": 15, "hour": 20 },
-  "title": "旧宅密室",
-  "content": "在废弃的祖宅密室中，发现一封泛黄的信件",
-  "chapterIndex": 5,
-  "emotions": [
-    { "type": "紧张", "score": 3 },
-    { "type": "期待", "score": 2 }
-  ],
-  "foreshadowing": [
-    { "content": "信中提到'那个孩子'的称呼", "type": "planted", "duration": "long_term", "hookType": "mystery", "strength": "strong", "tags": ["身世"] },
-    { "existingForeshadowingId": "fore-001", "type": "developed", "tags": ["物品"] }
-  ]
-}
-\`\`\`
-
-**场景：伏笔回收（真相揭晓）**
-\`\`\`json
-{
-  "foreshadowing": [
-    { "existingForeshadowingId": "fore-001", "type": "resolved", "tags": ["身世"] }
-  ]
-}
+埋下时记录 plantedChapter，收尾时标记 resolvedChapter
+跨度 = plannedChapter - plantedChapter
 \`\`\`
 
 ## 工具调用
 
-**创建事件（含伏笔）：**
-\`\`\`
-outline_manageEvents({
-  add: [
-    {
-      timestamp: { day: 1, hour: 14 },
-      title: "事件",
-      content: "内容",
-      chapterIndex: 1,
-      foreshadowing: [
-        // 场景A：继续已有伏笔（推进）
-        { existingForeshadowingId: "fore-xxx", type: "developed", tags: ["身世"] },
-        // 场景B：收尾已有伏笔
-        { existingForeshadowingId: "fore-yyy", type: "resolved", tags: ["物品"] },
-        // 场景C：埋下新伏笔
-        { content: "捡到神秘玉佩", type: "planted", duration: "long_term", tags: ["物品"] }
-      ]
-    }
-  ]
-})
-\`\`\`
+伏笔示例见 tool definition（不再在 prompt 中重复）：
+- **埋新伏笔**：type="planted" + plantedChapter + plannedChapter
+- **推进伏笔**：existingForeshadowingId + type="developed"
+- **收尾伏笔**：existingForeshadowingId + type="resolved"
+
+**创建事件：**
+- **追加（末尾）**：\`{ add: [{ timestamp: { day, hour }, title, content, chapterIndex, foreshadowing: [...] }] }\`
+- **插入（中间）**：\`{ insert: { afterEventIndex: N, events: [...] } }\` — 后续事件时间戳自动顺移
 
 **创建章节（仅当 instructions 要求时）：**
 \`\`\`
-outline_manageChapters({ add: [{ title: "章节名", summary: "摘要", volumeIndex: 1 }] })
+outline_manageChapters({ add: [{ title, summary, volumeIndex }] })
 \`\`\`
 
 **提交：**
