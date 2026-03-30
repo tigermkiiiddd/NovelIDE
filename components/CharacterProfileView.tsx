@@ -1351,7 +1351,7 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                   </div>
                 )}
                 <div style={{ fontSize: 13, color: '#94a3b8' }}>
-                  创建于 {formatTime(profile.createdAt)} · 最后更新 {formatTime(profile.updatedAt)}
+                  创建于 {formatTime(profile.createdAt)} · 最后更新于 {profile.lastChapterRef || '未记录'}
                 </div>
               </div>
               <button
