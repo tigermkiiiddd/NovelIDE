@@ -1,7 +1,6 @@
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { dbAPI } from '../services/persistence';
+import { persist } from 'zustand/middleware';
 
 interface UiState {
   isSidebarOpen: boolean;
@@ -36,40 +35,7 @@ interface UiState {
   toggleDebugMode: () => void;
 }
 
-// Custom IndexedDB storage adapter for Zustand persist
-const indexedDBStorage = {
-  getItem: async (name: string) => {
-    const settings = await dbAPI.getUiSettings();
-    // Zustand expects the stored string value directly
-    return settings ? JSON.stringify(settings) : null;
-  },
-  setItem: async (name: string, value: string | object) => {
-    try {
-      // Zustand may pass JSON string or already-parsed object
-      const parsed = typeof value === 'string' ? JSON.parse(value) as UiState : value as UiState;
-      await dbAPI.saveUiSettings({
-        isSidebarOpen: parsed.isSidebarOpen ?? true,
-        isChatOpen: parsed.isChatOpen ?? true,
-        sidebarWidth: parsed.sidebarWidth ?? 256,
-        agentWidth: parsed.agentWidth ?? 384,
-        isSplitView: parsed.isSplitView ?? false,
-        showLineNumbers: parsed.showLineNumbers ?? true,
-        wordWrap: parsed.wordWrap ?? true,
-        isDebugMode: parsed.isDebugMode ?? false,
-        hasSeenTutorial: parsed.hasSeenTutorial ?? false
-      });
-      console.log('[UiStore] UI settings saved, hasSeenTutorial:', parsed.hasSeenTutorial);
-    } catch (error) {
-      console.error('[UiStore] Failed to save UI settings:', error);
-    }
-  },
-  removeItem: async (name: string) => {
-    // Actually delete the stored settings
-    await dbAPI.deleteUiSettings();
-  }
-};
-
-// 创建持久化 Store
+// 创建持久化 Store - 使用 localStorage（同步、可靠）
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -104,20 +70,7 @@ export const useUiStore = create<UiState>()(
       toggleDebugMode: () => set((state) => ({ isDebugMode: !state.isDebugMode })),
     }),
     {
-      name: 'novel-genie-ui-storage', // Storage Key (for compatibility)
-      storage: indexedDBStorage,
-      // 选择性持久化
-      partialize: (state) => ({
-        isSidebarOpen: state.isSidebarOpen,
-        isChatOpen: state.isChatOpen,
-        sidebarWidth: state.sidebarWidth,
-        agentWidth: state.agentWidth,
-        isSplitView: state.isSplitView,
-        showLineNumbers: state.showLineNumbers,
-        wordWrap: state.wordWrap,
-        isDebugMode: state.isDebugMode,
-        hasSeenTutorial: state.hasSeenTutorial
-      })
+      name: 'novel-genie-ui-storage', // localStorage key
     }
   )
 );

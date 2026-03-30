@@ -90,7 +90,15 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={(e) => {
+        // 点击背景关闭
+        if (e.target === e.currentTarget) {
+          handleClose();
+        }
+      }}
+    >
       <div className="bg-gray-900 border border-gray-700 rounded-xl w-[calc(100%-16px)] sm:w-full max-w-2xl sm:max-h-[85vh] max-h-[calc(100%-32px)] flex flex-col shadow-2xl overflow-hidden">
 
         {/* Header */}
@@ -99,6 +107,7 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
             {TUTORIAL_STEPS.map((_, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => setCurrentStep(i)}
                 className={`w-2 h-2 rounded-full transition-all ${
                   i === currentStep ? 'bg-blue-500 w-4' : 'bg-gray-600 hover:bg-gray-500'
@@ -107,8 +116,10 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
             ))}
           </div>
           <button
+            type="button"
             onClick={handleClose}
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors relative z-10"
+            aria-label="关闭教程"
           >
             <X size={18} />
           </button>
