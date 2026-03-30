@@ -31,7 +31,21 @@ export class AIService {
     const apiKey = this.config.apiKey || process.env.API_KEY || '';
     if (!apiKey) return;
 
-    const baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
+    // 智能标准化 baseURL
+    let baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
+
+    // 移除末尾的斜杠
+    baseURL = baseURL.replace(/\/+$/, '');
+
+    // 如果包含 /chat/completions，去掉它（SDK 会自动添加）
+    if (baseURL.includes('/chat/completions')) {
+      baseURL = baseURL.replace(/\/chat\/completions.*$/, '');
+    }
+
+    // 如果不包含 /v1，自动补全
+    if (!baseURL.includes('/v1')) {
+      baseURL = `${baseURL}/v1`;
+    }
 
     this.client = new OpenAI({
       apiKey: apiKey,
