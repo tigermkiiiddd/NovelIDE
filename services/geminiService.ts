@@ -335,7 +335,6 @@ export class AIService {
       const warnings: string[] = [];
 
       // Build response metadata for debug display
-      const finishReason = completion.choices?.[0]?.finish_reason;
       const responseMetadata: AIResponseMetadata = {
         requestId: completion.id,
         model: completion.model,
