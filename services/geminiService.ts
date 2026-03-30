@@ -197,6 +197,7 @@ export class AIService {
       const requestPayload: any = {
         model: modelName,
         messages: openAIMessages,
+        stream: false,  // 显式禁用流式，防止代理默认返回 SSE 格式
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: forceToolName
           ? { type: 'function', function: { name: forceToolName } }  // 强制调用指定工具
