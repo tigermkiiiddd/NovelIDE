@@ -68,7 +68,14 @@ export interface TimelineContext {
     timestamp: { day: number; hour: number };
     title: string;
     content: string;
+    duration?: { value: number; unit: 'minute' | 'hour' | 'day' };
   }>;
+  // 时间线最新位置
+  lastEventTimestamp?: {
+    day: number;
+    hour: number;
+    endHour?: number;  // 加上 duration 后的结束时间
+  } | null;
   // 未完结伏笔上下文（用于继续/收尾已有伏笔）
   unresolvedForeshadowing?: Array<{
     id: string;
@@ -138,6 +145,8 @@ ${context.chapterSummaries.map(c => `- chapterIndex=${c.chapterIndex}「${c.titl
 ${context.recentEvents && context.recentEvents.length > 0 ? `
 **最近事件（剧情时间线参考）：**
 ${context.recentEvents.map(e => `- [${e.eventIndex}] 第${e.timestamp.day}天${e.timestamp.hour}时「${e.title}」：${e.content.substring(0, 80)}${e.content.length > 80 ? '...' : ''}`).join('\n')}
+
+📍 **时间线当前位置：** 最后一个事件 [${context.recentEvents[context.recentEvents.length - 1].eventIndex}] 在第${context.recentEvents[context.recentEvents.length - 1].timestamp.day}天${context.recentEvents[context.recentEvents.length - 1].timestamp.hour}时。续写时，新事件的 timestamp 应从此时间之后开始。
 ` : ''}
 
 ${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0 ? `
@@ -263,9 +272,17 @@ planted → developed → developed → ... → resolved
 - **推进伏笔**：existingForeshadowingId + type="developed"
 - **收尾伏笔**：existingForeshadowingId + type="resolved"
 
-**创建事件：**
-- **追加（末尾）**：\`{ add: [{ timestamp: { day, hour }, title, content, chapterIndex, foreshadowing: [...] }] }\`
-- **插入（中间）**：\`{ insert: { afterEventIndex: N, events: [...] } }\` — 后续事件时间戳自动顺移
+**创建事件（⚠️ 优先用 add！）：**
+- **追加 add（默认）**：\`{ add: [{ timestamp: { day, hour }, title, content, chapterIndex, foreshadowing: [...] }] }\`
+  - ✅ 续写剧情、推进时间线 → **用 add**
+  - ✅ 为新章节创建事件 → **用 add**
+  - ✅ timestamp 从【最近事件】的时间之后继续
+- **插入 insert（特殊）**：\`{ insert: { afterEventIndex: N, events: [...] } }\` — 后续事件时间戳自动顺移
+  - ⚠️ 仅在以下场景使用 insert：
+    - 插入回忆/闪回
+    - 在已有事件之间补充遗漏的细节
+    - 插入平行线/支线事件
+  - ❌ 续写新剧情时 **不要用 insert**，用 add
 
 **创建章节（仅当 instructions 要求时）：**
 \`\`\`

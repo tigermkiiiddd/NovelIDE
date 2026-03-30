@@ -169,13 +169,22 @@ export const executeProcessOutlineInput = async (
   // 构建 volumeId -> volumeIndex 的映射
   const volumeIdToIndex = new Map(existingVolumes.map((v: VolumeGroup) => [v.id, v.volumeIndex]));
 
-  // 获取最新5个事件（按时间戳排序后的最后5个）
-  const recentEvents = existingEvents.slice(-5).map((e: TimelineEvent) => ({
+  // 获取最新10个事件（按时间戳排序后的最后10个）
+  const recentEvents = existingEvents.slice(-10).map((e: TimelineEvent) => ({
     eventIndex: e.eventIndex,
     timestamp: e.timestamp,
     title: e.title,
-    content: e.content || ''
+    content: e.content || '',
+    duration: e.duration
   }));
+
+  // 提取时间线最新位置
+  const lastEvent = existingEvents.length > 0 ? existingEvents[existingEvents.length - 1] : null;
+  const lastEventTimestamp = lastEvent ? {
+    day: lastEvent.timestamp.day,
+    hour: lastEvent.timestamp.hour,
+    ...(lastEvent.duration && { endHour: lastEvent.timestamp.hour + toHours(lastEvent.duration) })
+  } : null;
 
   // 获取未完结伏笔（用于继续/收尾已有伏笔）
   const chapterAnalysisStore = useChapterAnalysisStore.getState();
@@ -193,6 +202,7 @@ export const executeProcessOutlineInput = async (
       eventCount: c.eventIds.length
     })),
     recentEvents,
+    lastEventTimestamp,
     unresolvedForeshadowing: unresolvedForeshadowing.map((f: ForeshadowingItem & { children: ForeshadowingItem[] }) => ({
       id: f.id,
       content: f.content,
