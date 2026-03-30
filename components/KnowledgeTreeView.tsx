@@ -346,9 +346,9 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       )}
 
       {/* 左侧：树状视图 */}
-      <div className={`flex-shrink-0 flex flex-col border-r border-gray-700 ${
+      <div className={`flex-shrink-0 flex flex-col border-r border-gray-700 overflow-hidden ${
         selectedNodeId && mobileTab === 'detail' ? 'hidden md:flex' : 'flex'
-      } w-full md:w-80`}>
+      } w-full md:w-80 flex-1 md:flex-none min-h-0`}>
         {/* 工具栏 */}
         <div className="p-3 border-b border-gray-700 flex items-center gap-2">
           <div className="relative flex-1">
@@ -531,8 +531,8 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       </div>
 
       {/* 右侧：详情预览 */}
-      <div className={`flex-1 min-w-0 overflow-auto ${
-        !selectedNodeId || (mobileTab === 'tree' && selectedNodeId) ? 'hidden md:block' : 'block'
+      <div className={`flex-1 min-w-0 ${
+        mobileTab === 'tree' && selectedNodeId ? 'hidden md:block' : 'block'
       }`}>
         <KnowledgeNodePreview
           node={selectedNode}
