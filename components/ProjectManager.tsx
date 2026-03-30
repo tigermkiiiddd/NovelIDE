@@ -400,7 +400,7 @@ ${polishInstruction || '(无额外指令)'}
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-gray-950 p-4 text-gray-100 sm:p-6 md:h-screen md:overflow-y-auto safe-area-top safe-area-bottom">
+    <div className="flex h-[100dvh] md:h-screen flex-col overflow-y-auto overflow-x-hidden bg-gray-950 p-4 text-gray-100 sm:p-6 safe-area-top safe-area-bottom">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col md:min-h-0">
 
         <header className="flex flex-col items-start gap-3 mb-4 md:gap-4 md:mb-8 md:flex-row md:justify-between md:items-center">
