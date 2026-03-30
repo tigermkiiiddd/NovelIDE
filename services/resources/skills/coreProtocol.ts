@@ -284,7 +284,7 @@ export const constructSystemPrompt = (
   }
 
   if (subSkillFolder) {
-    const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE);
+    const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE && !f.hidden);
     const validSkills = subSkillFiles.map(f => {
       const meta = f.metadata || {};
       if (meta.name && meta.description) {
@@ -329,7 +329,8 @@ export const constructSystemPrompt = (
     const templateFiles = files.filter(f =>
       f.parentId === rulesFolder.id &&
       f.type === FileType.FILE &&
-      f.name.startsWith('模板_')
+      f.name.startsWith('模板_') &&
+      !f.hidden
     );
 
     if (templateFiles.length === 0) return '(暂无可用模板)';

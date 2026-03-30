@@ -48,6 +48,9 @@ interface FileState {
   // Internal Helper
   _saveToDB: () => void;
   _restoreSystemFiles: () => void;
+
+  // Preset Switching
+  switchPreset: (newPresetId?: string) => void;
 }
 
 export const useFileStore = create<FileState>((set, get) => ({
@@ -280,7 +283,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   readFile: (path, startLine = 1, endLine) => {
       const { files } = get();
       const file = findNodeByPath(files, path);
-      if (!file) return `Error: File at "${path}" not found.`;
+      if (!file || file.hidden) return `Error: File at "${path}" not found.`;
 
       const allLines = (file.content || '').split(/\r?\n/);
       const totalLines = allLines.length;
@@ -304,7 +307,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   searchFiles: (query) => {
     const { files } = get();
     const lowerQuery = query.toLowerCase();
-    const results = files.filter(f => f.name.toLowerCase().includes(lowerQuery) || (f.content && f.content.toLowerCase().includes(lowerQuery)));
+    const results = files.filter(f => !f.hidden && (f.name.toLowerCase().includes(lowerQuery) || (f.content && f.content.toLowerCase().includes(lowerQuery))));
     if (results.length === 0) return `No files found matching "${query}".`;
 
     // 分类：只统计文件数量（用于提示）
@@ -392,5 +395,12 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     return `Renamed "${oldPath}" to "${newName}"`;
   },
 
-  listFiles: () => getFileTreeStructure(get().files)
+  listFiles: () => getFileTreeStructure(get().files),
+
+  switchPreset: (newPresetId?: string) => {
+    const { files, _saveToDB } = get();
+    const updatedFiles = getFileService().switchPreset(files, newPresetId);
+    set({ files: updatedFiles });
+    _saveToDB();
+  }
 }));

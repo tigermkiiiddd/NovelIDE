@@ -20,6 +20,7 @@ export interface FileNode {
   content?: string; // 仅文件有内容
   metadata?: FileMetadata; // Parsed frontmatter
   lastModified: number;
+  hidden?: boolean; // 隐藏后对用户和LLM不可见（题材切换时使用）
 }
 
 // --- API Content Part Types (for rawParts) ---

@@ -86,6 +86,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const currentProject = useProjectStore(state => state.getCurrentProject());
   const updateProject = useProjectStore(state => state.updateProject);
   const loadFiles = useFileStore(state => state.loadFiles);
+
+  // 包装 updateProject：检测 presetId 变更时切换题材文件
+  const handleUpdateProject = useCallback(async (id: string, updates: Partial<import('../types').ProjectMeta>) => {
+    const oldProject = useProjectStore.getState().projects.find(p => p.id === id);
+    const oldPresetId = oldProject?.presetId;
+
+    await updateProject(id, updates);
+
+    // presetId 变更时切换文件系统中的题材文件
+    const newPresetId = updates.presetId;
+    if (newPresetId !== oldPresetId) {
+      useFileStore.getState().switchPreset(newPresetId || undefined);
+    }
+  }, [updateProject]);
   const loadProjectAnalyses = useChapterAnalysisStore((state: ChapterAnalysisState) => state.loadProjectAnalyses);
   const triggerExtraction = useChapterAnalysisStore((state: ChapterAnalysisState) => state.triggerExtraction);
   const loadProjectCharacterProfiles = useCharacterMemoryStore((state: CharacterMemoryState) => state.loadProjectProfiles);
@@ -375,7 +389,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         ref={appModalsRef}
         project={currentProject}
         files={files}
-        onUpdateProject={updateProject}
+        onUpdateProject={handleUpdateProject}
         aiConfig={aiConfig}
         onUpdateAIConfig={updateAiConfig}
       />

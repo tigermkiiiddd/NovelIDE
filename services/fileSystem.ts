@@ -76,7 +76,7 @@ export const findNodeByPath = (files: FileNode[], path: string): FileNode | unde
 
 export const getFileTreeStructure = (files: FileNode[]): string => {
   const buildTree = (parentId: string | null, depth: number, currentPath: string): string => {
-    const children = files.filter(f => f.parentId === parentId)
+    const children = files.filter(f => f.parentId === parentId && !f.hidden)
       .sort((a, b) => {
         if (a.type !== b.type) return a.type === FileType.FOLDER ? -1 : 1;
         return a.name.localeCompare(b.name);
