@@ -13,7 +13,8 @@ import {
   SKILL_EXPECTATION_MANAGER,
   SKILL_PLEASURE_RHYTHM_MANAGER,
   SKILL_OUTLINE_ARCHITECT,
-  SKILL_TEXT_POLISH
+  SKILL_TEXT_POLISH,
+  SKILL_PROJECT_INIT
 } from './templates';
 import { GenrePreset } from './resources/presets';
 
@@ -128,6 +129,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
     '技能_去AI化润色.md': SKILL_TEXT_POLISH,
     '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+    '技能_项目初始化.md': SKILL_PROJECT_INIT,
   };
 
   // 题材技能 - 根据预设选择性加载
