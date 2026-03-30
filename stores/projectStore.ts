@@ -23,7 +23,11 @@ export interface ProjectState {
     targetChapters: number,
     chaptersPerVolume?: number,
     presetId?: string,
-    pleasureRhythm?: ProjectMeta['pleasureRhythm']
+    pleasureRhythm?: ProjectMeta['pleasureRhythm'],
+    coreGameplay?: string[],
+    narrativeElements?: string[],
+    styleTone?: string[],
+    romanceLine?: string[]
   ) => Promise<void>;
   updateProject: (id: string, updates: Partial<ProjectMeta>) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
@@ -70,7 +74,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await dbAPI.saveCurrentProjectId(id);
   },
 
-  createProject: async (name, description, genre, wordsPerChapter, targetChapters, chaptersPerVolume, presetId, pleasureRhythm) => {
+  createProject: async (name, description, genre, wordsPerChapter, targetChapters, chaptersPerVolume, presetId, pleasureRhythm, coreGameplay, narrativeElements, styleTone, romanceLine) => {
     const newProject: ProjectMeta = {
       id: generateId(),
       name,
@@ -81,6 +85,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       chaptersPerVolume,
       presetId,
       pleasureRhythm,
+      coreGameplay,
+      narrativeElements,
+      styleTone,
+      romanceLine,
       createdAt: Date.now(),
       lastModified: Date.now()
     };

@@ -96,6 +96,11 @@ export interface ProjectMeta {
     medium: number;          // 中爽点间隔（章数）
     large: number;           // 大爽点间隔（章数）
   };
+  // 新增：扩展标签系统
+  coreGameplay?: string[];   // 核心玩法标签（多选）
+  narrativeElements?: string[]; // 叙事元素标签（多选）
+  styleTone?: string[];      // 风格基调标签（多选）
+  romanceLine?: string[];    // 感情线标签（多选）
   lastModified: number;
   createdAt: number;
 }
@@ -1112,6 +1117,7 @@ export interface CharacterProfileV2 {
 
   createdAt: number;
   updatedAt: number;
+  lastChapterRef?: string;     // 最后更新的章节引用
 }
 
 // 预设大分类配置

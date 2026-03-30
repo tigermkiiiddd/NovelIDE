@@ -35,6 +35,11 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     project.pleasureRhythm || { small: 3, medium: 10, large: 30 }
   );
   const [selectedPresetId, setSelectedPresetId] = useState(project.presetId || '');
+  // 新增：扩展标签状态
+  const [coreGameplay, setCoreGameplay] = useState<string[]>(project.coreGameplay || []);
+  const [narrativeElements, setNarrativeElements] = useState<string[]>(project.narrativeElements || []);
+  const [styleTone, setStyleTone] = useState<string[]>(project.styleTone || []);
+  const [romanceLine, setRomanceLine] = useState<string[]>(project.romanceLine || []);
 
   useEffect(() => {
     if (isOpen) {
@@ -46,6 +51,10 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
       setChaptersPerVolume(project.chaptersPerVolume || 10);
       setPleasureRhythm(project.pleasureRhythm || { small: 3, medium: 10, large: 30 });
       setSelectedPresetId(project.presetId || '');
+      setCoreGameplay(project.coreGameplay || []);
+      setNarrativeElements(project.narrativeElements || []);
+      setStyleTone(project.styleTone || []);
+      setRomanceLine(project.romanceLine || []);
       setActiveTab('overview');
     }
   }, [isOpen, project]);
@@ -60,6 +69,10 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
         chaptersPerVolume,
         pleasureRhythm,
         presetId: selectedPresetId || undefined,
+        coreGameplay,
+        narrativeElements,
+        styleTone,
+        romanceLine,
     });
     if (updated) {
       onUpdate(updated);
@@ -108,7 +121,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
 
           {activeTab === 'overview' && (
             <div className="space-y-8 animate-in slide-in-from-left-4 duration-200">
@@ -137,6 +150,10 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                         chaptersPerVolume={chaptersPerVolume} setChaptersPerVolume={setChaptersPerVolume}
                         pleasureRhythm={pleasureRhythm} setPleasureRhythm={setPleasureRhythm}
                         selectedPresetId={selectedPresetId} setSelectedPresetId={setSelectedPresetId}
+                        coreGameplay={coreGameplay} setCoreGameplay={setCoreGameplay}
+                        narrativeElements={narrativeElements} setNarrativeElements={setNarrativeElements}
+                        styleTone={styleTone} setStyleTone={setStyleTone}
+                        romanceLine={romanceLine} setRomanceLine={setRomanceLine}
                       />
                     </div>
                 </div>

@@ -103,6 +103,7 @@ const normalizeProfile = (rawProfile: Partial<CharacterProfileV2> & { characterN
     categories,
     createdAt: rawProfile.createdAt || now,
     updatedAt: rawProfile.updatedAt || now,
+    lastChapterRef: rawProfile.lastChapterRef,
   };
 };
 
@@ -535,7 +536,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
             }
           });
 
-          return { ...profile, updatedAt: now };
+          return { ...profile, updatedAt: now, lastChapterRef: chapterRef };
         }),
       }));
 
@@ -727,7 +728,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
               }
             });
 
-            return { ...profile, updatedAt: now };
+            return { ...profile, updatedAt: now, lastChapterRef: chapterRef };
           });
         }, state.profiles),
       }));

@@ -24,7 +24,7 @@ import { ReadingLightView } from './ReadingLightView';
 import { JsonViewer } from './JsonViewer';
 import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { CharacterProfileView } from './CharacterProfileView';
-import EditHighlightOverlay from './Editor/EditHighlightOverlay';
+import EditHighlightOverlay from './editor/EditHighlightOverlay';
 import VersionHistory from './VersionHistory';
 import {
   FileText,

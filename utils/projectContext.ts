@@ -33,6 +33,26 @@ export function buildProjectOverviewPrompt(project: ProjectMeta | undefined): st
     lines.push(`爽点节奏：小爽每${project.pleasureRhythm.small}章，中爽每${project.pleasureRhythm.medium}章，大爽每${project.pleasureRhythm.large}章`);
   }
 
+  // 添加核心玩法标签
+  if (project.coreGameplay && project.coreGameplay.length > 0) {
+    lines.push(`核心玩法：${project.coreGameplay.join('、')}`);
+  }
+
+  // 添加叙事元素标签
+  if (project.narrativeElements && project.narrativeElements.length > 0) {
+    lines.push(`叙事元素：${project.narrativeElements.join('、')}`);
+  }
+
+  // 添加风格基调标签
+  if (project.styleTone && project.styleTone.length > 0) {
+    lines.push(`风格基调：${project.styleTone.join('、')}`);
+  }
+
+  // 添加感情线标签
+  if (project.romanceLine && project.romanceLine.length > 0) {
+    lines.push(`感情线：${project.romanceLine.join('、')}`);
+  }
+
   if (project.description) {
     lines.push(`核心梗：${project.description}`);
   }
@@ -42,6 +62,7 @@ export function buildProjectOverviewPrompt(project: ProjectMeta | undefined): st
   lines.push('> - **类型**决定叙事风格和读者预期');
   lines.push('> - **核心梗**决定故事主线和卖点');
   lines.push('> - **爽点节奏**决定剧情高潮的分布密度');
+  lines.push('> - **核心玩法/叙事元素/风格基调/感情线**决定创作方向和差异化特色');
 
   return lines.join('\n');
 }
