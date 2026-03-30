@@ -182,6 +182,11 @@ export const useFileStore = create<FileState>((set, get) => ({
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File at "${path}" not found.`;
 
+    // Check content modification permission
+    if (!getFileService().canModifyContent(file, files)) {
+      return `Error: Cannot modify content of immutable file "${file.name}"`;
+    }
+
     // 创建修改前版本（仅在内容有变化时）
     if (file.content !== content) {
       useVersionStore.getState().createVersion(
@@ -206,6 +211,11 @@ export const useFileStore = create<FileState>((set, get) => ({
   saveFileContent: (id, content) => {
     const { files, _saveToDB } = get();
     const file = files.find(f => f.id === id);
+
+    // Check content modification permission
+    if (file && !getFileService().canModifyContent(file, files)) {
+      return `Error: Cannot modify content of immutable file "${file.name}"`;
+    }
 
     // 创建修改前版本（仅在内容有变化时）
     if (file && file.content !== content) {
@@ -232,6 +242,11 @@ export const useFileStore = create<FileState>((set, get) => ({
     const { files, _saveToDB } = get();
     const file = findNodeByPath(files, path);
     if (!file) return `Error: File not found.`;
+
+    // Check content modification permission
+    if (!getFileService().canModifyContent(file, files)) {
+      return `Error: Cannot modify content of immutable file "${file.name}"`;
+    }
 
     // 创建修改前版本
     if (file.content) {

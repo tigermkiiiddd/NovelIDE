@@ -35,6 +35,12 @@ import {
   SKILL_PROJECT_INIT
 } from '../../services/templates';
 import { getPresetById } from '../../services/resources/presets';
+import {
+  ProtectionLevel,
+  getProtectionLevel,
+  canDelete as canDeleteByLevel,
+  canModifyContent as canModifyByLevel,
+} from './protectionRegistry';
 
 // 内联模板（用于世界线记录和伏笔记录）
 const withMeta = (content: string, summary: string, tags: string[] = []) => {
@@ -53,10 +59,6 @@ const FORESHADOW_TEMPLATE = withMeta(
   ['模板']
 );
 
-// 系统文件定义（从fileStore迁移）
-const PROTECTED_FOLDERS = ['98_技能配置', '99_创作规范', 'subskill'];
-const PROTECTED_FILE_PREFIXES = ['技能_', '指南_', '模板_'];
-
 export interface FileTree {
   [name: string]: FileTree | FileNode;
 }
@@ -70,61 +72,40 @@ export class FileService {
 
   /**
    * 系统文件保护 - 判断文件是否可删除
-   * 注意：99_创作规范 目录下的文件允许删除（可重置内容）
+   * 委托给保护注册表，IMMUTABLE 和 PERSISTENT 不可删除
    */
   canDeleteFile(file: FileNode | null, allFiles?: FileNode[]): boolean {
     if (!file) return false;
-
-    // 检查是否是受保护的文件夹（99_创作规范 允许删除其中的文件，但文件夹本身不可删除）
-    if (file.type === FileType.FOLDER && PROTECTED_FOLDERS.includes(file.name)) {
-      return false;
-    }
-
-    // 检查是否是受保护的文件
-    if (file.type === FileType.FILE) {
-      // 获取文件的完整路径
-      const filePath = allFiles ? this.getNodePath(file, allFiles) : '';
-
-      // 长期记忆.json 文件禁止删除（知识图谱系统文件）
-      if (file.name === '长期记忆.json') {
-        return false;
-      }
-
-      // outline.json 文件禁止删除（剧情大纲系统文件）
-      if (file.name === 'outline.json') {
-        return false;
-      }
-
-      // 99_创作规范 目录下的文件允许删除（用户可重置内容）
-      if (filePath.startsWith('/99_创作规范/')) {
-        return true;
-      }
-
-      // 98_技能配置/subskill 目录下的文件禁止删除（系统技能文件保护）
-      if (filePath.startsWith('/98_技能配置/subskill/')) {
-        return false;
-      }
-
-      // 检查文件名前缀（保护 98_技能配置 根目录下的文件）
-      if (PROTECTED_FILE_PREFIXES.some(prefix => file.name.startsWith(prefix))) {
-        return false;
-      }
-
-      // 检查是否是系统文件（/.gitkeep等）
-      if (file.name === '.gitkeep' || file.name.includes('/system/')) {
-        return false;
-      }
-    }
-
-    return true;
+    const filePath = allFiles ? this.getNodePath(file, allFiles) : '/' + file.name;
+    const level = getProtectionLevel(filePath, file.type === FileType.FOLDER);
+    return canDeleteByLevel(level);
   }
 
   /**
    * 文件重命名权限 - 判断文件是否可重命名
    */
   canRenameFile(file: FileNode | null, allFiles?: FileNode[]): boolean {
-    // 复用删除权限逻辑
     return this.canDeleteFile(file, allFiles);
+  }
+
+  /**
+   * 文件内容修改权限 - 判断文件内容是否可修改
+   * 仅 IMMUTABLE 禁止修改
+   */
+  canModifyContent(file: FileNode | null, allFiles?: FileNode[]): boolean {
+    if (!file) return false;
+    const filePath = allFiles ? this.getNodePath(file, allFiles) : '/' + file.name;
+    const level = getProtectionLevel(filePath, file.type === FileType.FOLDER);
+    return canModifyByLevel(level);
+  }
+
+  /**
+   * 获取文件的保护等级
+   */
+  getProtectionLevelForFile(file: FileNode | null, allFiles?: FileNode[]): ProtectionLevel {
+    if (!file) return ProtectionLevel.NONE;
+    const filePath = allFiles ? this.getNodePath(file, allFiles) : '/' + file.name;
+    return getProtectionLevel(filePath, file.type === FileType.FOLDER);
   }
 
   /**

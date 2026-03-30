@@ -12,6 +12,7 @@
 
 import { FileNode, FileType } from '../../../../types';
 import { FileService } from '../../../../domains/file/fileService';
+import { getProtectionLevel, ProtectionLevel, canDelete, canModifyContent } from '../../../../domains/file/protectionRegistry';
 import { mockFileSystem } from '../../../../src/test/utils/testHelpers';
 
 describe('FileService - 文件系统域逻辑', () => {
@@ -74,18 +75,19 @@ describe('FileService - 文件系统域逻辑', () => {
       expect(canDelete).toBe(false);
     });
 
-    it('应该识别受保护的子文件', () => {
+    it('应该允许删除subskill下的技能文件（AUTO_REBUILD）', () => {
       const allFiles: FileNode[] = [
         { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'subskill-folder', parentId: 'skill-folder', name: 'subskill', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'file-1', parentId: 'subskill-folder', name: '技能_世界观.md', type: FileType.FILE, content: 'Skill content', lastModified: Date.now() }
       ];
-      const protectedFile = allFiles[3];
+      const skillFile = allFiles[3];
 
-      const canDelete = fileService.canDeleteFile(protectedFile, allFiles);
+      const canDelete = fileService.canDeleteFile(skillFile, allFiles);
 
-      expect(canDelete).toBe(false);
+      // subskill files are AUTO_REBUILD: can be deleted, will auto-rebuild
+      expect(canDelete).toBe(true);
     });
 
     it('应该允许删除99_创作规范目录下的文件', () => {
@@ -103,18 +105,19 @@ describe('FileService - 文件系统域逻辑', () => {
   });
 
   describe('文件重命名权限', () => {
-    it('应该阻止重命名98_技能配置目录下的保护文件', () => {
+    it('应该允许重命名subskill下的技能文件（AUTO_REBUILD）', () => {
       const allFiles: FileNode[] = [
         { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'subskill-folder', parentId: 'skill-folder', name: 'subskill', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'file-1', parentId: 'subskill-folder', name: '技能_世界观.md', type: FileType.FILE, content: 'Skill content', lastModified: Date.now() }
       ];
-      const protectedFile = allFiles[3];
+      const skillFile = allFiles[3];
 
-      const canRename = fileService.canRenameFile(protectedFile, allFiles);
+      const canRename = fileService.canRenameFile(skillFile, allFiles);
 
-      expect(canRename).toBe(false);
+      // subskill files are AUTO_REBUILD: can be renamed
+      expect(canRename).toBe(true);
     });
 
     it('应该允许重命名99_创作规范目录下的文件', () => {
@@ -377,6 +380,112 @@ describe('FileService - 文件系统域逻辑', () => {
         const isValid = fileService.isValidFileName(name);
         expect(isValid).toBe(false);
       });
+    });
+  });
+
+  describe('保护注册表 (protectionRegistry)', () => {
+    describe('getProtectionLevel', () => {
+      it('98_技能配置 文件夹应为 IMMUTABLE', () => {
+        expect(getProtectionLevel('/98_技能配置', true)).toBe(ProtectionLevel.IMMUTABLE);
+      });
+
+      it('99_创作规范 文件夹应为 IMMUTABLE', () => {
+        expect(getProtectionLevel('/99_创作规范', true)).toBe(ProtectionLevel.IMMUTABLE);
+      });
+
+      it('subskill 文件夹应为 IMMUTABLE', () => {
+        expect(getProtectionLevel('/98_技能配置/subskill', true)).toBe(ProtectionLevel.IMMUTABLE);
+      });
+
+      it('agent_core.md 应为 AUTO_REBUILD', () => {
+        expect(getProtectionLevel('/98_技能配置/agent_core.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      });
+
+      it('subskill下技能文件应为 AUTO_REBUILD', () => {
+        expect(getProtectionLevel('/98_技能配置/subskill/技能_大纲构建.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      });
+
+      it('99_创作规范下文件应为 AUTO_REBUILD', () => {
+        expect(getProtectionLevel('/99_创作规范/指南_文风规范.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+        expect(getProtectionLevel('/99_创作规范/模板_项目档案.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      });
+
+      it('长期记忆.json 应为 PERSISTENT', () => {
+        expect(getProtectionLevel('/00_基础信息/长期记忆.json', false)).toBe(ProtectionLevel.PERSISTENT);
+      });
+
+      it('outline.json 应为 PERSISTENT', () => {
+        expect(getProtectionLevel('/03_剧情大纲/outline.json', false)).toBe(ProtectionLevel.PERSISTENT);
+      });
+
+      it('章节分析.json 应为 AUTO_REBUILD', () => {
+        expect(getProtectionLevel('/00_基础信息/章节分析.json', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      });
+
+      it('用户文件应为 NONE', () => {
+        expect(getProtectionLevel('/05_正文草稿/第一章.md', false)).toBe(ProtectionLevel.NONE);
+        expect(getProtectionLevel('/01_世界观/设定集.md', false)).toBe(ProtectionLevel.NONE);
+        expect(getProtectionLevel('/05_正文草稿', true)).toBe(ProtectionLevel.NONE);
+      });
+    });
+
+    describe('canDelete', () => {
+      it('NONE 和 AUTO_REBUILD 可删除', () => {
+        expect(canDelete(ProtectionLevel.NONE)).toBe(true);
+        expect(canDelete(ProtectionLevel.AUTO_REBUILD)).toBe(true);
+      });
+
+      it('IMMUTABLE 和 PERSISTENT 不可删除', () => {
+        expect(canDelete(ProtectionLevel.IMMUTABLE)).toBe(false);
+        expect(canDelete(ProtectionLevel.PERSISTENT)).toBe(false);
+      });
+    });
+
+    describe('canModifyContent', () => {
+      it('仅 IMMUTABLE 不可修改内容', () => {
+        expect(canModifyContent(ProtectionLevel.IMMUTABLE)).toBe(false);
+      });
+
+      it('NONE, PERSISTENT, AUTO_REBUILD 可修改内容', () => {
+        expect(canModifyContent(ProtectionLevel.NONE)).toBe(true);
+        expect(canModifyContent(ProtectionLevel.PERSISTENT)).toBe(true);
+        expect(canModifyContent(ProtectionLevel.AUTO_REBUILD)).toBe(true);
+      });
+    });
+  });
+
+  describe('FileService canModifyContent', () => {
+    it('IMMUTABLE 文件不可修改内容', () => {
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'agent-core', parentId: 'skill-folder', name: 'agent_core.md', type: FileType.FILE, content: 'core', lastModified: Date.now() },
+      ];
+      // 98_技能配置 folder is IMMUTABLE - but it's a folder, not a file with content
+      // Let's test with the folder itself
+      const skillFolder = allFiles[1];
+      expect(fileService.canModifyContent(skillFolder, allFiles)).toBe(false);
+    });
+
+    it('PERSISTENT 文件可修改内容', () => {
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'info-folder', parentId: 'root', name: '00_基础信息', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'memory', parentId: 'info-folder', name: '长期记忆.json', type: FileType.FILE, content: '{}', lastModified: Date.now() },
+      ];
+      const memoryFile = allFiles[2];
+      expect(fileService.canModifyContent(memoryFile, allFiles)).toBe(true);
+    });
+
+    it('AUTO_REBUILD 文件可修改内容', () => {
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'subskill-folder', parentId: 'skill-folder', name: 'subskill', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'skill-file', parentId: 'subskill-folder', name: '技能_大纲构建.md', type: FileType.FILE, content: 'skill', lastModified: Date.now() },
+      ];
+      const skillFile = allFiles[3];
+      expect(fileService.canModifyContent(skillFile, allFiles)).toBe(true);
     });
   });
 

@@ -3,6 +3,8 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { FileNode, FileType } from '../types';
 import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2, Download, Sparkles } from 'lucide-react';
 import { downloadSingleFile, downloadFolderAsZip } from '../utils/exportUtils';
+import { ProtectionLevel, getProtectionLevel } from '../domains/file/protectionRegistry';
+import { getNodePath } from '../services/fileSystem';
 
 interface FileExplorerProps {
   files: FileNode[];
@@ -128,12 +130,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       const isActive = activeFileId === node.id;
       const paddingLeft = `${depth * 1.2 + 0.5}rem`;
       
-      // Check if it's a system directory (Direct child of root)
-      const isSystemDir = node.parentId === 'root' && node.type === FileType.FOLDER;
-
-      // Check if it's a protected file (cannot be deleted)
-      const protectedFileNames = ['长期记忆.json'];
-      const isProtectedFile = protectedFileNames.includes(node.name);
+      // Check protection level from registry
+      const nodePath = getNodePath(node, files);
+      const protectionLevel = getProtectionLevel(nodePath, node.type === FileType.FOLDER);
+      const canDeleteOrRename = protectionLevel === ProtectionLevel.NONE || protectionLevel === ProtectionLevel.AUTO_REBUILD;
 
       return (
         <div key={node.id}>
@@ -225,8 +225,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                     </>
                 )}
 
-                {/* Delete Button - Hidden for System Directories and Protected Files */}
-                {!isSystemDir && !isProtectedFile && (
+                {/* Delete Button - Hidden for IMMUTABLE and PERSISTENT files/folders */}
+                {canDeleteOrRename && (
                     <button 
                         onClick={(e) => {
                             e.stopPropagation();
