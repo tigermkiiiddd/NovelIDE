@@ -1,6 +1,7 @@
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
+import { dbAPI } from '../services/persistence';
 
 interface UiState {
   isSidebarOpen: boolean;
@@ -35,7 +36,49 @@ interface UiState {
   toggleDebugMode: () => void;
 }
 
-// 创建持久化 Store - 使用 localStorage（同步、可靠）
+interface UiSettings {
+  isSidebarOpen: boolean;
+  isChatOpen: boolean;
+  sidebarWidth: number;
+  agentWidth: number;
+  isSplitView: boolean;
+  showLineNumbers: boolean;
+  wordWrap: boolean;
+  isDebugMode: boolean;
+  hasSeenTutorial: boolean;
+}
+
+// 正确的异步 storage adapter for Zustand persist
+const asyncIndexedDBStorage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      const settings = await dbAPI.getUiSettings();
+      console.log('[UiStore] Loaded from IndexedDB:', settings);
+      return settings ? JSON.stringify(settings) : null;
+    } catch (error) {
+      console.error('[UiStore] Failed to load from IndexedDB:', error);
+      return null;
+    }
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    try {
+      const parsed = JSON.parse(value) as { state: UiSettings };
+      await dbAPI.saveUiSettings(parsed.state);
+      console.log('[UiStore] Saved to IndexedDB, hasSeenTutorial:', parsed.state.hasSeenTutorial);
+    } catch (error) {
+      console.error('[UiStore] Failed to save to IndexedDB:', error);
+    }
+  },
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      await dbAPI.deleteUiSettings();
+    } catch (error) {
+      console.error('[UiStore] Failed to delete from IndexedDB:', error);
+    }
+  }
+};
+
+// 创建持久化 Store
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
@@ -70,7 +113,8 @@ export const useUiStore = create<UiState>()(
       toggleDebugMode: () => set((state) => ({ isDebugMode: !state.isDebugMode })),
     }),
     {
-      name: 'novel-genie-ui-storage', // localStorage key
+      name: 'novel-genie-ui-storage',
+      storage: createJSONStorage(() => asyncIndexedDBStorage),
     }
   )
 );
