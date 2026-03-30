@@ -98,6 +98,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   }, [hasSeenTutorial, projectId]);
 
   const handleTutorialClose = useCallback(() => {
+    console.log('[MainLayout] Tutorial closing, setting hasSeenTutorial to true');
     setIsTutorialOpen(false);
     setHasSeenTutorial(true);
   }, [setHasSeenTutorial]);

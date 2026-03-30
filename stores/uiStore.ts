@@ -44,19 +44,24 @@ const indexedDBStorage = {
     return settings ? JSON.stringify(settings) : null;
   },
   setItem: async (name: string, value: string | object) => {
-    // Zustand may pass JSON string or already-parsed object
-    const parsed = typeof value === 'string' ? JSON.parse(value) as UiState : value as UiState;
-    await dbAPI.saveUiSettings({
-      isSidebarOpen: parsed.isSidebarOpen ?? true,
-      isChatOpen: parsed.isChatOpen ?? true,
-      sidebarWidth: parsed.sidebarWidth ?? 256,
-      agentWidth: parsed.agentWidth ?? 384,
-      isSplitView: parsed.isSplitView ?? false,
-      showLineNumbers: parsed.showLineNumbers ?? true,
-      wordWrap: parsed.wordWrap ?? true,
-      isDebugMode: parsed.isDebugMode ?? false,
-      hasSeenTutorial: parsed.hasSeenTutorial ?? false
-    });
+    try {
+      // Zustand may pass JSON string or already-parsed object
+      const parsed = typeof value === 'string' ? JSON.parse(value) as UiState : value as UiState;
+      await dbAPI.saveUiSettings({
+        isSidebarOpen: parsed.isSidebarOpen ?? true,
+        isChatOpen: parsed.isChatOpen ?? true,
+        sidebarWidth: parsed.sidebarWidth ?? 256,
+        agentWidth: parsed.agentWidth ?? 384,
+        isSplitView: parsed.isSplitView ?? false,
+        showLineNumbers: parsed.showLineNumbers ?? true,
+        wordWrap: parsed.wordWrap ?? true,
+        isDebugMode: parsed.isDebugMode ?? false,
+        hasSeenTutorial: parsed.hasSeenTutorial ?? false
+      });
+      console.log('[UiStore] UI settings saved, hasSeenTutorial:', parsed.hasSeenTutorial);
+    } catch (error) {
+      console.error('[UiStore] Failed to save UI settings:', error);
+    }
   },
   removeItem: async (name: string) => {
     // Actually delete the stored settings
@@ -80,7 +85,10 @@ export const useUiStore = create<UiState>()(
       isDebugMode: false,     // 默认关闭调试模式
       hasSeenTutorial: false, // 默认未看过教程
 
-      setHasSeenTutorial: (v) => set({ hasSeenTutorial: v }),
+      setHasSeenTutorial: (v) => {
+        console.log('[UiStore] setHasSeenTutorial called with:', v);
+        set({ hasSeenTutorial: v });
+      },
 
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),
       setChatOpen: (open) => set({ isChatOpen: open }),

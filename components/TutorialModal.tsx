@@ -84,6 +84,7 @@ const TutorialModal: React.FC<TutorialModalProps> = ({ isOpen, onClose }) => {
   const isLast = currentStep === TUTORIAL_STEPS.length - 1;
 
   const handleClose = () => {
+    console.log('[TutorialModal] Close button clicked');
     setCurrentStep(0);
     onClose();
   };
