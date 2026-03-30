@@ -29,6 +29,8 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
           finalConfig.baseUrl = activeBackend.baseUrl;
           finalConfig.apiKey = activeBackend.apiKey;
           finalConfig.modelName = activeBackend.modelName;
+          finalConfig.lightweightModelName = activeBackend.lightweightModelName;
+          finalConfig.maxOutputTokens = activeBackend.maxOutputTokens;
       }
 
       onSave(finalConfig);
@@ -197,28 +199,45 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                 className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
                             />
                         </div>
+
+                        {/* Lightweight Model for Auto Tasks */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                                <Zap size={16}/>
+                                轻量模型（自动任务）
+                            </label>
+                            <input
+                                type="text"
+                                value={activeBackend.lightweightModelName || ''}
+                                onChange={e => updateActiveBackend({ lightweightModelName: e.target.value || undefined })}
+                                placeholder={activeBackend.modelName || 'gpt-4o-mini'}
+                                className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                            />
+                            <p className="text-xs text-gray-500 mt-2">
+                                用于章节分析等轻量自动任务的模型。若留空则使用主模型。
+                                建议使用更便宜、快速的模型（如 deepseek-coder、gpt-4o-mini）。
+                            </p>
+                        </div>
+
+                        {/* Max Output Tokens */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                                <Hash size={16}/> Max Output Tokens
+                            </label>
+                            <input
+                                type="number"
+                                value={activeBackend.maxOutputTokens || ''}
+                                onChange={e => updateActiveBackend({ maxOutputTokens: parseInt(e.target.value) || undefined })}
+                                placeholder="8192"
+                                className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                            />
+                            <p className="text-xs text-gray-500 mt-2">
+                                控制单次回复的最大长度。推荐: 8192。
+                            </p>
+                        </div>
                     </div>
                 </div>
             )}
-
-            {/* Lightweight Model for Auto Tasks */}
-            <div className="animate-in fade-in">
-                <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                    <Zap size={16}/>
-                    轻量模型（自动任务）
-                </label>
-                <input
-                    type="text"
-                    value={tempConfig.lightweightModelName || ''}
-                    onChange={e => setTempConfig({...tempConfig, lightweightModelName: e.target.value || undefined})}
-                    placeholder={activeBackend?.modelName || 'gpt-4o-mini'}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                    用于章节分析等轻量自动任务的模型。若留空则使用主模型。
-                    建议使用更便宜、快速的模型（如 deepseek-coder、gpt-4o-mini）。
-                </p>
-            </div>
 
             {/* Safety Settings (Gemini only) */}
             <div className="animate-in fade-in">
@@ -247,23 +266,6 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             : "仅当使用 Gemini 模型时生效。其他模型（如 GPT-4、DeepSeek）会自动忽略此参数。"}
                     </p>
                 </div>
-            </div>
-
-            {/* Max Output Tokens */}
-            <div>
-                 <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                    <Hash size={16}/> Max Output Tokens
-                 </label>
-                 <input
-                    type="number"
-                    value={tempConfig.maxOutputTokens || ''}
-                    onChange={e => setTempConfig({...tempConfig, maxOutputTokens: parseInt(e.target.value) || undefined})}
-                    placeholder="8192"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                 />
-                 <p className="text-xs text-gray-600 mt-1">
-                    控制单次回复的最大长度。推荐: 8192。
-                 </p>
             </div>
 
             {/* Auto Extraction Toggles */}

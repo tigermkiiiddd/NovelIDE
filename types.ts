@@ -239,6 +239,8 @@ export interface OpenAIBackend {
   baseUrl: string;
   apiKey: string;
   modelName: string;
+  lightweightModelName?: string; // 轻量模型
+  maxOutputTokens?: number;      // 最长输出
 }
 
 export interface AIConfig {
