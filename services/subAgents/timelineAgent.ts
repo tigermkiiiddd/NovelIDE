@@ -146,7 +146,20 @@ ${context.recentEvents && context.recentEvents.length > 0 ? `
 **最近事件（剧情时间线参考）：**
 ${context.recentEvents.map(e => `- [${e.eventIndex}] 第${e.timestamp.day}天${e.timestamp.hour}时「${e.title}」：${e.content.substring(0, 80)}${e.content.length > 80 ? '...' : ''}`).join('\n')}
 
-📍 **时间线当前位置：** 最后一个事件 [${context.recentEvents[context.recentEvents.length - 1].eventIndex}] 在第${context.recentEvents[context.recentEvents.length - 1].timestamp.day}天${context.recentEvents[context.recentEvents.length - 1].timestamp.hour}时。续写时，新事件的 timestamp 应从此时间之后开始。
+## ⚠️⚠️⚠️ 时间戳规则（最高优先级！违反将导致时间线混乱！）
+
+📍 **时间线当前位置：** 最后一个事件 [${context.recentEvents[context.recentEvents.length - 1].eventIndex}] 在 **第${context.recentEvents[context.recentEvents.length - 1].timestamp.day}天${context.recentEvents[context.recentEvents.length - 1].timestamp.hour}时**。
+
+**规则：新事件的 timestamp 必须 >= 这个位置！**
+
+❌ 错误示例：前面已到第3天，新事件却从第1天开始
+✅ 正确示例：前面到第3天18时，新事件从第3天19时或第4天开始
+
+**具体做法：**
+1. 先看【时间线当前位置】的 day 和 hour
+2. 新事件的 day 必须 >= 当前位置的天数
+3. 如果是同一天，hour 必须大于当前位置的 hour
+4. 建议新章节从次日（day+1）开始，给前一章留出时间缓冲
 ` : ''}
 
 ${context?.unresolvedForeshadowing && context.unresolvedForeshadowing.length > 0 ? `
@@ -276,7 +289,9 @@ planted → developed → developed → ... → resolved
 - **追加 add（默认）**：\`{ add: [{ timestamp: { day, hour }, title, content, chapterIndex, foreshadowing: [...] }] }\`
   - ✅ 续写剧情、推进时间线 → **用 add**
   - ✅ 为新章节创建事件 → **用 add**
-  - ✅ timestamp 从【最近事件】的时间之后继续
+  - ⚠️ **timestamp 必须接续时间线当前位置！** 不能从第1天重新开始！
+    - 查看【时间线当前位置】，新事件 day 必须大于等于那个天数
+    - 新章节建议从上一章结束的次日（day+1）开始
 - **插入 insert（特殊）**：\`{ insert: { afterEventIndex: N, events: [...] } }\` — 后续事件时间戳自动顺移
   - ⚠️ 仅在以下场景使用 insert：
     - 插入回忆/闪回

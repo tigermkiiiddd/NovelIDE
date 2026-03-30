@@ -554,7 +554,20 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
 
       // add
       if (args.add) {
+        // 检测时间戳回退：获取时间线最后一个事件的位置
+        const allEventsBeforeAdd = store.getEvents();
+        const lastEvt = allEventsBeforeAdd.length > 0 ? allEventsBeforeAdd[allEventsBeforeAdd.length - 1] : null;
+        const lastHours = lastEvt ? (lastEvt.timestamp.day - 1) * 24 + lastEvt.timestamp.hour + (lastEvt.duration ? toHours(lastEvt.duration) : 0) : 0;
+
         for (const e of args.add) {
+          // 校验：新事件 timestamp 不能早于时间线末尾
+          const newHours = (e.timestamp.day - 1) * 24 + e.timestamp.hour;
+          if (lastEvt && newHours < lastHours) {
+            return JSON.stringify({
+              success: false,
+              error: `时间戳回退错误：新事件「${e.title}」的 timestamp（第${e.timestamp.day}天${e.timestamp.hour}时）早于时间线末尾（第${lastEvt.timestamp.day}天${lastEvt.timestamp.hour}时）。add 模式下新事件的 timestamp 必须接续当前时间线位置，请使用正确的绝对时间戳。`
+            });
+          }
           const eventData: any = { ...e };
           if (e.chapterIndex !== undefined) {
             const chapter = findChapterByIndex(e.chapterIndex);
