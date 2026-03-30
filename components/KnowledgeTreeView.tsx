@@ -192,6 +192,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
   const [selectedImportance, setSelectedImportance] = useState<'critical' | 'important' | 'normal' | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'tree' | 'detail'>('tree');
 
   // 初始化
   useEffect(() => {
@@ -303,6 +304,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
     (node: KnowledgeNode) => {
       setSelectedNodeId(node.id);
       onSelectNode?.(node);
+      setMobileTab('detail');
     },
     [onSelectNode]
   );
@@ -324,9 +326,29 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
   }, [nodes, selectedNodeId]);
 
   return (
-    <div className={`h-full flex bg-gray-900 text-gray-100 ${className}`}>
+    <div className={`h-full flex flex-col md:flex-row bg-gray-900 text-gray-100 ${className}`}>
+      {/* Mobile tab bar */}
+      {selectedNodeId && (
+        <div className="md:hidden flex border-b border-gray-700 shrink-0">
+          <button
+            onClick={() => setMobileTab('tree')}
+            className={`flex-1 py-2 text-sm text-center ${mobileTab === 'tree' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400'}`}
+          >
+            知识列表
+          </button>
+          <button
+            onClick={() => setMobileTab('detail')}
+            className={`flex-1 py-2 text-sm text-center ${mobileTab === 'detail' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400'}`}
+          >
+            详情
+          </button>
+        </div>
+      )}
+
       {/* 左侧：树状视图 */}
-      <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-700">
+      <div className={`flex-shrink-0 flex flex-col border-r border-gray-700 ${
+        selectedNodeId && mobileTab === 'detail' ? 'hidden md:flex' : 'flex'
+      } w-full md:w-80`}>
         {/* 工具栏 */}
         <div className="p-3 border-b border-gray-700 flex items-center gap-2">
           <div className="relative flex-1">
@@ -509,7 +531,9 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       </div>
 
       {/* 右侧：详情预览 */}
-      <div className="flex-1 min-w-0">
+      <div className={`flex-1 min-w-0 ${
+        mobileTab === 'tree' && selectedNodeId ? 'hidden md:block' : 'block'
+      }`}>
         <KnowledgeNodePreview
           node={selectedNode}
           onUpdate={updateNode}

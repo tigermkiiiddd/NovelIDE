@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Activity,
   BookOpen,
@@ -1245,6 +1245,13 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const restoreProfileFromVersion = useCharacterMemoryStore((state: CharacterMemoryState) => state.restoreProfileFromVersion);
 
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   if (!profile) {
     return (
       <div
@@ -1300,18 +1307,18 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
       style={{
         height: '100%',
         overflowY: 'auto',
-        padding: 24,
+        padding: isMobile ? 12 : 24,
         background:
           'radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 34%), radial-gradient(circle at top right, rgba(34, 197, 94, 0.12), transparent 28%), linear-gradient(180deg, #0f172a 0%, #111827 100%)',
         color: '#e2e8f0',
       }}
     >
-      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ maxWidth: 1280, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: isMobile ? 12 : 18 }}>
         {/* 头部信息 */}
         <section
           style={{
             ...cardStyle,
-            padding: 24,
+            padding: isMobile ? 14 : 24,
             background:
               'linear-gradient(135deg, rgba(14, 116, 144, 0.18) 0%, rgba(15, 23, 42, 0.98) 44%, rgba(22, 101, 52, 0.22) 100%)',
           }}
@@ -1325,12 +1332,12 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
               alignItems: 'flex-start',
             }}
           >
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', gap: isMobile ? 10 : 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
               <div
                 style={{
-                  width: 62,
-                  height: 62,
-                  borderRadius: 18,
+                  width: isMobile ? 48 : 62,
+                  height: isMobile ? 48 : 62,
+                  borderRadius: isMobile ? 14 : 18,
                   display: 'grid',
                   placeItems: 'center',
                   background: 'rgba(56, 189, 248, 0.12)',
@@ -1339,18 +1346,18 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                   flexShrink: 0,
                 }}
               >
-                <User size={28} />
+                <User size={isMobile ? 22 : 28} />
               </div>
               <div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#f8fafc', marginBottom: 8 }}>
+                <div style={{ fontSize: isMobile ? 20 : 28, fontWeight: 700, color: '#f8fafc', marginBottom: 4 }}>
                   {profile.characterName}
                 </div>
                 {profile.baseProfilePath && (
-                  <div style={{ fontSize: 13, color: '#64748b', marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 4 }}>
                     基础设定: {profile.baseProfilePath}
                   </div>
                 )}
-                <div style={{ fontSize: 13, color: '#94a3b8' }}>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>
                   创建于 {formatTime(profile.createdAt)} · 最后更新于 {profile.lastChapterRef || '未记录'}
                 </div>
               </div>
@@ -1368,6 +1375,7 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                   fontSize: 13,
                   cursor: 'pointer',
                   transition: 'all 0.2s',
+                  minHeight: 44,
                 }}
               >
                 <History size={16} />
@@ -1380,8 +1388,9 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))',
                 gap: 12,
-                minWidth: 320,
+                minWidth: isMobile ? 'auto' : 320,
                 flex: 1,
+                width: isMobile ? '100%' : undefined,
               }}
             >
               <MetricCard label="总条目" value={String(stats.totalEntries)} accent="#38bdf8" />
@@ -1399,23 +1408,23 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
         {/* 分类说明 */}
         <div
           style={{
-            padding: '12px 16px',
+            padding: isMobile ? '10px 12px' : '12px 16px',
             borderRadius: 12,
             background: 'rgba(30, 41, 59, 0.4)',
             border: '1px solid rgba(148, 163, 184, 0.1)',
-            fontSize: 13,
+            fontSize: isMobile ? 12 : 13,
             color: '#94a3b8',
+            lineHeight: 1.6,
           }}
         >
           <strong style={{ color: '#cbd5e1' }}>分类说明：</strong>
-          <span style={{ marginLeft: 8 }}>
+          {isMobile ? <br /> : <span style={{ marginLeft: 8 }} />}
             <span style={{ color: '#34d399' }}>● 覆盖型</span>（状态/属性/目标/技能）只保留最新值；
-            <span style={{ color: '#f59e0b', marginLeft: 12 }}>● 累加型</span>（关系/经历/记忆）保留历史记录
-          </span>
+            <span style={{ color: '#f59e0b', marginLeft: isMobile ? 0 : 12 }}>● 累加型</span>（关系/经历/记忆）保留历史记录
         </div>
 
         {/* 覆盖型分类 */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 18 }}>
           {(['状态', '属性', '目标', '技能'] as CharacterCategoryName[]).map((catName) => (
             <CategoryCard
               key={catName}

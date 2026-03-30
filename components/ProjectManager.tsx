@@ -400,7 +400,7 @@ ${polishInstruction || '(无额外指令)'}
   };
 
   return (
-    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden overflow-y-auto bg-gray-950 p-4 text-gray-100 sm:p-6 md:h-screen md:overflow-hidden safe-area-top safe-area-bottom">
+    <div className="flex min-h-[100dvh] flex-col overflow-x-hidden bg-gray-950 p-4 text-gray-100 sm:p-6 md:h-screen md:overflow-y-auto safe-area-top safe-area-bottom">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col md:min-h-0">
 
         <header className="flex flex-col items-start gap-3 mb-4 md:gap-4 md:mb-8 md:flex-row md:justify-between md:items-center">
@@ -542,7 +542,7 @@ ${polishInstruction || '(无额外指令)'}
           )
         )}
 
-        <div className="flex-1 min-h-0 overflow-visible pb-2 pr-0 md:overflow-y-auto md:pr-2">
+        <div className="flex-1 min-h-0 pb-2 pr-0 md:overflow-y-auto md:pr-2">
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl">
               <Book size={48} className="mb-4 opacity-20" />
