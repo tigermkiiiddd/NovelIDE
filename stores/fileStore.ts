@@ -190,6 +190,9 @@ export const useFileStore = create<FileState>((set, get) => ({
       return `Error: Cannot modify content of immutable file "${file.name}"`;
     }
 
+    // 拒绝隐藏文件
+    if (file.hidden) return `Error: File at "${path}" not found.`;
+
     // 创建修改前版本（仅在内容有变化时）
     if (file.content !== content) {
       useVersionStore.getState().createVersion(
@@ -250,6 +253,9 @@ export const useFileStore = create<FileState>((set, get) => ({
     if (!getFileService().canModifyContent(file, files)) {
       return `Error: Cannot modify content of immutable file "${file.name}"`;
     }
+
+    // 拒绝隐藏文件
+    if (file.hidden) return `Error: File not found.`;
 
     // 创建修改前版本
     if (file.content) {

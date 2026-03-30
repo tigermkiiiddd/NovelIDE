@@ -21,6 +21,7 @@ export interface FileNode {
   metadata?: FileMetadata; // Parsed frontmatter
   lastModified: number;
   hidden?: boolean; // 隐藏后对用户和LLM不可见（题材切换时使用）
+  sourcePresetId?: string; // 标记文件属于哪个预设（题材文件专用）
 }
 
 // --- API Content Part Types (for rawParts) ---

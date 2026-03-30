@@ -90,14 +90,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   // 包装 updateProject：检测 presetId 变更时切换题材文件
   const handleUpdateProject = useCallback(async (id: string, updates: Partial<import('../types').ProjectMeta>) => {
     const oldProject = useProjectStore.getState().projects.find(p => p.id === id);
-    const oldPresetId = oldProject?.presetId;
+    const oldPresetId = oldProject?.presetId || undefined;
 
     await updateProject(id, updates);
 
-    // presetId 变更时切换文件系统中的题材文件
-    const newPresetId = updates.presetId;
+    // presetId 变更时切换文件系统中的题材文件（标准化空字符串为 undefined）
+    const newPresetId = updates.presetId || undefined;
     if (newPresetId !== oldPresetId) {
-      useFileStore.getState().switchPreset(newPresetId || undefined);
+      useFileStore.getState().switchPreset(newPresetId);
     }
   }, [updateProject]);
   const loadProjectAnalyses = useChapterAnalysisStore((state: ChapterAnalysisState) => state.loadProjectAnalyses);

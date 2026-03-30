@@ -29,13 +29,14 @@ const createFolder = (name: string, parentId: string): FileNode => ({
   lastModified: Date.now()
 });
 
-const createFile = (name: string, parentId: string, content: string): FileNode => ({
+const createFile = (name: string, parentId: string, content: string, extra?: Partial<FileNode>): FileNode => ({
   id: generateId(),
   parentId,
   name,
   type: FileType.FILE,
   content,
-  lastModified: Date.now()
+  lastModified: Date.now(),
+  ...extra,
 });
 
 // Helper for simple default content with metadata
@@ -65,7 +66,7 @@ export const findNodeByPath = (files: FileNode[], path: string): FileNode | unde
 
   for (let i = 0; i < parts.length; i++) {
     const partName = parts[i];
-    currentNode = files.find(f => f.parentId === currentParentId && f.name === partName);
+    currentNode = files.find(f => f.parentId === currentParentId && f.name === partName && !f.hidden);
     
     if (!currentNode) return undefined;
     currentParentId = currentNode.id;
@@ -193,7 +194,8 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
 
   // 根据预设创建题材技能
   if (preset && preset.skills.length > 0) {
-    // 使用预设指定的技能
+    // 使用预设指定的技能，标记 sourcePresetId
+    const pid = preset.id;
     preset.skills.forEach(skillName => {
       // 跳过通用技能（已创建）
       if (UNIVERSAL_SKILLS[skillName]) return;
@@ -201,13 +203,13 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       const customContent = preset.customSkills?.[skillName];
       const skillContent = customContent || GENRE_SKILL_MAP[skillName];
       if (skillContent) {
-        files.push(createFile(skillName, subskillFolder.id, skillContent));
+        files.push(createFile(skillName, subskillFolder.id, skillContent, { sourcePresetId: pid }));
       }
     });
     // 爽点节奏管理技能始终加载
     if (!preset.skills.includes('技能_爽点节奏管理.md')) {
       const customRhythm = preset.customSkills?.['技能_爽点节奏管理.md'];
-      files.push(createFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER));
+      files.push(createFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER, { sourcePresetId: pid }));
     }
   } else {
     // 默认加载全部题材技能
@@ -217,9 +219,9 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   }
 
   // --- 99_创作规范 (Templates & Guides) ---
-  // 文风规范：使用预设的或默认的
+  // 文风规范：使用预设的或默认的，有预设时标记 sourcePresetId
   const styleGuide = preset?.styleGuide || STYLE_GUIDE_TEMPLATE;
-  files.push(createFile('指南_文风规范.md', rulesFolder.id, styleGuide));
+  files.push(createFile('指南_文风规范.md', rulesFolder.id, styleGuide, preset ? { sourcePresetId: preset.id } : undefined));
 
   // 基础模板
   files.push(
@@ -229,10 +231,10 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     createFile('模板_伏笔记录.md', rulesFolder.id, withMeta('# 伏笔记录\n\n使用伏笔工具追踪剧情伏笔和爽点节奏。\n\n## 爽点标签规范\n- `爽点:小` - 小爽点（+1~+2）\n- `爽点:中` - 中爽点（+3~+4）\n- `爽点:大` - 大爽点（+5）\n\n在伏笔的 tags 字段中添加爽点等级标签，通过伏笔界面筛选和查看爽点分布。', '此文件说明如何使用伏笔工具追踪爽点节奏。', ['模板']))
   );
 
-  // 预设特定模板
+  // 预设特定模板，标记 sourcePresetId
   if (preset && preset.templates) {
     Object.entries(preset.templates).forEach(([fileName, content]) => {
-      files.push(createFile(fileName, rulesFolder.id, content));
+      files.push(createFile(fileName, rulesFolder.id, content, { sourcePresetId: preset.id }));
     });
   }
 
