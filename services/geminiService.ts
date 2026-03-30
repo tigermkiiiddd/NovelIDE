@@ -457,16 +457,36 @@ export class AIService {
               // CRITICAL: Generate and PERSIST the ID here if the API didn't return one (rare but possible with some proxies)
               // This ensures the next turn (Tool Response) uses the exact same ID.
               const callId = tc.id || `call_${Math.random().toString(36).substr(2, 9)}`;
-              
+
+              // 尝试解析 arguments，处理截断情况
+              let parsedArgs: any;
+              try {
+                parsedArgs = JSON.parse(tc.function.arguments);
+              } catch (parseError) {
+                // finish_reason=length 导致 tool_call arguments 被截断
+                console.error(`[AIService] Tool call arguments JSON parse failed (finish_reason=${finishReason}). Tool: ${tc.function.name}. Error: ${(parseError as Error).message}`);
+                warnings.push(`工具调用「${tc.function.name}」参数被截断，无法解析`);
+                // 如果没有文本内容，用截断提示替代
+                if (!msg.content) {
+                  parts.push({ text: `[响应被截断] 工具调用「${tc.function.name}」的参数因达到 token 上限而被截断，请调整请求内容后重试。` });
+                }
+                return; // 跳过这个 tool_call
+              }
+
               parts.push({
                 functionCall: {
                   id: callId,
                   name: tc.function.name,
-                  args: JSON.parse(tc.function.arguments) 
+                  args: parsedArgs
                 }
               });
           }
         });
+      }
+
+      // 兜底：parts 为空时添加截断提示（所有 tool_calls 都被跳过且无 content）
+      if (parts.length === 0) {
+        parts.push({ text: `[响应被截断] 因达到 token 上限，响应内容不完整。请缩减内容或调整 max_tokens 后重试。` });
       }
 
       return {
