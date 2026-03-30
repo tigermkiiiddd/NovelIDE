@@ -531,9 +531,9 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       </div>
 
       {/* 右侧：详情预览 */}
-      <div className={`flex-1 min-w-0 ${
-        mobileTab === 'tree' && selectedNodeId ? 'hidden md:block' : 'block'
-      }`}>
+      <div className={`flex-1 min-w-0 min-h-0 overflow-hidden ${
+        mobileTab === 'tree' && selectedNodeId ? 'hidden md:flex' : 'flex'
+      } flex-col`}>
         <KnowledgeNodePreview
           node={selectedNode}
           onUpdate={updateNode}
