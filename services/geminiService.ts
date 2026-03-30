@@ -197,7 +197,7 @@ export class AIService {
       const requestPayload: any = {
         model: modelName,
         messages: openAIMessages,
-        stream: false,  // 显式禁用流式，防止代理默认返回 SSE 格式
+        stream: true,  // 使用流式接收，兼容所有代理
         tools: tools.length > 0 ? tools : undefined,
         tool_choice: forceToolName
           ? { type: 'function', function: { name: forceToolName } }  // 强制调用指定工具
@@ -257,9 +257,76 @@ export class AIService {
         timestamp: new Date().toISOString(),
       }, null, 2));
 
-      const completion: any = await this.withRetry(() =>
+      // 使用流式请求，收集所有 chunk 后拼装为完整响应
+      const stream: any = await this.withRetry(() =>
           this.client!.chat.completions.create(requestPayload, { signal })
       );
+
+      // 收集流式 chunk
+      let content = '';
+      const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
+      let finishReason: string | null = null;
+      let model = '';
+      let id = '';
+      let usage: any = null;
+
+      for await (const chunk of stream) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        id = chunk.id || id;
+        model = chunk.model || model;
+        if (chunk.usage) usage = chunk.usage;
+
+        const choice = chunk.choices?.[0];
+        if (choice) {
+          finishReason = choice.finish_reason || finishReason;
+          // 收集文本内容
+          const delta = choice.delta;
+          if (delta?.content) {
+            content += delta.content;
+          }
+          // 收集 tool calls
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index ?? 0;
+              if (!toolCallsMap.has(idx)) {
+                toolCallsMap.set(idx, {
+                  id: tc.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+                  name: tc.function?.name || '',
+                  arguments: '',
+                });
+              }
+              const entry = toolCallsMap.get(idx)!;
+              if (tc.id) entry.id = tc.id;
+              if (tc.function?.name) entry.name = tc.function.name;
+              if (tc.function?.arguments) entry.arguments += tc.function.arguments;
+            }
+          }
+        }
+      }
+
+      // 拼装为标准非流式响应格式，后续代码无需改动
+      const completion: any = {
+        id,
+        object: 'chat.completion',
+        model,
+        choices: [{
+          index: 0,
+          finish_reason: finishReason || 'stop',
+          message: {
+            role: 'assistant',
+            content: content || null,
+            tool_calls: toolCallsMap.size > 0
+              ? Array.from(toolCallsMap.entries()).map(([idx, tc]) => ({
+                  index: idx,
+                  id: tc.id,
+                  type: 'function',
+                  function: { name: tc.name, arguments: tc.arguments },
+                }))
+              : undefined,
+          },
+        }],
+        usage: usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      };
 
       const requestEndTime = Date.now();
       const duration = requestEndTime - requestStartTime;
