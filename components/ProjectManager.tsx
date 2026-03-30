@@ -5,6 +5,7 @@ import { useAgentStore } from '../stores/agentStore';
 import { AIService } from '../services/geminiService';
 import { exportProject, importProject } from '../services/projectService';
 import { getDisplayVersion } from '../utils/version';
+import { getPresetById } from '../services/resources/presets';
 import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
 import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
@@ -190,9 +191,12 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
       setIsPolishing(true);
       try {
           const service = new AIService(aiConfig);
+          const selectedPreset = selectedPresetId ? getPresetById(selectedPresetId) : undefined;
+          const genreLabel = selectedPreset ? selectedPreset.name : (genre || '小说');
+          const genreRole = `请作为一名资深${genreLabel}创作顾问，帮我完善以下小说项目的设定。`;
 
           const userPrompt = `
-请作为一名资深网文编辑，帮我完善以下小说项目的设定。
+${genreRole}
 
 ⚠️ **核心原则：保留用户设定，只补充缺失部分**
 
@@ -309,10 +313,13 @@ ${polishInstruction || '(无额外指令)'}
 "sellingPoint": "一句话差异化卖点"
 }`;
 
+          const systemRole = selectedPreset
+              ? `你是一名${selectedPreset.name}领域的资深创作顾问，专门输出 JSON 格式的${genreLabel}项目设定。请只输出 JSON，不要包含 \`\`\`json 前缀。`
+              : '你是一个专门输出 JSON 格式的小说设定辅助工具。请只输出 JSON，不要包含 ```json 前缀。';
           const response = await service.sendMessage(
               [],
               userPrompt,
-              '你是一个专门输出 JSON 格式的小说设定辅助工具。请只输出 JSON，不要包含 ```json 前缀。',
+              systemRole,
               []
           );
 
