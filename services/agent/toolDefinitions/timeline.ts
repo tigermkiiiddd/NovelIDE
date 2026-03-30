@@ -556,7 +556,16 @@ export const processOutlineInputTool: ToolDefinition = {
 
 ### 场景A：章节已存在且内容正确 → 只创建事件
 
-章节已存在，且标题/摘要与正文内容一致，只需创建事件。
+章节已存在，且标题/摘要与正文一致，只需创建事件。
+
+**userInput 格式：**
+\`\`\`
+【目标章节】chapterIndex=X
+
+【事件列表】
+- 第1天 10:00「事件标题」：事件内容...
+- 第1天 10:30「事件标题」：事件内容...
+\`\`\`
 
 **instructions 示例：**
 "任务：为 chapterIndex=1 创建事件。章节已存在且标题/摘要正确，只需创建事件。正文8600字，分解为10-15个事件，时间从第1天14:00开始。"
@@ -596,6 +605,31 @@ export const processOutlineInputTool: ToolDefinition = {
 1. 大纲中的章节标题和摘要
 2. 实际正文内容
 如果两者不匹配，必须使用场景B（修改+创建），不要只创建事件！
+
+## ❌ 常见错误
+
+**错误1：章节需要修改却写"禁止调用 manageChapters"**
+\`\`\`
+// ❌ 大纲标题是A，正文写的是B，却禁止修改章节
+instructions: "禁止调用 manageChapters！只需创建事件。"
+// ✅ 正确做法：允许 update，禁止 add
+instructions: "用 manageChapters 更新 chapterIndex=4 的标题和摘要，然后创建事件。"
+\`\`\`
+
+**错误2：userInput 里包含章节信息（章节已存在时）**
+\`\`\`
+// ❌ 章节已存在，userInput 里不应有章节创建信息
+userInput: "【章节】第1章「xxx」：摘要..."
+// ✅ 正确做法：只写事件
+userInput: "【目标章节】chapterIndex=1\\n【事件列表】\\n- ..."
+\`\`\`
+
+**错误3：缺少 instructions**
+\`\`\`
+// ❌ 没有 instructions，SubAgent 不知道该做什么
+processOutlineInput({ userInput: "...", mode: "add" })
+// ✅ 必须提供完整的 instructions
+\`\`\`
 `,
     parameters: {
       type: 'object',
