@@ -52,9 +52,19 @@ interface UiSettings {
 const asyncIndexedDBStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
     try {
+      console.log('[UiStore] getItem called, name:', name);
       const settings = await dbAPI.getUiSettings();
       console.log('[UiStore] Loaded from IndexedDB:', settings);
-      return settings ? JSON.stringify(settings) : null;
+      if (!settings) return null;
+
+      // Zustand persist 期望的格式：整个 state 对象的 JSON
+      const stateWrapper = {
+        state: settings,
+        version: 0
+      };
+      const result = JSON.stringify(stateWrapper);
+      console.log('[UiStore] Returning to Zustand:', result);
+      return result;
     } catch (error) {
       console.error('[UiStore] Failed to load from IndexedDB:', error);
       return null;
@@ -62,9 +72,14 @@ const asyncIndexedDBStorage: StateStorage = {
   },
   setItem: async (name: string, value: string): Promise<void> => {
     try {
-      const parsed = JSON.parse(value) as { state: UiSettings };
-      await dbAPI.saveUiSettings(parsed.state);
-      console.log('[UiStore] Saved to IndexedDB, hasSeenTutorial:', parsed.state.hasSeenTutorial);
+      console.log('[UiStore] setItem called, value:', value);
+      const parsed = JSON.parse(value);
+      console.log('[UiStore] Parsed value:', parsed);
+
+      // Zustand persist 传入的格式：{ state: {...}, version: 0 }
+      const settings = parsed.state as UiSettings;
+      await dbAPI.saveUiSettings(settings);
+      console.log('[UiStore] Saved to IndexedDB, hasSeenTutorial:', settings.hasSeenTutorial);
     } catch (error) {
       console.error('[UiStore] Failed to save to IndexedDB:', error);
     }
@@ -115,6 +130,14 @@ export const useUiStore = create<UiState>()(
     {
       name: 'novel-genie-ui-storage',
       storage: createJSONStorage(() => asyncIndexedDBStorage),
+      // 添加 onRehydrateStorage 来追踪 hydration 状态
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.error('[UiStore] Hydration error:', error);
+        } else {
+          console.log('[UiStore] Hydration complete, hasSeenTutorial:', state?.hasSeenTutorial);
+        }
+      }
     }
   )
 );

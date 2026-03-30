@@ -54,6 +54,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   })));
   const setHasSeenTutorial = useUiStore(state => state.setHasSeenTutorial);
 
+  // 等待 Zustand persist hydration 完成
+  const [isHydrated, setIsHydrated] = useState(false);
+  useEffect(() => {
+    const unsubscribe = useUiStore.persist.onFinishHydration(() => {
+      console.log('[MainLayout] Hydration finished, hasSeenTutorial:', useUiStore.getState().hasSeenTutorial);
+      setIsHydrated(true);
+    });
+    // 如果已经 hydrated，立即设置
+    if (useUiStore.persist.hasHydrated()) {
+      setIsHydrated(true);
+    }
+    return unsubscribe;
+  }, []);
+
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
   const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
@@ -91,11 +105,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   // --- Tutorial Auto-popup ---
   useEffect(() => {
-    if (hasSeenTutorial || !projectId || tutorialShownRef.current) return;
+    if (!isHydrated || hasSeenTutorial || !projectId || tutorialShownRef.current) return;
+    console.log('[MainLayout] Showing tutorial, hasSeenTutorial:', hasSeenTutorial);
     tutorialShownRef.current = true;
     const timer = setTimeout(() => setIsTutorialOpen(true), 800);
     return () => clearTimeout(timer);
-  }, [hasSeenTutorial, projectId]);
+  }, [isHydrated, hasSeenTutorial, projectId]);
 
   const handleTutorialClose = useCallback(() => {
     console.log('[MainLayout] Tutorial closing, setting hasSeenTutorial to true');
