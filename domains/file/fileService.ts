@@ -146,7 +146,7 @@ export class FileService {
       extra?: Partial<FileNode>
     ): FileNode => {
       let file = updatedFiles.find(
-        f => f.name === name && f.parentId === parentId && f.type === FileType.FILE
+        f => f.name === name && f.parentId === parentId && f.type === FileType.FILE && !f.hidden
       );
 
       if (!file) {
