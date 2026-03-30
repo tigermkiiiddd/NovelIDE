@@ -176,7 +176,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         name: node.name,
         summary: node.summary,
         detail: node.detail || '',
-        tags: [...node.tags],
+        tags: Array.isArray(node.tags) ? [...node.tags] : [],
         category: node.category,
         subCategory: node.subCategory,
         topic: node.topic || '',

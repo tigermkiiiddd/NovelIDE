@@ -143,8 +143,11 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   addNode: (draft: KnowledgeNodeDraft) => {
     const now = Date.now();
     const metadata = draft.metadata ?? createKnowledgeNodeMetadata(draft.importance);
+    // Defensive: ensure tags is always a valid array
+    const safeTags = Array.isArray(draft.tags) ? draft.tags : [];
     const newNode: KnowledgeNode = {
       ...draft,
+      tags: safeTags,
       id: generateId(),
       metadata,
       createdAt: now,
@@ -153,7 +156,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
 
     set((state) => {
       // 更新可用标签
-      const newTags = draft.tags.filter((t) => !state.availableTags.includes(t));
+      const newTags = safeTags.filter((t) => !state.availableTags.includes(t));
 
       // 更新可用二级分类
       const newSubCategories = { ...state.availableSubCategories };
@@ -174,9 +177,14 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   },
 
   updateNode: (id: string, updates: Partial<KnowledgeNode>) => {
+    // Defensive: ensure tags is always a valid array
+    const safeUpdates = { ...updates };
+    if ('tags' in safeUpdates) {
+      safeUpdates.tags = Array.isArray(safeUpdates.tags) ? safeUpdates.tags : [];
+    }
     set((state) => ({
       nodes: state.nodes.map((node) =>
-        node.id === id ? { ...node, ...updates, updatedAt: Date.now() } : node
+        node.id === id ? { ...node, ...safeUpdates, updatedAt: Date.now() } : node
       ),
     }));
     setTimeout(() => saveToFile(get()), 1000);
@@ -633,6 +641,11 @@ async function loadFromProjectInternal(projectId: string) {
   }
 
   // 收集用户偏好的标签和二级分类
+  // Defensive: ensure all global preference nodes have valid tags arrays
+  globalUserPreferences = globalUserPreferences.map((n) => ({
+    ...n,
+    tags: Array.isArray(n.tags) ? n.tags : [],
+  }));
   const userPreferenceTags = globalUserPreferences.flatMap((n) => n.tags);
   const userPreferenceSubCategories: string[] = [];
   globalUserPreferences.forEach((node) => {
@@ -666,7 +679,13 @@ async function loadFromProjectInternal(projectId: string) {
     const rawNodes = data.nodes || [];
 
     // 过滤掉项目文件中的用户偏好节点（这些应该从全局存储加载）
-    const projectNodes = rawNodes.filter((n: KnowledgeNode) => n.category !== '用户偏好');
+    // 同时规范化 tags 字段，确保每个节点的 tags 都是数组
+    const projectNodes = rawNodes
+      .filter((n: KnowledgeNode) => n.category !== '用户偏好')
+      .map((n: KnowledgeNode) => ({
+        ...n,
+        tags: Array.isArray(n.tags) ? n.tags : [],
+      }));
 
     // 迁移旧的二级分类
     const migratedNodes = projectNodes.map((node: KnowledgeNode) => {

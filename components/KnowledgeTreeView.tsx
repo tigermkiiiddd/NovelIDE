@@ -148,7 +148,7 @@ const NodeItem: React.FC<NodeItemProps> = ({ node, isSelected, onSelect }) => {
       onClick={onSelect}
     >
       <span className="flex-1 truncate text-gray-300 text-sm">{node.name}</span>
-      {node.tags && node.tags.length > 0 && (
+      {Array.isArray(node.tags) && node.tags.length > 0 && (
         <div className="flex gap-1">
           {node.tags.slice(0, 2).map((tag) => (
             <span
@@ -210,7 +210,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
         (n) =>
           n.name.toLowerCase().includes(q) ||
           n.summary.toLowerCase().includes(q) ||
-          n.tags.some((t) => t.toLowerCase().includes(q))
+          (Array.isArray(n.tags) && n.tags.some((t) => t.toLowerCase().includes(q)))
       );
     }
 
@@ -226,7 +226,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
 
     // 标签过滤
     if (selectedTag) {
-      result = result.filter((n) => n.tags.includes(selectedTag));
+      result = result.filter((n) => Array.isArray(n.tags) && n.tags.includes(selectedTag));
     }
 
     return result;

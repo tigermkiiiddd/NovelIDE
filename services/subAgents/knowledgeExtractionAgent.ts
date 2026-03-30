@@ -320,7 +320,7 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
               name: op.name,
               summary: op.summary,
               detail: op.detail,
-              tags: op.tags || [],
+              tags: Array.isArray(op.tags) ? op.tags : [],
               importance: op.importance || 'normal',
             } as KnowledgeNodeDraft,
           };
@@ -334,7 +334,7 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
               name: op.name,
               summary: op.summary,
               detail: op.detail,
-              tags: op.tags,
+              tags: op.tags != null ? (Array.isArray(op.tags) ? op.tags : []) : undefined,
               importance: op.importance,
             } as Partial<KnowledgeNodeDraft>,
           };
