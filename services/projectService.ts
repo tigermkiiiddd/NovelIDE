@@ -1,5 +1,5 @@
 
-import { ProjectMeta, FileNode, ChatSession, PlanNote, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, CharacterProfileVersion, ChapterAnalysisVersion } from '../types';
+import { ProjectMeta, FileNode, PlanNote, ChapterAnalysis, LongTermMemory, MemoryEdge, CharacterProfileV2, CharacterProfileVersion, ChapterAnalysisVersion } from '../types';
 import { generateId } from './fileSystem';
 import { dbAPI } from './persistence';
 import { FileVersion } from '../stores/versionStore';
@@ -49,7 +49,6 @@ export interface ProjectBackup {
     version: number;
     meta: ProjectMeta;
     files: FileNode[];
-    sessions: ChatSession[];
     planNotes: PlanNote[];
     characterProfiles: CharacterProfileV2[];
     longTermMemories: LongTermMemory[];
@@ -66,7 +65,6 @@ export const exportProject = async (projectId: string): Promise<string> => {
     if (!project) throw new Error("Project not found");
 
     const files = await dbAPI.getFiles(projectId) || [];
-    const sessions = await dbAPI.getSessions(`novel-chat-sessions-${projectId}`) || [];
     const planNotes = await dbAPI.getPlanNotes(`novel-plan-notes-${projectId}`) || [];
     const characterProfiles = await dbAPI.getCharacterProfiles(projectId);
     const longTermMemories = await dbAPI.getLongTermMemories(projectId);
@@ -80,7 +78,6 @@ export const exportProject = async (projectId: string): Promise<string> => {
         version: 2,
         meta: project,
         files,
-        sessions,
         planNotes,
         characterProfiles,
         longTermMemories,
@@ -114,10 +111,6 @@ export const importProject = async (jsonString: string): Promise<ProjectMeta> =>
 
         // Restore associated IndexedDB data (v2 backup format)
         if (backup.version >= 2) {
-            // Chat sessions
-            if (backup.sessions?.length) {
-                await dbAPI.saveSessions(`novel-chat-sessions-${newId}`, backup.sessions);
-            }
             // Plan notes
             if (backup.planNotes?.length) {
                 await dbAPI.savePlanNotes(`novel-plan-notes-${newId}`, backup.planNotes);
