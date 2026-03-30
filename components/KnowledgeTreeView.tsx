@@ -148,7 +148,7 @@ const NodeItem: React.FC<NodeItemProps> = ({ node, isSelected, onSelect }) => {
       onClick={onSelect}
     >
       <span className="flex-1 truncate text-gray-300 text-sm">{node.name}</span>
-      {node.tags.length > 0 && (
+      {node.tags && node.tags.length > 0 && (
         <div className="flex gap-1">
           {node.tags.slice(0, 2).map((tag) => (
             <span

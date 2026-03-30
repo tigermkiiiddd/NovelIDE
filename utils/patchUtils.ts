@@ -198,6 +198,15 @@ export const applyEdits = (
 
     const matches = findAllMatches(result, oldContent);
 
+    console.log(`[applyEdits] Edit ${i + 1} - Finding matches:`, {
+      mode,
+      oldContentLength: oldContent.length,
+      oldContentPreview: oldContent.substring(0, 100),
+      matchesCount: matches.length,
+      resultLength: result.length,
+      resultPreview: result.substring(0, 100)
+    });
+
     // 严格模式验证
     if (strict && mode === 'single') {
       if (matches.length === 0) {
@@ -234,19 +243,23 @@ ${positions}
     // 执行替换
     if (mode === 'global') {
       if (matches.length === 0) {
+        console.warn(`[applyEdits] Edit ${i + 1}: No matches found, skipping`);
         messages.push(`Edit ${i + 1}: 未找到匹配，跳过`);
       } else {
         result = result.split(oldContent).join(newContent || '');
+        console.log(`[applyEdits] Edit ${i + 1}: Replaced ${matches.length} occurrences`);
         messages.push(`Edit ${i + 1}: ${matches.length} 处已替换`);
       }
     } else {
       // single 模式
       if (matches.length > 0) {
         result = result.replace(oldContent, newContent || '');
+        console.log(`[applyEdits] Edit ${i + 1}: Replaced 1 occurrence`);
         messages.push(`Edit ${i + 1}: 1 处已替换`);
       } else if (strict) {
         // 严格模式下已经在上面的验证中处理了
       } else {
+        console.warn(`[applyEdits] Edit ${i + 1}: No matches found in single mode, skipping`);
         messages.push(`Edit ${i + 1}: 未找到匹配，跳过`);
       }
     }

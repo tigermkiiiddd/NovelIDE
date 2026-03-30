@@ -89,6 +89,12 @@ export const mergePendingChanges = (
     timestamp: number;
   }>
 ): string => {
+  console.log('[mergePendingChanges] Starting merge:', {
+    baseContentLength: baseContent.length,
+    changesCount: changes.length,
+    basePreview: baseContent.substring(0, 100)
+  });
+
   if (changes.length === 0) return baseContent;
 
   // Sort by timestamp to apply changes in order
@@ -97,6 +103,12 @@ export const mergePendingChanges = (
   let result = baseContent;
 
   for (const change of sortedChanges) {
+    console.log('[mergePendingChanges] Processing change:', {
+      toolName: change.toolName,
+      newContentLength: change.newContent?.length,
+      resultBeforeLength: result.length
+    });
+
     if (change.toolName === 'updateFile' || change.toolName === 'createFile') {
       // Full content replacement for existing file
       // createFile on existing file is treated as updateFile (兜底处理旧数据)
@@ -104,14 +116,29 @@ export const mergePendingChanges = (
         console.warn('[mergePendingChanges] createFile on existing file, treating as updateFile (legacy data)');
       }
       result = change.newContent || '';
+      console.log('[mergePendingChanges] After updateFile/createFile:', {
+        resultLength: result.length,
+        resultPreview: result.substring(0, 100)
+      });
     } else if (change.toolName === 'patchFile') {
       // Apply patch edits using common utility
       const edits = change.args?.edits || [];
       if (edits.length > 0) {
         result = applyEditsSimple(result, edits);
+        console.log('[mergePendingChanges] After patchFile:', {
+          editsCount: edits.length,
+          resultLength: result.length,
+          resultPreview: result.substring(0, 100)
+        });
       }
     }
   }
+
+  console.log('[mergePendingChanges] Final result:', {
+    resultLength: result.length,
+    changedFromBase: result !== baseContent,
+    resultPreview: result.substring(0, 100)
+  });
 
   return result;
 };

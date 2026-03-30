@@ -332,7 +332,36 @@ export const executeTool = async (
                 description = `Patch: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
                 // 使用通用函数应用 patch（预览阶段用非严格模式）
-                newContent = applyEditsSimple(baseContent, args.edits);
+                const patchResult = applyEditsSimple(baseContent, args.edits);
+
+                // 检测 patch 是否成功应用
+                if (patchResult === baseContent) {
+                    console.error('[toolRunner] patchFile failed: no changes applied', {
+                        filePath,
+                        baseContentLength: baseContent.length,
+                        editsCount: args.edits.length,
+                        firstEditOldContent: args.edits[0]?.oldContent?.substring(0, 100)
+                    });
+
+                    return {
+                        type: 'ERROR',
+                        message: `❌ patchFile 失败: 无法在文件中找到要替换的内容。
+
+【可能原因】
+1. 文件内容已被修改，oldContent 不再存在
+2. oldContent 与文件内容不完全匹配（空格、换行、引号差异）
+
+【建议】
+1. 使用 readFile 重新读取文件，确认当前内容
+2. 使用更精确的 oldContent（包含更多上下文）
+3. 或改用 updateFile 直接替换整个文件内容
+
+【搜索的内容】
+"${args.edits[0]?.oldContent?.substring(0, 200) || 'N/A'}"`
+                    };
+                }
+
+                newContent = patchResult;
             } else if (name === 'deleteFile') {
                 // 验证文件存在
                 if (!existingFile) {

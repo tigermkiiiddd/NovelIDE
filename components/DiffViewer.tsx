@@ -32,6 +32,9 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
   console.log('DiffViewer render', {
     originalLength: originalContent.length,
     modifiedLength: modifiedContent.length,
+    areEqual: originalContent === modifiedContent,
+    originalPreview: originalContent.substring(0, 100),
+    modifiedPreview: modifiedContent.substring(0, 100),
     visibleHunksCount: 'calculating...'
   });
 
@@ -77,12 +80,61 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
 
   // If there are no visible diffs (all hunks processed), show minimal state
   // Editor will automatically exit diff mode, so just show a subtle completion indicator
+  // 但如果 originalContent !== modifiedContent，说明有 pending change，不应该显示"已处理"
   if (visibleHunks.length === 0 || !visibleHunks.some(h => h.type === 'change')) {
+    // 检查是否真的没有变更（内容完全相同）
+    if (originalContent === modifiedContent) {
+      return (
+        <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex items-center gap-3 text-sm opacity-50">
+            <CheckCheck size={20} />
+            <span>所有变更已处理，正在返回编辑模式...</span>
+          </div>
+        </div>
+      );
+    }
+
+    // 内容不同但 diff 计算失败（可能是 patch 匹配问题）
+    // 显示原始内容和目标内容，让用户手动决定
     return (
-      <div className="flex items-center justify-center h-full text-gray-500">
-        <div className="flex items-center gap-3 text-sm opacity-50">
-          <CheckCheck size={20} />
-          <span>所有变更已处理，正在返回编辑模式...</span>
+      <div className="flex flex-col h-full bg-[#0d1117]">
+        <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 bg-red-900/10 border-red-900/30">
+          <div className="flex items-center gap-3">
+            <div className="p-1 bg-red-900/20 rounded text-red-400 border border-red-900/30">
+              <XCircle size={16} />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-red-100 text-sm">无法自动计算差异</span>
+              <span className="text-xs text-red-400">patch 匹配失败，请手动审核</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={onRejectAll} className="px-3 py-1 text-xs text-red-400 hover:bg-red-900/20 rounded border border-red-900/30">
+              拒绝
+            </button>
+            <button onClick={onAcceptAll} className="px-3 py-1 text-xs text-green-400 hover:bg-green-900/20 rounded border border-green-900/30">
+              强制应用
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto p-4 text-sm text-gray-300">
+          <div className="mb-4 p-3 bg-yellow-900/10 border border-yellow-900/30 rounded">
+            <p className="text-yellow-400 mb-2">⚠️ 自动 patch 匹配失败</p>
+            <p className="text-gray-400 text-xs">
+              Agent 提交的修改无法自动应用到当前文件。可能原因：文件内容已被修改，或 oldContent 不匹配。
+              <br />建议：点击"强制应用"将使用 Agent 提交的完整新内容覆盖文件。
+            </p>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-gray-500 text-xs mb-2">当前文件内容预览：</h3>
+              <pre className="bg-gray-900 p-3 rounded text-xs overflow-auto max-h-60">{originalContent.substring(0, 500)}...</pre>
+            </div>
+            <div>
+              <h3 className="text-gray-500 text-xs mb-2">Agent 提交的新内容预览：</h3>
+              <pre className="bg-gray-900 p-3 rounded text-xs overflow-auto max-h-60">{modifiedContent.substring(0, 500)}...</pre>
+            </div>
+          </div>
         </div>
       </div>
     );

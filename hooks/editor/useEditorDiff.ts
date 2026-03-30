@@ -121,30 +121,34 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
     if (fileChanges.length === 0) return null;
 
-    // 对于虚拟文件（createFile 预览），originalContent 应该为空
-    // 因为虚拟文件代表一个新文件，没有原始内容
-    const isVirtualFile = !!activeFile.metadata?.virtualFilePath;
-    const baseContent = isVirtualFile ? '' : (activeFile?.content || '');
+    // 如果只有一个 change，直接使用它的 originalContent 和 newContent
+    if (fileChanges.length === 1) {
+      const change = fileChanges[0];
+      console.log('[useEditorDiff] Single change, using directly:', {
+        toolName: change.toolName,
+        originalContentLength: change.originalContent?.length,
+        newContentLength: change.newContent?.length
+      });
 
-    // 检查是否有 createFile 类型的变更
-    // 对于 createFile，应该使用 pendingChange 自己的 originalContent（空字符串）
-    // 而不是 activeFile.content（已创建文件的内容）
-    const hasCreateFile = fileChanges.some(c => c.toolName === 'createFile');
-    // 如果有 createFile，使用第一个 createFile 的 originalContent（应该是空字符串）
-    const originalContent = hasCreateFile
-      ? (fileChanges.find(c => c.toolName === 'createFile')?.originalContent ?? '')
-      : baseContent;
+      return {
+        id: 'merged',
+        fileName: filePath,
+        originalContent: change.originalContent ?? '',
+        newContent: change.newContent ?? '',
+        toolName: change.toolName,
+        args: change.args,
+        timestamp: change.timestamp,
+        description: change.description,
+        metadata: { sourceChanges: fileChanges }
+      };
+    }
 
-    console.log('[useEditorDiff] originalContent calculation:', {
-      isVirtualFile,
-      hasCreateFile,
-      baseContentLength: baseContent.length,
-      originalContentLength: originalContent.length,
-      willUseEmptyOriginal: hasCreateFile || isVirtualFile
-    });
+    // 多个 changes 时才需要 merge
+    const firstChange = fileChanges[0];
+    const originalContent = firstChange.originalContent ?? '';
 
     const finalContent = mergePendingChanges(
-      baseContent,
+      originalContent,
       fileChanges.map(c => ({
         toolName: c.toolName,
         newContent: c.newContent,
