@@ -28,8 +28,8 @@ export function buildProjectOverviewPrompt(project: ProjectMeta | undefined): st
     `每卷章节数：${project.chaptersPerVolume || '未定'}章`,
   ];
 
-  // 添加爽点节奏配置
-  if (project.pleasureRhythm) {
+  // 添加爽点节奏配置（仅在启用时）
+  if (project.pleasureRhythmEnabled !== false && project.pleasureRhythm) {
     lines.push(`爽点节奏：小爽每${project.pleasureRhythm.small}章，中爽每${project.pleasureRhythm.medium}章，大爽每${project.pleasureRhythm.large}章`);
   }
 
@@ -61,7 +61,10 @@ export function buildProjectOverviewPrompt(project: ProjectMeta | undefined): st
   lines.push('> ⚠️ 上述项目基础信息是创作地基，所有输出必须与之对齐：');
   lines.push('> - **类型**决定叙事风格和读者预期');
   lines.push('> - **核心梗**决定故事主线和卖点');
-  lines.push('> - **爽点节奏**决定剧情高潮的分布密度');
+  // 爽点提示仅在启用时展示
+  if (project.pleasureRhythmEnabled !== false && project.pleasureRhythm) {
+    lines.push('> - **爽点节奏**决定剧情高潮的分布密度');
+  }
   lines.push('> - **核心玩法/叙事元素/风格基调/感情线**决定创作方向和差异化特色');
 
   return lines.join('\n');

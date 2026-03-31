@@ -24,6 +24,7 @@ export interface ProjectState {
     chaptersPerVolume?: number,
     presetId?: string,
     pleasureRhythm?: ProjectMeta['pleasureRhythm'],
+    pleasureRhythmEnabled?: boolean,
     coreGameplay?: string[],
     narrativeElements?: string[],
     styleTone?: string[],
@@ -74,7 +75,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     await dbAPI.saveCurrentProjectId(id);
   },
 
-  createProject: async (name, description, genre, wordsPerChapter, targetChapters, chaptersPerVolume, presetId, pleasureRhythm, coreGameplay, narrativeElements, styleTone, romanceLine) => {
+  createProject: async (name, description, genre, wordsPerChapter, targetChapters, chaptersPerVolume, presetId, pleasureRhythm, pleasureRhythmEnabled, coreGameplay, narrativeElements, styleTone, romanceLine) => {
     const newProject: ProjectMeta = {
       id: generateId(),
       name,
@@ -84,6 +85,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       targetChapters,
       chaptersPerVolume,
       presetId,
+      pleasureRhythmEnabled,
       pleasureRhythm,
       coreGameplay,
       narrativeElements,

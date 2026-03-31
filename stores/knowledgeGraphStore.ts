@@ -263,13 +263,17 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   },
 
   searchNodes: (query: string) => {
-    const q = query.toLowerCase();
-    return get().nodes.filter(
-      (node) =>
-        node.name.toLowerCase().includes(q) ||
-        node.summary.toLowerCase().includes(q) ||
-        node.tags.some((t) => t.toLowerCase().includes(q)) ||
-        (node.topic && node.topic.toLowerCase().includes(q))
+    if (!query.trim()) return get().nodes;
+    const tokens = query.toLowerCase().split(/[\s,.;:!?，。；：！？、/\\|()[\]{}"'`~]+/).filter(Boolean);
+    if (tokens.length === 0) return get().nodes;
+    
+    return get().nodes.filter((node) =>
+      tokens.some((tok) =>
+        node.name.toLowerCase().includes(tok) ||
+        node.summary.toLowerCase().includes(tok) ||
+        node.tags.some((t) => t.toLowerCase().includes(tok)) ||
+        (node.topic && node.topic.toLowerCase().includes(tok))
+      )
     );
   },
 

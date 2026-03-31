@@ -93,6 +93,7 @@ export interface ProjectMeta {
   targetChapters?: number;   // 目标章节数
   chaptersPerVolume?: number; // 每卷章节数
   presetId?: string;         // 使用的预设ID
+  pleasureRhythmEnabled?: boolean; // 是否启用爽点节奏
   pleasureRhythm?: {         // 爽点节奏配置
     small: number;           // 小爽点间隔（章数）
     medium: number;          // 中爽点间隔（章数）

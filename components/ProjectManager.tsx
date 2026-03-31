@@ -50,6 +50,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
     medium: 10,
     large: 30
   });
+  const [pleasureRhythmEnabled, setPleasureRhythmEnabled] = useState(true);
 
   // AI State
   const [isPolishing, setIsPolishing] = useState(false);
@@ -99,6 +100,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
       chaptersPerVolume,
       selectedPresetId || undefined,
       pleasureRhythm,
+      pleasureRhythmEnabled,
       coreGameplay,
       narrativeElements,
       styleTone,
@@ -117,6 +119,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
     setChaptersPerVolume(10);
     setSelectedPresetId('');
     setPleasureRhythm({ small: 3, medium: 10, large: 30 });
+    setPleasureRhythmEnabled(true);
     setPolishInstruction('');
     setCoreGameplay([]);
     setNarrativeElements([]);
@@ -392,6 +395,7 @@ ${polishInstruction || '(无额外指令)'}
     targetChapters, setTargetChapters,
     chaptersPerVolume, setChaptersPerVolume,
     pleasureRhythm, setPleasureRhythm,
+    pleasureRhythmEnabled, setPleasureRhythmEnabled,
     selectedPresetId, setSelectedPresetId,
     coreGameplay, setCoreGameplay,
     narrativeElements, setNarrativeElements,

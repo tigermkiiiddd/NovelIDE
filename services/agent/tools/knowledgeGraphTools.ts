@@ -268,16 +268,19 @@ export const executeQueryKnowledge = async (args: {
     nodes = nodes.filter((n) => tags.some((tag) => n.tags.includes(tag)));
   }
 
-  // 按关键词搜索
-  if (query) {
-    const q = query.toLowerCase();
-    nodes = nodes.filter(
-      (n) =>
-        n.name.toLowerCase().includes(q) ||
-        n.summary.toLowerCase().includes(q) ||
-        n.tags.some((t) => t.toLowerCase().includes(q)) ||
-        (n.topic && n.topic.toLowerCase().includes(q))
-    );
+  // 按关键词搜索预过滤：支持多个关键词，只要命中一个就算
+  if (query && query.trim()) {
+    const tokens = query.toLowerCase().split(/[\s,.;:!?，。；：！？、/\\|()[\]{}"'`~]+/).filter(Boolean);
+    if (tokens.length > 0) {
+      nodes = nodes.filter((n) =>
+        tokens.some((tok) =>
+          n.name.toLowerCase().includes(tok) ||
+          n.summary.toLowerCase().includes(tok) ||
+          n.tags.some((t) => t.toLowerCase().includes(tok)) ||
+          (n.topic && n.topic.toLowerCase().includes(tok))
+        )
+      );
+    }
   }
 
   // 排序

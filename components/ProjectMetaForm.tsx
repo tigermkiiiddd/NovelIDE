@@ -23,6 +23,8 @@ interface ProjectMetaFormProps {
   setChaptersPerVolume: (v: number) => void;
   pleasureRhythm: PleasureRhythm;
   setPleasureRhythm: (v: PleasureRhythm) => void;
+  pleasureRhythmEnabled: boolean;
+  setPleasureRhythmEnabled: (v: boolean) => void;
   selectedPresetId: string;
   setSelectedPresetId: (v: string) => void;
   // 新增：扩展标签
@@ -45,6 +47,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
   targetChapters, setTargetChapters,
   chaptersPerVolume, setChaptersPerVolume,
   pleasureRhythm, setPleasureRhythm,
+  pleasureRhythmEnabled, setPleasureRhythmEnabled,
   selectedPresetId, setSelectedPresetId,
   coreGameplay, setCoreGameplay,
   narrativeElements, setNarrativeElements,
@@ -213,8 +216,23 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 爽点节奏配置 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>爽点节奏配置</label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="flex items-center justify-between mb-2">
+          <label className={labelClass + ' mb-0'}>爽点节奏配置</label>
+          <button
+            type="button"
+            onClick={() => setPleasureRhythmEnabled(!pleasureRhythmEnabled)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              pleasureRhythmEnabled ? 'bg-blue-600' : 'bg-gray-600'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                pleasureRhythmEnabled ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+        <div className={`grid grid-cols-3 gap-3 transition-opacity ${pleasureRhythmEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
           <div>
             <label className="block text-xs text-gray-500 mb-1">小爽间隔（章）</label>
             <textarea
@@ -224,6 +242,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
               inputMode="numeric"
               rows={1}
               autoComplete="off"
+              disabled={!pleasureRhythmEnabled}
             />
           </div>
           <div>
@@ -235,6 +254,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
               inputMode="numeric"
               rows={1}
               autoComplete="off"
+              disabled={!pleasureRhythmEnabled}
             />
           </div>
           <div>
@@ -246,12 +266,18 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
               inputMode="numeric"
               rows={1}
               autoComplete="off"
+              disabled={!pleasureRhythmEnabled}
             />
           </div>
         </div>
-        <p className="text-xs text-gray-500 mt-1">
-          小爽：小收获、小胜利 | 中爽：阶段胜利、重要突破 | 大爽：重大转折、终极高潮
-        </p>
+        {!pleasureRhythmEnabled && (
+          <p className="text-xs text-gray-600 mt-1">当前题材未启用爽点节奏</p>
+        )}
+        {pleasureRhythmEnabled && (
+          <p className="text-xs text-gray-500 mt-1">
+            小爽：小收获、小胜利 | 中爽：阶段胜利、重要突破 | 大爽：重大转折、终极高潮
+          </p>
+        )}
       </div>
 
       {/* 简介 / 核心梗 */}

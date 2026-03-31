@@ -34,6 +34,9 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
   const [pleasureRhythm, setPleasureRhythm] = useState<PleasureRhythm>(
     project.pleasureRhythm || { small: 3, medium: 10, large: 30 }
   );
+  const [pleasureRhythmEnabled, setPleasureRhythmEnabled] = useState(
+    project.pleasureRhythmEnabled !== false
+  );
   const [selectedPresetId, setSelectedPresetId] = useState(project.presetId || '');
   // 新增：扩展标签状态
   const [coreGameplay, setCoreGameplay] = useState<string[]>(project.coreGameplay || []);
@@ -50,6 +53,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
       setTargetChapters(project.targetChapters || 100);
       setChaptersPerVolume(project.chaptersPerVolume || 10);
       setPleasureRhythm(project.pleasureRhythm || { small: 3, medium: 10, large: 30 });
+      setPleasureRhythmEnabled(project.pleasureRhythmEnabled !== false);
       setSelectedPresetId(project.presetId || '');
       setCoreGameplay(project.coreGameplay || []);
       setNarrativeElements(project.narrativeElements || []);
@@ -68,6 +72,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
         targetChapters,
         chaptersPerVolume,
         pleasureRhythm,
+        pleasureRhythmEnabled,
         presetId: selectedPresetId || undefined,
         coreGameplay,
         narrativeElements,
@@ -149,6 +154,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                         targetChapters={targetChapters} setTargetChapters={setTargetChapters}
                         chaptersPerVolume={chaptersPerVolume} setChaptersPerVolume={setChaptersPerVolume}
                         pleasureRhythm={pleasureRhythm} setPleasureRhythm={setPleasureRhythm}
+                        pleasureRhythmEnabled={pleasureRhythmEnabled} setPleasureRhythmEnabled={setPleasureRhythmEnabled}
                         selectedPresetId={selectedPresetId} setSelectedPresetId={setSelectedPresetId}
                         coreGameplay={coreGameplay} setCoreGameplay={setCoreGameplay}
                         narrativeElements={narrativeElements} setNarrativeElements={setNarrativeElements}
