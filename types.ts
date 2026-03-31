@@ -878,10 +878,10 @@ export type EmotionScore = number;  // -10 ~ +10
 // 读者情绪分组（4 大驱动力维度）
 export type ReaderEmotionGroup = '追读钩子' | '爽感兑现' | '情绪施压' | '情感共鸣';
 
-// 读者情绪类型（20 种，面向读者的阅读体验情绪）
+// 读者情绪类型（21 种，面向读者的阅读体验情绪）
 export type EmotionCategory =
   // 追读钩子 — "我为什么停不下来"
-  | '好奇' | '悬念' | '期待' | '担忧' | '渴望'
+  | '好奇' | '悬念' | '期待' | '担忧' | '渴望' | '反转'
   // 爽感兑现 — "我看到了想看的"
   | '痛快' | '热血' | '甜蜜' | '得意' | '舒坦'
   // 情绪施压 — "我心里堵得慌"
@@ -920,6 +920,7 @@ export const READER_EMOTIONS: ReaderEmotionDef[] = [
   { value: '期待', group: '追读钩子', color: '#5eead4', bg: '#5eead433', readerVoice: '快让我看到！' },
   { value: '担忧', group: '追读钩子', color: '#14b8a6', bg: '#14b8a633', readerVoice: '别出事啊...' },
   { value: '渴望', group: '追读钩子', color: '#0d9488', bg: '#0d948833', readerVoice: '求求了，让我看到那幕' },
+  { value: '反转', group: '追读钩子', color: '#00bcd4', bg: '#00bcd433', readerVoice: '居然会这样？！完全没想到！' },
   // 爽感兑现
   { value: '痛快', group: '爽感兑现', color: '#ffd700', bg: '#ffd70033', readerVoice: '太爽了！就该这样！' },
   { value: '热血', group: '爽感兑现', color: '#ff6347', bg: '#ff634733', readerVoice: '燃起来了！' },
