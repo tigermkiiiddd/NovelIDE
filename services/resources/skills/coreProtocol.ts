@@ -385,23 +385,27 @@ export const constructSystemPrompt = (
     }
 
     const critical = knowledgeNodes.filter((n: any) => n.importance === 'critical');
-    const important = knowledgeNodes.filter((n: any) => n.importance === 'important').slice(0, 5);
+    const important = knowledgeNodes.filter((n: any) => n.importance === 'important');
 
     let output = '';
 
     if (critical.length > 0) {
       output += `## 📚 关键知识（必须遵守）\n> 共 ${critical.length} 条关键知识\n\n`;
-      output += critical.map((n: any) => `### ${n.name}\n- 分类: ${n.category}/${n.subCategory}\n- 标签: ${n.tags?.join(', ') || '无'}\n- 摘要: ${n.summary}\n`).join('\n');
+      output += critical.map((n: any) => {
+        let entry = `### ${n.name}\n- 分类: ${n.category}/${n.subCategory}\n- 标签: ${n.tags?.join(', ') || '无'}\n- 摘要: ${n.summary}`;
+        if (n.detail) entry += `\n- 详情: ${n.detail}`;
+        return entry;
+      }).join('\n\n');
+      output += '\n\n';
     }
 
     if (important.length > 0) {
-      output += `\n## 🔖 重要知识索引\n> 共 ${important.length} 条重要知识（需要时使用 query_knowledge 查询详情）\n\n`;
-      output += important.map((n: any) => `- **${n.name}**: ${n.summary}`).join('\n');
-      output += '\n';
-    }
-
-    if (output === '' && knowledgeNodes.length > 0) {
-      output = `\n## 💡 知识图谱提示\n> 当前有 ${knowledgeNodes.length} 条知识，但没有标记为 critical 或 important。使用 query_knowledge 或 manage_knowledge 工具查看和管理。\n`;
+      output += `## 🔖 重要知识索引\n> 共 ${important.length} 条重要知识（需要详情时使用 query_knowledge 查询）\n\n`;
+      output += important.map((n: any) => {
+        const tags = n.tags?.length > 0 ? ` [${n.tags.join(', ')}]` : '';
+        return `- **${n.name}**: ${n.summary}${tags}`;
+      }).join('\n');
+      output += '\n\n';
     }
 
     return output;

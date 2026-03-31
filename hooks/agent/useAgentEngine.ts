@@ -6,6 +6,7 @@ import { constructSystemPrompt } from '../../services/resources/skills/coreProto
 import { allTools, getToolsForMode } from '../../services/agent/tools/index';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
+import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
 import {
@@ -76,12 +77,15 @@ export const useAgentEngine = ({
       const freshTodos = freshSession?.todos || [];
 
       // 3. 构建 System Prompt (LLM Input Part 1)
+      // 获取知识图谱数据
+      const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
       const fullSystemInstruction = constructSystemPrompt(
         files,
         project,
         freshTodos,
         freshSession?.messages,  // 传递会话消息历史
-        planMode  // 传递 Plan 模式状态
+        planMode,  // 传递 Plan 模式状态
+        knowledgeNodes  // 传递知识图谱节点
       );
 
       // 根据模式选择工具
