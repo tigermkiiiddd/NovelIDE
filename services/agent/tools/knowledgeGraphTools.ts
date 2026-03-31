@@ -17,6 +17,7 @@ import {
 import {
   scoreKnowledgeNodeRecall,
 } from '../../../utils/knowledgeIntelligence';
+import Fuse from 'fuse.js';
 
 // ============================================
 // 工具定义
@@ -234,6 +235,31 @@ export const listKnowledgeMetadataTool: ToolDefinition = {
   },
 };
 
+/**
+ * 列出所有知识节点
+ */
+export const listAllKnowledgeTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'list_all_knowledge',
+    description: `【列出全部知识】返回知识图谱中所有节点的列表，按分类分组。
+
+当需要了解项目当前有哪些知识/设定/规则/禁止/风格时使用此工具。
+返回每个节点的 id、名称、摘要、分类、标签和重要程度。
+`,
+    parameters: {
+      type: 'object',
+      properties: {
+        importance: {
+          type: 'string',
+          enum: ['critical', 'important', 'normal'],
+          description: '按重要程度过滤（可选，不传则返回全部）',
+        },
+      },
+    },
+  },
+};
+
 // ============================================
 // 执行函数
 // ============================================
@@ -268,35 +294,57 @@ export const executeQueryKnowledge = async (args: {
     nodes = nodes.filter((n) => tags.some((tag) => n.tags.includes(tag)));
   }
 
-  // 按关键词搜索预过滤：支持多个关键词，只要命中一个就算
+  // 按关键词搜索预过滤：使用 Fuse 进行相似度搜索
+  let fuseResults: { item: KnowledgeNode; score?: number }[] | null = null;
   if (query && query.trim()) {
-    const tokens = query.toLowerCase().split(/[\s,.;:!?，。；：！？、/\\|()[\]{}"'`~]+/).filter(Boolean);
-    if (tokens.length > 0) {
-      nodes = nodes.filter((n) =>
-        tokens.some((tok) =>
-          n.name.toLowerCase().includes(tok) ||
-          n.summary.toLowerCase().includes(tok) ||
-          n.tags.some((t) => t.toLowerCase().includes(tok)) ||
-          (n.topic && n.topic.toLowerCase().includes(tok))
-        )
-      );
-    }
+    const fuse = new Fuse(nodes, {
+      keys: [
+        { name: 'tags', weight: 0.4 },
+        { name: 'name', weight: 0.3 },
+        { name: 'summary', weight: 0.2 },
+        { name: 'detail', weight: 0.1 }
+      ],
+      includeScore: true,
+      threshold: 0.6,
+      ignoreLocation: true
+    });
+    fuseResults = fuse.search(query);
   }
 
   // 排序
   const now = Date.now();
   switch (sortBy) {
     case 'activation':
-      nodes = nodes.sort((a, b) => {
-        const scoreA = scoreKnowledgeNodeRecall(a, query || a.name, now);
-        const scoreB = scoreKnowledgeNodeRecall(b, query || b.name, now);
-        return scoreB.activation - scoreA.activation;
-      });
+      if (fuseResults) {
+        nodes = fuseResults
+          .map((r) => r.item)
+          .sort((a, b) => {
+            const scoreA = scoreKnowledgeNodeRecall(a, '', now);
+            const scoreB = scoreKnowledgeNodeRecall(b, '', now);
+            return scoreB.activation - scoreA.activation;
+          });
+      } else {
+        nodes = nodes.sort((a, b) => {
+          const scoreA = scoreKnowledgeNodeRecall(a, '', now);
+          const scoreB = scoreKnowledgeNodeRecall(b, '', now);
+          return scoreB.activation - scoreA.activation;
+        });
+      }
       break;
     default:
-      if (query) {
+      if (fuseResults) {
+        nodes = fuseResults
+          .map((r) => {
+            const baseScore = scoreKnowledgeNodeRecall(r.item, '', now);
+            const fuseLexical = (1 - (r.score || 0)) * 60; // 转化为 0~60 的分数
+            const combined = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength + baseScore.review;
+            return { node: r.item, total: combined };
+          })
+          .sort((a, b) => b.total - a.total)
+          .map((item) => item.node);
+      } else {
         nodes = nodes
-          .map((n) => ({ node: n, score: scoreKnowledgeNodeRecall(n, query, now) }))
+          .map((n) => ({ node: n, score: scoreKnowledgeNodeRecall(n, '', now) }))
           .sort((a, b) => b.score.total - a.score.total)
           .map((item) => item.node);
       }
@@ -581,6 +629,47 @@ export const executeListKnowledgeMetadata = async () => {
   });
 };
 
+export const executeListAllKnowledge = async (args?: {
+  importance?: 'critical' | 'important' | 'normal';
+}) => {
+  const store = useKnowledgeGraphStore.getState();
+  await store.ensureInitialized();
+
+  let nodes = store.nodes;
+
+  if (args?.importance) {
+    nodes = nodes.filter((n) => n.importance === args.importance);
+  }
+
+  // 按分类分组
+  const grouped: Record<string, Array<{
+    id: string;
+    name: string;
+    summary: string;
+    subCategory: string;
+    tags: string[];
+    importance: string;
+  }>> = {};
+
+  for (const n of nodes) {
+    if (!grouped[n.category]) grouped[n.category] = [];
+    grouped[n.category].push({
+      id: n.id,
+      name: n.name,
+      summary: n.summary,
+      subCategory: n.subCategory,
+      tags: n.tags,
+      importance: n.importance,
+    });
+  }
+
+  return JSON.stringify({
+    success: true,
+    total: nodes.length,
+    grouped,
+  });
+};
+
 // ============================================
 // 导出
 // ============================================
@@ -590,4 +679,5 @@ export const knowledgeGraphToolDefinitions = [
   manageKnowledgeTool,
   linkKnowledgeTool,
   listKnowledgeMetadataTool,
+  listAllKnowledgeTool,
 ];

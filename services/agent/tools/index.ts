@@ -8,6 +8,7 @@ import {
   manageKnowledgeTool,
   linkKnowledgeTool,
   listKnowledgeMetadataTool,
+  listAllKnowledgeTool,
 } from './knowledgeGraphTools';
 import {
   getEventsTool,
@@ -30,6 +31,7 @@ const readTools: ToolDefinition[] = [
   readFileTool,
   queryKnowledgeTool,
   listKnowledgeMetadataTool,
+  listAllKnowledgeTool,
   getVolumesTool,
   getChaptersTool,
   getEventsTool,
