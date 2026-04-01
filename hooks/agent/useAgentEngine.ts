@@ -16,10 +16,11 @@ import {
   formatErrorForDisplay,
 } from '../../services/agent/errorFactory';
 import { AgentErrorInfo, AgentErrorCategory } from '../../types/agentErrors';
-import { buildSimpleHistory } from '../../domains/agentContext/historyBuilder';
-
-// 滑动窗口：最多发送给 LLM 的消息数量
-export const MAX_CONTEXT_MESSAGES = 30;
+import {
+  createApiHistoryPreview,
+  getWindowedMessages,
+  MAX_CONTEXT_MESSAGES,
+} from '../../domains/agentContext/windowing';
 
 interface UseAgentEngineProps {
   context: ReturnType<typeof useAgentContext>;
@@ -108,7 +109,7 @@ export const useAgentEngine = ({
 
         // 滑动窗口：只取最新的 N 条消息，但使用精细化分类器
         const totalMessages = currentMessages.length;
-        let windowedMessages = buildSimpleHistory(currentMessages, { maxMessages: MAX_CONTEXT_MESSAGES });
+        const windowedMessages = getWindowedMessages(currentMessages, MAX_CONTEXT_MESSAGES);
 
         // --- 滑动窗口完整性修正 ---
         // OpenAI API 要求：tool_calls 必须紧跟 tool response
@@ -229,8 +230,6 @@ export const useAgentEngine = ({
           return result;
         };
 
-        windowedMessages = fixWindowStart(windowedMessages);
-        windowedMessages = fixWindowIntegrity(windowedMessages);
         const inContextCount = windowedMessages.length;
         const droppedCount = totalMessages - inContextCount;
 
@@ -247,14 +246,7 @@ export const useAgentEngine = ({
         );
 
         // 格式化为 API 需要的结构
-        const apiHistory = windowedMessages.map(m => {
-          let apiRole = m.role;
-          // Fix: 这里的 system 是指 UI 上的系统提示（如"User Approved"），给 LLM 看作 User 输入
-          if (m.role === 'system') apiRole = 'user';
-
-          if (m.rawParts) return { role: apiRole, parts: m.rawParts };
-          return { role: apiRole === 'system' ? 'user' : apiRole, parts: [{ text: m.text }] };
-        });
+        const apiHistory = createApiHistoryPreview(windowedMessages);
 
         // --- CRITICAL: IMMEDIATE INPUT VISUALIZATION ---
         // Identify the trigger message for this turn (The User message or the Tool Result message)

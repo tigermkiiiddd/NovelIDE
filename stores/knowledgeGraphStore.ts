@@ -23,6 +23,7 @@ import {
   applyKnowledgeNodeEvent,
   scoreKnowledgeNodeRecall,
 } from '../utils/knowledgeIntelligence';
+import Fuse from 'fuse.js';
 import { extractKnowledgeFromDocument, extractKnowledgeFromDialogue, KnowledgeOperation } from '../services/subAgents/knowledgeExtractionAgent';
 import { AIService } from '../services/geminiService';
 import { useAgentStore } from './agentStore';
@@ -264,29 +265,52 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
 
   searchNodes: (query: string) => {
     if (!query.trim()) return get().nodes;
-    const tokens = query.toLowerCase().split(/[\s,.;:!?，。；：！？、/\\|()[\]{}"'`~]+/).filter(Boolean);
-    if (tokens.length === 0) return get().nodes;
     
-    return get().nodes.filter((node) =>
-      tokens.some((tok) =>
-        node.name.toLowerCase().includes(tok) ||
-        node.summary.toLowerCase().includes(tok) ||
-        node.tags.some((t) => t.toLowerCase().includes(tok)) ||
-        (node.topic && node.topic.toLowerCase().includes(tok))
-      )
-    );
+    const fuse = new Fuse(get().nodes, {
+      keys: [
+        { name: 'tags', weight: 0.4 },
+        { name: 'name', weight: 0.3 },
+        { name: 'summary', weight: 0.2 },
+        { name: 'detail', weight: 0.1 }
+      ],
+      threshold: 0.5,
+      ignoreLocation: true
+    });
+    
+    return fuse.search(query).map(result => result.item);
   },
 
   searchNodesWithScore: (query: string, limit = 10) => {
     const nodes = get().nodes;
-    const scored = nodes
-      .map((node) => ({
-        node,
-        score: scoreKnowledgeNodeRecall(node, query).total,
-      }))
+    if (!query.trim()) {
+      return nodes
+        .map((node) => ({ node, score: scoreKnowledgeNodeRecall(node, '').total }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    }
+    
+    const fuse = new Fuse(nodes, {
+      keys: [
+        { name: 'tags', weight: 0.4 },
+        { name: 'name', weight: 0.3 },
+        { name: 'summary', weight: 0.2 },
+        { name: 'detail', weight: 0.1 }
+      ],
+      includeScore: true,
+      threshold: 0.6,
+      ignoreLocation: true
+    });
+    
+    const now = Date.now();
+    return fuse.search(query)
+      .map(result => {
+        const baseScore = scoreKnowledgeNodeRecall(result.item, '', now);
+        const fuseLexical = (1 - (result.score || 0)) * 60;
+        const total = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength + baseScore.review;
+        return { node: result.item, score: total };
+      })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
-    return scored;
   },
 
   // ============================================

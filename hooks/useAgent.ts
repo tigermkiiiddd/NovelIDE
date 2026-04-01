@@ -5,13 +5,14 @@ import { generateId } from '../services/fileSystem';
 import { constructSystemPrompt } from '../services/resources/skills/coreProtocol';
 import { useAgentContext } from './agent/useAgentContext';
 import { useAgentTools, AgentToolsImplementation } from './agent/useAgentTools';
-import { useAgentEngine, MAX_CONTEXT_MESSAGES } from './agent/useAgentEngine';
+import { useAgentEngine } from './agent/useAgentEngine';
 import { executeApprovedChange } from '../services/agent/toolRunner';
 import { usePlanStore } from '../stores/planStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useFileStore } from '../stores/fileStore';
 import { findNodeByPath } from '../services/fileSystem';
+import { getWindowedMessages, MAX_CONTEXT_MESSAGES } from '../domains/agentContext/windowing';
 
 // Facade Hook
 export const useAgent = (
@@ -74,9 +75,10 @@ export const useAgent = (
 
   // 滑动窗口信息：用于 UI 显示
   const messageWindowInfo = useMemo(() => {
-      const total = currentSession?.messages?.length || 0;
-      const inContext = Math.min(total, MAX_CONTEXT_MESSAGES);
-      const dropped = Math.max(0, total - MAX_CONTEXT_MESSAGES);
+      const messages = currentSession?.messages || [];
+      const total = messages.length;
+      const inContext = getWindowedMessages(messages, MAX_CONTEXT_MESSAGES).length;
+      const dropped = Math.max(0, total - inContext);
       return {
           total,
           inContext,
@@ -94,9 +96,17 @@ export const useAgent = (
       const limit = isGemini ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
 
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
-      const sysPrompt = constructSystemPrompt(files, project, todos, undefined, undefined, knowledgeNodes);
       const msgs = currentSession?.messages || [];
-      const msgsText = msgs.reduce((acc: string, m: ChatMessage) => {
+      const windowedMessages = getWindowedMessages(msgs, MAX_CONTEXT_MESSAGES);
+      const sysPrompt = constructSystemPrompt(
+        files,
+        project,
+        todos,
+        msgs,
+        planMode,
+        knowledgeNodes
+      );
+      const msgsText = windowedMessages.reduce((acc: string, m: ChatMessage) => {
           let content = m.text;
           if (m.rawParts) content += JSON.stringify(m.rawParts);
           return acc + content;
@@ -110,7 +120,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode]);
 
   const approveChange = useCallback((change: PendingChange) => {
     // 构造包含追踪功能的 Action 集合
