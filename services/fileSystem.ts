@@ -172,7 +172,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       nodes: [],
       edges: [],
       availableSubCategories: {
-        '设定': ['世界设定', '角色设定', '物品设定', '场景设定'],
+        '设定': ['世界设定', '物品设定', '场景设定'],
         '规则': ['创作规则', '叙事规则', '逻辑规则'],
         '禁止': ['禁止词汇', '禁止情节', '禁止写法'],
         '风格': ['叙事风格', '对话风格', '描写风格'],

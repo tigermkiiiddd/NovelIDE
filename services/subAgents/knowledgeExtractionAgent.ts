@@ -110,7 +110,7 @@ const quickEvalConfig: SubAgentConfig<KnowledgeExtractionInput, QuickEvalOutput>
 - **风格**: 叙事风格、对话风格、描写风格
 
 ## 分类体系
-- **设定（是什么）**: 世界设定、角色设定、物品设定、场景设定
+- **设定（是什么）**: 世界设定、物品设定、场景设定
 - **规则（必须遵守）**: 创作规则、叙事规则、逻辑规则
 - **禁止（绝对不能）**: 禁止词汇、禁止情节、禁止写法
 - **风格（建议偏好）**: 叙事风格、对话风格、描写风格
@@ -119,6 +119,7 @@ const quickEvalConfig: SubAgentConfig<KnowledgeExtractionInput, QuickEvalOutput>
 - 宁缺毋滥：不确定时返回 false
 - 快速判断：不要过度分析
 - 只看是否有**长期稳定**的价值
+- 角色相关信息（设定、性格、背景、关系）由角色档案系统管理，不属于知识图谱
 
 ## 内容来源
 来源: ${input.source}
@@ -245,7 +246,7 @@ const buildDecisionPrompt = (input: DecisionInput): string => {
 ${existingNodesSummary || '(暂无)'}
 
 ## 二级分类参考
-- 设定: 世界设定、角色设定、物品设定、场景设定
+- 设定: 世界设定、物品设定、场景设定
 - 规则: 创作规则、叙事规则、逻辑规则
 - 禁止: 禁止词汇、禁止情节、禁止写法
 - 风格: 叙事风格、对话风格、描写风格
