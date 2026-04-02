@@ -62,6 +62,13 @@ export const manageRelationshipsTool: ToolDefinition = {
     name: 'manage_relationships',
     description: `【批量管理人际关系】批量添加、更新、删除角色之间的关系。
 
+## 角色来源
+角色必须先在"角色档案与记忆"系统中注册，才能添加到关系中。
+- 已注册角色: 从角色档案中获取，名称与档案一致
+- 注册方式: 通过 create_character_profile 工具创建角色档案
+- 查看已注册角色: 使用 list_character_profiles 工具
+- ⚠️ 注意: 仅读取角色档案文件不等于注册角色，必须通过工具创建档案
+
 ## 关系类型
 预设类型：${PRESET_RELATION_TYPES.join('、')}
 也可以使用自定义关系类型（description 中说明理由）。
@@ -72,7 +79,7 @@ export const manageRelationshipsTool: ToolDefinition = {
 - 弱：次要关系（如邻居、陌生人）
 
 ## 注意
-- 添加时 from/to 必须是项目中存在的角色名
+- 添加时 from/to 必须是已在角色档案中注册的角色名
 - 双向关系设 isBidirectional=true（如"朋友"），单向关系设 false（如"暗恋"）
 - 支持同一对角色有多种关系（如既是"师徒"又是"亲属"）`,
     parameters: {
@@ -257,7 +264,19 @@ export const executeManageRelationships = (args: {
           continue;
         }
         if (!characterNames.has(op.from) || !characterNames.has(op.to)) {
-          results.push(`❌ 添加失败: 角色 "${op.from}" 或 "${op.to}" 不存在`);
+          const availableChars = Array.from(characterNames);
+          const missing: string[] = [];
+          if (!characterNames.has(op.from)) missing.push(op.from);
+          if (!characterNames.has(op.to)) missing.push(op.to);
+
+          let msg = `❌ 添加失败: 角色 ${missing.map(m => `"${m}"`).join(', ')} 未在角色档案中注册\n`;
+          if (availableChars.length > 0) {
+            msg += `已注册角色: ${availableChars.join('、')}\n`;
+          } else {
+            msg += `当前没有任何已注册角色\n`;
+          }
+          msg += `提示: 请先使用 create_character_profile 工具创建角色档案，或检查角色名称是否完全匹配`;
+          results.push(msg);
           continue;
         }
         const relation = store.addRelation({
@@ -315,7 +334,7 @@ export const executeGetRelationshipGraph = (): string => {
   const { relations } = store;
 
   if (relations.length === 0) {
-    return '(关系网络为空，暂无任何角色关系)';
+    return '(关系网络为空。请先确保角色已在"角色档案与记忆"中注册，再使用 manage_relationships 添加关系。)';
   }
 
   // 统计每个角色的关系数
