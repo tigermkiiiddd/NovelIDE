@@ -20,12 +20,31 @@ const SUPPRESSION_KEYWORDS = [
 ];
 
 /**
+ * 正向触发词：必须包含以下动作关键字才能触发技能加载
+ * 只针对"写入/设计/创建"类操作
+ */
+const POSITIVE_TRIGGER_KEYWORDS = [
+  '写', '创作', '设计', '构建', '规划',
+  '增加', '新增', '添加', '修改', '改写', '重写',
+  '生成', '创建', '规划', '策划', '布局',
+];
+
+/**
  * 检查文本是否命中反提示词
  */
 function containsSuppressionKeyword(text: string): boolean {
   if (!text) return false;
   const lower = text.toLowerCase();
   return SUPPRESSION_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/**
+ * 检查文本是否命中正向触发词
+ */
+function containsPositiveTriggerKeyword(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return POSITIVE_TRIGGER_KEYWORDS.some(kw => lower.includes(kw));
 }
 
 /**
@@ -125,6 +144,12 @@ export function detectSkillTriggers(
   // 反提示词检查：查询/读取类关键字不触发技能
   if (containsSuppressionKeyword(text)) {
     console.log('[SkillTrigger] 跳过：命中反提示词（查询/读取类操作）');
+    return;
+  }
+
+  // 正向触发检查：必须包含写入/设计/创建类动作关键字
+  if (!containsPositiveTriggerKeyword(text)) {
+    console.log('[SkillTrigger] 跳过：未命中正向触发词（写入/设计/创建类动作）');
     return;
   }
 
