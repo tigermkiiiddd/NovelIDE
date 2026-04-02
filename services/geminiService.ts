@@ -244,11 +244,11 @@ export class AIService {
         timestamp: new Date().toISOString(),
       };
 
-      // 构建完整 URL - baseURL 可能是: https://api.openai.com/v1, https://xinyun.ai/v1, https://api.moonshot.cn/v1 等
-      const fullURL = baseURL.includes('/v1')
-        ? `${baseURL}/chat/completions`
-        : baseURL.includes('/chat/completions')
-          ? baseURL
+      // 构建完整 URL - baseURL 可能是: https://api.openai.com/v1, https://api.moonshot.cn/v1, https://open.bigmodel.cn/api/coding/paas/v4 等
+      const fullURL = baseURL.includes('/chat/completions')
+        ? baseURL
+        : baseURL.includes('/v1')
+          ? `${baseURL}/chat/completions`
           : `${baseURL}/v1/chat/completions`;
 
       console.log('[AI Request - 完整请求]', JSON.stringify({
