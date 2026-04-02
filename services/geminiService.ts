@@ -19,6 +19,7 @@ export class AIService {
   private client: OpenAI | null = null;
   private anthropicClient: Anthropic | null = null;
   private sdkBaseURL: string = '';  // SDK 实际使用的 baseURL
+  private isGLMProtocol: boolean = false;  // 是否为 GLM v4 协议
 
   constructor(config: AIConfig) {
     this.config = config;
@@ -38,6 +39,7 @@ export class AIService {
 
     // 根据 baseUrl 特征判断协议类型
     const isAnthropicProtocol = baseURL.toLowerCase().includes('anthropic');
+    const isGLMProtocol = baseURL.includes('/paas/');
 
     if (isAnthropicProtocol) {
       // Anthropic 原生协议（GLM Coding Plan 等）
@@ -59,6 +61,7 @@ export class AIService {
         baseURL = `${baseURL}/v1`;
       }
       this.sdkBaseURL = baseURL;
+      this.isGLMProtocol = isGLMProtocol;
       this.client = new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true });
       this.anthropicClient = null;
     }
@@ -142,6 +145,11 @@ export class AIService {
 
     if (isAnthropicProtocol) {
       return this.sendMessageAnthropic(history, message, systemInstruction, tools, signal,
+        maxTokensOverride, temperatureOverride, modelOverride);
+    }
+
+    if (this.isGLMProtocol) {
+      return this.sendMessageGLM(history, message, systemInstruction, tools, signal,
         maxTokensOverride, temperatureOverride, modelOverride);
     }
 
@@ -236,7 +244,7 @@ export class AIService {
       // Build request metadata for debug display
       const requestStartTime = Date.now();
       const requestMetadata = {
-        endpoint: `${baseURL}/chat/completions`,
+        endpoint: `${this.sdkBaseURL}/chat/completions`,
         model: modelName,
         max_tokens: this.config.maxOutputTokens,
         messageCount: openAIMessages.length,
@@ -727,6 +735,196 @@ export class AIService {
       candidates: [{ content: { parts } }],
       _metadata: {
         request: { endpoint: `${this.config.baseUrl}`, model: modelName },
+        response: { finishReason, usage },
+      },
+    };
+  }
+
+  /**
+   * GLM v4 协议（OpenAI-compatible 但流式格式不同）
+   * 使用 raw fetch + SSE 解析，跳过 OpenAI SDK 的流式解析
+   */
+  private async sendMessageGLM(
+    history: any[],
+    message: string,
+    systemInstruction: string,
+    tools: ToolDefinition[],
+    signal?: AbortSignal,
+    maxTokensOverride?: number,
+    temperatureOverride?: number,
+    modelOverride?: string
+  ): Promise<any> {
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // 1. 构建 messages（system 在 messages 数组内）
+    const glmMessages: any[] = [];
+    if (systemInstruction) {
+      glmMessages.push({ role: 'system', content: systemInstruction });
+    }
+    for (const msg of history) {
+      if (msg.role === 'user') {
+        if (msg.parts && msg.parts[0]?.functionResponse) {
+          msg.parts.forEach((p: any) => {
+            if (p.functionResponse) {
+              const toolName = p.functionResponse.name || 'unknown_tool';
+              const toolId = p.functionResponse.id || `call_${toolName}_${Date.now()}`;
+              glmMessages.push({
+                role: 'tool',
+                tool_call_id: toolId,
+                content: JSON.stringify(p.functionResponse.response),
+              });
+            }
+          });
+        } else {
+          const textContent = msg.parts ? msg.parts.map((p: any) => p.text).join('') : (msg.text || '');
+          glmMessages.push({ role: 'user', content: textContent });
+        }
+      } else if (msg.role === 'model' || msg.role === 'assistant') {
+        const textContent = msg.parts?.find((p: any) => p.text)?.text || '';
+        const toolCalls = msg.parts?.filter((p: any) => p.functionCall).map((p: any) => ({
+          id: p.functionCall.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+          function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args) },
+        }));
+        if (textContent || toolCalls.length > 0) {
+          const msgContent: any[] = [];
+          if (textContent) msgContent.push({ role: 'assistant', content: textContent });
+          toolCalls.forEach((tc: any) => {
+            msgContent.push({ role: 'assistant', content: '', tool_calls: [{ id: tc.id, type: 'function', function: { name: tc.function.name, arguments: tc.function.arguments } }] });
+          });
+          // GLM 简化版 assistant 消息
+          glmMessages.push({ role: 'assistant', content: textContent });
+        }
+      }
+    }
+    if (message) {
+      glmMessages.push({ role: 'user', content: message });
+    }
+
+    // 2. 构建请求
+    const modelName = modelOverride || this.config.modelName || 'glm-5';
+    const requestPayload = {
+      model: modelName,
+      messages: glmMessages,
+      stream: true,
+      max_tokens: maxTokensOverride ?? this.config.maxOutputTokens ?? 8192,
+      temperature: temperatureOverride ?? 0.7,
+    };
+
+    console.log('[GLM Request]', JSON.stringify({
+      endpoint: `${this.sdkBaseURL}/chat/completions`,
+      payload: requestPayload,
+    }, null, 2));
+
+    // 3. 原生 fetch 流式请求
+    const apiKey = this.config.apiKey || '';
+    const response = await this.withRetry(async () => {
+      const res = await fetch(`${this.sdkBaseURL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestPayload),
+        signal,
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        const error = new Error(`GLM API ${res.status}: ${body}`);
+        (error as any).status = res.status;
+        throw error;
+      }
+      return res;
+    });
+
+    let content = '';
+    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
+    let finishReason: string | null = null;
+    let usage: any = null;
+
+    // 4. 解析 GLM SSE 格式: data: {"choices":[{"delta":{"content":"..."}}]}
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(data);
+            const choice = chunk.choices?.[0];
+            if (!choice) continue;
+
+            // 文本内容
+            if (choice.delta?.content) {
+              content += choice.delta.content;
+            }
+
+            // tool_calls 支持（GLM 可能不支持，保守处理）
+            if (choice.delta?.tool_calls) {
+              choice.delta.tool_calls.forEach((tc: any, idx: number) => {
+                if (!toolCallsMap.has(idx)) {
+                  toolCallsMap.set(idx, {
+                    id: tc.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+                    name: tc.function?.name || '',
+                    arguments: '',
+                  });
+                }
+                if (tc.function?.arguments) {
+                  toolCallsMap.get(idx)!.arguments += tc.function.arguments;
+                }
+              });
+            }
+
+            // 完成原因和 usage
+            if (choice.finish_reason && choice.finish_reason !== 'null') {
+              finishReason = choice.finish_reason;
+            }
+            if (chunk.usage) usage = chunk.usage;
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    console.log('[GLM Response]', JSON.stringify({
+      contentLength: content.length,
+      toolCallsCount: toolCallsMap.size,
+      finishReason,
+      usage,
+    }, null, 2));
+
+    // 5. 转回内部 parts 格式
+    const parts: any[] = [];
+    if (content) parts.push({ text: content });
+    if (toolCallsMap.size > 0) {
+      toolCallsMap.forEach((tc) => {
+        let parsedArgs: any;
+        try {
+          parsedArgs = JSON.parse(tc.arguments);
+        } catch {
+          parts.push({ text: `[响应被截断] 工具调用「${tc.name}」参数无法解析。` });
+          return;
+        }
+        parts.push({ functionCall: { id: tc.id, name: tc.name, args: parsedArgs } });
+      });
+    }
+    if (parts.length === 0) {
+      parts.push({ text: `[无响应内容]` });
+    }
+
+    return {
+      candidates: [{ content: { parts } }],
+      _metadata: {
+        request: { endpoint: `${this.sdkBaseURL}/chat/completions`, model: modelName },
         response: { finishReason, usage },
       },
     };
