@@ -22,8 +22,14 @@ export const queryRelationshipsTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'query_relationships',
-    description: `【查询人际关系】查询角色关系网络。支持按角色名、关系类型、目标角色、描述关键词搜索。
+    description: `【查询人际关系】查询角色关系网络。
 
+## 存储位置
+角色关系存储在关系系统中，不在 md 文档中。
+通过此工具查询，不要读取 md 文件获取关系。
+
+## 查询功能
+支持按角色名、关系类型、目标角色、描述关键词搜索。
 返回匹配的关系列表，每条包含：来源角色、目标角色、关系类型、强度、描述、来源章节。
 
 不传参数时返回所有关系。`,
@@ -62,11 +68,17 @@ export const manageRelationshipsTool: ToolDefinition = {
     name: 'manage_relationships',
     description: `【批量管理人际关系】批量添加、更新、删除角色之间的关系。
 
+## ⚠️ 铁律：禁止用 md 文档记录关系
+角色关系必须存储在关系系统中，不允许用 md 文件记录！
+- ❌ 禁止在 md 文档中写角色关系表
+- ✅ 必须通过此工具管理所有关系
+- 关系数据存储在关系系统中，可供 AI 查询和分析
+
 ## 角色来源
 角色必须先在"角色档案与记忆"系统中注册，才能添加到关系中。
 - 已注册角色: 从角色档案中获取，名称与档案一致
-- 注册方式: 通过 create_character_profile 工具创建角色档案
-- 查看已注册角色: 使用 list_character_profiles 工具
+- 注册方式: 通过 init_character_profile 工具创建角色档案
+- 查看已注册角色: 使用 get_character_profile 工具
 - ⚠️ 注意: 仅读取角色档案文件不等于注册角色，必须通过工具创建档案
 
 ## 关系类型
@@ -275,7 +287,7 @@ export const executeManageRelationships = (args: {
           } else {
             msg += `当前没有任何已注册角色\n`;
           }
-          msg += `提示: 请先使用 create_character_profile 工具创建角色档案，或检查角色名称是否完全匹配`;
+          msg += `提示: 请先使用 init_character_profile 工具创建角色档案，或检查角色名称是否完全匹配`;
           results.push(msg);
           continue;
         }
@@ -334,7 +346,7 @@ export const executeGetRelationshipGraph = (): string => {
   const { relations } = store;
 
   if (relations.length === 0) {
-    return '(关系网络为空。请先确保角色已在"角色档案与记忆"中注册，再使用 manage_relationships 添加关系。)';
+    return '(关系网络为空。请先确保角色已在"角色档案与记忆"中注册，再使用此工具添加关系。)';
   }
 
   // 统计每个角色的关系数
