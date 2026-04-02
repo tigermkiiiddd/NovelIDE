@@ -28,6 +28,7 @@ export interface SkillTriggerRecord {
 export interface SkillTriggerState {
   records: SkillTriggerRecord[];
   currentRound: number;
+  isLoading: boolean;  // 跨项目切换时的加载保护
 
   advanceRound: () => void;
   triggerSkill: (skill: Omit<SkillTriggerRecord, 'triggerRound' | 'decayRounds'>) => SkillTriggerRecord;
@@ -57,9 +58,15 @@ const debounce = <T extends (...args: any[]) => any>(func: T, wait: number) => {
 export const useSkillTriggerStore = create<SkillTriggerState>((set, get) => ({
   records: [],
   currentRound: 0,
+  isLoading: false,
 
   advanceRound: () => {
-    const { records, currentRound } = get();
+    const { records, currentRound, isLoading } = get();
+    // 防止在加载新项目状态期间误操作
+    if (isLoading) {
+      console.log('[SkillTrigger] advanceRound: 加载中，跳过');
+      return;
+    }
     const nextRound = currentRound + 1;
     const stillActive = records.filter(record => isSkillAlive(record, nextRound));
     set({ currentRound: nextRound, records: stillActive });
@@ -67,7 +74,16 @@ export const useSkillTriggerStore = create<SkillTriggerState>((set, get) => ({
   },
 
   triggerSkill: (skill) => {
-    const { currentRound, records } = get();
+    const { currentRound, records, isLoading } = get();
+    // 防止在加载新项目状态期间误操作
+    if (isLoading) {
+      console.log('[SkillTrigger] triggerSkill: 加载中，跳过');
+      return records.find(r => r.skillId === skill.skillId) || {
+        ...skill,
+        triggerRound: currentRound,
+        decayRounds: MAX_ROUNDS,
+      };
+    }
     const existingIndex = records.findIndex(r => r.skillId === skill.skillId);
 
     if (existingIndex >= 0) {
@@ -96,16 +112,22 @@ export const useSkillTriggerStore = create<SkillTriggerState>((set, get) => ({
   },
 
   reset: () => {
-    set({ records: [], currentRound: 0 });
+    set({ records: [], currentRound: 0, isLoading: false });
     debouncedPersist([], 0);
   },
 
   loadFromDB: async (projectId) => {
-    const state = await dbAPI.getSkillTriggerState(projectId);
-    if (state) {
-      set({ records: state.records, currentRound: state.currentRound });
-    } else {
-      set({ records: [], currentRound: 0 });
+    set({ isLoading: true });  // 开始加载，阻止 advanceRound
+    try {
+      const state = await dbAPI.getSkillTriggerState(projectId);
+      if (state) {
+        set({ records: state.records, currentRound: state.currentRound, isLoading: false });
+      } else {
+        set({ records: [], currentRound: 0, isLoading: false });
+      }
+    } catch (error) {
+      console.error('[SkillTrigger] loadFromDB 失败:', error);
+      set({ records: [], currentRound: 0, isLoading: false });
     }
   },
 
