@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { dbAPI } from '../services/persistence';
 import { generateId } from '../services/fileSystem';
+import { useSkillTriggerStore } from './skillTriggerStore';
 
 // 简单的 debounce 工具函数
 const debounce = <T extends (...args: any[]) => any>(
@@ -183,6 +184,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           todos: [],
           lastModified: Date.now()
         };
+
+        // 新建会话时重置技能触发状态
+        useSkillTriggerStore.getState().reset();
 
         const newSessions = [newSession, ...currentSessions];
         set({
