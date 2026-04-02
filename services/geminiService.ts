@@ -18,6 +18,7 @@ export class AIService {
   private config: AIConfig;
   private client: OpenAI | null = null;
   private anthropicClient: Anthropic | null = null;
+  private sdkBaseURL: string = '';  // SDK 实际使用的 baseURL
 
   constructor(config: AIConfig) {
     this.config = config;
@@ -47,15 +48,17 @@ export class AIService {
       });
       this.client = null;
     } else {
-      // OpenAI-compatible 协议（现有逻辑不变）
+      // OpenAI-compatible 协议
       baseURL = baseURL || 'https://api.openai.com/v1';
       baseURL = baseURL.replace(/\/+$/, '');
       if (baseURL.includes('/chat/completions')) {
         baseURL = baseURL.replace(/\/chat\/completions.*$/, '');
       }
-      if (!baseURL.includes('/v1') && !baseURL.includes('/v4')) {
+      // 自动补全版本号
+      if (!baseURL.match(/\/v\d+$/)) {
         baseURL = `${baseURL}/v1`;
       }
+      this.sdkBaseURL = baseURL;
       this.client = new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true });
       this.anthropicClient = null;
     }
@@ -208,7 +211,6 @@ export class AIService {
       // 2. Prepare Request Options (with Gemini Safety Settings Injection)
       const modelName = modelOverride || this.config.modelName || 'gemini-2.0-flash';
       const isGemini = modelName.toLowerCase().includes('gemini');
-      const baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
 
       const requestPayload: any = {
         model: modelName,
@@ -244,16 +246,8 @@ export class AIService {
         timestamp: new Date().toISOString(),
       };
 
-      // 构建完整 URL - 如果用户已经自带版本号（/v1 /v4 等），直接加 /chat/completions
-      const fullURL = baseURL.includes('/chat/completions')
-        ? baseURL
-        : (baseURL.includes('/v1') || baseURL.includes('/v4'))
-          ? `${baseURL}/chat/completions`
-          : `${baseURL}/v1/chat/completions`;
-
       console.log('[AI Request - 完整请求]', JSON.stringify({
-        baseURL: baseURL,
-        fullURL: fullURL,
+        sdkBaseURL: this.sdkBaseURL,
         payload: {
           ...requestPayload,
           messages: openAIMessages.map((m: any) => ({
@@ -547,7 +541,7 @@ export class AIService {
 
        // 将请求信息附加到错误对象，便于调试
        error._requestInfo = {
-         endpoint: `${this.config.baseUrl || 'https://api.openai.com/v1'}/chat/completions`,
+         endpoint: `${this.sdkBaseURL}/chat/completions`,
          model: this.config.modelName,
          timestamp: new Date().toISOString(),
        };
