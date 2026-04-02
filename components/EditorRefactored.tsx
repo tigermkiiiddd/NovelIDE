@@ -23,7 +23,7 @@ import DiffViewer from './DiffViewer';
 import { ReadingLightView } from './ReadingLightView';
 import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { CharacterProfileView } from './CharacterProfileView';
-import RelationshipManager from './RelationshipManager';
+import { RelationshipManager } from './RelationshipManager';
 import EditHighlightOverlay from './editor/EditHighlightOverlay';
 import VersionHistory from './VersionHistory';
 import {
