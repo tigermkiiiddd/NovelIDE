@@ -3,7 +3,6 @@ import { listFilesTool, readFileTool } from './fileReadTools';
 import { createFileTool, updateFileTool, patchFileTool, renameFileTool, deleteFileTool } from './fileWriteTools';
 import { updateProjectMetaTool } from './projectTools';
 import { manageTodosTool } from './todoTools';
-import { thinkingTool } from './thinkingTools';
 import {
   queryKnowledgeTool,
   manageKnowledgeTool,
@@ -66,7 +65,7 @@ const writeTools: ToolDefinition[] = [
   manageRelationshipsTool,
 ];
 
-export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool, thinkingTool];
+export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool];
 
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => allTools;
 
@@ -78,4 +77,3 @@ export * from './knowledgeGraphTools';
 export * from './timelineTools';
 export * from './characterProfileTools';
 export * from './relationshipTools';
-export * from './thinkingTools';
