@@ -107,7 +107,9 @@ export const useSkillTriggerStore = create<SkillTriggerState>((set, get) => ({
   },
 
   getActiveSkills: () => {
-    const { records, currentRound } = get();
+    const { records, currentRound, isLoading } = get();
+    // 加载期间返回空，防止跨项目污染
+    if (isLoading) return [];
     return records.filter(record => isSkillAlive(record, currentRound));
   },
 
