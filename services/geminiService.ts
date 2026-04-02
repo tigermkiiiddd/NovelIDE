@@ -867,6 +867,11 @@ export class AIService {
             const choice = chunk.choices?.[0];
             if (!choice) continue;
 
+            // DEBUG: 打印所有含 tool_calls 的 chunk
+            if (choice.delta?.tool_calls) {
+              console.log('[GLM chunk] tool_calls:', JSON.stringify(choice.delta.tool_calls));
+            }
+
             // 文本内容
             if (choice.delta?.content) {
               content += choice.delta.content;
@@ -877,8 +882,12 @@ export class AIService {
               choice.delta.tool_calls.forEach((tc: any, idx: number) => {
                 const id = tc.id || `call_${Math.random().toString(36).substr(2, 9)}`;
                 const name = tc.function?.name || tc.name || '';
-                // GLM streaming: arguments 可能嵌套在 function.arguments 或直接在 tc.arguments
-                const rawArgs = tc.function?.arguments ?? tc.arguments ?? '';
+                // GLM streaming: arguments 可能是字符串或对象，兜底处理
+                const rawArgs = typeof tc.function?.arguments === 'string'
+                  ? tc.function.arguments
+                  : typeof tc.arguments === 'string'
+                    ? tc.arguments
+                    : JSON.stringify(tc.function?.arguments ?? tc.arguments ?? '');
                 if (!toolCallsMap.has(idx)) {
                   toolCallsMap.set(idx, { id, name, arguments: rawArgs });
                 } else {
