@@ -481,6 +481,40 @@ const ToolLogMessage: React.FC<{
     );
 };
 
+// --- Reasoning Block (显示模型思考过程) ---
+const ReasoningBlock: React.FC<{
+    reasoning: string;
+    isDebugMode: boolean;
+}> = ({ reasoning, isDebugMode }) => {
+    const [isExpanded, setIsExpanded] = useState(!isDebugMode);
+
+    // 截断过长内容用于预览
+    const previewLength = 150;
+    const isLong = reasoning.length > previewLength;
+    const preview = isLong ? reasoning.slice(0, previewLength) + '...' : reasoning;
+
+    return (
+        <div className="mt-2 text-xs font-mono bg-[#0d1117] rounded-lg border border-blue-700/50 overflow-hidden">
+            <div
+                className="px-3 py-2 bg-blue-900/30 border-b border-blue-700/50 flex items-center gap-2 cursor-pointer"
+                onClick={() => setIsExpanded(!isExpanded)}
+            >
+                <ChevronRight size={14} className={`text-blue-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                <Brain size={14} className="text-blue-400" />
+                <span className="font-medium text-blue-300 truncate flex-1">💭 模型思考过程</span>
+                <span className="text-[10px] text-blue-400 bg-blue-900/50 px-1.5 py-0.5 rounded shrink-0">
+                    {isExpanded ? '收起' : '展开'}
+                </span>
+            </div>
+            {isExpanded && (
+                <div className="p-3 text-gray-300 whitespace-pre-wrap leading-relaxed max-h-[400px] overflow-y-auto custom-scrollbar">
+                    {isLong && !isExpanded ? preview : reasoning}
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- SubAgent Output Block (格式化报告显示) ---
 const SubAgentOutputBlock: React.FC<{
     text: string;
@@ -730,6 +764,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
         
         {messages.map((msg, index) => {
             const toolCalls = msg.rawParts?.filter((p: any) => p.functionCall).map((p: any) => p.functionCall);
+            const reasoningParts = msg.rawParts?.filter((p: any) => p.reasoning).map((p: any) => p.reasoning as string);
             const isUser = msg.role === 'user';
             const isModel = msg.role === 'model';
             const isSystem = msg.role === 'system';
@@ -894,6 +929,15 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         {/* Message Text */}
                         {msg.text && (
                             <div className="whitespace-pre-wrap select-text cursor-text leading-relaxed">{msg.text}</div>
+                        )}
+
+                        {/* REASONING BLOCK - 显示模型思考过程 */}
+                        {isModel && reasoningParts && reasoningParts.length > 0 && (
+                            <div className="mt-3 space-y-2">
+                                {reasoningParts.map((reasoning: string, idx: number) => (
+                                    <ReasoningBlock key={`reasoning-${idx}`} reasoning={reasoning} isDebugMode={isDebugMode} />
+                                ))}
+                            </div>
                         )}
 
                         {/* TOOL CALL VISUALIZATION (Input) - Always visible in Model message if present */}

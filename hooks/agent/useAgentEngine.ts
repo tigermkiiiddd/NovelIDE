@@ -352,6 +352,9 @@ export const useAgentEngine = ({
           } else if (p.thought !== undefined) {
             const t = String(p.thought);
             console.log(`[LLM-Raw]   part[${i}] THOUGHT(${t.length}chars): "${t.slice(0, 100).replace(/\n/g, '\u21b5')}${t.length > 100 ? '...' : ''}"`);
+          } else if (p.reasoning !== undefined) {
+            const r = String(p.reasoning);
+            console.log(`[LLM-Raw]   part[${i}] REASONING(${r.length}chars): "${r.slice(0, 100).replace(/\n/g, '\u21b5')}${r.length > 100 ? '...' : ''}"`);
           } else {
             console.log(`[LLM-Raw]   part[${i}] UNKNOWN:`, JSON.stringify(p).slice(0, 200));
           }

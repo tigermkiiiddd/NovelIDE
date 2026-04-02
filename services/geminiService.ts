@@ -842,6 +842,7 @@ export class AIService {
     });
 
     let content = '';
+    let reasoningContent = '';
     const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
     let finishReason: string | null = null;
     let usage: any = null;
@@ -867,12 +868,13 @@ export class AIService {
             const choice = chunk.choices?.[0];
             if (!choice) continue;
 
-            // 文本内容（reasoning_content 和 content 都要处理）
+            // 文本内容
             if (choice.delta?.content) {
               content += choice.delta.content;
             }
+            // 思考/推理内容单独存储
             if (choice.delta?.reasoning_content) {
-              content += choice.delta.reasoning_content;
+              reasoningContent += choice.delta.reasoning_content;
             }
 
             // tool_calls 支持（GLM function calling）
@@ -909,6 +911,7 @@ export class AIService {
 
     console.log('[GLM Response]', JSON.stringify({
       contentLength: content.length,
+      reasoningContentLength: reasoningContent.length,
       toolCallsCount: toolCallsMap.size,
       finishReason,
       usage,
@@ -916,6 +919,8 @@ export class AIService {
 
     // 5. 转回内部 parts 格式
     const parts: any[] = [];
+    // 优先添加思考内容（作为推理部分）
+    if (reasoningContent) parts.push({ reasoning: reasoningContent });
     if (content) parts.push({ text: content });
     if (toolCallsMap.size > 0) {
       toolCallsMap.forEach((tc) => {
