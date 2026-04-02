@@ -1,5 +1,6 @@
 
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { AIConfig } from "../types";
 import { ToolDefinition } from "./agent/types";
 import { AIResponseMetadata } from "../types/agentErrors";
@@ -16,6 +17,7 @@ const getSafetySettings = (threshold: string = 'BLOCK_NONE') => [
 export class AIService {
   private config: AIConfig;
   private client: OpenAI | null = null;
+  private anthropicClient: Anthropic | null = null;
 
   constructor(config: AIConfig) {
     this.config = config;
@@ -31,27 +33,32 @@ export class AIService {
     const apiKey = this.config.apiKey || process.env.API_KEY || '';
     if (!apiKey) return;
 
-    // 智能标准化 baseURL
-    let baseURL = this.config.baseUrl || 'https://api.openai.com/v1';
+    let baseURL = this.config.baseUrl || '';
 
-    // 移除末尾的斜杠
-    baseURL = baseURL.replace(/\/+$/, '');
+    // 根据 baseUrl 特征判断协议类型
+    const isAnthropicProtocol = baseURL.toLowerCase().includes('anthropic');
 
-    // 如果包含 /chat/completions，去掉它（SDK 会自动添加）
-    if (baseURL.includes('/chat/completions')) {
-      baseURL = baseURL.replace(/\/chat\/completions.*$/, '');
+    if (isAnthropicProtocol) {
+      // Anthropic 原生协议（GLM Coding Plan 等）
+      this.anthropicClient = new Anthropic({
+        apiKey,
+        baseURL: baseURL.replace(/\/+$/, ''),
+        dangerouslyAllowBrowser: true,
+      });
+      this.client = null;
+    } else {
+      // OpenAI-compatible 协议（现有逻辑不变）
+      baseURL = baseURL || 'https://api.openai.com/v1';
+      baseURL = baseURL.replace(/\/+$/, '');
+      if (baseURL.includes('/chat/completions')) {
+        baseURL = baseURL.replace(/\/chat\/completions.*$/, '');
+      }
+      if (!baseURL.includes('/v1')) {
+        baseURL = `${baseURL}/v1`;
+      }
+      this.client = new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true });
+      this.anthropicClient = null;
     }
-
-    // 如果不包含 /v1，自动补全
-    if (!baseURL.includes('/v1')) {
-      baseURL = `${baseURL}/v1`;
-    }
-
-    this.client = new OpenAI({
-      apiKey: apiKey,
-      baseURL: baseURL,
-      dangerouslyAllowBrowser: true
-    });
   }
 
   /**
@@ -126,6 +133,15 @@ export class AIService {
     modelOverride?: string  // 覆盖默认模型（用于轻量任务）
   ): Promise<any> {
     
+    // 根据 baseUrl 特征判断协议
+    const baseURL = this.config.baseUrl || '';
+    const isAnthropicProtocol = baseURL.toLowerCase().includes('anthropic');
+
+    if (isAnthropicProtocol) {
+      return this.sendMessageAnthropic(history, message, systemInstruction, tools, signal,
+        maxTokensOverride, temperatureOverride, modelOverride);
+    }
+
     if (!this.client) throw new Error("API Key not configured.");
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -538,5 +554,153 @@ export class AIService {
 
        throw error;
     }
+  }
+
+  /**
+   * Anthropic 原生协议（GLM Coding Plan 等）
+   */
+  private async sendMessageAnthropic(
+    history: any[],
+    message: string,
+    systemInstruction: string,
+    tools: ToolDefinition[],
+    signal?: AbortSignal,
+    maxTokensOverride?: number,
+    temperatureOverride?: number,
+    modelOverride?: string
+  ): Promise<any> {
+    if (!this.anthropicClient) throw new Error("API Key not configured.");
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    // 1. 构建 Anthropic 格式 messages
+    const anthropicMessages: any[] = [];
+    for (const msg of history) {
+      if (msg.role === 'user') {
+        if (msg.parts && msg.parts[0]?.functionResponse) {
+          msg.parts.forEach((p: any) => {
+            if (p.functionResponse) {
+              const toolName = p.functionResponse.name || 'unknown_tool';
+              const toolId = p.functionResponse.id || `call_${toolName}_${Date.now()}`;
+              anthropicMessages.push({
+                role: 'user',
+                content: [
+                  { type: 'tool_result', tool_use_id: toolId, content: JSON.stringify(p.functionResponse.response) }
+                ]
+              });
+            }
+          });
+        } else {
+          const textContent = msg.parts ? msg.parts.map((p: any) => p.text).join('') : (msg.text || '');
+          anthropicMessages.push({ role: 'user', content: textContent });
+        }
+      } else if (msg.role === 'model' || msg.role === 'assistant') {
+        const textContent = msg.parts?.find((p: any) => p.text)?.text || '';
+        const toolCalls = msg.parts?.filter((p: any) => p.functionCall).map((p: any) => ({
+          id: p.functionCall.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+          function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args) }
+        }));
+        if (textContent || toolCalls.length > 0) {
+          const msgContent: any[] = [];
+          if (textContent) msgContent.push({ type: 'text', text: textContent });
+          toolCalls.forEach((tc: any) => {
+            msgContent.push({ type: 'tool_use', id: tc.id, name: tc.function.name, input: JSON.parse(tc.function.arguments) });
+          });
+          anthropicMessages.push({ role: 'assistant', content: msgContent });
+        }
+      }
+    }
+    if (message) {
+      anthropicMessages.push({ role: 'user', content: message });
+    }
+
+    // 2. 构建请求
+    const modelName = modelOverride || this.config.modelName || 'glm-4';
+    const requestPayload: any = {
+      model: modelName,
+      messages: anthropicMessages,
+      system: systemInstruction || undefined,
+      max_tokens: maxTokensOverride ?? this.config.maxOutputTokens ?? 8192,
+      temperature: temperatureOverride ?? 0.7,
+      stream: true,
+    };
+    if (tools.length > 0) {
+      requestPayload.tools = tools;
+    }
+
+    console.log('[Anthropic Request]', JSON.stringify({
+      endpoint: `${this.config.baseUrl}`,
+      payload: {
+        model: modelName,
+        messageCount: anthropicMessages.length,
+        hasTools: tools.length > 0,
+        toolCount: tools.length,
+      },
+    }, null, 2));
+
+    // 3. 流式请求 & 解析
+    const stream: any = await this.withRetry(async () =>
+      this.anthropicClient!.messages.stream(requestPayload, { signal })
+    );
+
+    let content = '';
+    const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
+    let finishReason: string | null = null;
+    let usage: any = null;
+
+    for await (const event of stream) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (event.type === 'message_delta' && event.usage) usage = event.usage;
+      if (event.type === 'content_block_delta') {
+        if (event.delta.type === 'text_delta') content += event.delta.text;
+        if (event.delta.type === 'tool_use_delta') {
+          const idx = event.delta.tool_use_index ?? 0;
+          if (!toolCallsMap.has(idx)) {
+            toolCallsMap.set(idx, {
+              id: event.delta.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+              name: event.delta.name || '',
+              arguments: '',
+            });
+          }
+          toolCallsMap.get(idx)!.arguments += event.delta.input ?? '';
+        }
+      }
+      if (event.type === 'message_delta') {
+        finishReason = event.delta.stop_reason || null;
+      }
+    }
+
+    console.log('[Anthropic Response]', JSON.stringify({
+      contentLength: content.length,
+      toolCallsCount: toolCallsMap.size,
+      finishReason,
+      usage,
+    }, null, 2));
+
+    // 4. 转回内部 parts 格式
+    const parts: any[] = [];
+    if (content) parts.push({ text: content });
+    if (toolCallsMap.size > 0) {
+      toolCallsMap.forEach((tc) => {
+        let parsedArgs: any;
+        try {
+          parsedArgs = JSON.parse(tc.arguments);
+        } catch {
+          parts.push({ text: `[响应被截断] 工具调用「${tc.name}」参数无法解析。` });
+          return;
+        }
+        parts.push({ functionCall: { id: tc.id, name: tc.name, args: parsedArgs } });
+      });
+    }
+    if (parts.length === 0) {
+      parts.push({ text: `[无响应内容]` });
+    }
+
+    return {
+      candidates: [{ content: { parts } }],
+      _metadata: {
+        request: { endpoint: `${this.config.baseUrl}`, model: modelName },
+        response: { finishReason, usage },
+      },
+    };
   }
 }
