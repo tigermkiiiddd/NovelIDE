@@ -10,11 +10,13 @@ import type { ActivationNotification } from '../../stores/skillTriggerStore';
 import { lifecycleManager } from '../agentContext/toolLifecycle';
 
 /**
- * 反提示词：包含以下操作动作关键字时不触发技能加载
- * 只针对"读取/查询"类工具调用关键字，避免干扰正常的知识检索流程
+ * 反提示词：包含以下关键字时不触发技能加载
+ * 主要针对"查询/读取"类操作，避免干扰正常的知识检索流程
  */
 const SUPPRESSION_KEYWORDS = [
-  '搜索', '找找', '查询', '查看',
+  '查询', '搜索', '找找', '查看',
+  '有什么', '都有哪些', '能说说', '介绍一下',
+  '大纲', '章节', '目录', '看看', '了解一下', '帮我找',
 ];
 
 /**
