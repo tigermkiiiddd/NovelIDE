@@ -86,7 +86,7 @@ const quickEvalTool: ToolDefinition = {
 const quickEvalConfig: SubAgentConfig<KnowledgeExtractionInput, QuickEvalOutput> = {
   name: 'QuickEvalAgent',
   maxLoops: 2,
-  temperature: 0.7,
+  temperature: 0.1,
   tools: [quickEvalTool],
   terminalToolName: 'quick_eval',
 
@@ -298,7 +298,7 @@ const executeListNodes = (args: { category?: string }, ctx: ToolContext): string
 const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> = {
   name: 'KnowledgeDecisionAgent',
   maxLoops: 6,
-  temperature: 0.7,
+  temperature: 0.1,
   tools: [listNodesTool, submitDecisionTool],
   terminalToolName: 'submit_decision',
 

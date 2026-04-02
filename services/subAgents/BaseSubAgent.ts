@@ -139,7 +139,7 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
         signal,
         undefined,  // forceToolName
         undefined,  // maxTokensOverride
-        this.config.temperature ?? 0.7  // SubAgent 默认温度
+        this.config.temperature ?? 0.2  // SubAgent 默认低温度
       );
 
       const candidates = response.candidates;

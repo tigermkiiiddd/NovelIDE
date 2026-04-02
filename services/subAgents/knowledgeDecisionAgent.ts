@@ -92,7 +92,7 @@ const quickEvalTool: ToolDefinition = {
 const quickEvalConfig: SubAgentConfig<KnowledgeDecisionInput, QuickEvalOutput> = {
   name: 'QuickKnowledgeEval',
   maxLoops: 2,
-  temperature: 0.7,
+  temperature: 0.1,
   tools: [quickEvalTool],
   terminalToolName: 'quick_eval',
 
@@ -351,7 +351,7 @@ const decisionConfig: SubAgentConfig<
 > = {
   name: 'KnowledgeDecisionAgent',
   maxLoops: 8,
-  temperature: 0.7,
+  temperature: 0.2,
   tools: [listMetadataTool, queryKnowledgeTool, submitDecisionTool],
   terminalToolName: 'submit_decision',
 
@@ -445,7 +445,7 @@ export class KnowledgeDecisionAgent extends BaseSubAgent<
     const config: SubAgentConfig<KnowledgeDecisionInput, KnowledgeDecisionOutput> = {
       name: 'KnowledgeDecisionAgent',
       maxLoops: 1,
-      temperature: 0.7,
+      temperature: 0.2,
       tools: [],
       terminalToolName: '',
       getSystemPrompt: () => '',
