@@ -21,9 +21,9 @@ import { getNodePath } from '../services/fileSystem';
 import { FileNode } from '../types';
 import DiffViewer from './DiffViewer';
 import { ReadingLightView } from './ReadingLightView';
-import { JsonViewer } from './JsonViewer';
 import { KnowledgeTreeView } from './KnowledgeTreeView';
 import { CharacterProfileView } from './CharacterProfileView';
+import RelationshipManager from './RelationshipManager';
 import EditHighlightOverlay from './editor/EditHighlightOverlay';
 import VersionHistory from './VersionHistory';
 import {
@@ -49,6 +49,9 @@ import {
   Loader2,
   FileScan,
 } from 'lucide-react';
+
+const RELATION_FILE_NAME = '人际关系.json';
+const INFO_FOLDER_NAME = '00_基础信息';
 
 interface EditorProps {
   className?: string;
@@ -379,19 +382,20 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
       );
     }
 
-    // 其他 JSON 文件 -> JsonViewer
-    if (filePath.startsWith(CHARACTER_PROFILE_PATH_PREFIX) && activeFile.name.endsWith('.json')) {
+    // 人际关系.json -> RelationshipManager
+    if (filePath === `${INFO_FOLDER_NAME}/${RELATION_FILE_NAME}`) {
       return (
         <div className={`h-full ${className}`}>
-          <CharacterProfileView filePath={filePath} content={activeFile.content} />
+          <RelationshipManager />
         </div>
       );
     }
 
-    if (activeFile.name.endsWith('.json') && activeFile.content) {
+    // 角色资料 JSON -> CharacterProfileView
+    if (filePath.startsWith(CHARACTER_PROFILE_PATH_PREFIX) && activeFile.name.endsWith('.json')) {
       return (
         <div className={`h-full ${className}`}>
-          <JsonViewer content={activeFile.content} />
+          <CharacterProfileView filePath={filePath} content={activeFile.content} />
         </div>
       );
     }

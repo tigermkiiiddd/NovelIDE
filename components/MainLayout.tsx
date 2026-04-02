@@ -15,6 +15,7 @@ import { useChapterAnalysisStore, ChapterAnalysisState } from '../stores/chapter
 import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useWorldTimelineStore } from '../stores/worldTimelineStore';
+import { useRelationshipStore } from '../stores/relationshipStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getNodePath } from '../services/fileSystem';
 // Extracted layout modules
@@ -107,6 +108,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const loadProjectCharacterProfiles = useCharacterMemoryStore((state: CharacterMemoryState) => state.loadProjectProfiles);
   const ensureKnowledgeGraphInitialized = useKnowledgeGraphStore(state => state.ensureInitialized);
   const loadTimeline = useWorldTimelineStore(state => state.loadTimeline);
+  const loadRelations = useRelationshipStore(state => state.loadRelations);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
 
   // --- Data Initialization ---
@@ -117,9 +119,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           loadProjectCharacterProfiles(projectId);
           ensureKnowledgeGraphInitialized(projectId);
           loadTimeline(projectId);
+          loadRelations();
         });
     }
-  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized, loadTimeline]);
+  }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized, loadTimeline, loadRelations]);
 
   // --- Tutorial Auto-popup ---
   useEffect(() => {
