@@ -764,31 +764,13 @@ export const constructSystemPrompt = (
   const knowledgeGraphSection = getKnowledgeGraphSection();
   const foreshadowingSection = getForeshadowingSection();
 
-  // --- 技能触发注入：活跃的自动加载技能 ---
+  // --- 技能触发注入：活跃的技能列表（仅告知存在，不注入内容） ---
   let triggeredSkillsSection = '';
   const activeSkills = useSkillTriggerStore.getState().getActiveSkills();
   if (activeSkills.length > 0) {
-    const skillFolder = files.find(f => f.name === '98_技能配置');
-    const subskillFolder = skillFolder
-      ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
-      : null;
-
-    const sections = activeSkills.map(record => {
-      // 从 files 中找到对应技能文件的内容
-      const skillFile = subskillFolder
-        ? files.find(f => f.parentId === subskillFolder.id && f.name === record.skillId)
-        : null;
-      if (!skillFile?.content) return null;
-      const remaining = getRemainingRounds(record, lifecycleManager.getCurrentRound());
-      return `## 活跃技能: ${record.name}\n` +
-        `**命中标签**: ${record.originalTags.join(', ')}\n` +
-        `**剩余活跃**: ${remaining}/${record.decayRounds} 轮\n` +
-        `---\n${skillFile.content}`;
-    }).filter(Boolean);
-
-    if (sections.length > 0) {
-      triggeredSkillsSection = `\n\n---\n## 自动加载的技能\n` + sections.join('\n\n');
-    }
+    const skillNames = activeSkills.map(r => `- ${r.name}`).join('\n');
+    const remaining = getRemainingRounds(activeSkills[0], lifecycleManager.getCurrentRound());
+    triggeredSkillsSection = `\n\n---\n## 当前活跃技能（共 ${activeSkills.length} 个，剩余 ${remaining} 轮）\n${skillNames}\n`;
   }
 
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
