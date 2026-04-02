@@ -13,6 +13,7 @@ import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 import { useRelationshipStore } from '../../../stores/relationshipStore';
 import { useSkillTriggerStore, getRemainingRounds } from '../../../stores/skillTriggerStore';
+import { lifecycleManager } from '../../../domains/agentContext/toolLifecycle';
 import { buildProjectOverviewPrompt } from '../../../utils/projectContext';
 
 // Plan 模式已移除
@@ -767,7 +768,6 @@ export const constructSystemPrompt = (
   let triggeredSkillsSection = '';
   const activeSkills = useSkillTriggerStore.getState().getActiveSkills();
   if (activeSkills.length > 0) {
-    const triggerStore = useSkillTriggerStore.getState();
     const skillFolder = files.find(f => f.name === '98_技能配置');
     const subskillFolder = skillFolder
       ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
@@ -779,7 +779,7 @@ export const constructSystemPrompt = (
         ? files.find(f => f.parentId === subskillFolder.id && f.name === record.skillId)
         : null;
       if (!skillFile?.content) return null;
-      const remaining = getRemainingRounds(record, triggerStore.currentRound);
+      const remaining = getRemainingRounds(record, lifecycleManager.getCurrentRound());
       return `## 活跃技能: ${record.name}\n` +
         `**命中标签**: ${record.originalTags.join(', ')}\n` +
         `**剩余活跃**: ${remaining}/${record.decayRounds} 轮\n` +

@@ -8,6 +8,7 @@ import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
 import { useSkillTriggerStore, getRemainingRounds } from '../../stores/skillTriggerStore';
+import { lifecycleManager } from '../../domains/agentContext/toolLifecycle';
 import { detectSkillTriggers } from '../../domains/skillTrigger/skillTriggerService';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
@@ -74,7 +75,7 @@ export const useAgentEngine = ({
     resetErrorTracker(); // 新的一轮对话，重置防死循环计数器
 
     // 轮次递增（每条用户消息只递增一次）
-    useSkillTriggerStore.getState().advanceRound();
+    lifecycleManager.advanceRound();
 
     try {
       // 2. 获取最新上下文

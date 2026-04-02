@@ -272,6 +272,13 @@ export class LifecycleManager {
   }
 
   /**
+   * 设置当前轮次（用于从 IndexedDB 恢复状态）
+   */
+  setCurrentRound(round: number): void {
+    this.currentRound = round;
+  }
+
+  /**
    * 获取所有活跃消息的生命周期
    */
   getActiveLifecycles(): MessageLifecycle[] {
@@ -333,3 +340,6 @@ export class LifecycleManager {
     };
   }
 }
+
+/** 单例：供 skillTriggerStore 和 agentEngine 共用 */
+export const lifecycleManager = new LifecycleManager();

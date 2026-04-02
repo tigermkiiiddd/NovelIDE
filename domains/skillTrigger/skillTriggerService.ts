@@ -7,6 +7,7 @@ import Fuse from 'fuse.js';
 import type { FileNode } from '../../types';
 import type { SkillTriggerRecord } from '../../stores/skillTriggerStore';
 import type { ActivationNotification } from '../../stores/skillTriggerStore';
+import { lifecycleManager } from '../agentContext/toolLifecycle';
 
 /**
  * 对一段文本进行多关键字模糊匹配
@@ -86,7 +87,6 @@ export function findMatchedKeyword(
 export interface TriggerDetectionContext {
   files: FileNode[];
   triggerStore: {
-    currentRound: number;
     triggerSkill: (skill: Omit<SkillTriggerRecord, 'triggerRound' | 'decayRounds'>) => SkillTriggerRecord;
   };
 }
@@ -128,8 +128,8 @@ export function detectSkillTriggers(
         matchText,
       });
 
-      const wasReset = triggerStore.currentRound > existingRecord.triggerRound;
-      const remaining = existingRecord.decayRounds - (triggerStore.currentRound - existingRecord.triggerRound);
+      const wasReset = lifecycleManager.getCurrentRound() > existingRecord.triggerRound;
+      const remaining = existingRecord.decayRounds - (lifecycleManager.getCurrentRound() - existingRecord.triggerRound);
 
       const notif: ActivationNotification = {
         skillId: existingRecord.skillId,
