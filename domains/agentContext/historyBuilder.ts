@@ -293,7 +293,7 @@ export const buildSimpleHistory = (
     const responseSysIds: string[] = [];
     for (let j = i + 1; j < messages.length; j++) {
       const next = messages[j];
-      if (next.role === 'system' && next.rawParts?.some((p: any) => p.functionResponse)) {
+      if (next.role === 'system' && (next.rawParts?.some((p: any) => p.functionResponse) || next.isToolOutput)) {
         responseSysIds.push(next.id);
         responseToCallMap.set(next.id, msg.id);
       } else {

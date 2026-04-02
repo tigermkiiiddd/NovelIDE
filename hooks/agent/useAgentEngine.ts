@@ -175,8 +175,8 @@ export const useAgentEngine = ({
             const msg = msgs[i];
 
             // 检查是否是 tool response 消息
-            const hasToolResponse = (msg.role === 'user' || msg.role === 'system') &&
-              msg.rawParts?.some((p: any) => p.functionResponse);
+            const hasToolResponse = (msg.role === 'system' || msg.role === 'user') &&
+              (msg.rawParts?.some((p: any) => p.functionResponse) || msg.isToolOutput);
 
             if (hasToolResponse) {
               // ⚠️ 关键修复：检查 lastToolCallsMsg 而不是 result[-1]
@@ -205,8 +205,8 @@ export const useAgentEngine = ({
               let hasNextResponse = false;
               for (let j = i + 1; j < msgs.length; j++) {
                 const next = msgs[j];
-                const isResponse = (next?.role === 'user' || next?.role === 'system') &&
-                  next?.rawParts?.some((p: any) => p.functionResponse);
+                const isResponse = (next?.role === 'system' || next?.role === 'user') &&
+                  (next?.rawParts?.some((p: any) => p.functionResponse) || next?.isToolOutput);
                 if (isResponse) {
                   hasNextResponse = true;
                   break;

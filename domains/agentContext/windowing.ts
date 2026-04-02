@@ -33,7 +33,7 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
 
     const hasToolResponse =
       (message.role === 'user' || message.role === 'system') &&
-      message.rawParts?.some((part: any) => part.functionResponse);
+      (message.rawParts?.some((part: any) => part.functionResponse) || message.isToolOutput);
 
     if (hasToolResponse) {
       if (!lastToolCallsMessage) {
@@ -54,7 +54,7 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
         const next = messages[j];
         const isResponse =
           (next?.role === 'user' || next?.role === 'system') &&
-          next?.rawParts?.some((part: any) => part.functionResponse);
+          (next?.rawParts?.some((part: any) => part.functionResponse) || next?.isToolOutput);
 
         if (isResponse) {
           hasNextResponse = true;
