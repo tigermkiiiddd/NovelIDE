@@ -460,7 +460,6 @@ export const useAgentEngine = ({
             messages: session.messages.map((m: ChatMessage) => {
               const result = toolResults.find(r => r.toolMsgId === m.id);
               if (!result) return m;
-              console.log('[ToolResponse挂载] msgId:', m.id, 'role:', m.role, 'rawParts:', JSON.stringify(result.functionResponse));
               return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: result.hasError };
             }),
             lastModified: Date.now()
