@@ -875,15 +875,17 @@ export class AIService {
             // tool_calls 支持（GLM function calling）
             if (choice.delta?.tool_calls) {
               choice.delta.tool_calls.forEach((tc: any, idx: number) => {
+                const id = tc.id || `call_${Math.random().toString(36).substr(2, 9)}`;
+                const name = tc.function?.name || tc.name || '';
+                // GLM streaming: arguments 可能嵌套在 function.arguments 或直接在 tc.arguments
+                const rawArgs = tc.function?.arguments ?? tc.arguments ?? '';
                 if (!toolCallsMap.has(idx)) {
-                  toolCallsMap.set(idx, {
-                    id: tc.id || `call_${Math.random().toString(36).substr(2, 9)}`,
-                    name: tc.function?.name || '',
-                    arguments: '',
-                  });
-                }
-                if (tc.function?.arguments) {
-                  toolCallsMap.get(idx)!.arguments += tc.function.arguments;
+                  toolCallsMap.set(idx, { id, name, arguments: rawArgs });
+                } else {
+                  const existing = toolCallsMap.get(idx)!;
+                  existing.arguments += rawArgs;
+                  if (id !== existing.id && id) existing.id = id;
+                  if (name && !existing.name) existing.name = name;
                 }
               });
             }
@@ -915,7 +917,8 @@ export class AIService {
         let parsedArgs: any;
         try {
           parsedArgs = JSON.parse(tc.arguments);
-        } catch {
+        } catch (e) {
+          console.error('[GLM] tool_args parse failed:', tc.name, 'raw:', tc.arguments);
           parts.push({ text: `[响应被截断] 工具调用「${tc.name}」参数无法解析。` });
           return;
         }
