@@ -53,7 +53,7 @@ export class AIService {
       if (baseURL.includes('/chat/completions')) {
         baseURL = baseURL.replace(/\/chat\/completions.*$/, '');
       }
-      if (!baseURL.includes('/v1')) {
+      if (!baseURL.includes('/v1') && !baseURL.includes('/v4')) {
         baseURL = `${baseURL}/v1`;
       }
       this.client = new OpenAI({ apiKey, baseURL, dangerouslyAllowBrowser: true });
