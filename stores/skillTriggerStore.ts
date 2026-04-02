@@ -34,6 +34,7 @@ export interface SkillTriggerState {
   getActiveSkills: () => SkillTriggerRecord[];
   reset: () => void;
   loadFromDB: (projectId: string) => Promise<void>;
+  recalibrate: (newMessageCount: number) => void;
 }
 
 export interface ActivationNotification {
@@ -105,6 +106,16 @@ export const useSkillTriggerStore = create<SkillTriggerState>((set, get) => ({
       set({ records: state.records, currentRound: state.currentRound });
     } else {
       set({ records: [], currentRound: 0 });
+    }
+  },
+
+  recalibrate: (newMessageCount: number) => {
+    const { records, currentRound } = get();
+    // 如果消息被删除了，同步重置 currentRound 并清除超出范围的技能
+    if (newMessageCount < currentRound) {
+      const stillActive = records.filter(record => isSkillAlive(record, newMessageCount));
+      set({ currentRound: newMessageCount, records: stillActive });
+      debouncedPersist(stillActive, newMessageCount);
     }
   },
 }));

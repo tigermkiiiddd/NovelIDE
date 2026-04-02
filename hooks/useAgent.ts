@@ -292,10 +292,13 @@ export const useAgent = (
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);
+      // 重新校准技能 round（从 store 直接获取最新消息数）
+      const newCount = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.messages.length || 0;
+      useSkillTriggerStore.getState().recalibrate(newCount);
       // 清除所有 pendingChanges，避免孤立的 tool_calls
       pendingChanges.forEach(c => removePendingChange(c.id));
       setTimeout(() => engine.processTurn(), 0);
-  }, [deleteMessagesFrom, engine, pendingChanges, removePendingChange]);
+  }, [deleteMessagesFrom, engine, pendingChanges, removePendingChange, currentSessionId]);
 
   const editUserMessage = useCallback(async (messageId: string, newText: string) => {
       editMessageContent(messageId, newText);

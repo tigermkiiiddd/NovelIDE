@@ -73,6 +73,9 @@ export const useAgentEngine = ({
     setLoading(true);
     resetErrorTracker(); // 新的一轮对话，重置防死循环计数器
 
+    // 轮次递增（每条用户消息只递增一次）
+    useSkillTriggerStore.getState().advanceRound();
+
     try {
       // 2. 获取最新上下文
       const globalSessions = useAgentStore.getState().sessions;
@@ -461,10 +464,7 @@ export const useAgentEngine = ({
             lastModified: Date.now()
           }));
 
-          // --- 技能触发检测：每轮 AI 回复完成后执行 ---
-          const triggerStore = useSkillTriggerStore.getState();
-          triggerStore.advanceRound();
-
+          // --- 技能触发检测：检测本轮 tool thinking 中的关键词 ---
           // 收集用户消息 + 本轮所有 tool thinking
           const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
           const thinkingTexts = toolResults
@@ -474,7 +474,7 @@ export const useAgentEngine = ({
 
           detectSkillTriggers(
             combinedText,
-            { files, triggerStore },
+            { files, triggerStore: useSkillTriggerStore.getState() },
             (notif) => {
               addMessage({
                 id: generateId(),
@@ -497,10 +497,8 @@ export const useAgentEngine = ({
           keepGoing = false;
 
           // --- 技能触发检测（纯文本回复轮） ---
-          const triggerStore = useSkillTriggerStore.getState();
-          triggerStore.advanceRound();
           const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
-          detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore });
+          detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
         }
       }
 
