@@ -802,13 +802,18 @@ export class AIService {
 
     // 2. 构建请求
     const modelName = modelOverride || this.config.modelName || 'glm-5';
-    const requestPayload = {
+    const requestPayload: any = {
       model: modelName,
       messages: glmMessages,
       stream: true,
       max_tokens: maxTokensOverride ?? this.config.maxOutputTokens ?? 8192,
       temperature: temperatureOverride ?? 0.7,
     };
+    if (tools.length > 0) {
+      requestPayload.tools = tools;
+      requestPayload.tool_choice = 'auto';
+      requestPayload.tool_stream = true;  // GLM 工具流式输出
+    }
 
     console.log('[GLM Request]', JSON.stringify({
       endpoint: `${this.sdkBaseURL}/chat/completions`,
@@ -867,7 +872,7 @@ export class AIService {
               content += choice.delta.content;
             }
 
-            // tool_calls 支持（GLM 可能不支持，保守处理）
+            // tool_calls 支持（GLM function calling）
             if (choice.delta?.tool_calls) {
               choice.delta.tool_calls.forEach((tc: any, idx: number) => {
                 if (!toolCallsMap.has(idx)) {
