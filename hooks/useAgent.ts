@@ -253,15 +253,29 @@ export const useAgent = (
           .getState()
           .triggerConversationExtraction(userMessage.text, recentMessages.map(m => ({ role: m.role, text: m.text })))
           .then((result) => {
-            if (!result || result.added + result.updated + result.linked === 0) return;
+            if (!result) return;
 
-            addMessage({
-              id: generateId(),
-              role: 'system',
-              text: `🧠 已自动沉淀知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
-              timestamp: Date.now(),
-              metadata: { logType: 'success', extractionSummary: result.summary },
-            });
+            const hasExtracted = result.added + result.updated + result.linked > 0;
+            const summary = result.summary;
+
+            if (hasExtracted) {
+              addMessage({
+                id: generateId(),
+                role: 'system',
+                text: `🧠 已自动沉淀知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
+                timestamp: Date.now(),
+                metadata: { logType: 'success', extractionSummary: summary },
+              });
+            } else if (summary) {
+              // 跳过提取时也显示原因
+              addMessage({
+                id: generateId(),
+                role: 'system',
+                text: `⏭️ ${summary}`,
+                timestamp: Date.now(),
+                metadata: { logType: 'info', extractionSummary: summary },
+              });
+            }
           })
           .catch((error: Error) => {
             console.error('[ConversationMemory] trigger failed', error);
