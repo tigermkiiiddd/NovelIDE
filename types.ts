@@ -782,7 +782,7 @@ export interface KnowledgeNode {
   // 内容（中文，简洁原则）
   name: string;                     // 简短名称（≤20字）
   summary: string;                  // 一句话概括（≤50字）
-  detail?: string;                  // 详细说明（≤200字，可选）
+  detail?: string;                  // 详细说明（≤300字，可选）
   // Tag系统
   tags: string[];                   // 标签（跨分类索引）
   // 元数据
@@ -794,6 +794,8 @@ export interface KnowledgeNode {
     type: '对话' | '文档' | '用户';
     ref?: string;
   };
+  // 【新增】附件列表 - 关联到项目文档
+  attachments?: MemoryAttachment[];
   // 记忆智能元数据（可选，支持激活度/间隔重复算法）
   metadata?: KnowledgeNodeMetadata;
   // 时间戳
@@ -809,6 +811,36 @@ export interface KnowledgeEdge {
   type: KnowledgeEdgeType;          // 关系类型
   note?: string;                    // 关系说明
   createdAt: number;
+}
+
+// ============================================
+// 记忆附件系统
+// ============================================
+
+/**
+ * 记忆附件条目
+ * 关联到项目中的具体文档
+ */
+export interface MemoryAttachment {
+  filePath: string;           // 文件路径（如 "02_角色档案/苏清月/背景.md"）
+  fileName: string;           // 文件名（不含路径）
+  attachedAt: number;         // 附加时间
+  reason?: string;            // 附加原因（可选）
+}
+
+/**
+ * 附件操作类型
+ */
+export type AttachmentAction = 'attach' | 'detach';
+
+/**
+ * 附件操作参数
+ */
+export interface AttachmentOperation {
+  action: AttachmentAction;
+  nodeId: string;             // 知识节点ID
+  filePath: string;           // 文件路径
+  reason?: string;            // 附加原因
 }
 
 // 知识节点草稿（用于创建/更新）

@@ -3,7 +3,7 @@
  * @description 知识图谱状态管理 - 三级分类 + Tag系统 + 记忆智能算法
  */
 
-import { FileNode, KnowledgeNodeMetadata, KnowledgeNodeDynamicState } from '../types';
+import { FileNode, KnowledgeNodeMetadata, KnowledgeNodeDynamicState, MemoryAttachment } from '../types';
 import {
   KnowledgeCategory,
   KnowledgeNode,
@@ -76,6 +76,12 @@ interface KnowledgeGraphState {
   // 分类管理
   addSubCategory: (category: KnowledgeCategory, subCategory: string) => void;
   addTag: (tag: string) => void;
+
+  // 附件操作
+  attachDocument: (nodeId: string, filePath: string, reason?: string) => void;
+  detachDocument: (nodeId: string, filePath: string) => void;
+  getNodeAttachments: (nodeId: string) => MemoryAttachment[];
+  getDocumentsByPath: (filePath: string) => KnowledgeNode[];
 
   // 统计
   getStats: () => {
@@ -373,6 +379,64 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       };
     });
     setTimeout(() => saveToFile(get()), 1000);
+  },
+
+  // ============================================
+  // 附件操作
+  // ============================================
+
+  attachDocument: (nodeId: string, filePath: string, reason?: string) => {
+    const fileName = filePath.split('/').pop() || filePath;
+
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (node.id !== nodeId) return node;
+
+        const attachments = node.attachments || [];
+        // 避免重复附加
+        if (attachments.some(a => a.filePath === filePath)) return node;
+
+        return {
+          ...node,
+          attachments: [...attachments, {
+            filePath,
+            fileName,
+            attachedAt: Date.now(),
+            reason,
+          }],
+          updatedAt: Date.now(),
+        };
+      }),
+    }));
+
+    setTimeout(() => saveToFile(get()), 1000);
+  },
+
+  detachDocument: (nodeId: string, filePath: string) => {
+    set((state) => ({
+      nodes: state.nodes.map((node) => {
+        if (node.id !== nodeId) return node;
+
+        return {
+          ...node,
+          attachments: (node.attachments || []).filter(a => a.filePath !== filePath),
+          updatedAt: Date.now(),
+        };
+      }),
+    }));
+
+    setTimeout(() => saveToFile(get()), 1000);
+  },
+
+  getNodeAttachments: (nodeId: string) => {
+    const node = get().nodes.find(n => n.id === nodeId);
+    return node?.attachments || [];
+  },
+
+  getDocumentsByPath: (filePath: string) => {
+    return get().nodes.filter(n =>
+      n.attachments?.some(a => a.filePath === filePath)
+    );
   },
 
   // ============================================

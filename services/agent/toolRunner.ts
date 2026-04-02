@@ -507,6 +507,7 @@ export const executeTool = async (
                 case 'list_all_knowledge':
                     result = await executeListAllKnowledge(args);
                     break;
+                case 'manage_attachments':
                 // --- CHARACTER PROFILE TOOLS ---
                 case 'init_character_profile':
                     result = await executeInitCharacterProfile(args);

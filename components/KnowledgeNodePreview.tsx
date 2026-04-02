@@ -344,14 +344,38 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
 
         {/* 详情 */}
         <div className="bg-gray-800/50 rounded p-3">
-          <label className="text-xs font-medium text-gray-500 block mb-1">详情</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">详情（≤300字）</label>
           <EditableText
             value={localData.detail || ''}
             onChange={(v) => handleChange('detail', v)}
             placeholder="详细说明..."
             multiline
-            maxLength={500}
+            maxLength={300}
           />
+        </div>
+
+        {/* 附件 */}
+        <div className="bg-gray-800/50 rounded p-3">
+          <label className="text-xs font-medium text-gray-500 block mb-2">
+            📎 附件
+          </label>
+          {node.attachments && node.attachments.length > 0 ? (
+            <div className="space-y-2">
+              {node.attachments.map((att, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-gray-700/50 rounded px-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-300 truncate">{att.fileName}</div>
+                    <div className="text-xs text-gray-500 truncate">{att.filePath}</div>
+                    {att.reason && (
+                      <div className="text-xs text-gray-400 mt-1">{att.reason}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500 italic">暂无附件</div>
+          )}
         </div>
 
         {/* 标签 */}

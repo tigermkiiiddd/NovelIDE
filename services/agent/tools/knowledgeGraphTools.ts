@@ -94,11 +94,20 @@ export const manageKnowledgeTool: ToolDefinition = {
     name: 'manage_knowledge',
     description: `【知识管理】批量添加、更新、删除知识节点，或强化/复习已有知识。
 
-## 知识节点要求
-- **名称**: 简短明确，≤20字
-- **摘要**: 一句话概括，≤50字
-- **详情**: 详细说明，≤200字（可选）
-- **简洁原则**: 如果内容过长，应该拆分为多个节点
+## 记忆 vs 文档的区别
+- **记忆（知识图谱）**：AI 推理用，简短摘要（见下方字数限制）
+- **文档（文件）**：内容创作用，完整原文
+- **长篇原文必须放进附件（attachments），禁止写入节点内容**
+
+## 知识节点字数限制
+- **名称（name）**：≤20字
+- **摘要（summary）**：≤50字
+- **详情（detail）**：≤300字
+- 过长的内容应拆分为多个节点
+
+## 附件（attachments）用法
+- 创建节点时通过 attachments 关联源文档路径
+- AI 读取时会按需加载附件中的完整原文
 
 ## 分类体系
 - **设定（是什么）**: 世界设定、物品设定、场景设定
@@ -380,6 +389,10 @@ export const executeManageKnowledge = async (args: {
     detail?: string;
     tags?: string[];
     importance?: 'critical' | 'important' | 'normal';
+    attachments?: Array<{
+      filePath: string;
+      reason?: string;
+    }>;
   }>;
   updates?: Array<{
     nodeId: string;
@@ -418,6 +431,14 @@ export const executeManageKnowledge = async (args: {
           continue;
         }
 
+        // 处理附件
+        const attachments = n.attachments?.map(a => ({
+          filePath: a.filePath,
+          fileName: a.filePath.split('/').pop() || a.filePath,
+          attachedAt: Date.now(),
+          reason: a.reason,
+        }));
+
         const newNode = store.addNode({
           category: n.category,
           subCategory: n.subCategory,
@@ -427,6 +448,7 @@ export const executeManageKnowledge = async (args: {
           detail: n.detail,
           tags: n.tags || [],
           importance: n.importance || 'normal',
+          attachments,
         });
         addedNodes.push({
           id: newNode.id,
