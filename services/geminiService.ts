@@ -569,7 +569,6 @@ export class AIService {
     temperatureOverride?: number,
     modelOverride?: string
   ): Promise<any> {
-    if (!this.anthropicClient) throw new Error("API Key not configured.");
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
     // 1. 构建 Anthropic 格式 messages
@@ -618,55 +617,90 @@ export class AIService {
     const requestPayload: any = {
       model: modelName,
       messages: anthropicMessages,
-      system: systemInstruction || undefined,
       max_tokens: maxTokensOverride ?? this.config.maxOutputTokens ?? 8192,
-      temperature: temperatureOverride ?? 0.7,
       stream: true,
     };
+    if (systemInstruction) {
+      requestPayload.system = systemInstruction;
+    }
     if (tools.length > 0) {
       requestPayload.tools = tools;
     }
 
     console.log('[Anthropic Request]', JSON.stringify({
-      endpoint: `${this.config.baseUrl}`,
-      payload: {
-        model: modelName,
-        messageCount: anthropicMessages.length,
-        hasTools: tools.length > 0,
-        toolCount: tools.length,
-      },
+      endpoint: `${this.config.baseUrl}/messages`,
+      payload: requestPayload,
     }, null, 2));
 
-    // 3. 流式请求 & 解析
-    const stream: any = await this.withRetry(async () =>
-      this.anthropicClient!.messages.stream(requestPayload, { signal })
-    );
+    // 3. 原生 fetch 流式请求（跳过 SDK 避免兼容问题）
+    const apiKey = this.config.apiKey || '';
+    const response = await this.withRetry(async () => {
+      const res = await fetch(`${this.config.baseUrl}/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify(requestPayload),
+        signal,
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        const error = new Error(`Anthropic API ${res.status}: ${body}`);
+        (error as any).status = res.status;
+        throw error;
+      }
+      return res;
+    });
 
     let content = '';
     const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
     let finishReason: string | null = null;
     let usage: any = null;
 
-    for await (const event of stream) {
-      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      if (event.type === 'message_delta' && event.usage) usage = event.usage;
-      if (event.type === 'content_block_delta') {
-        if (event.delta.type === 'text_delta') content += event.delta.text;
-        if (event.delta.type === 'tool_use_delta') {
-          const idx = event.delta.tool_use_index ?? 0;
-          if (!toolCallsMap.has(idx)) {
-            toolCallsMap.set(idx, {
-              id: event.delta.id || `call_${Math.random().toString(36).substr(2, 9)}`,
-              name: event.delta.name || '',
-              arguments: '',
-            });
-          }
-          toolCallsMap.get(idx)!.arguments += event.delta.input ?? '';
+    // 4. 解析 SSE 流
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const event = JSON.parse(data);
+            if (event.type === 'message_delta' && event.usage) usage = event.usage;
+            if (event.type === 'content_block_delta') {
+              if (event.delta.type === 'text_delta') content += event.delta.text;
+              if (event.delta.type === 'tool_use_delta') {
+                const idx = event.delta.tool_use_index ?? 0;
+                if (!toolCallsMap.has(idx)) {
+                  toolCallsMap.set(idx, {
+                    id: event.delta.id || `call_${Math.random().toString(36).substr(2, 9)}`,
+                    name: event.delta.name || '',
+                    arguments: '',
+                  });
+                }
+                toolCallsMap.get(idx)!.arguments += event.delta.input ?? '';
+              }
+            }
+            if (event.type === 'message_delta') {
+              finishReason = event.delta.stop_reason || null;
+            }
+          } catch { /* ignore parse errors */ }
         }
       }
-      if (event.type === 'message_delta') {
-        finishReason = event.delta.stop_reason || null;
-      }
+    } finally {
+      reader.releaseLock();
     }
 
     console.log('[Anthropic Response]', JSON.stringify({
