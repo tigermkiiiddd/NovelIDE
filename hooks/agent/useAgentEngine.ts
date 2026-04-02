@@ -455,15 +455,22 @@ export const useAgentEngine = ({
           }
 
           // 更新所有 UI 消息为完成，并把 functionResponse 挂载到对应 system 消息上
-          useAgentStore.getState().updateCurrentSession((session: ChatSession) => ({
-            ...session,
-            messages: session.messages.map((m: ChatMessage) => {
-              const result = toolResults.find(r => r.toolMsgId === m.id);
-              if (!result) return m;
-              return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: result.hasError };
-            }),
-            lastModified: Date.now()
-          }));
+          console.log('[ToolResult挂载] step1 - toolResults:', toolResults.length);
+          try {
+            useAgentStore.getState().updateCurrentSession((session: ChatSession) => {
+              console.log('[ToolResult挂载] step2 - session.messages:', session.messages.length, 'sysIds:', session.messages.filter(m => m.role === 'system').map(m => m.id).join(','));
+              const newMsgs = session.messages.map((m: ChatMessage) => {
+                const result = toolResults.find(r => r.toolMsgId === m.id);
+                if (!result) return m;
+                console.log('[ToolResult挂载] step3 - matched msgId:', m.id, 'fnResp:', JSON.stringify(result.functionResponse).slice(0, 100));
+                return { ...m, text: result.streamedLog, rawParts: [result.functionResponse], isError: result.hasError };
+              });
+              return { ...session, messages: newMsgs, lastModified: Date.now() };
+            });
+            console.log('[ToolResult挂载] step4 - update done');
+          } catch (e) {
+            console.error('[ToolResult挂载] error:', e, String(e));
+          }
 
           // --- 技能触发检测：检测本轮 tool thinking 中的关键词 ---
           // 收集用户消息 + 本轮所有 tool thinking
