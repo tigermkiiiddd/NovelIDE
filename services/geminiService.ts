@@ -244,10 +244,10 @@ export class AIService {
         timestamp: new Date().toISOString(),
       };
 
-      // 构建完整 URL - baseURL 可能是: https://api.openai.com/v1, https://api.moonshot.cn/v1, https://open.bigmodel.cn/api/coding/paas/v4 等
+      // 构建完整 URL - 如果用户已经自带 /v1 或 /v4，直接加 /chat/completions
       const fullURL = baseURL.includes('/chat/completions')
         ? baseURL
-        : baseURL.includes('/v1')
+        : baseURL.includes('/v1') || baseURL.includes('/v4')
           ? `${baseURL}/chat/completions`
           : `${baseURL}/v1/chat/completions`;
 
