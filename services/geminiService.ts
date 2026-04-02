@@ -864,14 +864,13 @@ export class AIService {
           if (data === '[DONE]') continue;
           try {
             const chunk = JSON.parse(data);
-
-            // 无条件打印所有 chunk（调试用）
-            if (chunk.choices?.[0]?.delta) {
-              console.log('[GLM chunk]', JSON.stringify(chunk.choices[0].delta).substring(0, 300));
-            }
-
             const choice = chunk.choices?.[0];
             if (!choice) continue;
+
+            // DEBUG: 打印 tool_calls chunk
+            if (choice.delta?.tool_calls) {
+              console.log('[GLM chunk] tool_calls:', JSON.stringify(choice.delta.tool_calls).substring(0, 200));
+            }
 
             // 文本内容
             if (choice.delta?.content) {
@@ -882,19 +881,17 @@ export class AIService {
             if (choice.delta?.tool_calls) {
               choice.delta.tool_calls.forEach((tc: any, idx: number) => {
                 const id = tc.id || `call_${Math.random().toString(36).substr(2, 9)}`;
-                const name = tc.function?.name || tc.name || '';
-                // GLM streaming: arguments 可能是字符串或对象，兜底处理
-                const rawArgs = typeof tc.function?.arguments === 'string'
-                  ? tc.function.arguments
-                  : typeof tc.arguments === 'string'
-                    ? tc.arguments
-                    : JSON.stringify(tc.function?.arguments ?? tc.arguments ?? '');
+                const name = tc.function?.Name || tc.function?.name || tc.name || '';
+                const rawArgs = tc.function?.arguments ?? tc.arguments ?? '';
                 if (!toolCallsMap.has(idx)) {
                   toolCallsMap.set(idx, { id, name, arguments: rawArgs });
                 } else {
                   const existing = toolCallsMap.get(idx)!;
-                  existing.arguments += rawArgs;
-                  if (id !== existing.id && id) existing.id = id;
+                  // 只追加不完整的 arguments（streaming 断开时补全 }）
+                  if (rawArgs && !existing.arguments.endsWith('}')) {
+                    existing.arguments += rawArgs;
+                  }
+                  if (id && id !== existing.id) existing.id = id;
                   if (name && !existing.name) existing.name = name;
                 }
               });
@@ -924,6 +921,7 @@ export class AIService {
     if (content) parts.push({ text: content });
     if (toolCallsMap.size > 0) {
       toolCallsMap.forEach((tc) => {
+        if (!tc.name || !tc.arguments) return;
         let parsedArgs: any;
         try {
           parsedArgs = JSON.parse(tc.arguments);
