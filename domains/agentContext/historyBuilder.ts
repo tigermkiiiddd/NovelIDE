@@ -332,7 +332,10 @@ export const buildSimpleHistory = (
     // 原先此类消息会 fall-through 到"普通 model 文本回复"分支被保留，
     // 之后 fixWindowIntegrity 再丢弃它，导致上下文只剩 user 消息，LLM 无限重试同一工具。
     if (msg.role === 'model' && msg.rawParts?.some((p: any) => p.functionCall) && !callToResponsesMap.has(msg.id)) {
-      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call 模型消息（无配对 response）: msgId=${msg.id}`);
+      const nextMsg = messages[i + 1];
+      const nextMsgHasFnResp = nextMsg?.rawParts?.some((p: any) => p.functionResponse);
+      const nextMsgHasFnCall = nextMsg?.rawParts?.some((p: any) => p.functionCall);
+      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call: msgId=${msg.id}, nextMsgRole=${nextMsg?.role}, nextMsgHasFnResp=${nextMsgHasFnResp}, nextMsgHasFnCall=${nextMsgHasFnCall}`);
       continue;
     }
 

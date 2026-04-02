@@ -867,14 +867,12 @@ export class AIService {
             const choice = chunk.choices?.[0];
             if (!choice) continue;
 
-            // DEBUG: 打印 tool_calls chunk
-            if (choice.delta?.tool_calls) {
-              console.log('[GLM chunk] tool_calls:', JSON.stringify(choice.delta.tool_calls).substring(0, 200));
-            }
-
-            // 文本内容
+            // 文本内容（reasoning_content 和 content 都要处理）
             if (choice.delta?.content) {
               content += choice.delta.content;
+            }
+            if (choice.delta?.reasoning_content) {
+              content += choice.delta.reasoning_content;
             }
 
             // tool_calls 支持（GLM function calling）
