@@ -3,6 +3,7 @@ import { listFilesTool, readFileTool } from './fileReadTools';
 import { createFileTool, updateFileTool, patchFileTool, renameFileTool, deleteFileTool } from './fileWriteTools';
 import { updateProjectMetaTool } from './projectTools';
 import { manageTodosTool } from './todoTools';
+import { thinkingTool } from './thinkingTools';
 import {
   queryKnowledgeTool,
   manageKnowledgeTool,
@@ -23,6 +24,11 @@ import {
   manageSubCategoryTool,
   archiveEntryTool,
 } from './characterProfileTools';
+import {
+  queryRelationshipsTool,
+  manageRelationshipsTool,
+  getRelationshipGraphTool,
+} from './relationshipTools';
 import { ToolDefinition } from '../types';
 
 // 主 Agent 可用的工具
@@ -32,6 +38,8 @@ const readTools: ToolDefinition[] = [
   queryKnowledgeTool,
   listKnowledgeMetadataTool,
   listAllKnowledgeTool,
+  queryRelationshipsTool,
+  getRelationshipGraphTool,
   getVolumesTool,
   getChaptersTool,
   getEventsTool,
@@ -54,9 +62,11 @@ const writeTools: ToolDefinition[] = [
   updateCharacterProfileTool,
   manageSubCategoryTool,
   archiveEntryTool,
+  // 人际关系工具
+  manageRelationshipsTool,
 ];
 
-export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool];
+export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool, thinkingTool];
 
 export const getToolsForMode = (planMode: boolean): ToolDefinition[] => allTools;
 
@@ -67,3 +77,5 @@ export * from './todoTools';
 export * from './knowledgeGraphTools';
 export * from './timelineTools';
 export * from './characterProfileTools';
+export * from './relationshipTools';
+export * from './thinkingTools';

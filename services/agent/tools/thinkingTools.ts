@@ -12,7 +12,12 @@ export const thinkingTool: ToolDefinition = {
     description: `[META TOOL] 结构化思考工具。**必须与操作工具并发调用，禁止单独使用。**
 
 用途：
-- intent: 用户输入后的意图推理
+- intent: 用户输入后的意图推理，**必须输出结构化结果**：
+  - intent: [casual|query|simple_edit|design|plan]
+  - complexity: [low|medium|high]
+  - requiresPlanning: [true|false]
+  - keyDecisions: [需要用户确认的关键决策列表]
+  - summary: [一句话总结理解的需求]
 - reflect_creative: 文件操作后的创作反思，必须回答：
   1) 当前核心目标是什么？
   2) 内容是否有AI味？
@@ -40,8 +45,8 @@ export const thinkingTool: ToolDefinition = {
         },
         mode: {
           type: 'string',
-          enum: ['intent', 'analyze', 'reflect', 'plan', 'reflect_creative'],
-          description: '思考模式: intent=意图推理; analyze=方案分析; reflect=自我反思; plan=行动规划; reflect_creative=创作反思，必须包含7项检测：核心目标、AI味(0-10)、文风符合度、设定一致性、角色OC、大纲OC、目标达成度。是审视内容质量，不是规划下一步。'
+          enum: ['intent', 'reflect'],
+          description: '思考模式: intent=意图推理（必须输出结构化结果，见上方说明）; reflect=自我反思'
         },
         content: {
           type: 'string',
@@ -83,10 +88,7 @@ export const formatThinkingResult = (
 ): string => {
   const modeLabels: Record<string, string> = {
     intent: '意图推理',
-    analyze: '方案分析',
-    reflect: '自我反思',
-    plan: '行动规划',
-    reflect_creative: '📝 创作反思（编辑视角）'
+    reflect: '自我反思'
   };
 
   const actionLabels: Record<string, string> = {
@@ -101,25 +103,6 @@ export const formatThinkingResult = (
   const wordLimitHint = maxResponseWords !== undefined && maxResponseWords > 0
     ? `\n**字数限制**: ${maxResponseWords}字以内`
     : '';
-
-  // 创作反思模式使用特殊格式
-  if (mode === 'reflect_creative') {
-    return `🔍 **【创作反思】**
-
-**核心目标**: ${thinking}
-
-**质量评分**: ${confidenceEmoji} ${confidence}%
-
-**判定**: ${actionLabels[nextAction] || nextAction}${wordLimitHint}
-
----
-
-**反思内容**:
-${content}
-
----
-> ⚠️ 反思检查项：AI味程度、文风符合度、设定一致性、角色OC检测、大纲OC检测、目标达成度`;
-  }
 
   return `🧠 **【${modeLabels[mode] || '思考'}】**
 

@@ -356,6 +356,34 @@ export interface CharacterRelationship {
   updatedAt: number;
 }
 
+// ============================================
+// 人际关系系统类型
+// ============================================
+
+// 预设关系类型（用户可自定义扩展）
+export const PRESET_RELATION_TYPES = [
+  '朋友', '敌人', '恋人', '夫妻', '师徒', '同门',
+  '亲属', '盟友', '对手', '上下级', '暗恋', '仇人',
+  '同窗', '邻居', '合作者', '陌生人',
+] as const;
+
+export type RelationType = string; // 开放类型，不限于预设
+export type RelationStrength = '强' | '中' | '弱';
+
+// 单条关系边
+export interface CharacterRelation {
+  id: string;
+  from: string;               // 角色A名称
+  to: string;                 // 角色B名称
+  type: RelationType;         // 关系类型
+  strength: RelationStrength;
+  description?: string;       // 关系描述/备注
+  chapterRef?: string;        // 来源章节
+  isBidirectional: boolean;   // 是否双向关系
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface CharacterGoal {
   id: string;
   description: string;
@@ -848,7 +876,8 @@ export interface StoryOutline {
 // 故事时间戳（绝对时间）
 export interface StoryTimeStamp {
   day: number;        // 第几天（从1开始）
-  hour: number;       // 小时（0-23，支持小数如 8.5）
+  hour: number;       // 小时（0-23，整数）
+  minute: number;     // 分钟（0-59，整数）
 }
 
 // 时间单位（用于持续时间）

@@ -102,7 +102,7 @@ const generateId = () => `timeline-${Date.now()}-${Math.random().toString(36).su
  * day 从1开始，所以需要减1
  */
 export function timestampToHours(ts: StoryTimeStamp): number {
-  return (ts.day - 1) * 24 + ts.hour;
+  return (ts.day - 1) * 24 + ts.hour + ts.minute / 60;
 }
 
 /**
@@ -129,14 +129,13 @@ export function toHours(time: QuantizedTime | undefined): number {
 
 /**
  * 格式化时间戳显示
- * 例如: { day: 1, hour: 8.5 } -> "第1天 08:30"
+ * 例如: { day: 1, hour: 8, minute: 30 } -> "第1天 08:30"
  */
 export function formatTimestampDisplay(ts: StoryTimeStamp | undefined): string {
   if (!ts) return '';
 
   const hour = ts.hour;
-  const hourInt = Math.floor(hour);
-  const minutes = Math.round((hour - hourInt) * 60);
+  const minutes = ts.minute;
 
   // 根据小时判断时间段
   let timeOfDay = '';
@@ -150,8 +149,8 @@ export function formatTimestampDisplay(ts: StoryTimeStamp | undefined): string {
 
   // 格式化时间
   const timeStr = minutes > 0
-    ? `${hourInt.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
-    : `${hourInt.toString().padStart(2, '0')}:00`;
+    ? `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+    : `${hour.toString().padStart(2, '0')}:00`;
 
   return `第${ts.day}天 ${timeStr} ${timeOfDay}`;
 }
@@ -199,9 +198,11 @@ export function calculateEndTime(startTs: StoryTimeStamp, duration: QuantizedTim
 
   // day 从1开始
   const endDay = Math.floor(endHours / 24) + 1;
-  const endHour = endHours % 24;
+  const endHourDecimal = endHours % 24;
+  const endHour = Math.floor(endHourDecimal);
+  const endMinute = Math.round((endHourDecimal - endHour) * 60);
 
-  return { day: endDay, hour: endHour };
+  return { day: endDay, hour: endHour, minute: endMinute };
 }
 
 /**
@@ -211,8 +212,8 @@ export function formatTimeRangeDisplay(startTs: StoryTimeStamp | undefined, dura
   if (!startTs) return '';
 
   // 格式化开始时间
-  const startHour = Math.floor(startTs.hour);
-  const startMinutes = Math.round((startTs.hour - startHour) * 60);
+  const startHour = startTs.hour;
+  const startMinutes = startTs.minute;
   const startTimeStr = startMinutes > 0
     ? `${startHour.toString().padStart(2, '0')}:${startMinutes.toString().padStart(2, '0')}`
     : `${startHour.toString().padStart(2, '0')}:00`;
@@ -224,8 +225,8 @@ export function formatTimeRangeDisplay(startTs: StoryTimeStamp | undefined, dura
 
   // 计算结束时间
   const endTs = calculateEndTime(startTs, duration);
-  const endHour = Math.floor(endTs.hour);
-  const endMinutes = Math.round((endTs.hour - endHour) * 60);
+  const endHour = endTs.hour;
+  const endMinutes = endTs.minute;
   const endTimeStr = endMinutes > 0
     ? `${endHour.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`
     : `${endHour.toString().padStart(2, '0')}:00`;

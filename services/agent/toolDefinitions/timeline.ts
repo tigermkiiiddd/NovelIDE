@@ -205,13 +205,13 @@ export const manageEventsTool: ToolDefinition = {
 - update: 更新事件
 - delete: 删除事件
 
-时间戳格式：{ "day": 1, "hour": 8 } 表示第1天8点
+时间戳格式：{ "day": 1, "hour": 8, "minute": 30 } 表示第1天8点30分
 duration 格式：{ "value": 2, "unit": "hour" } 表示持续2小时
 
 **add 示例（在时间线末尾追加）：**
 \`\`\`
 { "add": [{
-  "timestamp": { "day": 1, "hour": 14 },
+  "timestamp": { "day": 1, "hour": 14, "minute": 0 },
   "title": "发现玉佩",
   "content": "在山洞中发现一个神秘玉佩",
   "duration": { "value": 1, "unit": "hour" },
@@ -226,7 +226,7 @@ duration 格式：{ "value": 2, "unit": "hour" } 表示持续2小时
 { "insert": {
   "afterEventIndex": 5,
   "events": [{
-    "timestamp": { "day": 3, "hour": 10 },
+    "timestamp": { "day": 3, "hour": 10, "minute": 15 },
     "title": "回忆插入",
     "content": "闪回到主角的童年",
     "duration": { "value": 2, "unit": "hour" },
@@ -255,9 +255,10 @@ duration 格式：{ "value": 2, "unit": "hour" } 表示持续2小时
                 description: '事件发生的时间戳',
                 properties: {
                   day: { type: 'number', description: '第几天（从1开始）' },
-                  hour: { type: 'number', description: '小时（0-23，支持小数如8.5）' }
+                  hour: { type: 'number', description: '小时（0-23，整数）' },
+                  minute: { type: 'number', description: '分钟（0-59，整数）' }
                 },
-                required: ['day', 'hour']
+                required: ['day', 'hour', 'minute']
               },
               title: { type: 'string' },
               content: { type: 'string' },

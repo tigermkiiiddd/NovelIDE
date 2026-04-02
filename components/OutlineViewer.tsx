@@ -26,7 +26,8 @@ type EventGroupMode = 'none' | 'day' | 'chapter';
 interface EventFormData {
   // 时间戳（开始时间）
   day: number;          // 第几天
-  hour: number;         // 小时（0-23，支持小数）
+  hour: number;         // 小时（0-23，整数）
+  minute: number;      // 分钟（0-59，整数）
   // 持续时间
   durationValue: number;
   durationUnit: 'hour' | 'day';
@@ -651,7 +652,7 @@ const EventForm = React.memo(({
   onDeleteForeshadowing?: (id: string) => void;
   onLinkForeshadowing?: (id: string) => void;
 }) => {
-  const previewTime = formatTimeDisplay({ day: formData.day, hour: formData.hour });
+  const previewTime = formatTimeDisplay({ day: formData.day, hour: formData.hour, minute: formData.minute || 0 });
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickCreateTitle, setQuickCreateTitle] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -788,8 +789,8 @@ const EventForm = React.memo(({
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-gray-700">
-      {/* 时间戳输入：天 + 小时 */}
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      {/* 时间戳输入：天 + 小时 + 分钟 */}
+      <div className="grid grid-cols-4 gap-2 mb-2">
         <div>
           <label className="text-xs text-gray-500">第几天</label>
           <input
@@ -812,21 +813,43 @@ const EventForm = React.memo(({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">开始小时</label>
+          <label className="text-xs text-gray-500">小时</label>
           <input
             type="number"
             min="0"
-            max="23.5"
-            step="0.5"
+            max="23"
+            step="1"
             value={formData.hour}
             onChange={(e) => {
               const val = e.target.value;
               if (val === '') {
                 onFieldChange('hour', 0);
               } else {
-                const num = parseFloat(val);
-                if (!isNaN(num) && num >= 0 && num <= 23.5) {
+                const num = parseInt(val);
+                if (!isNaN(num) && num >= 0 && num <= 23) {
                   onFieldChange('hour', num);
+                }
+              }
+            }}
+            className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-500">分钟</label>
+          <input
+            type="number"
+            min="0"
+            max="59"
+            step="1"
+            value={formData.minute || 0}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === '') {
+                onFieldChange('minute', 0);
+              } else {
+                const num = parseInt(val);
+                if (!isNaN(num) && num >= 0 && num <= 59) {
+                  onFieldChange('minute', num);
                 }
               }
             }}
@@ -1919,6 +1942,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
   const [newEvent, setNewEvent] = useState({
     day: 1,
     hour: 8,
+    minute: 0,
     durationValue: 1,
     durationUnit: 'hour' as 'hour' | 'day',
     title: '',
@@ -2026,7 +2050,8 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     addEvent({
       timestamp: {
         day: newEvent.day,
-        hour: newEvent.hour
+        hour: newEvent.hour,
+        minute: newEvent.minute || 0
       },
       duration: {
         value: newEvent.durationValue,
@@ -2042,19 +2067,30 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       chapterId: newEvent.chapterId || undefined
     });
     // 重置表单，保持时间设置
-    setNewEvent({
-      day: newEvent.day,
-      hour: newEvent.hour + 1 > 23 ? 8 : newEvent.hour + 1,
-      durationValue: newEvent.durationValue,
-      durationUnit: newEvent.durationUnit,
-      title: '',
-      content: '',
-      location: '',
-      characters: '',
-      emotion: '',
-      emotions: [],
-      storyLineId: '',
-      chapterId: ''
+    setNewEvent(prev => {
+      // 计算下一个时间：如果小时+1超过23，重置到8，分钟保持不变
+      let nextHour = prev.hour + 1;
+      let nextDay = prev.day;
+      if (nextHour > 23) {
+        nextHour = 8;
+        nextDay = prev.day + 1;
+      }
+      return {
+        ...prev,
+        day: nextDay,
+        hour: nextHour,
+        minute: prev.minute || 0,
+        durationValue: prev.durationValue,
+        durationUnit: prev.durationUnit,
+        title: '',
+        content: '',
+        location: '',
+        characters: '',
+        emotion: '',
+        emotions: [],
+        storyLineId: '',
+        chapterId: ''
+      };
     });
     setShowAddEvent(false);
   };
@@ -2068,6 +2104,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     setNewEvent({
       day: event.timestamp?.day || 1,
       hour: event.timestamp?.hour || 8,
+      minute: event.timestamp?.minute || 0,
       durationValue: event.duration?.value || 1,
       durationUnit: event.duration?.unit || 'hour',
       title: event.title,
@@ -2097,7 +2134,8 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     updateEvent(editingEventId, {
       timestamp: {
         day: newEvent.day,
-        hour: newEvent.hour
+        hour: newEvent.hour,
+        minute: newEvent.minute || 0
       },
       duration: {
         value: newEvent.durationValue,
@@ -2406,25 +2444,25 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
           // 按章节分组：显示时间跨度
           const timestamps = group.events
             .filter(e => e.timestamp && typeof e.timestamp.day === 'number')
-            .map(e => (e.timestamp.day - 1) * 24 + e.timestamp.hour);
+            .map(e => (e.timestamp.day - 1) * 24 * 60 + e.timestamp.hour * 60 + (e.timestamp.minute || 0));
           if (timestamps.length > 0) {
-            const minHours = Math.min(...timestamps);
-            const maxHours = Math.max(...timestamps);
-            const startDay = Math.floor(minHours / 24) + 1;
-            const startHour = minHours % 24;
-            const endDay = Math.floor(maxHours / 24) + 1;
-            const endHour = maxHours % 24;
+            const minMins = Math.min(...timestamps);
+            const maxMins = Math.max(...timestamps);
+            const startDay = Math.floor(minMins / (24 * 60)) + 1;
+            const startHour = Math.floor((minMins % (24 * 60)) / 60);
+            const startMinute = minMins % 60;
+            const endDay = Math.floor(maxMins / (24 * 60)) + 1;
+            const endHour = Math.floor((maxMins % (24 * 60)) / 60);
+            const endMinute = maxMins % 60;
 
-            const formatTime = (day: number, hour: number) => {
-              const h = Math.floor(hour);
-              const m = Math.round((hour - h) * 60);
-              return m > 0 ? `第${day}天${h}:${m.toString().padStart(2, '0')}` : `第${day}天${h}:00`;
+            const formatTime = (day: number, hour: number, minute: number) => {
+              return minute > 0 ? `第${day}天${hour}:${minute.toString().padStart(2, '0')}` : `第${day}天${hour}:00`;
             };
 
-            if (startDay === endDay && startHour === endHour) {
-              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour)}` };
+            if (startDay === endDay && startHour === endHour && startMinute === endMinute) {
+              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour, startMinute)}` };
             } else {
-              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour)} ~ ${formatTime(endDay, endHour)}` };
+              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour, startMinute)} ~ ${formatTime(endDay, endHour, endMinute)}` };
             }
           }
           return group;

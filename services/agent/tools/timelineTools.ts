@@ -557,15 +557,18 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         // 检测时间戳回退：获取时间线最后一个事件的位置
         const allEventsBeforeAdd = store.getEvents();
         const lastEvt = allEventsBeforeAdd.length > 0 ? allEventsBeforeAdd[allEventsBeforeAdd.length - 1] : null;
-        const lastHours = lastEvt ? (lastEvt.timestamp.day - 1) * 24 + lastEvt.timestamp.hour + (lastEvt.duration ? toHours(lastEvt.duration) : 0) : 0;
+        // 计算最后一个事件结束后的时间（分钟）
+        const lastHours = lastEvt
+          ? (lastEvt.timestamp.day - 1) * 24 * 60 + lastEvt.timestamp.hour * 60 + (lastEvt.timestamp.minute || 0) + (lastEvt.duration ? toHours(lastEvt.duration) * 60 : 0)
+          : 0;
 
         for (const e of args.add) {
           // 校验：新事件 timestamp 不能早于时间线末尾
-          const newHours = (e.timestamp.day - 1) * 24 + e.timestamp.hour;
-          if (lastEvt && newHours < lastHours) {
+          const newMins = (e.timestamp.day - 1) * 24 * 60 + e.timestamp.hour * 60 + (e.timestamp.minute || 0);
+          if (lastEvt && newMins < lastHours) {
             return JSON.stringify({
               success: false,
-              error: `时间戳回退错误：新事件「${e.title}」的 timestamp（第${e.timestamp.day}天${e.timestamp.hour}时）早于时间线末尾（第${lastEvt.timestamp.day}天${lastEvt.timestamp.hour}时）。add 模式下新事件的 timestamp 必须接续当前时间线位置，请使用正确的绝对时间戳。`
+              error: `时间戳回退错误：新事件「${e.title}」的 timestamp（第${e.timestamp.day}天${e.timestamp.hour}时${e.timestamp.minute}分）早于时间线末尾（第${lastEvt.timestamp.day}天${lastEvt.timestamp.hour}时${lastEvt.timestamp.minute}分）。add 模式下新事件的 timestamp 必须接续当前时间线位置，请使用正确的绝对时间戳。`
             });
           }
           const eventData: any = { ...e };
@@ -628,20 +631,23 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           return JSON.stringify({ success: false, error: `事件 ${afterEventIndex} 不存在` });
         }
 
-        // 计算插入点的时间戳
-        let insertAfterHours: number;
+        // 计算插入点的时间戳（以分钟为单位）
+        let insertAfterMinutes: number;
         if (afterEvent) {
-          insertAfterHours = (afterEvent.timestamp.day - 1) * 24 + afterEvent.timestamp.hour;
+          insertAfterMinutes = (afterEvent.timestamp.day - 1) * 24 * 60 + afterEvent.timestamp.hour * 60 + (afterEvent.timestamp.minute || 0);
           // 加上 afterEvent 自己的持续时间
           if (afterEvent.duration) {
-            insertAfterHours += toHours(afterEvent.duration);
+            const durationMinutes = afterEvent.duration.unit === 'minute' ? afterEvent.duration.value :
+                                    afterEvent.duration.unit === 'hour' ? afterEvent.duration.value * 60 :
+                                    afterEvent.duration.value * 24 * 60;
+            insertAfterMinutes += durationMinutes;
           }
         } else {
           // 在最前面插入，从第一个事件之前开始
           if (allEvents.length > 0) {
-            insertAfterHours = (allEvents[0].timestamp.day - 1) * 24 + allEvents[0].timestamp.hour;
+            insertAfterMinutes = (allEvents[0].timestamp.day - 1) * 24 * 60 + allEvents[0].timestamp.hour * 60 + (allEvents[0].timestamp.minute || 0);
           } else {
-            insertAfterHours = 8; // 默认第1天8点
+            insertAfterMinutes = 8 * 60; // 默认第1天8点
           }
         }
 
@@ -650,35 +656,38 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         const shouldShift = (e: TimelineEvent) => {
           if (!afterEvent) return true; // 在最前面插入，所有事件都偏移
           // 在 afterEvent 之后的事件才偏移
-          const eHours = (e.timestamp.day - 1) * 24 + e.timestamp.hour;
-          const afterHours = (afterEvent.timestamp.day - 1) * 24 + afterEvent.timestamp.hour;
-          return eHours > afterHours || (eHours === afterHours && e.eventIndex > afterEvent.eventIndex);
+          const eMins = (e.timestamp.day - 1) * 24 * 60 + e.timestamp.hour * 60 + (e.timestamp.minute || 0);
+          const afterMins = (afterEvent.timestamp.day - 1) * 24 * 60 + afterEvent.timestamp.hour * 60 + (afterEvent.timestamp.minute || 0);
+          return eMins > afterMins || (eMins === afterMins && e.eventIndex > afterEvent.eventIndex);
         };
 
         for (const e of allEvents) {
           if (shouldShift(e)) {
-            const oldHours = (e.timestamp.day - 1) * 24 + e.timestamp.hour;
-            const newHours = oldHours + totalDurationHours;
+            const oldMins = (e.timestamp.day - 1) * 24 * 60 + e.timestamp.hour * 60 + (e.timestamp.minute || 0);
+            const newMins = oldMins + totalDurationHours * 60;
             const newTimestamp = {
-              day: Math.floor(newHours / 24) + 1,
-              hour: newHours % 24
+              day: Math.floor(newMins / (24 * 60)) + 1,
+              hour: Math.floor((newMins % (24 * 60)) / 60),
+              minute: Math.round(newMins % 60)
             };
             store.updateEvent(e.id, { timestamp: newTimestamp });
           }
         }
 
         // 插入新事件
-        let currentHours = insertAfterHours;
+        let currentMinutes = insertAfterMinutes;
         for (const e of events) {
-          const durationHours = e.duration
-            ? (e.duration.unit === 'minute' ? e.duration.value / 60 :
-               e.duration.unit === 'hour' ? e.duration.value :
-               e.duration.value * 24)
-            : 1;
+          const durationMinutes = e.duration
+            ? (e.duration.unit === 'minute' ? e.duration.value :
+               e.duration.unit === 'hour' ? e.duration.value * 60 :
+               e.duration.value * 24 * 60)
+            : 60; // 默认1小时
 
+          const totalMins = currentMinutes;
           const timestamp = {
-            day: Math.floor(currentHours / 24) + 1,
-            hour: currentHours % 24
+            day: Math.floor(totalMins / (24 * 60)) + 1,
+            hour: Math.floor((totalMins % (24 * 60)) / 60),
+            minute: totalMins % 60
           };
 
           const eventData: any = {

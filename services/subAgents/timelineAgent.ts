@@ -65,7 +65,7 @@ export interface TimelineContext {
   chapterSummaries: Array<{ chapterIndex: number; title: string; volumeIndex: number; eventCount: number }>;
   recentEvents: Array<{
     eventIndex: number;
-    timestamp: { day: number; hour: number };
+    timestamp: { day: number; hour: number; minute: number };
     title: string;
     content: string;
     duration?: { value: number; unit: 'minute' | 'hour' | 'day' };
@@ -74,7 +74,9 @@ export interface TimelineContext {
   lastEventTimestamp?: {
     day: number;
     hour: number;
+    minute: number;
     endHour?: number;  // 加上 duration 后的结束时间
+    endMinute?: number;
   } | null;
   // 未完结伏笔上下文（用于继续/收尾已有伏笔）
   unresolvedForeshadowing?: Array<{
