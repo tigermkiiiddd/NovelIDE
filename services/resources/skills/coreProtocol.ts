@@ -501,6 +501,7 @@ export const constructSystemPrompt = (
   knowledgeNodes?: any[]  // 知识图谱数据
 ): string => {
   // --- 1. 变量组装 (Variable Assembly) ---
+  console.log('[constructSystemPrompt] files.length:', files?.length, 'subSkillFolder:', files?.find(f => f.name === 'subskill')?.name);
   const skillFolder = files.find(f => f.name === '98_技能配置');
 
   // 1.1 Resolve Agent Core Protocol
