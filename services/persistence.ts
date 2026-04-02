@@ -97,10 +97,15 @@ interface NovelGenieDB extends DBSchema {
     value: ChapterAnalysisVersion & { projectId: string };
     indexes: { 'by-project': string; 'by-entity': string };
   };
+  // 技能触发状态
+  skillTrigger: {
+    key: string; // 'skill-trigger-{projectId}'
+    value: { records: any[]; currentRound: number };
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -186,6 +191,11 @@ export const initDB = () => {
 
         // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
         // No new object stores required for these versions.
+
+        // Version 14: Add skillTrigger store
+        if (!db.objectStoreNames.contains('skillTrigger')) {
+          db.createObjectStore('skillTrigger');
+        }
       },
     });
   }
@@ -1041,7 +1051,24 @@ export const dbAPI = {
     }
 
     return result;
-  }
+  },
+
+  // --- Skill Trigger ---
+  getSkillTriggerState: async (projectId: string): Promise<{ records: any[]; currentRound: number } | undefined> => {
+    try {
+      const db = await initDB();
+      return await db.get('skillTrigger', `skill-trigger-${projectId}`);
+    } catch (error) {
+      console.error('[dbAPI.getSkillTriggerState] 读取失败:', projectId, error);
+      return undefined;
+    }
+  },
+
+  saveSkillTriggerState: async (projectId: string, state: { records: any[]; currentRound: number }) => {
+    console.log('[dbAPI.saveSkillTriggerState] 保存, projectId:', projectId, '记录数:', state.records.length);
+    const db = await initDB();
+    await db.put('skillTrigger', state, `skill-trigger-${projectId}`);
+  },
 };
 
 // ============================================

@@ -1,9 +1,8 @@
 
 export const SKILL_DRAFT_EXPANDER = `---
 name: 正文扩写 (Draft Expander)
-description: 将简略的大纲扩写为充满画面感的正文，注重"展示而非讲述"(Show, Don't Tell)。
 summarys: ['本技能专注于正文执行，通过"展示而非讲述"原则，将干瘪的大纲转化为具有电影画面感和沉浸式体验的文字。']
-tags: ["技能", "扩写"]
+tags: ["技能", "扩写", "写正文", "展开写", "场景展开", "细节描写", "丰富内容", "show dont tell", "展示而非讲述"]
 ---
 
 # 核心指令：沉浸式扩写

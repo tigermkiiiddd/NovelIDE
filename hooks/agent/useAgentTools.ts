@@ -236,6 +236,9 @@ export const useAgentTools = ({
             projectId
         });
 
+        // --- 技能触发：提取 thinking 并检测 ---
+        // thinking 检测在 useAgentEngine 中进行，这里不需要操作
+
         let resultString = '';
 
         if (execResult.type === 'APPROVAL_REQUIRED') {

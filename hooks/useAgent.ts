@@ -11,8 +11,10 @@ import { usePlanStore } from '../stores/planStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useFileStore } from '../stores/fileStore';
+import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { findNodeByPath } from '../services/fileSystem';
 import { getWindowedMessages, MAX_CONTEXT_MESSAGES } from '../domains/agentContext/windowing';
+import { detectSkillTriggers } from '../domains/skillTrigger/skillTriggerService';
 
 // Facade Hook
 export const useAgent = (
@@ -267,8 +269,26 @@ export const useAgent = (
       }, 0);
     }
 
+    // --- 技能触发检测：用户消息立即触发一次（不推进轮次） ---
+    const triggerStore = useSkillTriggerStore.getState();
+    detectSkillTriggers(
+      userMessage.text,
+      { files, triggerStore },
+      (notif) => {
+        addMessage({
+          id: generateId(),
+          role: 'system',
+          text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
+            ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
+            ` | 剩余活跃: ${notif.remainingRounds}轮`,
+          timestamp: Date.now(),
+          metadata: { logType: 'info' },
+        });
+      }
+    );
+
     setTimeout(() => engine.processTurn(), 0);
-  }, [addMessage, currentSession?.messages, engine, currentSessionId]);
+  }, [addMessage, currentSession?.messages, engine, currentSessionId, files]);
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);

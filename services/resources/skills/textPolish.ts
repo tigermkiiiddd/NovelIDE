@@ -5,9 +5,8 @@
 
 export const SKILL_TEXT_POLISH = `---
 name: 文本润色 (Text Polish)
-description: 去AI化润色技能，融合文风改造与7层反AI检测，消除AI写作痕迹，确保文本自然流畅。
 summarys: ['本技能整合了去AI化文风改造与反AI润色，提供完整的高风险词库、7层检测体系、改写算法、No-Poison避毒和自然化标准。']
-tags: ["技能", "润色", "反AI", "去AI化"]
+tags: ["技能", "润色", "去AI化", "反AI", "人类化", "自然流畅", "消除AI味", "AI痕迹"]
 ---
 
 # 核心指令：去AI化文风 + 文本润色专家

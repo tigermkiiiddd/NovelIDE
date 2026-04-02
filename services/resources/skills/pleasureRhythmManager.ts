@@ -1,8 +1,7 @@
 export const SKILL_PLEASURE_RHYTHM_MANAGER = `---
 name: 爽点节奏管理 (Pleasure Rhythm Manager)
-description: 网文爽点节奏设计与密度控制专家，提供爽点分级标准、节奏配置和分布检查工具。
 summarys: ['本技能专注于爽点节奏管理，提供小中大爽点分级、节奏设计和密度控制方法，使用伏笔工具追踪爽点。']
-tags: ["技能", "爽点", "节奏"]
+tags: ["技能", "爽点", "节奏", "节奏把控", "情绪高低", "爽点节奏", "张力节奏", "节奏管理"]
 ---
 
 # 核心指令：爽点节奏管理专家
@@ -119,7 +118,6 @@ tags: ["技能", "爽点", "节奏"]
 \`\`\`
 content: "主角首次打脸反派"
 type: "planted"
-tags: ["爽点:小", "打脸"]
 duration: "short_term"
 sourceRef: "第3章"
 \`\`\`

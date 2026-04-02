@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useCallback, useRef } from 'react';
 import { useAgentStore, sessionLoadingState } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
+import { useSkillTriggerStore, setSkillTriggerProjectId } from '../../stores/skillTriggerStore';
 import { AIService } from '../../services/geminiService';
 import { ProjectMeta, AIProvider } from '../../types';
 
@@ -49,6 +50,9 @@ export const useAgentContext = (project: ProjectMeta | undefined) => {
             useAgentStore.getState().loadProjectSessions(projectId);
             // 同时加载 Plan 笔记
             usePlanStore.getState().loadPlanNotes(projectId);
+            // 加载技能触发状态
+            useSkillTriggerStore.getState().loadFromDB(projectId);
+            setSkillTriggerProjectId(projectId);
         }
     }, [projectId]); // Only depend on projectId
 

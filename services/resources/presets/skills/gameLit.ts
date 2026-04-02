@@ -4,9 +4,8 @@
 
 export const GAME_LIT_SKILL_CHARACTER_DESIGNER = `---
 name: 角色设计 (Character Designer) - 游戏文/LitRPG
-description: 游戏文角色塑造专家，基于"底色-追求-手段"三维模型，结合数值面板、金手指体系、等级成长、IP融合等游戏文核心要素。
 summarys: ['本技能专注于游戏文/LitRPG角色塑造，采用"底色-追求-手段"三维模型，结合数值面板、金手指限制、等级成长等游戏化要素。']
-tags: ["技能", "人设", "游戏文"]
+tags: ["技能", "人设", "角色设计", "角色塑造", "底色追求手段", "人物设定", "角色性格", "角色背景"]
 ---
 
 # 核心指令：游戏文/LitRPG 角色塑造专家
@@ -263,9 +262,8 @@ tags: ["技能", "人设", "游戏文"]
 
 export const GAME_LIT_SKILL_EXPECTATION_MANAGER = `---
 name: 期待感管理 (Expectation Manager) - 游戏文/LitRPG
-description: 基于 GAP 理论的游戏文期待感管理，专注于等级突破、技能获取、数值暴涨、以弱胜强等游戏文特有的期待设计。
 summarys: ['本技能专注于游戏文/LitRPG的期待感管理，运用 GAP 三角模型设计升级突破、技能获取、以弱胜强等游戏化情绪曲线。']
-tags: ["技能", "期待感", "游戏文"]
+tags: ["技能", "期待感", "期待管理", "爽点设计", "情绪高点", "爆点", "燃点", "高潮设计"]
 ---
 
 # 核心指令：游戏文/LitRPG 期待感管理师
@@ -444,9 +442,8 @@ tags: ["技能", "期待感", "游戏文"]
 
 export const GAME_LIT_SKILL_PLEASURE_RHYTHM = `---
 name: 爽点节奏管理 (Pleasure Rhythm Manager) - 游戏文/LitRPG
-description: 游戏文爽点节奏设计与密度控制专家，提供升级、技能获取、数值暴涨、打脸等游戏文特有的爽点场景库和节奏设计。
 summarys: ['本技能专注于游戏文/LitRPG的爽点节奏管理，提供升级突破、技能获取、数值暴涨等游戏文特有的爽点场景和节奏设计。']
-tags: ["技能", "爽点", "节奏", "游戏文"]
+tags: ["技能", "爽点", "节奏", "节奏把控", "情绪高低", "张力节奏", "节奏管理"]
 ---
 
 # 核心指令：游戏文/LitRPG 爽点节奏管理专家
@@ -615,9 +612,8 @@ tags: ["技能", "爽点", "节奏", "游戏文"]
 
 export const GAME_LIT_SKILL_WORLD_BUILDER = `---
 name: 世界观构建 (World Builder) - 游戏文/LitRPG
-description: 游戏文世界观构建专家，专注于数值体系、等级系统、金手指体系、IP融合设定、势力排行等游戏文核心设定。
 summarys: ['本技能专注于游戏文/LitRPG世界观构建，提供数值体系、等级系统、金手指规则、IP融合设定等核心设定方法。']
-tags: ["技能", "世界观", "游戏文"]
+tags: ["技能", "世界观", "力量体系", "势力格局", "资源稀缺", "规则设计", "体系构建", "背景设定"]
 ---
 
 # 核心指令：游戏文/LitRPG 世界观构建专家

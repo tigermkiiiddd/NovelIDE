@@ -7,6 +7,8 @@ import { allTools, getToolsForMode } from '../../services/agent/tools/index';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
+import { useSkillTriggerStore, getRemainingRounds } from '../../stores/skillTriggerStore';
+import { detectSkillTriggers } from '../../domains/skillTrigger/skillTriggerService';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
 import {
@@ -413,6 +415,7 @@ export const useAgentEngine = ({
                   hasError: true,
                   streamedLog: '⛔ Execution Aborted',
                   toolName: name,
+                  thinking: toolPart.functionCall.args?.thinking,
                 };
               }
 
@@ -426,6 +429,7 @@ export const useAgentEngine = ({
                 hasError,
                 streamedLog: streamedLog.trim() || (hasError ? '❌ Execution Failed' : '✅ Execution Complete'),
                 toolName: name,
+                thinking: args?.thinking,
               };
             })
           );
@@ -457,6 +461,33 @@ export const useAgentEngine = ({
             lastModified: Date.now()
           }));
 
+          // --- 技能触发检测：每轮 AI 回复完成后执行 ---
+          const triggerStore = useSkillTriggerStore.getState();
+          triggerStore.advanceRound();
+
+          // 收集用户消息 + 本轮所有 tool thinking
+          const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
+          const thinkingTexts = toolResults
+            .map(r => r.thinking)
+            .filter(Boolean) as string[];
+          const combinedText = [latestUserMsg?.text, ...thinkingTexts].filter(Boolean).join(' ');
+
+          detectSkillTriggers(
+            combinedText,
+            { files, triggerStore },
+            (notif) => {
+              addMessage({
+                id: generateId(),
+                role: 'system',
+                text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
+                  ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
+                  ` | 剩余活跃: ${notif.remainingRounds}轮`,
+                timestamp: Date.now(),
+                metadata: { logType: 'info' },
+              });
+            }
+          );
+
         } else {
           // 没有工具调用，直接结束
           console.warn(
@@ -464,6 +495,12 @@ export const useAgentEngine = ({
             `  loop#=${loopCount} textPart=${!!textPart} parts=${parts.length}`
           );
           keepGoing = false;
+
+          // --- 技能触发检测（纯文本回复轮） ---
+          const triggerStore = useSkillTriggerStore.getState();
+          triggerStore.advanceRound();
+          const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
+          detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore });
         }
       }
 

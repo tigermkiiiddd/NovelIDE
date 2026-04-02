@@ -12,6 +12,7 @@ import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem } from '..
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 import { useRelationshipStore } from '../../../stores/relationshipStore';
+import { useSkillTriggerStore, getRemainingRounds } from '../../../stores/skillTriggerStore';
 import { buildProjectOverviewPrompt } from '../../../utils/projectContext';
 
 // Plan 模式已移除
@@ -519,10 +520,12 @@ export const constructSystemPrompt = (
     const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE && !f.hidden);
     const validSkills = subSkillFiles.map(f => {
       const meta = f.metadata || {};
-      if (meta.name && meta.description) {
-        // Modified: Only provide Meta info + Path. Content is NOT loaded to save tokens.
+      if (meta.name) {
+        // Only provide Meta info + Path. Content is NOT loaded to save tokens.
         const path = getNodePath(f, files);
-        return `- **${meta.name}**\n  - 描述: ${meta.description}\n  - 挂载路径: \`${path}\``;
+        const tags = meta.tags ? `标签: ${meta.tags.join(', ')}` : '';
+        const summaryText = meta.summarys?.[0] || '';
+        return `- **${meta.name}**\n  - 简介: ${summaryText}${tags ? '\n  - ' + tags : ''}\n  - 挂载路径: \`${path}\``;
       }
       return null;
     }).filter(Boolean);
@@ -759,6 +762,35 @@ export const constructSystemPrompt = (
   const characterProfilesSection = getCharacterProfilesSection();
   const knowledgeGraphSection = getKnowledgeGraphSection();
   const foreshadowingSection = getForeshadowingSection();
+
+  // --- 技能触发注入：活跃的自动加载技能 ---
+  let triggeredSkillsSection = '';
+  const activeSkills = useSkillTriggerStore.getState().getActiveSkills();
+  if (activeSkills.length > 0) {
+    const triggerStore = useSkillTriggerStore.getState();
+    const skillFolder = files.find(f => f.name === '98_技能配置');
+    const subskillFolder = skillFolder
+      ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
+      : null;
+
+    const sections = activeSkills.map(record => {
+      // 从 files 中找到对应技能文件的内容
+      const skillFile = subskillFolder
+        ? files.find(f => f.parentId === subskillFolder.id && f.name === record.skillId)
+        : null;
+      if (!skillFile?.content) return null;
+      const remaining = getRemainingRounds(record, triggerStore.currentRound);
+      return `## 活跃技能: ${record.name}\n` +
+        `**命中标签**: ${record.originalTags.join(', ')}\n` +
+        `**剩余活跃**: ${remaining}/${record.decayRounds} 轮\n` +
+        `---\n${skillFile.content}`;
+    }).filter(Boolean);
+
+    if (sections.length > 0) {
+      triggeredSkillsSection = `\n\n---\n## 自动加载的技能\n` + sections.join('\n\n');
+    }
+  }
+
   const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
     .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
     .replace(/\{\{PENDING_TODOS\}\}/g, pendingTodos)
@@ -770,6 +802,7 @@ export const constructSystemPrompt = (
 
   return `
 ${processedAgentInstruction}
+${triggeredSkillsSection}
 ${characterProfilesSection}
 ${knowledgeGraphSection}
 ${foreshadowingSection}
