@@ -864,13 +864,14 @@ export class AIService {
           if (data === '[DONE]') continue;
           try {
             const chunk = JSON.parse(data);
+
+            // 无条件打印所有 chunk（调试用）
+            if (chunk.choices?.[0]?.delta) {
+              console.log('[GLM chunk]', JSON.stringify(chunk.choices[0].delta).substring(0, 300));
+            }
+
             const choice = chunk.choices?.[0];
             if (!choice) continue;
-
-            // DEBUG: 打印所有含 tool_calls 的 chunk
-            if (choice.delta?.tool_calls) {
-              console.log('[GLM chunk] tool_calls:', JSON.stringify(choice.delta.tool_calls));
-            }
 
             // 文本内容
             if (choice.delta?.content) {
