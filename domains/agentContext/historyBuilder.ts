@@ -335,7 +335,7 @@ export const buildSimpleHistory = (
       const nextMsg = messages[i + 1];
       const nextMsgHasFnResp = nextMsg?.rawParts?.some((p: any) => p.functionResponse);
       const nextMsgHasFnCall = nextMsg?.rawParts?.some((p: any) => p.functionCall);
-      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call: msgId=${msg.id}, nextMsgRole=${nextMsg?.role}, nextMsgHasFnResp=${nextMsgHasFnResp}, nextMsgHasFnCall=${nextMsgHasFnCall}`);
+      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call: msgId=${msg.id}, nextMsgRole=${nextMsg?.role}, nextMsgHasFnResp=${nextMsgHasFnResp}, nextMsgHasFnCall=${nextMsgHasFnCall}, nextMsgId=${nextMsg?.id}`);
       continue;
     }
 
