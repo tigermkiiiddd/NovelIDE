@@ -23,6 +23,8 @@ import {
 import { EntityVersionHistory } from './EntityVersionHistory';
 import { useEntityVersionStore } from '../stores/entityVersionStore';
 import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
+import { useRelationshipStore } from '../stores/relationshipStore';
+import { RelationshipGraph } from './RelationshipGraph';
 import {
   CharacterProfileV2,
   CharacterCategoryName,
@@ -1231,6 +1233,24 @@ const EmptyInline: React.FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
+// 人际关系子图区域
+const RelationshipGraphSection: React.FC<{ characterName: string }> = ({ characterName }) => {
+  const relations = useRelationshipStore((s) => s.relations);
+  const charRelations = useMemo(
+    () => relations.filter(r => r.from === characterName || r.to === characterName),
+    [relations, characterName]
+  );
+
+  if (charRelations.length === 0) return null;
+
+  return (
+    <RelationshipGraph
+      focusCharacter={characterName}
+      height={360}
+    />
+  );
+};
+
 export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ filePath, content }) => {
   const profiles = useCharacterMemoryStore((state: CharacterMemoryState) => state.profiles);
   const characterName = useMemo(() => deriveCharacterName(filePath), [filePath]);
@@ -1448,6 +1468,9 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
             />
           ))}
         </div>
+
+        {/* 人际关系图 */}
+        <RelationshipGraphSection characterName={profile.characterName} />
       </div>
 
       {/* 版本历史弹窗 */}

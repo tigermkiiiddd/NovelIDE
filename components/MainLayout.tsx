@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
 import { FileNode } from '../types';
-import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit, HelpCircle, Zap } from 'lucide-react';
+import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit, HelpCircle, Zap, HeartHandshake } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
 import Sidebar from './Sidebar';
 import StatusBar from './StatusBar';
@@ -71,6 +71,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
 
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [isKnowledgeGraphOpen, setIsKnowledgeGraphOpen] = useState(false);
+  const [isRelationshipViewOpen, setIsRelationshipViewOpen] = useState(false);
   const [isPlanViewerOpen, setIsPlanViewerOpen] = useState(false);
   const [isForeshadowingTrackerOpen, setIsForeshadowingTrackerOpen] = useState(false);
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -300,6 +301,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
                     知识图谱
                  </button>
                  <button
+                    onClick={() => setIsRelationshipViewOpen(!isRelationshipViewOpen)}
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isRelationshipViewOpen ? 'bg-pink-600/20 text-pink-400' : 'text-gray-400 hover:text-white'}`}
+                 >
+                    <HeartHandshake size={14} />
+                    人际关系
+                 </button>
+                 <button
                     onClick={toggleChat}
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isChatOpen ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:text-white'}`}
                  >
@@ -315,6 +323,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           <EditorArea
             activeFile={activeFile}
             isKnowledgeGraphOpen={isKnowledgeGraphOpen}
+            isRelationshipViewOpen={isRelationshipViewOpen}
             isPlanViewerOpen={isPlanViewerOpen}
             onClosePlanViewer={() => setIsPlanViewerOpen(false)}
             currentPlanNote={currentPlanNote || null}

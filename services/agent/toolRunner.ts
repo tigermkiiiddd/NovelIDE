@@ -18,6 +18,11 @@ import {
   executeManageSubCategory,
   executeArchiveEntry,
 } from './tools/characterProfileTools';
+import {
+  executeQueryRelationships,
+  executeManageRelationships,
+  executeGetRelationshipGraph,
+} from './tools/relationshipTools';
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
@@ -514,6 +519,16 @@ export const executeTool = async (
                     break;
                 case 'archive_entry':
                     result = await executeArchiveEntry(args);
+                    break;
+                // --- RELATIONSHIP TOOLS ---
+                case 'query_relationships':
+                    result = executeQueryRelationships(args);
+                    break;
+                case 'manage_relationships':
+                    result = executeManageRelationships(args);
+                    break;
+                case 'get_relationship_graph':
+                    result = executeGetRelationshipGraph();
                     break;
                 // --- OUTLINE TOOLS ---
                 case 'processOutlineInput':

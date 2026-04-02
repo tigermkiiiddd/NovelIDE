@@ -6,6 +6,7 @@ import { usePlanStore } from '../../stores/planStore';
 const KnowledgeTreeView = lazy(() => import('../KnowledgeTreeView').then(m => ({ default: m.KnowledgeTreeView })));
 const OutlineViewer = lazy(() => import('../OutlineViewer'));
 const PlanNoteViewer = lazy(() => import('../PlanNoteViewer'));
+const RelationshipGraph = lazy(() => import('../RelationshipGraph').then(m => ({ default: m.RelationshipGraph })));
 // Editor is always needed — eager import
 import Editor from '../EditorRefactored';
 
@@ -18,6 +19,7 @@ const loadingFallback = (
 interface EditorAreaProps {
   activeFile: FileNode | null;
   isKnowledgeGraphOpen: boolean;
+  isRelationshipViewOpen: boolean;
   isPlanViewerOpen: boolean;
   onClosePlanViewer: () => void;
   currentPlanNote: PlanNote | null;
@@ -33,6 +35,7 @@ interface EditorAreaProps {
 const EditorArea: React.FC<EditorAreaProps> = ({
   activeFile,
   isKnowledgeGraphOpen,
+  isRelationshipViewOpen,
   isPlanViewerOpen,
   onClosePlanViewer,
   currentPlanNote,
@@ -71,6 +74,14 @@ const EditorArea: React.FC<EditorAreaProps> = ({
           onSelectNode={(node) => console.log('Selected knowledge node:', node)}
           className="h-full"
         />
+      </Suspense>
+    );
+  }
+
+  if (isRelationshipViewOpen) {
+    return (
+      <Suspense fallback={loadingFallback}>
+        <RelationshipGraph height={window.innerHeight - 100} />
       </Suspense>
     );
   }

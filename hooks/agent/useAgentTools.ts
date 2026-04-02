@@ -3,6 +3,7 @@ import { useRef, useCallback } from 'react';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useCharacterMemoryStore } from '../../stores/characterMemoryStore';
+import { useRelationshipStore } from '../../stores/relationshipStore';
 import { executeTool, ToolExecutionResult } from '../../services/agent/toolRunner';
 import { FileNode, TodoItem, PendingChange, ChatMessage, PlanNote, BatchEdit } from '../../types';
 import { AIService } from '../../services/geminiService';
@@ -169,6 +170,19 @@ export const useAgentTools = ({
                 // 构建动态状态摘要
                 const statusSummary = buildCharacterStatusSummary(profile);
                 content += `\n\n---\n【角色动态状态】\n${statusSummary}`;
+            }
+
+            // 注入人际关系
+            const relations = useRelationshipStore.getState().getRelationsForCharacter(characterName);
+            if (relations.length > 0) {
+                const relLines = relations.map(r => {
+                    const other = r.from === characterName ? r.to : r.from;
+                    const dir = r.isBidirectional ? '⇄' : '→';
+                    let line = `  - ${other} ${dir} ${characterName}: ${r.type}(${r.strength})`;
+                    if (r.description) line += ` — ${r.description}`;
+                    return line;
+                });
+                content += `\n\n【人际关系】(${relations.length}条)\n${relLines.join('\n')}`;
             }
         }
 
