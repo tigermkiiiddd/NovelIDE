@@ -10,6 +10,23 @@ import type { ActivationNotification } from '../../stores/skillTriggerStore';
 import { lifecycleManager } from '../agentContext/toolLifecycle';
 
 /**
+ * 反提示词：包含以下操作动作关键字时不触发技能加载
+ * 只针对"读取/查询"类工具调用关键字，避免干扰正常的知识检索流程
+ */
+const SUPPRESSION_KEYWORDS = [
+  '搜索', '找找', '查询', '查看',
+];
+
+/**
+ * 检查文本是否命中反提示词
+ */
+function containsSuppressionKeyword(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return SUPPRESSION_KEYWORDS.some(kw => lower.includes(kw));
+}
+
+/**
  * 对一段文本进行多关键字模糊匹配
  * @param text 待检测文本（用户输入 + thinking）
  * @param keywords tags + summarys 拼接后的关键词列表
@@ -102,6 +119,12 @@ export function detectSkillTriggers(
   onActivated?: (notif: ActivationNotification) => void
 ): void {
   const { files, triggerStore } = context;
+
+  // 反提示词检查：查询/读取类关键字不触发技能
+  if (containsSuppressionKeyword(text)) {
+    console.log('[SkillTrigger] 跳过：命中反提示词（查询/读取类操作）');
+    return;
+  }
 
   // 获取 subskill 目录中的技能文件
   const skillFolder = files.find(f => f.name === '98_技能配置');
