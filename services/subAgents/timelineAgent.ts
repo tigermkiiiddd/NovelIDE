@@ -115,7 +115,7 @@ const outlineSubAgentConfig: SubAgentConfig<TimelineInput, TimelineOutput, Timel
   maxHistoryPairs: 15,
   tools: subAgentTools,
   terminalToolName: 'outline_submitOutline',
-  temperature: 0.1,
+  temperature: 0.7,
 
   getSystemPrompt: (_input, context) => {
     const projectOverview = buildProjectOverviewPrompt(context?.project);
