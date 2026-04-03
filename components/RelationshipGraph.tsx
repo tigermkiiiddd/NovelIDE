@@ -41,6 +41,23 @@ const getPairKey = (from: string, to: string) => [from, to].sort().join('||');
 const getLinkIdentity = (relation: CharacterRelation) =>
   `${relation.from}=>${relation.to}=>${relation.type}=>${relation.description || ''}`;
 
+const adjustColor = (hexColor: string, factor: number) => {
+  if (!hexColor.startsWith('#') || (hexColor.length !== 7 && hexColor.length !== 4)) {
+    return hexColor;
+  }
+
+  const fullHex = hexColor.length === 4
+    ? `#${hexColor[1]}${hexColor[1]}${hexColor[2]}${hexColor[2]}${hexColor[3]}${hexColor[3]}`
+    : hexColor;
+
+  const clamp = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+  const r = clamp(parseInt(fullHex.slice(1, 3), 16) * factor);
+  const g = clamp(parseInt(fullHex.slice(3, 5), 16) * factor);
+  const b = clamp(parseInt(fullHex.slice(5, 7), 16) * factor);
+
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
 const getCurveControlPoint = (
   src: { x: number; y: number },
   tgt: { x: number; y: number },
@@ -557,6 +574,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const srcRadius = typeof link.source === 'object' ? getNodeRadius(link.source) : 16;
     const tgtRadius = typeof link.target === 'object' ? getNodeRadius(link.target) : 16;
     const control = getCurveControlPoint(src, tgt, curv);
+    const lineArrowGap = !link.relation?.isBidirectional ? 6 : 0;
+    const targetTangent = curv === 0
+      ? { x: tgt.x - src.x, y: tgt.y - src.y }
+      : getQuadraticTangent(src, control, tgt, 0.98);
+    const targetTangentLen = Math.sqrt(targetTangent.x * targetTangent.x + targetTangent.y * targetTangent.y) || 1;
+    const targetUx = targetTangent.x / targetTangentLen;
+    const targetUy = targetTangent.y / targetTangentLen;
     const pathStart = curv === 0
       ? {
           x: src.x + ((tgt.x - src.x) / control.len) * srcRadius,
@@ -565,10 +589,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       : getQuadraticPoint(src, control, tgt, 0.08);
     const pathEnd = curv === 0
       ? {
-          x: tgt.x - ((tgt.x - src.x) / control.len) * tgtRadius,
-          y: tgt.y - ((tgt.y - src.y) / control.len) * tgtRadius,
+          x: tgt.x - ((tgt.x - src.x) / control.len) * (tgtRadius + lineArrowGap),
+          y: tgt.y - ((tgt.y - src.y) / control.len) * (tgtRadius + lineArrowGap),
         }
-      : getQuadraticPoint(src, control, tgt, 0.92);
+      : {
+          x: tgt.x - targetUx * (tgtRadius + lineArrowGap),
+          y: tgt.y - targetUy * (tgtRadius + lineArrowGap),
+        };
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 14;
@@ -595,9 +622,15 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const isFirstDegreeLink = !!activeNode && firstDegreeLinks.has(linkKey);
     const isHighlighted = isHovered || isFirstDegreeLink;
     const isDimmed = !isHovered && !!activeNode && !isFirstDegreeLink;
-    const color = getRelationColor(relation.type);
+    const baseColor = getRelationColor(relation.type);
+    const color = isHovered
+      ? adjustColor(baseColor, 1)
+      : isFirstDegreeLink
+        ? adjustColor(baseColor, 0.92)
+        : isDimmed
+          ? adjustColor(baseColor, 0.3)
+          : adjustColor(baseColor, 0.58);
     const width = STRENGTH_WIDTH[relation.strength] || 2;
-    const alpha = isHovered ? 1 : isDimmed ? 0.08 : isFirstDegreeLink ? 0.95 : 0.42;
 
     // 曲线绘制
     const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0 };
@@ -612,6 +645,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const srcRadius = typeof link.source === 'object' ? getNodeRadius(link.source) : 16;
     const tgtRadius = typeof link.target === 'object' ? getNodeRadius(link.target) : 16;
     const control = getCurveControlPoint(src, tgt, curv);
+    const lineArrowGap = !relation.isBidirectional ? 6 : 0;
+    const targetTangent = curv === 0
+      ? { x: tgt.x - src.x, y: tgt.y - src.y }
+      : getQuadraticTangent(src, control, tgt, 0.98);
+    const targetTangentLen = Math.sqrt(targetTangent.x * targetTangent.x + targetTangent.y * targetTangent.y) || 1;
+    const targetUx = targetTangent.x / targetTangentLen;
+    const targetUy = targetTangent.y / targetTangentLen;
     const pathStart = curv === 0
       ? {
           x: src.x + ((tgt.x - src.x) / control.len) * srcRadius,
@@ -620,31 +660,17 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       : getQuadraticPoint(src, control, tgt, 0.08);
     const pathEnd = curv === 0
       ? {
-          x: tgt.x - ((tgt.x - src.x) / control.len) * tgtRadius,
-          y: tgt.y - ((tgt.y - src.y) / control.len) * tgtRadius,
+          x: tgt.x - ((tgt.x - src.x) / control.len) * (tgtRadius + lineArrowGap),
+          y: tgt.y - ((tgt.y - src.y) / control.len) * (tgtRadius + lineArrowGap),
         }
-      : getQuadraticPoint(src, control, tgt, 0.92);
-
-    // 外发光（高亮时）
-    if (isHighlighted && !isDimmed) {
-      ctx.beginPath();
-      if (curv === 0) {
-        ctx.moveTo(pathStart.x, pathStart.y);
-        ctx.lineTo(pathEnd.x, pathEnd.y);
-      } else {
-        ctx.moveTo(pathStart.x, pathStart.y);
-        ctx.quadraticCurveTo(control.x, control.y, pathEnd.x, pathEnd.y);
-      }
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width * 2 + 3;
-      ctx.globalAlpha = isHovered ? 0.3 : 0.18;
-      ctx.stroke();
-    }
+      : {
+          x: tgt.x - targetUx * (tgtRadius + lineArrowGap),
+          y: tgt.y - targetUy * (tgtRadius + lineArrowGap),
+        };
 
     // 主连线
-    ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
-    ctx.lineWidth = isHovered ? width * 2.1 : isFirstDegreeLink ? width * 1.7 : width;
+    ctx.lineWidth = width;
     ctx.lineCap = 'round';
     ctx.beginPath();
     if (curv === 0) {
@@ -657,31 +683,25 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     ctx.stroke();
 
     if (!relation.isBidirectional) {
-      const arrowPoint = curv === 0
-        ? pathEnd
-        : getQuadraticPoint(pathStart, control, pathEnd, 0.96);
-      const tangent = curv === 0
-        ? { x: pathEnd.x - pathStart.x, y: pathEnd.y - pathStart.y }
-        : getQuadraticTangent(pathStart, control, pathEnd, 0.96);
-      const tangentLen = Math.sqrt(tangent.x * tangent.x + tangent.y * tangent.y) || 1;
-      const ux = tangent.x / tangentLen;
-      const uy = tangent.y / tangentLen;
+      const arrowPoint = {
+        x: tgt.x - targetUx * tgtRadius,
+        y: tgt.y - targetUy * tgtRadius,
+      };
       const arrowLength = isHovered ? 11 : 9;
       const arrowWidth = isHovered ? 5.5 : 4.5;
 
       ctx.beginPath();
       ctx.moveTo(arrowPoint.x, arrowPoint.y);
       ctx.lineTo(
-        arrowPoint.x - ux * arrowLength - uy * arrowWidth,
-        arrowPoint.y - uy * arrowLength + ux * arrowWidth,
+        arrowPoint.x - targetUx * arrowLength - targetUy * arrowWidth,
+        arrowPoint.y - targetUy * arrowLength + targetUx * arrowWidth,
       );
       ctx.lineTo(
-        arrowPoint.x - ux * arrowLength + uy * arrowWidth,
-        arrowPoint.y - uy * arrowLength - ux * arrowWidth,
+        arrowPoint.x - targetUx * arrowLength + targetUy * arrowWidth,
+        arrowPoint.y - targetUy * arrowLength - targetUx * arrowWidth,
       );
       ctx.closePath();
       ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
       ctx.fill();
     }
 
@@ -705,7 +725,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       const labelText = relation.type;
       const textWidth = ctx.measureText(labelText).width;
       ctx.fillStyle = '#0f172a';
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = 1;
       const padding = 3;
       const boxHeight = fontSize + 6;
       ctx.beginPath();
@@ -713,7 +733,6 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       ctx.fill();
 
       ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
       ctx.fillText(labelText, labelX, labelY);
     }
 

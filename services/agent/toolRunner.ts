@@ -26,6 +26,7 @@ import {
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
+import { runPolishSubAgent } from '../subAgents/polishAgent';
 import { AIService } from '../geminiService';
 import { executeSearchTools } from './tools/searchTools';
 import { useVersionStore } from '../../stores/versionStore';
@@ -478,6 +479,23 @@ export const executeTool = async (
                 actions, // Pass the read-only tools
                 onUiLog,
                 signal // Pass signal to sub-agent
+            );
+        }
+        // --- POLISH AGENT ENTRY POINT ---
+        else if (name === 'call_polish_agent') {
+            if (!aiService) return { type: 'ERROR', message: 'AI Service not available for Polish Agent' };
+
+            if (onUiLog) {
+                onUiLog(`${startLog}✨ **去AI文风润色**: ${args.target_file}`);
+            }
+
+            result = await runPolishSubAgent(
+                aiService,
+                args.target_file,
+                files,
+                actions,
+                onUiLog,
+                signal
             );
         }
         else {

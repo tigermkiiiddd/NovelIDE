@@ -109,6 +109,12 @@ export const useRelationshipStore: UseBoundStore<StoreApi<RelationshipState>> = 
     isLoaded: false,
 
     loadRelations: async () => {
+      // Always clear old data first to prevent stale data from previous project
+      useRelationshipStore.setState({
+        relations: [],
+        customRelationTypes: [],
+        isLoaded: false,
+      });
       const data = await loadFromFiles();
       if (data) {
         useRelationshipStore.setState({

@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
@@ -87,6 +87,14 @@ const AgentChat: React.FC<AgentChatProps> = ({
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [showMemoryDebug, setShowMemoryDebug] = useState(false);
+  // Reset memory debug panel when project/session changes
+  const prevSessionIdRef = useRef(currentSessionId);
+  useEffect(() => {
+    if (prevSessionIdRef.current !== currentSessionId) {
+      prevSessionIdRef.current = currentSessionId;
+      setShowMemoryDebug(false);
+    }
+  }, [currentSessionId]);
 
   // Use file store to navigate
   const setActiveFileId = useFileStore(state => state.setActiveFileId);

@@ -16,6 +16,7 @@ import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/charact
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useWorldTimelineStore } from '../stores/worldTimelineStore';
 import { useRelationshipStore } from '../stores/relationshipStore';
+import { useAgentStore } from '../stores/agentStore';
 import { useShallow } from 'zustand/react/shallow';
 import { getNodePath } from '../services/fileSystem';
 // Extracted layout modules
@@ -196,6 +197,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   const {
     messages, isLoading,
     sendMessage,
+    processTurn,
     stopGeneration,
     regenerateMessage,
     editUserMessage,
@@ -233,6 +235,21 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     onSwipeLeft: () => { if (isMobile && !isChatOpen) setChatOpen(true); },
     enabled: isMobile
   });
+
+  // --- Listen for agent trigger events (from Editor polish button) ---
+  useEffect(() => {
+    const handleAgentTrigger = (event: CustomEvent<{ sessionId: string; triggerMessageId: string }>) => {
+      // 确保是当前 session 的触发
+      const agentStoreState = useAgentStore.getState();
+      if (event.detail.sessionId === agentStoreState.currentSessionId) {
+        // 触发 agent 处理
+        setTimeout(() => processTurn(), 0);
+      }
+    };
+
+    window.addEventListener('trigger_agent_process', handleAgentTrigger as EventListener);
+    return () => window.removeEventListener('trigger_agent_process', handleAgentTrigger as EventListener);
+  }, [processTurn]);
 
   // --- Helpers ---
   if (!currentProject) return <div className="h-screen w-full flex items-center justify-center bg-gray-900 text-gray-500">Loading Context...</div>;

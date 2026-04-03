@@ -109,14 +109,14 @@ const normalizeProfile = (rawProfile: Partial<CharacterProfileV2> & { characterN
 
 // 确保档案文件夹存在
 const ensureProfileFolder = () => {
-  const fileStore = useFileStore.getState();
-  const characterFolder = fileStore.files.find((file) => file.name === CHARACTER_ROOT_FOLDER && file.parentId === 'root');
+  const currentFiles = useFileStore.getState().files;
+  const characterFolder = currentFiles.find((file) => file.name === CHARACTER_ROOT_FOLDER && file.parentId === 'root');
   if (!characterFolder) {
     console.log('[CharacterMemoryStore] 未找到角色档案根目录:', CHARACTER_ROOT_FOLDER);
     return null;
   }
 
-  let profileFolder = fileStore.files.find((file) => file.name === PROFILE_FOLDER && file.parentId === characterFolder.id);
+  let profileFolder = currentFiles.find((file) => file.name === PROFILE_FOLDER && file.parentId === characterFolder.id);
   if (!profileFolder) {
     console.log('[CharacterMemoryStore] 创建档案子目录:', PROFILE_FOLDER);
     profileFolder = {
@@ -126,7 +126,7 @@ const ensureProfileFolder = () => {
       type: FileType.FOLDER,
       lastModified: Date.now(),
     };
-    fileStore.files.push(profileFolder);
+    useFileStore.setState({ files: [...currentFiles, profileFolder] });
   }
 
   return profileFolder;
@@ -170,9 +170,10 @@ const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
     return;
   }
 
-  const fileStore = useFileStore.getState();
-  const existingFiles = fileStore.files.filter((file) => file.parentId === folder.id && file.type === FileType.FILE);
+  const currentFiles = useFileStore.getState().files;
+  const existingFiles = currentFiles.filter((file) => file.parentId === folder.id && file.type === FileType.FILE);
   const seen = new Set<string>();
+  let updatedFiles = [...currentFiles];
 
   profiles.forEach((rawProfile) => {
     const profile = normalizeProfile(rawProfile);
@@ -184,10 +185,11 @@ const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
     console.log('[CharacterMemoryStore] 保存档案文件:', fileName, '字节数:', content.length);
 
     if (target) {
-      target.content = content;
-      target.lastModified = Date.now();
+      updatedFiles = updatedFiles.map((file) =>
+        file.id === target.id ? { ...file, content, lastModified: Date.now() } : file
+      );
     } else {
-      fileStore.files.push({
+      updatedFiles.push({
         id: `character-memory-${Date.now()}-${profile.characterId}`,
         parentId: folder.id,
         name: fileName,
@@ -199,17 +201,16 @@ const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
   });
 
   // 删除不在列表中的文件
-  existingFiles
-    .filter((file) => !seen.has(file.name))
-    .forEach((file) => {
-      const index = fileStore.files.findIndex((item) => item.id === file.id);
-      if (index >= 0) {
-        fileStore.files.splice(index, 1);
-      }
-    });
+  const filesToDelete = existingFiles.filter((file) => !seen.has(file.name));
+  if (filesToDelete.length > 0) {
+    updatedFiles = updatedFiles.filter((file) => !filesToDelete.some((f) => f.id === file.id));
+  }
+
+  // 使用 setState 更新文件列表，触发 Zustand 订阅
+  useFileStore.setState({ files: updatedFiles });
 
   if (projectId) {
-    await dbAPI.saveFiles(projectId, [...fileStore.files]);
+    await dbAPI.saveFiles(projectId, updatedFiles);
     console.log('[CharacterMemoryStore] 已同步到文件系统');
   }
 };

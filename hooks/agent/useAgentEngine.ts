@@ -476,28 +476,8 @@ export const useAgentEngine = ({
             console.error('[ToolResult挂载] error:', e, String(e));
           }
 
-          // --- 技能触发检测：每个 thinking 单独判断一次 ---
-          const thinkingTexts = toolResults
-            .map(r => r.thinking)
-            .filter(Boolean) as string[];
-
-          for (const t of thinkingTexts) {
-            detectSkillTriggers(
-              t,
-              { files, triggerStore: useSkillTriggerStore.getState() },
-              (notif) => {
-                addMessage({
-                  id: generateId(),
-                  role: 'system',
-                  text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
-                    ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
-                    ` | 剩余活跃: ${notif.remainingRounds}轮`,
-                  timestamp: Date.now(),
-                  metadata: { logType: 'info' },
-                });
-              }
-            );
-          }
+          // AI thinking 独立显示，不再触发技能激活
+          // (技能激活改为通过用户意图 / 工具名 触发，不再依赖 thinking 文本匹配)
 
         } else {
           // 没有工具调用，直接结束

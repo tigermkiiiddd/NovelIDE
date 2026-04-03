@@ -1,5 +1,21 @@
 import { ToolDefinition } from '../types';
 
+export const callPolishAgentTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'call_polish_agent',
+    description: '【去AI文风润色】启动专门的润色子代理，对正文草稿进行去AI化改造。它会读取文件、按 SKILL_TEXT_POLOLISH 规范逐段扫描，使用 patchFile 工具批量修改（每批最多20处），最终生成优化报告。',
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程(用中文):为什么要对这个文件进行润色？' },
+        target_file: { type: 'string', description: '目标文件路径，如 "05_正文草稿/第一章.md"' }
+      },
+      required: ['thinking', 'target_file']
+    }
+  }
+};
+
 export const callSearchAgentTool: ToolDefinition = {
   type: 'function',
   function: {

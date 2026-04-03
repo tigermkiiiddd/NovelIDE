@@ -76,11 +76,16 @@ const statusOf = (c: MessageClassification, rounds: number): DecayStatus[] => {
     isAlive: maxRounds === -1 ? true : rounds < maxRounds,
   });
   if (c.toolDecayConfigs && c.toolType) {
-    const s = [
-      calc('call', c.toolDecayConfigs.call.value, c.toolDecayConfigs.call.decayRounds),
-      calc('content', c.toolDecayConfigs.content.value, c.toolDecayConfigs.content.decayRounds),
-    ];
-    if (c.isToolResult) s.push(calc('response', c.toolDecayConfigs.response.value, c.toolDecayConfigs.response.decayRounds));
+    const s: DecayStatus[] = [];
+    if (c.toolDecayConfigs.call) {
+      s.push(calc('call', c.toolDecayConfigs.call.value, c.toolDecayConfigs.call.decayRounds));
+    }
+    if (c.toolDecayConfigs.content) {
+      s.push(calc('content', c.toolDecayConfigs.content.value, c.toolDecayConfigs.content.decayRounds));
+    }
+    if (c.isToolResult && c.toolDecayConfigs.response) {
+      s.push(calc('response', c.toolDecayConfigs.response.value, c.toolDecayConfigs.response.decayRounds));
+    }
     return s;
   }
   return [calc(c.decayDimension || 'content_text', c.contentValue, c.decayRounds)];

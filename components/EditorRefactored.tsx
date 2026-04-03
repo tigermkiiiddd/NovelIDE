@@ -48,6 +48,7 @@ import {
   RefreshCw,
   Loader2,
   FileScan,
+  Wand2,
 } from 'lucide-react';
 
 const RELATION_FILE_NAME = '人际关系.json';
@@ -64,6 +65,7 @@ const DRAFT_FOLDER = '\u0030\u0035_\u6b63\u6587\u8349\u7a3f';
 const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
   const editor = useEditor({ className });
   const profileActions = useCharacterProfileActions();
+  const currentProjectId = useProjectStore(state => state.currentProjectId);
 
   const {
     activeFile,
@@ -203,6 +205,44 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
       console.error('章节分析失败:', error);
     } finally {
       setIsAnalyzingChapter(false);
+    }
+  }, [activeFile, isDraftFile, filePath]);
+
+  // 处理去AI文风润色
+  const [isPolishing, setIsPolishing] = useState(false);
+  const handlePolish = useCallback(async () => {
+    if (!activeFile || !isDraftFile || !filePath) return;
+
+    setIsPolishing(true);
+    try {
+      const agentStore = useAgentStore.getState();
+      const sessionId = agentStore.currentSessionId;
+
+      if (!sessionId) {
+        console.error('没有活动的会话');
+        setIsPolishing(false);
+        return;
+      }
+
+      // 添加用户消息，触发 call_polish_agent 工具
+      const messageId = `polish_${Date.now()}`;
+      agentStore.addMessage({
+        id: messageId,
+        role: 'user',
+        text: `请对文件 "${filePath}" 进行去AI文风润色，使用 call_polish_agent 工具。`,
+        timestamp: Date.now()
+      });
+
+      // 触发 agent 处理 - 使用全局事件通知
+      window.dispatchEvent(new CustomEvent('trigger_agent_process', {
+        detail: { sessionId, triggerMessageId: messageId }
+      }));
+
+      console.log('去AI文风润色已触发:', filePath);
+    } catch (error) {
+      console.error('去AI文风润色失败:', error);
+    } finally {
+      setIsPolishing(false);
     }
   }, [activeFile, isDraftFile, filePath]);
 
@@ -386,7 +426,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
     if (filePath === `${INFO_FOLDER_NAME}/${RELATION_FILE_NAME}`) {
       return (
         <div className={`h-full ${className}`}>
-          <RelationshipManager />
+          <RelationshipManager key={currentProjectId || 'no-project'} />
         </div>
       );
     }
@@ -548,6 +588,22 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
                 <Loader2 size={14} className="animate-spin" />
               ) : (
                 <FileScan size={14} />
+              )}
+            </button>
+          )}
+
+          {/* Polish (去AI文风) - Only for draft files */}
+          {isDraftFile && (
+            <button
+              onClick={handlePolish}
+              disabled={isPolishing}
+              className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-emerald-400 hover:text-white hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="去AI文风"
+            >
+              {isPolishing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Wand2 size={14} />
               )}
             </button>
           )}
