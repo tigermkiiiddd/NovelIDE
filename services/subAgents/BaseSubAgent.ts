@@ -177,6 +177,20 @@ export class BaseSubAgent<TInput, TOutput, TContext = any> {
             onLog(`🤔 [${this.config.name} 思考]: ${args.thinking}`);
           }
 
+          // Debug 模式：记录完整的原始 tool call 数据
+          console.log(`[${this.config.name}] RAW TOOL CALL:`, JSON.stringify({ name, args, id }, null, 2));
+
+          if (onLog) {
+            if (name === 'patchFile') {
+              const editsSummary = (args.edits || []).map((e: any, i: number) =>
+                `[${i+1}] ${e.mode}: "${e.oldContent?.substring(0, 30) || ''}..." → "${e.newContent?.substring(0, 30) || ''}..." (相同:${e.oldContent === e.newContent})`
+              ).join('\n');
+              onLog(`📤 [${this.config.name}] patchFile 调用:\n${editsSummary}`);
+            } else {
+              onLog(`📤 [${this.config.name}] 调用 ${name}: ${JSON.stringify(args).substring(0, 300)}`);
+            }
+          }
+
           // 检查是否为终止工具
           if (name === this.config.terminalToolName) {
             if (onLog) {

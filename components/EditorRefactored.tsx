@@ -17,7 +17,9 @@ import { useCharacterProfileActions } from '../hooks/useCharacterProfileActions'
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useProjectStore } from '../stores/projectStore';
-import { getNodePath } from '../services/fileSystem';
+import { getNodePath, generateId } from '../services/fileSystem';
+import { AIService } from '../services/geminiService';
+import { runPolishSubAgent } from '../services/subAgents/polishAgent';
 import { FileNode } from '../types';
 import DiffViewer from './DiffViewer';
 import { ReadingLightView } from './ReadingLightView';
@@ -210,35 +212,32 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
 
   // 处理去AI文风润色
   const [isPolishing, setIsPolishing] = useState(false);
+
   const handlePolish = useCallback(async () => {
     if (!activeFile || !isDraftFile || !filePath) return;
 
     setIsPolishing(true);
     try {
-      const agentStore = useAgentStore.getState();
-      const sessionId = agentStore.currentSessionId;
+      const { aiConfig } = useAgentStore.getState();
+      const aiService = new AIService(aiConfig);
 
-      if (!sessionId) {
-        console.error('没有活动的会话');
-        setIsPolishing(false);
-        return;
-      }
+      const result = await runPolishSubAgent(
+        aiService,
+        { targetFile: filePath, fileContent: '' },
+        undefined, // context
+        (msg) => {
+          console.log(msg);
+          useAgentStore.getState().addMessage({
+            id: generateId(),
+            role: 'system',
+            text: `🎨 ${msg}`,
+            timestamp: Date.now(),
+            metadata: { logType: 'info' }
+          });
+        }
+      );
 
-      // 添加用户消息，触发 call_polish_agent 工具
-      const messageId = `polish_${Date.now()}`;
-      agentStore.addMessage({
-        id: messageId,
-        role: 'user',
-        text: `请对文件 "${filePath}" 进行去AI文风润色，使用 call_polish_agent 工具。`,
-        timestamp: Date.now()
-      });
-
-      // 触发 agent 处理 - 使用全局事件通知
-      window.dispatchEvent(new CustomEvent('trigger_agent_process', {
-        detail: { sessionId, triggerMessageId: messageId }
-      }));
-
-      console.log('去AI文风润色已触发:', filePath);
+      console.log('去AI文风润色完成:', result);
     } catch (error) {
       console.error('去AI文风润色失败:', error);
     } finally {
