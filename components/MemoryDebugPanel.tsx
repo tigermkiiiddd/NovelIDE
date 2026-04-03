@@ -106,21 +106,27 @@ const compressionOf = (
   const isCall = message.role === 'model' && message.rawParts?.some((p) => 'functionCall' in p);
   if (isCall) {
     const cfg = classification.toolDecayConfigs;
-    if (!maps.callToResponses.has(message.id)) return done('removed', 3, '孤立 tool call 会被丢弃。', [make('call', '调用名', callNames(message), '已移除', 'removed'), make('args', '参数', callArgs(message, false), '已移除', 'removed')]);
-    if (!cfg) return done('full', 0, '未命中工具衰减配置。', [make('call', '调用名', callNames(message), callNames(message), 'same'), make('args', '参数', callArgs(message, false), callArgs(message, false), 'same')]);
-    if (rounds >= cfg.response.decayRounds) return done('removed', 3, `超过 response 阈值 ${cfg.response.decayRounds} 轮，整组移除。`, [make('call', '调用名', callNames(message), '已移除', 'removed'), make('args', '参数', callArgs(message, false), '已移除', 'removed')]);
-    if (rounds >= cfg.content.decayRounds) return done('compressed', 2, `超过 content 阈值 ${cfg.content.decayRounds} 轮，参数清空。`, [make('call', '调用名', callNames(message), callNames(message), 'same'), make('args', '参数', callArgs(message, false), callArgs(message, true), 'compressed')]);
-    return done('full', 0, '工具调用当前完整保留。', [make('call', '调用名', callNames(message), callNames(message), 'same'), make('args', '参数', callArgs(message, false), callArgs(message, false), 'same')]);
+    if (!maps.callToResponses.has(message.id)) return done('removed', 3, '孤立 tool call 会被丢弃。', [make('call', '调用名', callNames(message), '已移除', 'removed'), make('path', '路径', callArgs(message, false), '已移除', 'removed'), make('content', '参数', callArgs(message, false), '已移除', 'removed')]);
+    if (!cfg) return done('full', 0, '未命中工具衰减配置。', [make('call', '调用名', callNames(message), callNames(message), 'same'), make('path', '路径', callArgs(message, false), callArgs(message, false), 'same'), make('content', '参数', callArgs(message, false), callArgs(message, false), 'same')]);
+    if (rounds >= cfg.content.decayRounds) return done('removed', 3, `超过 content 阈值 ${cfg.content.decayRounds} 轮，整组移除。`, [make('call', '调用名', callNames(message), '已移除', 'removed'), make('path', '路径', callArgs(message, false), '已移除', 'removed'), make('content', '参数', callArgs(message, false), '已移除', 'removed')]);
+    if (rounds >= cfg.path.decayRounds) return done('compressed', 2, `超过 path 阈值 ${cfg.path.decayRounds} 轮，路径清空。`, [make('call', '调用名', callNames(message), callNames(message), 'same'), make('path', '路径', callArgs(message, false), callArgs(message, true), 'compressed'), make('content', '参数', callArgs(message, false), callArgs(message, false), 'same')]);
+    return done('full', 0, '工具调用当前完整保留。', [make('call', '调用名', callNames(message), callNames(message), 'same'), make('path', '路径', callArgs(message, false), callArgs(message, false), 'same'), make('content', '参数', callArgs(message, false), callArgs(message, false), 'same')]);
   }
 
   const pairedCallId = maps.responseToCall.get(message.id);
   if (pairedCallId) {
     const paired = byId.get(pairedCallId);
     const pairedRounds = (roundsMap.get(pairedCallId) ?? 0) + roundOffset;
-    const responseDecay = paired?.toolDecayConfigs?.response.decayRounds;
-    if (!paired || responseDecay === undefined) return done('removed', 3, '配对 tool call 缺失。', [make('response', '结果', responseBody(message), '已移除', 'removed')]);
-    if (pairedRounds >= responseDecay) return done('removed', 3, `所属工具调用超过 response 阈值 ${responseDecay} 轮，本结果移除。`, [make('response', '结果', responseBody(message), '已移除', 'removed')]);
-    return done('full', 0, '工具结果当前完整保留。', [make('response', '结果', responseBody(message), responseBody(message), 'same')]);
+    const pairedCfg = paired?.toolDecayConfigs;
+    // results 和 status 都衰减到则移除
+    const statusThreshold = pairedCfg?.status.decayRounds ?? 4;
+    const resultsThreshold = pairedCfg?.results.decayRounds ?? 4;
+    const statusDead = pairedRounds >= statusThreshold;
+    const resultsDead = pairedRounds >= resultsThreshold;
+    if (!paired || (statusDead && resultsDead)) return done('removed', 3, '配对 tool call 已衰减。', [make('results', '结果', responseBody(message), '已移除', 'removed'), make('status', '状态', responseBody(message), '已移除', 'removed')]);
+    if (statusDead) return done('compressed', 2, `超过 status 阈值 ${statusThreshold} 轮，结果清空。`, [make('results', '结果', responseBody(message), responseBody(message), 'same'), make('status', '状态', responseBody(message), '已移除', 'removed')]);
+    if (resultsDead) return done('compressed', 2, `超过 results 阈值 ${resultsThreshold} 轮，载荷清空。`, [make('results', '结果', responseBody(message), '已移除', 'removed'), make('status', '状态', responseBody(message), responseBody(message), 'same')]);
+    return done('full', 0, '工具结果当前完整保留。', [make('results', '结果', responseBody(message), responseBody(message), 'same'), make('status', '状态', responseBody(message), responseBody(message), 'same')]);
   }
 
   const limit = classification.decayRounds === -1 ? Infinity : classification.decayRounds;
@@ -135,7 +141,7 @@ const promptClass = (state: PromptState) => state === 'full' ? 'border border-em
 const sectionClass = (change: ChangeType) => change === 'compressed' ? 'border-amber-500/30 bg-amber-500/10' : change === 'removed' ? 'border-rose-500/30 bg-rose-500/10' : 'border-gray-700 bg-gray-900/50';
 const projectedClass = (change: ChangeType) => change === 'compressed' ? 'border-amber-500/30 bg-amber-500/10' : change === 'removed' ? 'border-rose-500/30 bg-rose-500/10' : 'border-emerald-500/20 bg-emerald-500/5';
 const sectionLabel = (change: ChangeType) => change === 'compressed' ? '这一块被压缩了' : change === 'removed' ? '这一块被移除了' : '未变化';
-const dimLabel = (d: DecayDimension) => d === 'call' ? '调用名' : d === 'content' ? '参数' : d === 'response' ? '结果' : '正文';
+const dimLabel = (d: DecayDimension) => d === 'call' ? '调用名' : d === 'path' ? '路径' : d === 'content' ? '参数' : d === 'status' ? '状态' : d === 'results' ? '结果' : d === 'content_text' ? '正文' : d;
 const valueLabel = (v: ContentValue) => v === ContentValue.HIGH ? '高' : v === ContentValue.MEDIUM ? '中' : '低';
 const valueColor = (v: ContentValue) => v === ContentValue.HIGH ? 'text-emerald-300' : v === ContentValue.MEDIUM ? 'text-sky-300' : 'text-amber-300';
 const barColor = (s: DecayStatus) => !s.isAlive ? 'bg-rose-500' : s.value === ContentValue.HIGH ? 'bg-emerald-400' : s.value === ContentValue.MEDIUM ? 'bg-sky-400' : 'bg-amber-400';
@@ -144,14 +150,22 @@ const MemoryDebugPanel: React.FC<Props> = ({ session, onClose }) => {
   const [roundOffset, setRoundOffset] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
+  // decayScore = userTurns × 1.0 + toolCalls × 0.2，最低基准 4
   const roundsMap = useMemo(() => {
     if (!session) return new Map<string, number>();
-    let n = 0;
+    let userTurns = 0;
+    let toolCalls = 0;
     const map = new Map<string, number>();
     for (let i = session.messages.length - 1; i >= 0; i--) {
       const m = session.messages[i];
-      map.set(m.id, n);
-      if (m.role === 'user' || m.role === 'model') n++;
+      const score = userTurns * 1.0 + toolCalls * 0.2;
+      map.set(m.id, Math.max(4, score));
+      if (m.role === 'user') userTurns++;
+      if (m.role === 'model') {
+        const hasToolCall = m.rawParts?.some((p) => 'functionCall' in p);
+        if (hasToolCall) toolCalls++;
+        else userTurns++; // 纯文字回复计用户轮
+      }
     }
     return map;
   }, [session]);

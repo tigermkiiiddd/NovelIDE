@@ -235,84 +235,105 @@ export const getResultValueConfig = (toolType: ToolType, resultKey: string) => {
 };
 
 /**
- * 获取工具调用的精细衰减配置
- * call: 工具名称，快速衰减
- * content: 参数内容，根据参数类型决定衰减
- * response: 返回结果
+ * 获取工具调用的精细衰减配置（5维度模型）
+ * - call: 工具名称 (~5-20 tokens)
+ * - path: 文件/目录路径 (~10-50 tokens)
+ * - content: 主参数内容 (varies)
+ * - status: 操作状态 (~10-50 tokens)
+ * - results: 大型数据载荷 (100s-1000s tokens)
  */
 export const getToolDecayConfigs = (toolType: ToolType): ToolDecayConfigs => {
   // 默认配置
   const defaultConfig: ToolDecayConfigs = {
-    call: { value: ContentValue.LOW, decayRounds: 4 },      // 工具名 4轮
-    content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // 参数内容 8轮
-    response: { value: ContentValue.LOW, decayRounds: 8 }    // 结果 8轮
+    call: { value: ContentValue.LOW, decayRounds: 12 },
+    path: { value: ContentValue.MEDIUM, decayRounds: 8 },
+    content: { value: ContentValue.MEDIUM, decayRounds: 8 },
+    status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+    results: { value: ContentValue.LOW, decayRounds: 8 }
   };
 
-  // 根据工具类型调整配置
   switch (toolType) {
     case ToolType.READ_FILE:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // path 8轮
-        response: { value: ContentValue.MEDIUM, decayRounds: 12 } // 文件内容 12轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.MEDIUM, decayRounds: 12 },
+        content: { value: ContentValue.MEDIUM, decayRounds: 8 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 30 }
       };
 
     case ToolType.CREATE_FILE:
     case ToolType.WRITE_FILE:
     case ToolType.UPDATE_FILE:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 16 }, // path + content 16轮
-        response: { value: ContentValue.LOW, decayRounds: 8 }    // status 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.MEDIUM, decayRounds: 16 },
+        content: { value: ContentValue.LOW, decayRounds: 4 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 30 }
       };
 
     case ToolType.PATCH_FILE:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 16 }, // path + patches 16轮
-        response: { value: ContentValue.LOW, decayRounds: 8 }    // status 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.MEDIUM, decayRounds: 16 },
+        content: { value: ContentValue.LOW, decayRounds: 4 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 30 }
       };
 
     case ToolType.DELETE_FILE:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // path 8轮
-        response: { value: ContentValue.LOW, decayRounds: 8 }    // status 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        content: { value: ContentValue.LOW, decayRounds: 4 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 30 }
       };
 
     case ToolType.LIST_FILES:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.LOW, decayRounds: 8 },    // path 8轮
-        response: { value: ContentValue.MEDIUM, decayRounds: 8 } // files 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.LOW, decayRounds: 4 },
+        content: { value: ContentValue.LOW, decayRounds: 4 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 4 }
       };
 
     case ToolType.MANAGE_TODOS:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // todo/task 8轮
-        response: { value: ContentValue.MEDIUM, decayRounds: 8 }  // todos 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.LOW, decayRounds: 4 },
+        content: { value: ContentValue.LOW, decayRounds: 4 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 4 }
       };
 
     case ToolType.CALL_SEARCH_AGENT:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // query 8轮
-        response: { value: ContentValue.MEDIUM, decayRounds: 8 } // results 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.LOW, decayRounds: 4 },
+        content: { value: ContentValue.MEDIUM, decayRounds: 10 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 4 }
       };
 
     case ToolType.MANAGE_PLAN_NOTE:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },        // 工具名 4轮
-        content: { value: ContentValue.MEDIUM, decayRounds: 8 }, // content 8轮
-        response: { value: ContentValue.LOW, decayRounds: 8 }    // status 8轮
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.MEDIUM, decayRounds: 8 },
+        content: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 30 }
       };
 
     case ToolType.UPDATE_PROJECT_META:
       return {
-        call: { value: ContentValue.LOW, decayRounds: 4 },
+        call: { value: ContentValue.LOW, decayRounds: 12 },
+        path: { value: ContentValue.LOW, decayRounds: 4 },
         content: { value: ContentValue.MEDIUM, decayRounds: 8 },
-        response: { value: ContentValue.MEDIUM, decayRounds: 8 }
+        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
+        results: { value: ContentValue.MEDIUM, decayRounds: 30 }
       };
 
     default:
@@ -323,7 +344,7 @@ export const getToolDecayConfigs = (toolType: ToolType): ToolDecayConfigs => {
 /**
  * 衰减维度类型
  */
-export type DecayDimension = 'call' | 'content' | 'response' | 'content_text';
+export type DecayDimension = 'call' | 'path' | 'content' | 'status' | 'results' | 'content_text';
 
 /**
  * 单个衰减维度的配置
@@ -334,12 +355,14 @@ export interface DecayConfig {
 }
 
 /**
- * 工具调用的精细衰减配置
+ * 工具调用的精细衰减配置（5维度）
  */
 export interface ToolDecayConfigs {
   call: DecayConfig;      // 工具名称
-  content: DecayConfig;  // 参数内容
-  response: DecayConfig; // 返回结果
+  path: DecayConfig;      // 文件/目录路径
+  content: DecayConfig;   // 主参数内容
+  status: DecayConfig;    // 操作状态
+  results: DecayConfig;   // 大型数据载荷
 }
 
 /**
@@ -398,10 +421,10 @@ export const classifyMessage = (message: ChatMessage): MessageClassification => 
       isToolResult: true,
       isThinking: false,
       toolType: toolInfo?.toolName,
-      contentValue: configs.response.value, // 使用 response 维度的价值
-      decayRounds: configs.response.decayRounds,
+      contentValue: configs.results.value, // results 维度为主要价值
+      decayRounds: configs.results.decayRounds,
       contentLocation: ContentLocation.RAW_RESULT,
-      decayDimension: 'response',
+      decayDimension: 'results',
       toolDecayConfigs: configs
     };
   }
