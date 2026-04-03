@@ -81,7 +81,7 @@ const EditorArea: React.FC<EditorAreaProps> = ({
   if (isRelationshipViewOpen) {
     return (
       <Suspense fallback={loadingFallback}>
-        <RelationshipGraph height={window.innerHeight - 100} />
+        <RelationshipGraph isMobile={isMobile} />
       </Suspense>
     );
   }

@@ -115,6 +115,7 @@ const getCurvatureSpread = (count: number, index: number) => {
 interface RelationshipGraphProps {
   focusCharacter?: string;
   height?: number;
+  isMobile?: boolean;
   onNodeDoubleClick?: (name: string) => void;
   onNodeClick?: (name: string) => void;
   onLinkClick?: (link: GraphLink, event: MouseEvent) => void;
@@ -210,13 +211,16 @@ const Tooltip: React.FC<{
 
 export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   focusCharacter,
-  height = 500,
+  height,
+  isMobile = false,
   onNodeDoubleClick,
   onNodeClick,
   onLinkClick,
   onLinkHover,
   onBackgroundDoubleClick,
 }) => {
+  // Derive effective height: use prop, fallback to container height, or mobile default
+  const effectiveHeight = height ?? (isMobile ? window.innerHeight - 160 : 500);
   const relations = useRelationshipStore((s: RelationshipState) => s.relations);
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -384,7 +388,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const fg = fgRef.current;
     if (!fg) return;
 
-    const spreadBase = Math.max(220, Math.min(containerWidth, height) * 0.36);
+    const spreadBase = Math.max(220, Math.min(containerWidth, effectiveHeight) * 0.36);
     const linkDistance = Math.max(140, Math.min(180, spreadBase * 0.62));
     const radialRadius = Math.max(140, Math.min(300, spreadBase * 0.8));
 
@@ -421,7 +425,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     );
 
     fg.d3ReheatSimulation();
-  }, [containerWidth, graphData, height]);
+  }, [containerWidth, graphData, effectiveHeight]);
 
   // 自定义节点绘制
   const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -796,7 +800,8 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         overflow: 'hidden',
         background: '#0a0f1a',
         border: '1px solid rgba(148, 163, 184, 0.12)',
-        height,
+        height: effectiveHeight,
+        touchAction: 'pan-x pan-y',
       }}
     >
       <div
@@ -813,13 +818,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       <div
         style={{
           position: 'absolute',
-          top: 12,
-          left: 12,
-          right: 12,
+          top: isMobile ? 8 : 12,
+          left: isMobile ? 8 : 12,
+          right: isMobile ? 8 : 12,
           display: 'flex',
-          gap: 8,
+          gap: isMobile ? 6 : 8,
           alignItems: 'center',
           zIndex: 20,
+          flexWrap: 'wrap',
         }}
       >
         {/* 搜索框 */}
@@ -828,12 +834,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '6px 12px',
+            padding: isMobile ? '6px 10px' : '6px 12px',
             borderRadius: 10,
             background: 'rgba(15, 23, 42, 0.85)',
             border: '1px solid rgba(148, 163, 184, 0.2)',
             flex: 1,
-            maxWidth: 260,
+            minWidth: isMobile ? 0 : 0,
+            maxWidth: isMobile ? '100%' : 260,
           }}
         >
           <Search size={14} style={{ color: '#64748b', flexShrink: 0 }} />
@@ -847,7 +854,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               border: 'none',
               outline: 'none',
               color: '#f8fafc',
-              fontSize: 13,
+              fontSize: isMobile ? 14 : 13,
               width: '100%',
             }}
           />
@@ -868,13 +875,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '6px 12px',
+            padding: isMobile ? '8px 12px' : '6px 12px',
             borderRadius: 10,
             background: filterTypes.size > 0 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.85)',
             border: filterTypes.size > 0 ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(148, 163, 184, 0.2)',
             color: filterTypes.size > 0 ? '#bae6fd' : '#94a3b8',
             cursor: 'pointer',
-            fontSize: 13,
+            fontSize: isMobile ? 14 : 13,
+            minHeight: isMobile ? 36 : 'auto',
           }}
         >
           <Filter size={14} />
@@ -888,12 +896,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            padding: '6px 10px',
+            padding: isMobile ? '8px 10px' : '6px 10px',
             borderRadius: 10,
             background: 'rgba(15, 23, 42, 0.85)',
             border: '1px solid rgba(148, 163, 184, 0.2)',
             color: '#94a3b8',
             cursor: 'pointer',
+            minWidth: isMobile ? 36 : 'auto',
+            minHeight: isMobile ? 36 : 'auto',
           }}
         >
           <Maximize2 size={14} />
@@ -905,12 +915,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
           style={{
             display: 'flex',
             alignItems: 'center',
-            padding: '6px 10px',
+            padding: isMobile ? '8px 10px' : '6px 10px',
             borderRadius: 10,
             background: 'rgba(15, 23, 42, 0.85)',
             border: '1px solid rgba(148, 163, 184, 0.2)',
             color: '#94a3b8',
             cursor: 'pointer',
+            minWidth: isMobile ? 36 : 'auto',
+            minHeight: isMobile ? 36 : 'auto',
           }}
         >
           <RotateCcw size={14} />
@@ -922,17 +934,22 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         <div
           style={{
             position: 'absolute',
-            top: 50,
-            left: 12,
+            ...(isMobile
+              ? { bottom: 60, left: 0, right: 0 }
+              : { top: 50, left: 12 }),
             padding: '10px 14px',
-            borderRadius: 12,
-            background: 'rgba(15, 23, 42, 0.95)',
-            border: '1px solid rgba(148, 163, 184, 0.15)',
+            borderRadius: isMobile ? '12px 12px 0 0' : 12,
+            background: 'rgba(15, 23, 42, 0.97)',
+            borderTop: isMobile ? '1px solid rgba(148, 163, 184, 0.15)' : 'none',
+            border: isMobile ? 'none' : '1px solid rgba(148, 163, 184, 0.15)',
             zIndex: 20,
-            maxWidth: 320,
+            maxWidth: isMobile ? '100%' : 320,
             display: 'flex',
-            flexWrap: 'wrap',
+            flexWrap: isMobile ? 'nowrap' : 'wrap',
             gap: 6,
+            overflowX: isMobile ? 'auto' : 'visible',
+            overflowY: 'hidden',
+            maxHeight: isMobile ? '40vh' : 'none',
           }}
         >
           {allTypes.map(type => (
@@ -940,14 +957,17 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
               key={type}
               onClick={() => toggleFilter(type)}
               style={{
-                padding: '4px 10px',
+                padding: isMobile ? '6px 12px' : '4px 10px',
                 borderRadius: 999,
-                fontSize: 12,
+                fontSize: isMobile ? 13 : 12,
                 border: `1px solid ${getRelationColor(type)}${filterTypes.has(type) ? 'cc' : '40'}`,
                 background: filterTypes.has(type) ? `${getRelationColor(type)}25` : 'transparent',
                 color: filterTypes.has(type) ? getRelationColor(type) : '#94a3b8',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                minHeight: isMobile ? 36 : 'auto',
               }}
             >
               {type}
@@ -963,7 +983,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         nodeId="id"
         nodeLabel="name"
         width={containerWidth}
-        height={height}
+        height={effectiveHeight}
         backgroundColor="#0a0f1a"
         linkCurvature="curvature"
         linkColor={() => 'transparent'}

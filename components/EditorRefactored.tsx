@@ -425,7 +425,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
     if (filePath === `${INFO_FOLDER_NAME}/${RELATION_FILE_NAME}`) {
       return (
         <div className={`h-full ${className}`}>
-          <RelationshipManager key={currentProjectId || 'no-project'} />
+          <RelationshipManager key={currentProjectId || 'no-project'} isMobile={isMobile} />
         </div>
       );
     }

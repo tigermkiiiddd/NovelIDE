@@ -63,12 +63,13 @@ const getRelationColor = (type: string) => RELATION_COLOR_MAP[type] || '#94a3b8'
 
 interface RelationshipManagerProps {
   onClose?: () => void;
+  isMobile?: boolean;
 }
 
 type DrawerMode = 'none' | 'create' | 'edit-link';
 type SelectMode = 'idle' | 'selecting';
 
-export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClose }) => {
+export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClose, isMobile = false }) => {
   const relations = useRelationshipStore((s: RelationshipState) => s.relations);
   const customRelationTypes = useRelationshipStore((s: RelationshipState) => s.customRelationTypes);
   const addRelation = useRelationshipStore((s: RelationshipState) => s.addRelation);
@@ -473,11 +474,11 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
         title="添加关系"
         style={{
           position: 'absolute',
-          bottom: 20,
-          right: 20,
+          bottom: isMobile ? 80 : 20,
+          right: isMobile ? 16 : 20,
           zIndex: 20,
-          width: 48,
-          height: 48,
+          width: isMobile ? 52 : 48,
+          height: isMobile ? 52 : 48,
           borderRadius: 14,
           background: 'linear-gradient(135deg, #34d399, #059669)',
           border: 'none',
@@ -503,19 +504,15 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
       {selectedNode && drawerMode === 'none' && (
         <div style={{
           position: 'absolute',
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 320,
-          background: 'rgba(15, 23, 42, 0.95)',
-          borderLeft: '1px solid rgba(148, 163, 184, 0.12)',
+          ...(isMobile ? { bottom: 0, left: 0, right: 0, borderTop: '1px solid rgba(148, 163, 184, 0.12)', borderRadius: '16px 16px 0 0', animation: 'slideUpPanel 0.2s ease-out' } : { top: 0, right: 0, bottom: 0, width: 320, borderLeft: '1px solid rgba(148, 163, 184, 0.12)', animation: 'slideInRight 0.2s ease-out' }),
+          background: 'rgba(15, 23, 42, 0.97)',
           zIndex: 25,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          animation: 'slideInRight 0.2s ease-out',
+          maxHeight: isMobile ? '70vh' : '100%',
         }}>
-          <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+          <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } } @keyframes slideUpPanel { from { transform: translateY(100%); } to { transform: translateY(0); } }`}</style>
 
           {/* Panel header */}
           <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid rgba(148, 163, 184, 0.1)' }}>
@@ -716,11 +713,12 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
 
               <div style={{ gridColumn: '1 / -1' }}>
                 <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>关系描述</div>
-                <input type="text"
+                <textarea
                   value={drawerMode === 'create' ? createDescription : editDescription}
                   onChange={e => drawerMode === 'create' ? setCreateDescription(e.target.value) : setEditDescription(e.target.value)}
                   placeholder="描述这段关系..."
-                  style={inputStyle}
+                  rows={2}
+                  style={{ ...inputStyle, resize: 'none', minHeight: isMobile ? 60 : 36 }}
                 />
               </div>
 
