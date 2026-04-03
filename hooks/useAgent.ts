@@ -331,7 +331,6 @@ export const useAgent = (
     messages: currentSession?.messages || [],
     isLoading,
     sendMessage,
-    processTurn: engine.processTurn,
     stopGeneration: engine.stopGeneration,
     regenerateMessage,
     editUserMessage,

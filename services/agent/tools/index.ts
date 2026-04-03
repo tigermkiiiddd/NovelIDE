@@ -28,7 +28,7 @@ import {
   manageRelationshipsTool,
   getRelationshipGraphTool,
 } from './relationshipTools';
-import { callSearchAgentTool, callPolishAgentTool } from './subAgentTools';
+import { callSearchAgentTool } from './subAgentTools';
 import { ToolDefinition } from '../types';
 
 // 主 Agent 可用的工具
@@ -66,7 +66,6 @@ const writeTools: ToolDefinition[] = [
   manageRelationshipsTool,
   // 子代理工具
   callSearchAgentTool,
-  callPolishAgentTool,
 ];
 
 export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool];
