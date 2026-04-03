@@ -349,7 +349,7 @@ export const buildSimpleHistory = (
         return getToolDecayConfigs(toolType);
       });
       // 如果有多个工具，用最快衰减的工具配置（最保守）
-      const minResponseDecay = Math.min(...allConfigs.map(c => c.response.decayRounds));
+      const minResponseDecay = Math.min(...allConfigs.map(c => c.results.decayRounds));
       const minContentDecay = Math.min(...allConfigs.map(c => c.content.decayRounds));
 
       // response 维度衰减 → 整组丢弃（维持 API 合法性）

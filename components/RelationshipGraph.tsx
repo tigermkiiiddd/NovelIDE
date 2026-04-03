@@ -42,6 +42,10 @@ interface RelationshipGraphProps {
   focusCharacter?: string;
   height?: number;
   onNodeDoubleClick?: (name: string) => void;
+  onNodeClick?: (name: string) => void;
+  onLinkClick?: (link: GraphLink, event: MouseEvent) => void;
+  onLinkHover?: (link: GraphLink | null) => void;
+  onBackgroundDoubleClick?: (x: number, y: number) => void;
 }
 
 interface GraphNode {
@@ -52,7 +56,7 @@ interface GraphNode {
   isFocus?: boolean;
 }
 
-interface GraphLink {
+export interface GraphLink {
   source: string | GraphNode;
   target: string | GraphNode;
   relation: CharacterRelation;
@@ -134,6 +138,10 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   focusCharacter,
   height = 500,
   onNodeDoubleClick,
+  onNodeClick,
+  onLinkClick,
+  onLinkHover,
+  onBackgroundDoubleClick,
 }) => {
   const relations = useRelationshipStore((s: RelationshipState) => s.relations);
   const fgRef = useRef<any>(null);
@@ -261,7 +269,8 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
   const handleNodeClick = useCallback((node: any) => {
     setHighlightNode(node.id);
-  }, []);
+    onNodeClick?.(node.id);
+  }, [onNodeClick]);
 
   const handleLinkClick = useCallback((link: any, event: MouseEvent) => {
     setSelectedLink({
@@ -269,12 +278,22 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       x: event.offsetX,
       y: event.offsetY,
     });
-  }, []);
+    onLinkClick?.(link as GraphLink, event);
+  }, [onLinkClick]);
 
   const handleBackgroundClick = useCallback(() => {
     setSelectedLink(null);
     setHighlightNode(focusCharacter || null);
-  }, [focusCharacter]);
+    onLinkHover?.(null);
+  }, [focusCharacter, onLinkHover]);
+
+  const handleLinkHover = useCallback((link: any) => {
+    onLinkHover?.(link ? (link as GraphLink) : null);
+  }, [onLinkHover]);
+
+  const handleBackgroundDoubleClick = useCallback((event: MouseEvent) => {
+    onBackgroundDoubleClick?.(event.offsetX, event.offsetY);
+  }, [onBackgroundDoubleClick]);
 
   // 自定义节点绘制
   const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -282,49 +301,85 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const isDimmed = highlightNodes.size > 0 && !highlightNodes.has(node.id);
     const isFocus = node.id === focusCharacter;
 
-    const baseRadius = Math.max(8, 4 + (node.val || 1) * 1.5);
-    const radius = isHighlight ? baseRadius * 1.3 : baseRadius;
-    const alpha = isDimmed ? 0.2 : 1;
+    const baseRadius = Math.max(14, 10 + (node.val || 1) * 2);
+    const radius = isHighlight ? baseRadius * 1.2 : baseRadius;
+    const alpha = isDimmed ? 0.15 : 1;
 
     // 确保节点位置有效
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y) || !Number.isFinite(radius)) {
       return;
     }
 
-    // 光晕
+    const { x, y } = node;
+
+    // 外部光晕
     if (isFocus || isHighlight) {
-      const glowColor = isFocus ? 'rgba(56, 189, 248, 0.3)' : 'rgba(148, 163, 184, 0.2)';
+      const glowColor = isFocus ? 'rgba(56, 189, 248, 0.25)' : 'rgba(200, 210, 230, 0.2)';
       ctx.beginPath();
-      ctx.arc(node.x, node.y, radius * 2.2, 0, Math.PI * 2);
-      const gradient = ctx.createRadialGradient(node.x, node.y, radius, node.x, node.y, radius * 2.2);
-      gradient.addColorStop(0, glowColor);
-      gradient.addColorStop(1, 'transparent');
-      ctx.fillStyle = gradient;
+      ctx.arc(x, y, radius * 2.5, 0, Math.PI * 2);
+      const glow = ctx.createRadialGradient(x, y, radius, x, y, radius * 2.5);
+      glow.addColorStop(0, glowColor);
+      glow.addColorStop(1, 'transparent');
+      ctx.fillStyle = glow;
       ctx.fill();
     }
 
-    // 节点圆
+    // 投影
+    ctx.shadowColor = isFocus ? 'rgba(56, 189, 248, 0.5)' : 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = isFocus ? 16 : 8;
+    ctx.shadowOffsetY = 3;
+
+    // 节点渐变填充
     ctx.beginPath();
-    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-    const nodeColor = isFocus ? '#38bdf8' : isHighlight ? '#e2e8f0' : '#94a3b8';
-    ctx.fillStyle = isDimmed
-      ? `rgba(100, 116, 139, ${alpha})`
-      : nodeColor;
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    const nodeColor = isFocus ? '#38bdf8' : isHighlight ? '#e2e8f0' : '#475569';
+    const grad = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius);
+    if (isDimmed) {
+      grad.addColorStop(0, `rgba(71, 85, 105, ${alpha})`);
+      grad.addColorStop(1, `rgba(51, 65, 85, ${alpha})`);
+    } else if (isFocus) {
+      grad.addColorStop(0, '#7dd3fc');
+      grad.addColorStop(1, '#0ea5e9');
+    } else if (isHighlight) {
+      grad.addColorStop(0, '#cbd5e1');
+      grad.addColorStop(1, '#94a3b8');
+    } else {
+      grad.addColorStop(0, '#64748b');
+      grad.addColorStop(1, '#334155');
+    }
+    ctx.fillStyle = grad;
     ctx.globalAlpha = alpha;
     ctx.fill();
 
+    // 重置阴影
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
     // 边框
-    ctx.strokeStyle = isFocus ? '#38bdf8' : 'rgba(148, 163, 184, 0.4)';
-    ctx.lineWidth = isFocus ? 2 : 1;
+    ctx.strokeStyle = isFocus ? '#bae6fd' : isHighlight ? '#e2e8f0' : 'rgba(148, 163, 184, 0.3)';
+    ctx.lineWidth = isFocus ? 2.5 : isHighlight ? 2 : 1;
     ctx.stroke();
 
-    // 名称标签
-    const fontSize = Math.max(10, 12 / globalScale);
-    ctx.font = `${isFocus || isHighlight ? 600 : 400} ${fontSize}px -apple-system, sans-serif`;
+    // 角色首字母（中文取第一个字）
+    const label = node.name.length > 2 ? node.name.slice(0, 2) : node.name;
+    const fontSize = Math.max(10, radius * 0.7);
+    ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = isDimmed ? `rgba(148, 163, 184, ${alpha})` : '#f8fafc';
-    ctx.fillText(node.name, node.x, node.y + radius + 4);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = isDimmed ? `rgba(100, 116, 139, ${alpha})` : isFocus ? '#ffffff' : '#f1f5f9';
+    ctx.fillText(label, x, y);
+
+    // 名称标签（放大镜下才显示）
+    if (globalScale > 0.6) {
+      const labelFontSize = Math.max(10, Math.min(13, 11 / globalScale));
+      ctx.font = `${isFocus || isHighlight ? 600 : 400} ${labelFontSize}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = isDimmed ? `rgba(148, 163, 184, ${alpha})` : '#f8fafc';
+      ctx.globalAlpha = alpha * (isHighlight || isFocus ? 1 : 0.8);
+      ctx.fillText(node.name, x, y + radius + 5);
+    }
 
     ctx.globalAlpha = 1;
   }, [highlightNodes, focusCharacter]);
@@ -339,11 +394,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const relation: CharacterRelation = link.relation;
     const color = getRelationColor(relation.type);
     const width = STRENGTH_WIDTH[relation.strength] || 2;
-    const alpha = isDimmed ? 0.08 : isHighlight ? 1 : 0.5;
-
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = isHighlight ? width * 1.5 : width;
+    const alpha = isDimmed ? 0.06 : isHighlight ? 0.9 : 0.4;
 
     // 曲线绘制
     const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0 };
@@ -355,11 +406,39 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     }
 
     const curv = link.curvature || 0;
-    if (curv === 0) {
+
+    // 外发光（高亮时）
+    if (isHighlight && !isDimmed) {
       ctx.beginPath();
+      if (curv === 0) {
+        ctx.moveTo(src.x, src.y);
+        ctx.lineTo(tgt.x, tgt.y);
+      } else {
+        const midX = (src.x + tgt.x) / 2;
+        const midY = (src.y + tgt.y) / 2;
+        const dx = tgt.x - src.x;
+        const dy = tgt.y - src.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const cpX = midX + (-dy / len) * curv * len * 0.5;
+        const cpY = midY + (dx / len) * curv * len * 0.5;
+        ctx.moveTo(src.x, src.y);
+        ctx.quadraticCurveTo(cpX, cpY, tgt.x, tgt.y);
+      }
+      ctx.strokeStyle = `${color}30`;
+      ctx.lineWidth = width * 3 + 4;
+      ctx.globalAlpha = 0.4;
+      ctx.stroke();
+    }
+
+    // 主连线
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isHighlight ? width * 2 : width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (curv === 0) {
       ctx.moveTo(src.x, src.y);
       ctx.lineTo(tgt.x, tgt.y);
-      ctx.stroke();
     } else {
       const midX = (src.x + tgt.x) / 2;
       const midY = (src.y + tgt.y) / 2;
@@ -368,22 +447,37 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
       const cpX = midX + (-dy / len) * curv * len * 0.5;
       const cpY = midY + (dx / len) * curv * len * 0.5;
-
-      ctx.beginPath();
       ctx.moveTo(src.x, src.y);
       ctx.quadraticCurveTo(cpX, cpY, tgt.x, tgt.y);
-      ctx.stroke();
+    }
+    ctx.stroke();
 
-      // 关系标签（仅在高亮或缩放足够时显示）
-      if (isHighlight || globalScale > 0.8) {
-        const fontSize = Math.max(8, 10 / globalScale);
-        ctx.font = `${fontSize}px -apple-system, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillStyle = color;
-        ctx.globalAlpha = isDimmed ? 0.1 : 0.8;
-        ctx.fillText(relation.type, cpX, cpY - 4);
-      }
+    // 关系标签（高亮或缩放足够时显示）
+    if (!isDimmed && (isHighlight || globalScale > 0.7) && curv !== 0) {
+      const midX = (src.x + tgt.x) / 2;
+      const midY = (src.y + tgt.y) / 2;
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const cpX = midX + (-dy / len) * curv * len * 0.5;
+      const cpY = midY + (dx / len) * curv * len * 0.5;
+
+      const fontSize = Math.max(9, 11 / globalScale);
+      ctx.font = `500 ${fontSize}px -apple-system, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+
+      // 标签背景
+      const labelText = relation.type;
+      const textWidth = ctx.measureText(labelText).width;
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.globalAlpha = alpha;
+      const padding = 3;
+      ctx.fillRect(cpX - textWidth / 2 - padding, cpY - fontSize - 5, textWidth + padding * 2, fontSize + 4);
+
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fillText(labelText, cpX, cpY - 5);
     }
 
     ctx.globalAlpha = 1;
@@ -419,7 +513,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         position: 'relative',
         borderRadius: 16,
         overflow: 'hidden',
-        background: 'linear-gradient(180deg, rgba(15,23,42,0.95) 0%, rgba(10,15,25,0.98) 100%)',
+        background: '#0a0f1a',
         border: '1px solid rgba(148, 163, 184, 0.12)',
         height,
       }}
@@ -562,7 +656,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         nodeLabel="name"
         width={containerWidth}
         height={height}
-        backgroundColor="transparent"
+        backgroundColor="#0a0f1a"
         linkCurvature="curvature"
         linkColor={() => 'transparent'}
         linkLineDash={null}
@@ -575,19 +669,28 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         onNodeDragEnd={(node: any) => { node.fx = node.x; node.fy = node.y; }}
         onNodeDoubleClick={(node: any) => onNodeDoubleClick?.(node.id)}
         onLinkClick={handleLinkClick as any}
+        onLinkHover={handleLinkHover as any}
         onBackgroundClick={handleBackgroundClick}
+        onBackgroundDoubleClick={handleBackgroundDoubleClick as any}
         onEngineStop={handleEngineStop}
         nodeCanvasObject={paintNode as any}
         nodeCanvasObjectMode={() => 'replace'}
         linkCanvasObject={paintLink as any}
         linkCanvasObjectMode={() => 'replace'}
-        cooldownTicks={300}
-        warmupTicks={50}
+        cooldownTicks={500}
+        warmupTicks={200}
         enableNodeDrag={true}
         enableZoomInteraction={true}
         enablePanInteraction={true}
         minZoom={0.3}
         maxZoom={5}
+        d3AlphaDecay={0.02}
+        d3VelocityDecay={0.3}
+        d3Force={{
+          link: { distance: 120, strength: 0.6 },
+          charge: { strength: -400 },
+          center: { x: 0.5, y: 0.5, strength: 0.05 },
+        }}
       />
 
       {/* Tooltip */}
