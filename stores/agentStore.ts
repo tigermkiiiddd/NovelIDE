@@ -25,6 +25,9 @@ const debounce = <T extends (...args: any[]) => any>(
   };
 };
 
+// Lazy tool loading categories
+export type ToolCategory = 'file_write' | 'file_search' | 'knowledge' | 'character' | 'relationship' | 'outline';
+
 interface AgentState {
   // Config
   aiConfig: AIConfig;
@@ -35,11 +38,15 @@ interface AgentState {
   sessions: ChatSession[];
   currentSessionId: string | null;
   isSessionsLoading: boolean; // Added loading state for sessions
-  
+
   // Active State
   isLoading: boolean;
   pendingChanges: PendingChange[];
-  
+
+  // Lazy Tool Loading State
+  activatedCategories: ToolCategory[];
+  setActivatedCategories: (categories: ToolCategory[]) => void;
+
   // UI State for Reviewing
   reviewingChangeId: string | null;
   setReviewingChangeId: (id: string | null) => void;
@@ -122,9 +129,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       isSessionsLoading: false, // Initial state
       isLoading: false,
       pendingChanges: [],
+      activatedCategories: [],
       reviewingChangeId: null,
 
       setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
+
+      // Lazy Tool Loading
+      setActivatedCategories: (categories) => set({ activatedCategories: categories }),
 
       loadProjectSessions: async (projectId: string) => {
           // 设置全局加载标记
@@ -193,6 +204,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           sessions: newSessions,
           currentSessionId: newSession.id,
           pendingChanges: [],
+          activatedCategories: [],
           reviewingChangeId: null
         });
 
@@ -378,3 +390,6 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         }
       }
 }));
+
+// 导出 ToolCategory 类型供其他模块使用
+export type { ToolCategory };

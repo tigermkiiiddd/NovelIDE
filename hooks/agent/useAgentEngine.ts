@@ -4,6 +4,7 @@ import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote } f
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
 import { allTools, getToolsForMode } from '../../services/agent/tools/index';
+import { getAllToolsForLLM, handleSearchToolsCall } from '../../services/agent/tools/indexLazy';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
@@ -95,8 +96,8 @@ export const useAgentEngine = ({
         knowledgeNodes  // 传递知识图谱节点
       );
 
-      // 根据模式选择工具
-      const toolsForMode = getToolsForMode(planMode);
+      // Lazy loading: 合并始终激活工具 + 目录 + search_tools + 已激活工具
+      const toolsForMode = getAllToolsForLLM();
 
       let loopCount = 0;
       const MAX_LOOPS = 90;

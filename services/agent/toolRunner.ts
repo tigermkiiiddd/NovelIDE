@@ -27,6 +27,7 @@ import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../u
 import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
+import { executeSearchTools } from './tools/searchTools';
 import { useVersionStore } from '../../stores/versionStore';
 
 /**
@@ -456,6 +457,10 @@ export const executeTool = async (
             );
             result = op.result;
         } 
+        // --- SEARCH TOOLS HANDLER ---
+        else if (name === 'search_tools') {
+            result = executeSearchTools(args);
+        }
         // --- SUB AGENT ENTRY POINT ---
         else if (name === 'call_search_agent') {
             if (!aiService) return { type: 'ERROR', message: 'AI Service not available for Sub-Agent' };

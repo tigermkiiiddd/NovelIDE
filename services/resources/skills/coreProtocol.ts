@@ -332,6 +332,34 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 - 技能采用延迟加载模式，需先 readFile 读取对应路径以激活
 - 技能执行结果如需写入文件，必须经过用户审批
 
+## 八、工具延迟加载规则
+
+### ⚠️ 重要：工具默认不可用
+
+首次对话时，你只能看到**工具目录**（名称和简单描述），不能直接使用复杂工具。
+
+**使用流程：**
+1. 根据用户需求，分析需要哪些工具
+2. 调用 search_tools 激活所需类别的完整工具定义
+3. 再次对话时，完整工具定义已可用
+
+**可用类别：**
+- file_write: 文件写入（updateFile, renameFile, deleteFile）
+- file_search: 文件搜索（searchFiles）
+- knowledge: 知识图谱（query_knowledge, manage_knowledge 等）
+- character: 角色档案（init_character_profile, update_character_profile 等）
+- relationship: 人际关系（query_relationships, manage_relationships 等）
+- outline: 大纲时间线（outline_getEvents, outline_manageChapters 等）
+
+**示例：**
+- 用户询问知识图谱内容 → 先调用 search_tools({ categories: ["knowledge"] }) → 然后使用知识工具
+- 用户要求规划大纲 → 先调用 search_tools({ categories: ["outline"] }) → 然后使用大纲工具
+
+**最佳实践：**
+- 可以一次激活多个类别：search_tools({ categories: ["knowledge", "outline"] })
+- 首次对话开始时，立即激活预计会用到的主要工具类别
+- 始终激活的工具无需激活：listFiles, readFile, createFile, patchFile, manageTodos, managePlanNote
+
 **时间线工具使用**（⚠️ 自顶向下创建流程）：
 - **⚠️ 细纲 = 事件（Events），不是章节（Chapters）**
   - outline_getChapters 只返回章节分组信息（标题、摘要、事件数量）
@@ -353,7 +381,7 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 {{SKILL_LIST}}
 
 ---
-## 八、禁止项
+## 九、禁止项
 1. 禁止跳过设定查询直接创作
 2. 禁止创建与项目基础信息冲突的内容
 3. 禁止在 02_角色档案 中创建不含下划线分隔的角色文件（必须是 '前缀_姓名.md' 格式）
