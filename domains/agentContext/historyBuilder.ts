@@ -336,7 +336,11 @@ export const buildSimpleHistory = (
     if (msg.role === 'model' && msg.rawParts?.some((p: any) => p.functionCall) && !callToResponsesMap.has(msg.id)) {
       const msgIdx = messages.indexOf(msg);
       const nextMsg = messages[msgIdx + 1];
-      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call: msgId=${msg.id}, nextMsgRole=${nextMsg?.role}, nextMsgId=${nextMsg?.id}`);
+      const toolNames = (msg.rawParts || [])
+        .filter((p: any) => p.functionCall)
+        .map((p: any) => `${p.functionCall.name}(${JSON.stringify(p.functionCall.args).slice(0, 80)})`)
+        .join('; ');
+      console.warn(`[buildSimpleHistory] 丢弃孤立 tool_call: msgId=${msg.id}, nextMsgRole=${nextMsg?.role}, nextMsgId=${nextMsg?.id}, tools=[${toolNames}], text=${msg.text?.slice(0, 100)}`);
       continue;
     }
 

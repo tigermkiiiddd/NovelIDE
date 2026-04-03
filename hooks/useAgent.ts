@@ -300,6 +300,7 @@ export const useAgent = (
     }
 
     // --- 技能触发检测：用户消息立即触发一次（不推进轮次） ---
+    console.log('[sendMessage] triggerSkill 调用:', userMessage.text);
     triggerSkill(userMessage.text);
 
     setTimeout(() => engine.processTurn(), 0);

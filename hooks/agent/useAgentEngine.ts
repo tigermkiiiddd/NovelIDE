@@ -479,6 +479,12 @@ export const useAgentEngine = ({
           // AI thinking 独立显示，不再触发技能激活
           // (技能激活改为通过用户意图 / 工具名 触发，不再依赖 thinking 文本匹配)
 
+          // --- 工具执行完成后：技能触发检测 ---
+          // 即使 LLM 调用了工具，也需要检测是否触发了技能
+          // 用户输入如"设计女主角"可能在工具轮中被触发
+          const latestUserMsgForSkill = currentMessages.filter(m => m.role === 'user').pop();
+          detectSkillTriggers(latestUserMsgForSkill?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
+
         } else {
           // 没有工具调用，直接结束
           console.warn(
