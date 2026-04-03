@@ -1,7 +1,8 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
+import { forceCenter, forceCollide, forceManyBody, forceRadial } from 'd3-force-3d';
 import { useRelationshipStore, RelationshipState } from '../stores/relationshipStore';
-import { CharacterRelation, PRESET_RELATION_TYPES, RelationType } from '../types';
+import { CharacterRelation } from '../types';
 import { Search, X, Filter, Maximize2, RotateCcw } from 'lucide-react';
 
 // ============================================
@@ -33,6 +34,10 @@ const getRelationColor = (type: string) => RELATION_COLOR_MAP[type] || DEFAULT_C
 
 const STRENGTH_WIDTH: Record<string, number> = { '强': 3, '中': 2, '弱': 1 };
 const STRENGTH_PARTICLES: Record<string, number> = { '强': 4, '中': 2, '弱': 0 };
+
+const getNodeRadius = (node: Pick<GraphNode, 'val'>) => Math.max(16, 11 + (node.val || 1) * 2.4);
+
+const getPairKey = (from: string, to: string) => [from, to].sort().join('||');
 
 // ============================================
 // Props
@@ -147,12 +152,18 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const [highlightNode, setHighlightNode] = useState<string | null>(focusCharacter || null);
+  const [selectedNode, setSelectedNode] = useState<string | null>(focusCharacter || null);
+  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [selectedLink, setSelectedLink] = useState<{ relation: CharacterRelation; x: number; y: number } | null>(null);
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [containerWidth, setContainerWidth] = useState(800);
+
+  useEffect(() => {
+    setSelectedNode(focusCharacter || null);
+    setHoveredNode(null);
+  }, [focusCharacter]);
 
   // 监听容器宽度
   useEffect(() => {
@@ -211,64 +222,65 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       isFocus: name === focusCharacter,
     }));
 
-    // 同一对节点多条关系时，分配不同曲率
-    const pairCount: Record<string, number> = {};
-    const pairIndex: Record<string, number> = {};
-
-    const links: GraphLink[] = filteredRelations.map(r => {
-      const pairKey = [r.from, r.to].sort().join('||');
-      pairCount[pairKey] = (pairCount[pairKey] || 0) + 1;
-      const idx = pairCount[pairKey] - 1;
-      pairIndex[pairKey] = idx;
-
-      const totalForPair = pairCount[pairKey];
-      // 如果后续发现同对有更多关系，curvature 会在下一轮修正
-      // 这里先简单分配
-      const curvature = totalForPair <= 1 ? 0 : 0.2 * (idx + 1);
-
-      return {
-        source: r.from,
-        target: r.to,
-        relation: r,
-        curvature,
-      };
+    // 同一对节点多条关系时，给每条边稳定分配不同曲率
+    const pairGroups = new Map<string, CharacterRelation[]>();
+    filteredRelations.forEach(relation => {
+      const pairKey = getPairKey(relation.from, relation.to);
+      const group = pairGroups.get(pairKey);
+      if (group) group.push(relation);
+      else pairGroups.set(pairKey, [relation]);
     });
 
-    // 修正曲率：如果同对有多条，第一轮 count 可能不准
-    const finalLinks = links.map(link => {
-      const pairKey = [link.relation.from, link.relation.to].sort().join('||');
-      const total = pairCount[pairKey];
-      if (total <= 1) {
-        link.curvature = 0;
-      } else {
-        // 重新分配
-        const idx = pairIndex[pairKey];
-        link.curvature = 0.15 * ((idx % 2 === 0 ? 1 : -1) * Math.ceil((idx + 1) / 2));
-      }
-      return link;
+    const finalLinks: GraphLink[] = [];
+    pairGroups.forEach(group => {
+      group.forEach((relation, idx) => {
+        const curvature = group.length <= 1
+          ? 0
+          : 0.16 * (idx % 2 === 0 ? 1 : -1) * Math.ceil((idx + 1) / 2);
+
+        finalLinks.push({
+          source: relation.from,
+          target: relation.to,
+          relation,
+          curvature,
+        });
+      });
     });
 
     return { nodes, links: finalLinks };
   }, [filteredRelations, focusCharacter]);
 
-  // 高亮邻居
-  const highlightNodes = useMemo(() => {
-    if (!highlightNode) return new Set<string>();
+  const activeNode = hoveredNode || selectedNode;
+
+  // 选中节点及其一级邻居
+  const firstDegreeNodes = useMemo(() => {
+    if (!activeNode) return new Set<string>();
     const neighbors = new Set<string>();
-    neighbors.add(highlightNode);
+    neighbors.add(activeNode);
     filteredRelations.forEach(r => {
-      if (r.from === highlightNode) neighbors.add(r.to);
-      if (r.to === highlightNode) neighbors.add(r.from);
+      if (r.from === activeNode) neighbors.add(r.to);
+      if (r.to === activeNode) neighbors.add(r.from);
     });
     return neighbors;
-  }, [highlightNode, filteredRelations]);
+  }, [activeNode, filteredRelations]);
+
+  const firstDegreeLinks = useMemo(() => {
+    if (!activeNode) return new Set<string>();
+    const links = new Set<string>();
+    filteredRelations.forEach(r => {
+      if (r.from === activeNode || r.to === activeNode) {
+        links.add(`${r.from}=>${r.to}=>${r.type}=>${r.description || ''}`);
+      }
+    });
+    return links;
+  }, [activeNode, filteredRelations]);
 
   const handleNodeHover = useCallback((node: any) => {
-    setHighlightNode(node?.id || focusCharacter || null);
-  }, [focusCharacter]);
+    setHoveredNode(node?.id || null);
+  }, []);
 
   const handleNodeClick = useCallback((node: any) => {
-    setHighlightNode(node.id);
+    setSelectedNode(node.id);
     onNodeClick?.(node.id);
   }, [onNodeClick]);
 
@@ -283,7 +295,8 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
   const handleBackgroundClick = useCallback(() => {
     setSelectedLink(null);
-    setHighlightNode(focusCharacter || null);
+    setHoveredNode(null);
+    setSelectedNode(focusCharacter || null);
     onLinkHover?.(null);
   }, [focusCharacter, onLinkHover]);
 
@@ -295,15 +308,70 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     onBackgroundDoubleClick?.(event.offsetX, event.offsetY);
   }, [onBackgroundDoubleClick]);
 
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg) return;
+
+    const spreadBase = Math.max(220, Math.min(containerWidth, height) * 0.36);
+    const linkDistance = Math.max(140, Math.min(180, spreadBase * 0.62));
+    const radialRadius = Math.max(140, Math.min(300, spreadBase * 0.8));
+
+    const linkForce = fg.d3Force('link');
+    if (linkForce) {
+      linkForce
+        .distance(linkDistance)
+        .strength((link: any) => {
+          const strength = link.relation?.strength;
+          if (strength === '强') return 0.95;
+          if (strength === '中') return 0.8;
+          return 0.68;
+        });
+    }
+
+    fg.d3Force(
+      'charge',
+      forceManyBody()
+        .strength((node: any) => -Math.min(900, 180 + (node.val || 1) * 55))
+        .distanceMin(60)
+        .distanceMax(spreadBase * 2.4)
+    );
+
+    fg.d3Force(
+      'collide',
+      forceCollide((node: any) => getNodeRadius(node) + 18).iterations(3)
+    );
+
+    fg.d3Force('center', forceCenter(0, 0));
+    fg.d3Force(
+      'radial',
+      forceRadial(graphData.nodes.length > 2 ? radialRadius : 0, 0, 0)
+        .strength(graphData.nodes.length > 2 ? 0.06 : 0)
+    );
+
+    fg.d3ReheatSimulation();
+  }, [containerWidth, graphData, height]);
+
+  useEffect(() => {
+    if (!fgRef.current || graphData.nodes.length === 0) return;
+
+    const timer = window.setTimeout(() => {
+      fgRef.current?.zoomToFit(500, 80);
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [graphData]);
+
   // 自定义节点绘制
   const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const isHighlight = highlightNodes.size > 0 && highlightNodes.has(node.id);
-    const isDimmed = highlightNodes.size > 0 && !highlightNodes.has(node.id);
+    const isSelected = selectedNode === node.id;
+    const isNeighbor = activeNode ? firstDegreeNodes.has(node.id) && node.id !== activeNode : false;
+    const isHighlighted = !!activeNode && (isSelected || node.id === activeNode || isNeighbor);
+    const isDimmed = !!activeNode && !isHighlighted;
     const isFocus = node.id === focusCharacter;
 
-    const baseRadius = Math.max(14, 10 + (node.val || 1) * 2);
-    const radius = isHighlight ? baseRadius * 1.2 : baseRadius;
-    const alpha = isDimmed ? 0.15 : 1;
+    const baseRadius = getNodeRadius(node);
+    const radius = baseRadius;
+    const alpha = isDimmed ? 0.18 : 1;
 
     // 确保节点位置有效
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y) || !Number.isFinite(radius)) {
@@ -313,8 +381,12 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const { x, y } = node;
 
     // 外部光晕
-    if (isFocus || isHighlight) {
-      const glowColor = isFocus ? 'rgba(56, 189, 248, 0.25)' : 'rgba(200, 210, 230, 0.2)';
+    if (isFocus || isSelected || isNeighbor) {
+      const glowColor = isSelected || node.id === activeNode
+        ? 'rgba(59, 130, 246, 0.28)'
+        : isNeighbor
+          ? 'rgba(34, 197, 94, 0.22)'
+          : 'rgba(56, 189, 248, 0.25)';
       ctx.beginPath();
       ctx.arc(x, y, radius * 2.5, 0, Math.PI * 2);
       const glow = ctx.createRadialGradient(x, y, radius, x, y, radius * 2.5);
@@ -325,24 +397,32 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     }
 
     // 投影
-    ctx.shadowColor = isFocus ? 'rgba(56, 189, 248, 0.5)' : 'rgba(0, 0, 0, 0.4)';
-    ctx.shadowBlur = isFocus ? 16 : 8;
+    ctx.shadowColor = isSelected || node.id === activeNode
+      ? 'rgba(59, 130, 246, 0.48)'
+      : isNeighbor
+        ? 'rgba(34, 197, 94, 0.36)'
+        : isFocus
+          ? 'rgba(56, 189, 248, 0.5)'
+          : 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = isSelected || node.id === activeNode ? 18 : isNeighbor || isFocus ? 14 : 8;
     ctx.shadowOffsetY = 3;
 
     // 节点渐变填充
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
-    const nodeColor = isFocus ? '#38bdf8' : isHighlight ? '#e2e8f0' : '#475569';
     const grad = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius);
     if (isDimmed) {
       grad.addColorStop(0, `rgba(71, 85, 105, ${alpha})`);
       grad.addColorStop(1, `rgba(51, 65, 85, ${alpha})`);
+    } else if (isSelected || node.id === activeNode) {
+      grad.addColorStop(0, '#60a5fa');
+      grad.addColorStop(1, '#2563eb');
+    } else if (isNeighbor) {
+      grad.addColorStop(0, '#86efac');
+      grad.addColorStop(1, '#16a34a');
     } else if (isFocus) {
       grad.addColorStop(0, '#7dd3fc');
       grad.addColorStop(1, '#0ea5e9');
-    } else if (isHighlight) {
-      grad.addColorStop(0, '#cbd5e1');
-      grad.addColorStop(1, '#94a3b8');
     } else {
       grad.addColorStop(0, '#64748b');
       grad.addColorStop(1, '#334155');
@@ -357,8 +437,21 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     ctx.shadowOffsetY = 0;
 
     // 边框
-    ctx.strokeStyle = isFocus ? '#bae6fd' : isHighlight ? '#e2e8f0' : 'rgba(148, 163, 184, 0.3)';
-    ctx.lineWidth = isFocus ? 2.5 : isHighlight ? 2 : 1;
+    ctx.strokeStyle = isSelected || node.id === activeNode
+      ? '#bfdbfe'
+      : isNeighbor
+        ? '#bbf7d0'
+        : isFocus
+          ? '#bae6fd'
+          : 'rgba(148, 163, 184, 0.3)';
+    ctx.lineWidth = isSelected || node.id === activeNode ? 3 : isNeighbor || isFocus ? 2 : 1;
+    ctx.stroke();
+
+    // 内圈让节点层次更清晰
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(6, radius - 4), 0, Math.PI * 2);
+    ctx.strokeStyle = isDimmed ? `rgba(226, 232, 240, ${alpha * 0.15})` : 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
     // 角色首字母（中文取第一个字）
@@ -373,28 +466,44 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     // 名称标签（放大镜下才显示）
     if (globalScale > 0.6) {
       const labelFontSize = Math.max(10, Math.min(13, 11 / globalScale));
-      ctx.font = `${isFocus || isHighlight ? 600 : 400} ${labelFontSize}px -apple-system, sans-serif`;
+      ctx.font = `${isHighlighted || isFocus ? 600 : 400} ${labelFontSize}px -apple-system, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
+      const labelY = y + radius + 7;
+      const labelWidth = ctx.measureText(node.name).width;
+      ctx.fillStyle = isDimmed ? `rgba(15, 23, 42, ${alpha * 0.5})` : 'rgba(15, 23, 42, 0.72)';
+      ctx.beginPath();
+      ctx.roundRect(x - labelWidth / 2 - 6, labelY - 2, labelWidth + 12, labelFontSize + 6, 8);
+      ctx.fill();
       ctx.fillStyle = isDimmed ? `rgba(148, 163, 184, ${alpha})` : '#f8fafc';
-      ctx.globalAlpha = alpha * (isHighlight || isFocus ? 1 : 0.8);
-      ctx.fillText(node.name, x, y + radius + 5);
+      ctx.globalAlpha = alpha * (isHighlighted || isFocus ? 1 : 0.8);
+      ctx.fillText(node.name, x, labelY);
     }
 
     ctx.globalAlpha = 1;
-  }, [highlightNodes, focusCharacter]);
+  }, [activeNode, firstDegreeNodes, focusCharacter, selectedNode]);
+
+  const paintNodePointerArea = useCallback((node: any, color: string, ctx: CanvasRenderingContext2D) => {
+    const radius = getNodeRadius(node) + 2;
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) {
+      return;
+    }
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, Math.PI * 2, false);
+    ctx.fill();
+  }, []);
 
   // 自定义连线绘制
   const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
-    const isHighlight = highlightNodes.size > 0 &&
-      highlightNodes.has(typeof link.source === 'object' ? link.source.id : link.source) &&
-      highlightNodes.has(typeof link.target === 'object' ? link.target.id : link.target);
-    const isDimmed = highlightNodes.size > 0 && !isHighlight;
-
     const relation: CharacterRelation = link.relation;
+    const linkKey = `${relation.from}=>${relation.to}=>${relation.type}=>${relation.description || ''}`;
+    const isFirstDegreeLink = !!activeNode && firstDegreeLinks.has(linkKey);
+    const isDimmed = !!activeNode && !isFirstDegreeLink;
     const color = getRelationColor(relation.type);
     const width = STRENGTH_WIDTH[relation.strength] || 2;
-    const alpha = isDimmed ? 0.06 : isHighlight ? 0.9 : 0.4;
+    const alpha = isDimmed ? 0.08 : isFirstDegreeLink ? 0.95 : 0.42;
 
     // 曲线绘制
     const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0 };
@@ -408,7 +517,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const curv = link.curvature || 0;
 
     // 外发光（高亮时）
-    if (isHighlight && !isDimmed) {
+    if (isFirstDegreeLink && !isDimmed) {
       ctx.beginPath();
       if (curv === 0) {
         ctx.moveTo(src.x, src.y);
@@ -433,7 +542,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     // 主连线
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
-    ctx.lineWidth = isHighlight ? width * 2 : width;
+    ctx.lineWidth = isFirstDegreeLink ? width * 2.2 : width;
     ctx.lineCap = 'round';
     ctx.beginPath();
     if (curv === 0) {
@@ -453,7 +562,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     ctx.stroke();
 
     // 关系标签（高亮或缩放足够时显示）
-    if (!isDimmed && (isHighlight || globalScale > 0.7) && curv !== 0) {
+    if (!isDimmed && (isFirstDegreeLink || globalScale > 0.7) && curv !== 0) {
       const midX = (src.x + tgt.x) / 2;
       const midY = (src.y + tgt.y) / 2;
       const dx = tgt.x - src.x;
@@ -481,19 +590,48 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     }
 
     ctx.globalAlpha = 1;
-  }, [highlightNodes]);
+  }, [activeNode, firstDegreeLinks]);
 
   const handleEngineStop = useCallback(() => {
-    if (focusCharacter && fgRef.current) {
+    if (!fgRef.current) return;
+
+    if (focusCharacter) {
       fgRef.current.centerAt(0, 0, 800);
+    } else if (graphData.nodes.length > 1) {
+      fgRef.current.zoomToFit(400, 80);
     }
-  }, [focusCharacter]);
+  }, [focusCharacter, graphData.nodes.length]);
 
   const resetView = useCallback(() => {
     if (fgRef.current) {
       fgRef.current.zoomToFit(400, 60);
       setTimeout(() => fgRef.current.zoomToFit(400, 60), 200);
     }
+  }, []);
+
+  const relaxLayout = useCallback(() => {
+    graphData.nodes.forEach(node => {
+      delete (node as any).fx;
+      delete (node as any).fy;
+    });
+
+    if (fgRef.current) {
+      fgRef.current.d3ReheatSimulation();
+      setTimeout(() => fgRef.current?.zoomToFit(500, 80), 350);
+    }
+  }, [graphData]);
+
+  const handleNodeDragEnd = useCallback((node: any) => {
+    node.fx = node.x;
+    node.fy = node.y;
+    fgRef.current?.d3ReheatSimulation();
+
+    window.setTimeout(() => {
+      if (!node) return;
+      node.fx = undefined;
+      node.fy = undefined;
+      fgRef.current?.d3ReheatSimulation();
+    }, 120);
   }, []);
 
   // 类型筛选切换
@@ -518,6 +656,16 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         height,
       }}
     >
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'radial-gradient(circle at top, rgba(56, 189, 248, 0.12), transparent 40%), radial-gradient(circle at bottom, rgba(168, 85, 247, 0.10), transparent 45%)',
+          pointerEvents: 'none',
+          zIndex: 0,
+        }}
+      />
+
       {/* 工具栏 */}
       <div
         style={{
@@ -607,6 +755,23 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         >
           <Maximize2 size={14} />
         </button>
+
+        <button
+          onClick={relaxLayout}
+          title="重新散开"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '6px 10px',
+            borderRadius: 10,
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            color: '#94a3b8',
+            cursor: 'pointer',
+          }}
+        >
+          <RotateCcw size={14} />
+        </button>
       </div>
 
       {/* 筛选面板 */}
@@ -661,12 +826,14 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         linkColor={() => 'transparent'}
         linkLineDash={null}
         linkDirectionalParticles={(link: any) => STRENGTH_PARTICLES[link.relation?.strength] || 0}
+        linkDirectionalArrowLength={(link: any) => link.relation?.isBidirectional ? 0 : 4}
+        linkDirectionalArrowColor={(link: any) => getRelationColor(link.relation?.type)}
         linkDirectionalParticleWidth={2.5}
         linkDirectionalParticleColor={(link: any) => getRelationColor(link.relation?.type)}
         linkDirectionalParticleSpeed={0.004}
         onNodeHover={handleNodeHover}
         onNodeClick={handleNodeClick}
-        onNodeDragEnd={(node: any) => { node.fx = node.x; node.fy = node.y; }}
+        onNodeDragEnd={handleNodeDragEnd}
         onNodeDoubleClick={(node: any) => onNodeDoubleClick?.(node.id)}
         onLinkClick={handleLinkClick as any}
         onLinkHover={handleLinkHover as any}
@@ -675,6 +842,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         onEngineStop={handleEngineStop}
         nodeCanvasObject={paintNode as any}
         nodeCanvasObjectMode={() => 'replace'}
+        nodePointerAreaPaint={paintNodePointerArea as any}
         linkCanvasObject={paintLink as any}
         linkCanvasObjectMode={() => 'replace'}
         cooldownTicks={500}
@@ -685,12 +853,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         minZoom={0.3}
         maxZoom={5}
         d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
-        d3Force={{
-          link: { distance: 120, strength: 0.6 },
-          charge: { strength: -400 },
-          center: { x: 0.5, y: 0.5, strength: 0.05 },
-        }}
+        d3VelocityDecay={0.22}
       />
 
       {/* Tooltip */}
