@@ -33,11 +33,63 @@ const DEFAULT_COLOR = '#94a3b8';
 const getRelationColor = (type: string) => RELATION_COLOR_MAP[type] || DEFAULT_COLOR;
 
 const STRENGTH_WIDTH: Record<string, number> = { '强': 3, '中': 2, '弱': 1 };
-const STRENGTH_PARTICLES: Record<string, number> = { '强': 4, '中': 2, '弱': 0 };
 
 const getNodeRadius = (node: Pick<GraphNode, 'val'>) => Math.max(16, 11 + (node.val || 1) * 2.4);
 
 const getPairKey = (from: string, to: string) => [from, to].sort().join('||');
+
+const getLinkIdentity = (relation: CharacterRelation) =>
+  `${relation.from}=>${relation.to}=>${relation.type}=>${relation.description || ''}`;
+
+const getCurveControlPoint = (
+  src: { x: number; y: number },
+  tgt: { x: number; y: number },
+  curvature: number,
+) => {
+  const midX = (src.x + tgt.x) / 2;
+  const midY = (src.y + tgt.y) / 2;
+  const dx = tgt.x - src.x;
+  const dy = tgt.y - src.y;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+
+  return {
+    x: midX + (-dy / len) * curvature * len * 0.5,
+    y: midY + (dx / len) * curvature * len * 0.5,
+    len,
+  };
+};
+
+const getQuadraticPoint = (
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  t: number,
+) => {
+  const mt = 1 - t;
+  return {
+    x: mt * mt * p0.x + 2 * mt * t * p1.x + t * t * p2.x,
+    y: mt * mt * p0.y + 2 * mt * t * p1.y + t * t * p2.y,
+  };
+};
+
+const getQuadraticTangent = (
+  p0: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  t: number,
+) => ({
+  x: 2 * (1 - t) * (p1.x - p0.x) + 2 * t * (p2.x - p1.x),
+  y: 2 * (1 - t) * (p1.y - p0.y) + 2 * t * (p2.y - p1.y),
+});
+
+const getCurvatureSpread = (count: number, index: number) => {
+  if (count <= 1) return 0;
+  const center = (count - 1) / 2;
+  const distanceFromCenter = index - center;
+  const step = count <= 3 ? 0.42 : 0.3;
+
+  return distanceFromCenter * step;
+};
 
 // ============================================
 // Props
@@ -154,7 +206,8 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
   const [selectedNode, setSelectedNode] = useState<string | null>(focusCharacter || null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-  const [selectedLink, setSelectedLink] = useState<{ relation: CharacterRelation; x: number; y: number } | null>(null);
+  const [hoveredLink, setHoveredLink] = useState<CharacterRelation | null>(null);
+  const [pointerPosition, setPointerPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterPanel, setShowFilterPanel] = useState(false);
@@ -233,10 +286,12 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
     const finalLinks: GraphLink[] = [];
     pairGroups.forEach(group => {
-      group.forEach((relation, idx) => {
-        const curvature = group.length <= 1
-          ? 0
-          : 0.16 * (idx % 2 === 0 ? 1 : -1) * Math.ceil((idx + 1) / 2);
+      const sortedGroup = [...group].sort((a, b) => getLinkIdentity(a).localeCompare(getLinkIdentity(b), 'zh-CN'));
+      const [canonicalFrom] = [sortedGroup[0].from, sortedGroup[0].to].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+
+      sortedGroup.forEach((relation, idx) => {
+        const baseCurvature = getCurvatureSpread(sortedGroup.length, idx);
+        const curvature = relation.from === canonicalFrom ? baseCurvature : -baseCurvature;
 
         finalLinks.push({
           source: relation.from,
@@ -269,7 +324,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const links = new Set<string>();
     filteredRelations.forEach(r => {
       if (r.from === activeNode || r.to === activeNode) {
-        links.add(`${r.from}=>${r.to}=>${r.type}=>${r.description || ''}`);
+        links.add(getLinkIdentity(r));
       }
     });
     return links;
@@ -285,24 +340,24 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   }, [onNodeClick]);
 
   const handleLinkClick = useCallback((link: any, event: MouseEvent) => {
-    setSelectedLink({
-      relation: link.relation,
-      x: event.offsetX,
-      y: event.offsetY,
-    });
     onLinkClick?.(link as GraphLink, event);
   }, [onLinkClick]);
 
   const handleBackgroundClick = useCallback(() => {
-    setSelectedLink(null);
+    setHoveredLink(null);
     setHoveredNode(null);
     setSelectedNode(focusCharacter || null);
     onLinkHover?.(null);
   }, [focusCharacter, onLinkHover]);
 
   const handleLinkHover = useCallback((link: any) => {
+    setHoveredLink(link?.relation || null);
     onLinkHover?.(link ? (link as GraphLink) : null);
   }, [onLinkHover]);
+
+  const handlePointerMove = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    setPointerPosition({ x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY });
+  }, []);
 
   const handleBackgroundDoubleClick = useCallback((event: MouseEvent) => {
     onBackgroundDoubleClick?.(event.offsetX, event.offsetY);
@@ -322,9 +377,9 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         .distance(linkDistance)
         .strength((link: any) => {
           const strength = link.relation?.strength;
-          if (strength === '强') return 0.95;
-          if (strength === '中') return 0.8;
-          return 0.68;
+          if (strength === '强') return 0.32;
+          if (strength === '中') return 0.24;
+          return 0.18;
         });
     }
 
@@ -345,21 +400,11 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     fg.d3Force(
       'radial',
       forceRadial(graphData.nodes.length > 2 ? radialRadius : 0, 0, 0)
-        .strength(graphData.nodes.length > 2 ? 0.06 : 0)
+        .strength(graphData.nodes.length > 2 ? 0.008 : 0)
     );
 
     fg.d3ReheatSimulation();
   }, [containerWidth, graphData, height]);
-
-  useEffect(() => {
-    if (!fgRef.current || graphData.nodes.length === 0) return;
-
-    const timer = window.setTimeout(() => {
-      fgRef.current?.zoomToFit(500, 80);
-    }, 450);
-
-    return () => window.clearTimeout(timer);
-  }, [graphData]);
 
   // 自定义节点绘制
   const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -454,10 +499,16 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // 角色首字母（中文取第一个字）
-    const label = node.name.length > 2 ? node.name.slice(0, 2) : node.name;
-    const fontSize = Math.max(10, radius * 0.7);
+    // 球内文字至少容纳 3 个汉字，不再用过大的字号
+    const label = node.name.length > 3 ? node.name.slice(0, 3) : node.name;
+    let fontSize = Math.max(9, radius * 0.48);
     ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+    const maxInnerWidth = radius * 1.55;
+    const measuredWidth = ctx.measureText(label).width;
+    if (measuredWidth > maxInnerWidth) {
+      fontSize = Math.max(8, fontSize * (maxInnerWidth / measuredWidth));
+      ctx.font = `bold ${fontSize}px -apple-system, sans-serif`;
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = isDimmed ? `rgba(100, 116, 139, ${alpha})` : isFocus ? '#ffffff' : '#f1f5f9';
@@ -495,15 +546,58 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     ctx.fill();
   }, []);
 
+  const paintLinkPointerArea = useCallback((link: any, color: string, ctx: CanvasRenderingContext2D) => {
+    const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0, val: 1 };
+    const tgt = typeof link.target === 'object' ? link.target : { x: 0, y: 0, val: 1 };
+    if (!Number.isFinite(src.x) || !Number.isFinite(src.y) || !Number.isFinite(tgt.x) || !Number.isFinite(tgt.y)) {
+      return;
+    }
+
+    const curv = link.curvature || 0;
+    const srcRadius = typeof link.source === 'object' ? getNodeRadius(link.source) : 16;
+    const tgtRadius = typeof link.target === 'object' ? getNodeRadius(link.target) : 16;
+    const control = getCurveControlPoint(src, tgt, curv);
+    const pathStart = curv === 0
+      ? {
+          x: src.x + ((tgt.x - src.x) / control.len) * srcRadius,
+          y: src.y + ((tgt.y - src.y) / control.len) * srcRadius,
+        }
+      : getQuadraticPoint(src, control, tgt, 0.08);
+    const pathEnd = curv === 0
+      ? {
+          x: tgt.x - ((tgt.x - src.x) / control.len) * tgtRadius,
+          y: tgt.y - ((tgt.y - src.y) / control.len) * tgtRadius,
+        }
+      : getQuadraticPoint(src, control, tgt, 0.92);
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    if (curv === 0) {
+      ctx.moveTo(pathStart.x, pathStart.y);
+      ctx.lineTo(pathEnd.x, pathEnd.y);
+    } else {
+      ctx.moveTo(pathStart.x, pathStart.y);
+      ctx.quadraticCurveTo(control.x, control.y, pathEnd.x, pathEnd.y);
+    }
+    ctx.stroke();
+  }, []);
+
   // 自定义连线绘制
   const paintLink = useCallback((link: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const relation: CharacterRelation = link.relation;
-    const linkKey = `${relation.from}=>${relation.to}=>${relation.type}=>${relation.description || ''}`;
+    const linkKey = getLinkIdentity(relation);
+    const hoveredLinkKey = hoveredLink
+      ? getLinkIdentity(hoveredLink)
+      : null;
+    const isHovered = hoveredLinkKey === linkKey;
     const isFirstDegreeLink = !!activeNode && firstDegreeLinks.has(linkKey);
-    const isDimmed = !!activeNode && !isFirstDegreeLink;
+    const isHighlighted = isHovered || isFirstDegreeLink;
+    const isDimmed = !isHovered && !!activeNode && !isFirstDegreeLink;
     const color = getRelationColor(relation.type);
     const width = STRENGTH_WIDTH[relation.strength] || 2;
-    const alpha = isDimmed ? 0.08 : isFirstDegreeLink ? 0.95 : 0.42;
+    const alpha = isHovered ? 1 : isDimmed ? 0.08 : isFirstDegreeLink ? 0.95 : 0.42;
 
     // 曲线绘制
     const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0 };
@@ -515,92 +609,124 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     }
 
     const curv = link.curvature || 0;
+    const srcRadius = typeof link.source === 'object' ? getNodeRadius(link.source) : 16;
+    const tgtRadius = typeof link.target === 'object' ? getNodeRadius(link.target) : 16;
+    const control = getCurveControlPoint(src, tgt, curv);
+    const pathStart = curv === 0
+      ? {
+          x: src.x + ((tgt.x - src.x) / control.len) * srcRadius,
+          y: src.y + ((tgt.y - src.y) / control.len) * srcRadius,
+        }
+      : getQuadraticPoint(src, control, tgt, 0.08);
+    const pathEnd = curv === 0
+      ? {
+          x: tgt.x - ((tgt.x - src.x) / control.len) * tgtRadius,
+          y: tgt.y - ((tgt.y - src.y) / control.len) * tgtRadius,
+        }
+      : getQuadraticPoint(src, control, tgt, 0.92);
 
     // 外发光（高亮时）
-    if (isFirstDegreeLink && !isDimmed) {
+    if (isHighlighted && !isDimmed) {
       ctx.beginPath();
       if (curv === 0) {
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
+        ctx.moveTo(pathStart.x, pathStart.y);
+        ctx.lineTo(pathEnd.x, pathEnd.y);
       } else {
-        const midX = (src.x + tgt.x) / 2;
-        const midY = (src.y + tgt.y) / 2;
-        const dx = tgt.x - src.x;
-        const dy = tgt.y - src.y;
-        const len = Math.sqrt(dx * dx + dy * dy) || 1;
-        const cpX = midX + (-dy / len) * curv * len * 0.5;
-        const cpY = midY + (dx / len) * curv * len * 0.5;
-        ctx.moveTo(src.x, src.y);
-        ctx.quadraticCurveTo(cpX, cpY, tgt.x, tgt.y);
+        ctx.moveTo(pathStart.x, pathStart.y);
+        ctx.quadraticCurveTo(control.x, control.y, pathEnd.x, pathEnd.y);
       }
-      ctx.strokeStyle = `${color}30`;
-      ctx.lineWidth = width * 3 + 4;
-      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width * 2 + 3;
+      ctx.globalAlpha = isHovered ? 0.3 : 0.18;
       ctx.stroke();
     }
 
     // 主连线
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = color;
-    ctx.lineWidth = isFirstDegreeLink ? width * 2.2 : width;
+    ctx.lineWidth = isHovered ? width * 2.1 : isFirstDegreeLink ? width * 1.7 : width;
     ctx.lineCap = 'round';
     ctx.beginPath();
     if (curv === 0) {
-      ctx.moveTo(src.x, src.y);
-      ctx.lineTo(tgt.x, tgt.y);
+      ctx.moveTo(pathStart.x, pathStart.y);
+      ctx.lineTo(pathEnd.x, pathEnd.y);
     } else {
-      const midX = (src.x + tgt.x) / 2;
-      const midY = (src.y + tgt.y) / 2;
-      const dx = tgt.x - src.x;
-      const dy = tgt.y - src.y;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const cpX = midX + (-dy / len) * curv * len * 0.5;
-      const cpY = midY + (dx / len) * curv * len * 0.5;
-      ctx.moveTo(src.x, src.y);
-      ctx.quadraticCurveTo(cpX, cpY, tgt.x, tgt.y);
+      ctx.moveTo(pathStart.x, pathStart.y);
+      ctx.quadraticCurveTo(control.x, control.y, pathEnd.x, pathEnd.y);
     }
     ctx.stroke();
 
+    if (!relation.isBidirectional) {
+      const arrowPoint = curv === 0
+        ? pathEnd
+        : getQuadraticPoint(pathStart, control, pathEnd, 0.96);
+      const tangent = curv === 0
+        ? { x: pathEnd.x - pathStart.x, y: pathEnd.y - pathStart.y }
+        : getQuadraticTangent(pathStart, control, pathEnd, 0.96);
+      const tangentLen = Math.sqrt(tangent.x * tangent.x + tangent.y * tangent.y) || 1;
+      const ux = tangent.x / tangentLen;
+      const uy = tangent.y / tangentLen;
+      const arrowLength = isHovered ? 11 : 9;
+      const arrowWidth = isHovered ? 5.5 : 4.5;
+
+      ctx.beginPath();
+      ctx.moveTo(arrowPoint.x, arrowPoint.y);
+      ctx.lineTo(
+        arrowPoint.x - ux * arrowLength - uy * arrowWidth,
+        arrowPoint.y - uy * arrowLength + ux * arrowWidth,
+      );
+      ctx.lineTo(
+        arrowPoint.x - ux * arrowLength + uy * arrowWidth,
+        arrowPoint.y - uy * arrowLength - ux * arrowWidth,
+      );
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+    }
+
     // 关系标签（高亮或缩放足够时显示）
-    if (!isDimmed && (isFirstDegreeLink || globalScale > 0.7) && curv !== 0) {
-      const midX = (src.x + tgt.x) / 2;
-      const midY = (src.y + tgt.y) / 2;
-      const dx = tgt.x - src.x;
-      const dy = tgt.y - src.y;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const cpX = midX + (-dy / len) * curv * len * 0.5;
-      const cpY = midY + (dx / len) * curv * len * 0.5;
+    if (!isDimmed && (isHighlighted || globalScale > 0.7)) {
+      const labelPoint = curv === 0
+        ? {
+            x: (pathStart.x + pathEnd.x) / 2,
+            y: (pathStart.y + pathEnd.y) / 2,
+          }
+        : getQuadraticPoint(pathStart, control, pathEnd, 0.5);
+      const labelX = labelPoint.x;
+      const labelY = labelPoint.y - 1;
 
       const fontSize = Math.max(9, 11 / globalScale);
       ctx.font = `500 ${fontSize}px -apple-system, sans-serif`;
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
+      ctx.textBaseline = 'middle';
 
       // 标签背景
       const labelText = relation.type;
       const textWidth = ctx.measureText(labelText).width;
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillStyle = '#0f172a';
       ctx.globalAlpha = alpha;
       const padding = 3;
-      ctx.fillRect(cpX - textWidth / 2 - padding, cpY - fontSize - 5, textWidth + padding * 2, fontSize + 4);
+      const boxHeight = fontSize + 6;
+      ctx.beginPath();
+      ctx.roundRect(labelX - textWidth / 2 - padding, labelY - boxHeight / 2, textWidth + padding * 2, boxHeight, boxHeight / 2);
+      ctx.fill();
 
       ctx.fillStyle = color;
       ctx.globalAlpha = alpha;
-      ctx.fillText(labelText, cpX, cpY - 5);
+      ctx.fillText(labelText, labelX, labelY);
     }
 
     ctx.globalAlpha = 1;
-  }, [activeNode, firstDegreeLinks]);
+  }, [activeNode, firstDegreeLinks, hoveredLink]);
 
   const handleEngineStop = useCallback(() => {
     if (!fgRef.current) return;
 
     if (focusCharacter) {
       fgRef.current.centerAt(0, 0, 800);
-    } else if (graphData.nodes.length > 1) {
-      fgRef.current.zoomToFit(400, 80);
     }
-  }, [focusCharacter, graphData.nodes.length]);
+  }, [focusCharacter]);
 
   const resetView = useCallback(() => {
     if (fgRef.current) {
@@ -617,21 +743,18 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
     if (fgRef.current) {
       fgRef.current.d3ReheatSimulation();
-      setTimeout(() => fgRef.current?.zoomToFit(500, 80), 350);
     }
   }, [graphData]);
 
   const handleNodeDragEnd = useCallback((node: any) => {
     node.fx = node.x;
     node.fy = node.y;
-    fgRef.current?.d3ReheatSimulation();
 
     window.setTimeout(() => {
       if (!node) return;
       node.fx = undefined;
       node.fy = undefined;
-      fgRef.current?.d3ReheatSimulation();
-    }, 120);
+    }, 220);
   }, []);
 
   // 类型筛选切换
@@ -647,6 +770,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   return (
     <div
       ref={containerRef}
+      onMouseMove={handlePointerMove}
       style={{
         position: 'relative',
         borderRadius: 16,
@@ -825,12 +949,6 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         linkCurvature="curvature"
         linkColor={() => 'transparent'}
         linkLineDash={null}
-        linkDirectionalParticles={(link: any) => STRENGTH_PARTICLES[link.relation?.strength] || 0}
-        linkDirectionalArrowLength={(link: any) => link.relation?.isBidirectional ? 0 : 4}
-        linkDirectionalArrowColor={(link: any) => getRelationColor(link.relation?.type)}
-        linkDirectionalParticleWidth={2.5}
-        linkDirectionalParticleColor={(link: any) => getRelationColor(link.relation?.type)}
-        linkDirectionalParticleSpeed={0.004}
         onNodeHover={handleNodeHover}
         onNodeClick={handleNodeClick}
         onNodeDragEnd={handleNodeDragEnd}
@@ -845,6 +963,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         nodePointerAreaPaint={paintNodePointerArea as any}
         linkCanvasObject={paintLink as any}
         linkCanvasObjectMode={() => 'replace'}
+        linkPointerAreaPaint={paintLinkPointerArea as any}
         cooldownTicks={500}
         warmupTicks={200}
         enableNodeDrag={true}
@@ -853,16 +972,16 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
         minZoom={0.3}
         maxZoom={5}
         d3AlphaDecay={0.02}
-        d3VelocityDecay={0.22}
+        d3VelocityDecay={0.38}
       />
 
       {/* Tooltip */}
-      {selectedLink && (
+      {hoveredLink && (
         <Tooltip
-          x={selectedLink.x}
-          y={selectedLink.y}
-          relation={selectedLink.relation}
-          onClose={() => setSelectedLink(null)}
+          x={pointerPosition.x}
+          y={pointerPosition.y}
+          relation={hoveredLink}
+          onClose={() => setHoveredLink(null)}
         />
       )}
 
