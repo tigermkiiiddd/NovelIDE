@@ -25,6 +25,9 @@ export const fixWindowStart = (messages: ChatMessage[]): ChatMessage[] => {
 export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
   if (messages.length === 0) return messages;
 
+  console.log(`[fixWindowIntegrity] INPUT: ${messages.length} messages`);
+  messages.forEach((m, i) => console.log(`  [${i}] role=${m.role}, id=${m.id}, hasRawParts=${!!m.rawParts}, isToolOutput=${m.isToolOutput}, text=${m.text?.substring(0, 50)}`));
+
   const result: ChatMessage[] = [];
   let lastToolCallsMessage: ChatMessage | null = null;
 
@@ -37,6 +40,7 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
 
     if (hasToolResponse) {
       if (!lastToolCallsMessage) {
+        console.log(`[fixWindowIntegrity] SKIP isolated toolResponse: msgId=${message.id}, role=${message.role}, text=${message.text?.substring(0, 50)}`);
         continue;
       }
     } else {
@@ -70,6 +74,7 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
       }
 
       if (!hasNextResponse) {
+        console.log(`[fixWindowIntegrity] SKIP isolated toolCall: msgId=${message.id}, text=${message.text?.substring(0, 50)}`);
         continue;
       }
 
@@ -78,6 +83,9 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
 
     result.push(message);
   }
+
+  console.log(`[fixWindowIntegrity] OUTPUT: ${result.length} messages`);
+  result.forEach((m, i) => console.log(`  [${i}] role=${m.role}, id=${m.id}, text=${m.text?.substring(0, 50)}`));
 
   return result;
 };

@@ -277,6 +277,8 @@ export const buildSimpleHistory = (
 
   if (messages.length === 0) return [];
 
+  console.log(`[buildSimpleHistory] INPUT: ${messages.length} messages`);
+
   // 1. 计算每条消息的已过轮次
   const roundsMap = computeRoundsElapsed(messages);
 
@@ -417,6 +419,9 @@ export const buildSimpleHistory = (
 
   // 4. 移除真正被丢弃的消息（只过滤 droppedIds，不影响已 push 的 system response）
   const finalMessages = resultMessages.filter(m => !droppedIds.has(m.id));
+
+  console.log(`[buildSimpleHistory] OUTPUT: ${finalMessages.length} messages`);
+  finalMessages.forEach((m, i) => console.log(`  [${i}] role=${m.role}, id=${m.id}, text=${m.text?.substring(0, 50)}`));
 
   // 5. 按时间正序返回（保持 API 历史正确顺序）
   return finalMessages.sort((a, b) => a.timestamp - b.timestamp);

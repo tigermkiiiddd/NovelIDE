@@ -155,21 +155,16 @@ const MemoryDebugPanel: React.FC<Props> = ({ session, onClose }) => {
   const [roundOffset, setRoundOffset] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
-  // decayScore = userTurns × 1.0 + toolCalls × 0.2，最低基准 4
+  // 从后往前计算每条消息之后经过了多少轮（与 buildSimpleHistory 保持一致）
   const roundsMap = useMemo(() => {
     if (!session) return new Map<string, number>();
-    let userTurns = 0;
-    let toolCalls = 0;
+    let roundCounter = 0;
     const map = new Map<string, number>();
     for (let i = session.messages.length - 1; i >= 0; i--) {
       const m = session.messages[i];
-      const score = userTurns * 1.0 + toolCalls * 0.2;
-      map.set(m.id, Math.max(4, score));
-      if (m.role === 'user') userTurns++;
-      if (m.role === 'model') {
-        const hasToolCall = m.rawParts?.some((p) => 'functionCall' in p);
-        if (hasToolCall) toolCalls++;
-        else userTurns++; // 纯文字回复计用户轮
+      map.set(m.id, roundCounter);
+      if (m.role === 'user' || m.role === 'model') {
+        roundCounter++;
       }
     }
     return map;
