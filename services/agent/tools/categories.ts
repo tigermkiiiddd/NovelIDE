@@ -62,6 +62,7 @@ import { managePlanNoteTool } from './planTools';
 export const alwaysOnTools: ToolDefinition[] = [
   listFilesTool,
   readFileTool,
+  searchFilesTool,
   createFileTool,
   patchFileTool,
   manageTodosTool,
@@ -74,7 +75,6 @@ export const alwaysOnTools: ToolDefinition[] = [
 
 export const categoryTools: Record<ToolCategory, ToolDefinition[]> = {
   file_write: [updateFileTool, renameFileTool, deleteFileTool],
-  file_search: [searchFilesTool],
   knowledge: [
     queryKnowledgeTool,
     manageKnowledgeTool,
@@ -125,7 +125,6 @@ export const getActivatedTools = (activatedCategories: ToolCategory[]): ToolDefi
 // 导出所有 lazy 类别
 export const lazyCategories: ToolCategory[] = [
   'file_write',
-  'file_search',
   'knowledge',
   'character',
   'relationship',

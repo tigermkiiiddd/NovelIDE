@@ -345,7 +345,6 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 
 **可用类别：**
 - file_write: 文件写入（updateFile, renameFile, deleteFile）
-- file_search: 文件搜索（searchFiles）
 - knowledge: 知识图谱（query_knowledge, manage_knowledge 等）
 - character: 角色档案（init_character_profile, update_character_profile 等）
 - relationship: 人际关系（query_relationships, manage_relationships 等）
@@ -358,7 +357,7 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 **最佳实践：**
 - 可以一次激活多个类别：search_tools({ categories: ["knowledge", "outline"] })
 - 首次对话开始时，立即激活预计会用到的主要工具类别
-- 始终激活的工具无需激活：listFiles, readFile, createFile, patchFile, manageTodos, managePlanNote
+- 始终激活的工具无需激活：listFiles, readFile, searchFiles, createFile, patchFile, manageTodos, managePlanNote
 
 **时间线工具使用**（⚠️ 自顶向下创建流程）：
 - **⚠️ 细纲 = 事件（Events），不是章节（Chapters）**

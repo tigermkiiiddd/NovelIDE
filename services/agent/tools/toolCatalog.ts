@@ -31,13 +31,6 @@ export const toolCatalogEntries: ToolCatalogEntry[] = [
     category: 'file_write',
   },
 
-  // file_search 系列
-  {
-    name: 'searchFiles',
-    description: '按文件名或内容关键词搜索文件',
-    category: 'file_search',
-  },
-
   // knowledge 系列
   {
     name: 'query_knowledge',
