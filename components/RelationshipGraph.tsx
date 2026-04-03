@@ -286,6 +286,11 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     const radius = isHighlight ? baseRadius * 1.3 : baseRadius;
     const alpha = isDimmed ? 0.2 : 1;
 
+    // 确保节点位置有效
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y) || !Number.isFinite(radius)) {
+      return;
+    }
+
     // 光晕
     if (isFocus || isHighlight) {
       const glowColor = isFocus ? 'rgba(56, 189, 248, 0.3)' : 'rgba(148, 163, 184, 0.2)';
@@ -343,6 +348,11 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     // 曲线绘制
     const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0 };
     const tgt = typeof link.target === 'object' ? link.target : { x: 0, y: 0 };
+
+    // 确保连线位置有效
+    if (!Number.isFinite(src.x) || !Number.isFinite(src.y) || !Number.isFinite(tgt.x) || !Number.isFinite(tgt.y)) {
+      return;
+    }
 
     const curv = link.curvature || 0;
     if (curv === 0) {
