@@ -183,8 +183,6 @@ export class FileService {
     ensureFile('指南_文风规范.md', rulesFolder.id, styleGuide, presetId ? { sourcePresetId: presetId } : undefined);
     ensureFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE);
     ensureFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE);
-    ensureFile('模板_世界线记录.md', rulesFolder.id, TIMELINE_TEMPLATE);
-    ensureFile('模板_伏笔记录.md', rulesFolder.id, FORESHADOW_TEMPLATE);
 
     // 4.1 恢复预设特定模板到 99_创作规范，标记 sourcePresetId
     if (preset && preset.templates) {
@@ -328,7 +326,7 @@ export class FileService {
       '技能_场景描写.md', '技能_线束编织.md', '技能_项目初始化.md',
     ]);
     const UNIVERSAL_TEMPLATE_NAMES = new Set([
-      '模板_项目档案.md', '模板_角色档案.md', '模板_世界线记录.md', '模板_伏笔记录.md',
+      '模板_项目档案.md', '模板_角色档案.md',
     ]);
 
     // 收集所有预设中出现的题材文件名

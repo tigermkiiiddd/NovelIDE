@@ -227,8 +227,6 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   files.push(
     createFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE),
     createFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE),
-    createFile('模板_世界线记录.md', rulesFolder.id, withMeta('# 世界线记录\n\n| 章节 | 事件 | 状态变更 | 伏笔 |\n|---|---|---|---|\n', '此文件为标准的世界线记录模板，提供了表格格式以供复制使用，旨在规范化记录剧情事件与状态变更。', ['模板'])),
-    createFile('模板_伏笔记录.md', rulesFolder.id, withMeta('# 伏笔记录\n\n使用伏笔工具追踪剧情伏笔和爽点节奏。\n\n## 爽点标签规范\n- `爽点:小` - 小爽点（+1~+2）\n- `爽点:中` - 中爽点（+3~+4）\n- `爽点:大` - 大爽点（+5）\n\n在伏笔的 tags 字段中添加爽点等级标签，通过伏笔界面筛选和查看爽点分布。', '此文件说明如何使用伏笔工具追踪爽点节奏。', ['模板']))
   );
 
   // 预设特定模板，标记 sourcePresetId
