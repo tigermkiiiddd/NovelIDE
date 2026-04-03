@@ -57,6 +57,11 @@ interface AgentState {
   switchSession: (id: string) => Promise<void>;
   deleteSession: (id: string) => void;
   updateCurrentSession: (updater: (session: ChatSession) => ChatSession) => void;
+  addRecalledKnowledgeNode: (nodeId: string) => void;
+  removeRecalledKnowledgeNode: (nodeId: string) => void;
+  addHiddenKnowledgeNode: (nodeId: string) => void;
+  removeHiddenKnowledgeNode: (nodeId: string) => void;
+  getCurrentSessionKnowledgeState: () => { recalledIds: string[]; hiddenIds: string[] };
   
   // Message Helpers
   addMessage: (message: ChatMessage) => void;
@@ -193,7 +198,9 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           title: initialTitle,
           messages: [],
           todos: [],
-          lastModified: Date.now()
+          lastModified: Date.now(),
+          recalledKnowledgeNodeIds: [],
+          hiddenKnowledgeNodeIds: [],
         };
 
         // 新建会话时重置技能触发状态
@@ -271,6 +278,47 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         
         set({ sessions: updatedSessions });
         syncSessionsToDB(currentSession.projectId, updatedSessions);
+      },
+
+      addRecalledKnowledgeNode: (nodeId) => {
+        get().updateCurrentSession(session => ({
+          ...session,
+          recalledKnowledgeNodeIds: session.recalledKnowledgeNodeIds.includes(nodeId)
+            ? session.recalledKnowledgeNodeIds
+            : [...session.recalledKnowledgeNodeIds, nodeId],
+        }));
+      },
+
+      removeRecalledKnowledgeNode: (nodeId) => {
+        get().updateCurrentSession(session => ({
+          ...session,
+          recalledKnowledgeNodeIds: session.recalledKnowledgeNodeIds.filter(id => id !== nodeId),
+        }));
+      },
+
+      addHiddenKnowledgeNode: (nodeId) => {
+        get().updateCurrentSession(session => ({
+          ...session,
+          hiddenKnowledgeNodeIds: session.hiddenKnowledgeNodeIds.includes(nodeId)
+            ? session.hiddenKnowledgeNodeIds
+            : [...session.hiddenKnowledgeNodeIds, nodeId],
+        }));
+      },
+
+      removeHiddenKnowledgeNode: (nodeId) => {
+        get().updateCurrentSession(session => ({
+          ...session,
+          hiddenKnowledgeNodeIds: session.hiddenKnowledgeNodeIds.filter(id => id !== nodeId),
+        }));
+      },
+
+      getCurrentSessionKnowledgeState: () => {
+        const { sessions, currentSessionId } = get();
+        const session = sessions.find(s => s.id === currentSessionId);
+        return {
+          recalledIds: session?.recalledKnowledgeNodeIds || [],
+          hiddenIds: session?.hiddenKnowledgeNodeIds || [],
+        };
       },
 
       addMessage: (message) => {

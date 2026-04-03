@@ -221,6 +221,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
     set((state) => ({
       nodes: state.nodes.map((n) => (n.id === id ? updatedNode : n)),
     }));
+    useAgentStore.getState().addRecalledKnowledgeNode(id);
     setTimeout(() => saveToFile(get()), 1000);
     return updatedNode;
   },

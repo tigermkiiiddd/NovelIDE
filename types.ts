@@ -116,6 +116,9 @@ export interface ChatSession {
   todos: TodoItem[]; // 每个会话有独立的任务状态
   lastModified: number;
   planModeEnabled?: boolean; // 会话级 Plan 模式开关
+  // 知识节点状态（按会话持久化）
+  recalledKnowledgeNodeIds: string[];   // 本次对话召回的节点ID
+  hiddenKnowledgeNodeIds: string[];     // 本次对话隐藏的常驻节点ID
 }
 
 // --- Plan Notebook Types ---

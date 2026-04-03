@@ -476,29 +476,28 @@ export const useAgentEngine = ({
             console.error('[ToolResult挂载] error:', e, String(e));
           }
 
-          // --- 技能触发检测：检测本轮 tool thinking 中的关键词 ---
-          // 收集用户消息 + 本轮所有 tool thinking
-          const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
+          // --- 技能触发检测：每个 thinking 单独判断一次 ---
           const thinkingTexts = toolResults
             .map(r => r.thinking)
             .filter(Boolean) as string[];
-          const combinedText = [latestUserMsg?.text, ...thinkingTexts].filter(Boolean).join(' ');
 
-          detectSkillTriggers(
-            combinedText,
-            { files, triggerStore: useSkillTriggerStore.getState() },
-            (notif) => {
-              addMessage({
-                id: generateId(),
-                role: 'system',
-                text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
-                  ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
-                  ` | 剩余活跃: ${notif.remainingRounds}轮`,
-                timestamp: Date.now(),
-                metadata: { logType: 'info' },
-              });
-            }
-          );
+          for (const t of thinkingTexts) {
+            detectSkillTriggers(
+              t,
+              { files, triggerStore: useSkillTriggerStore.getState() },
+              (notif) => {
+                addMessage({
+                  id: generateId(),
+                  role: 'system',
+                  text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
+                    ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
+                    ` | 剩余活跃: ${notif.remainingRounds}轮`,
+                  timestamp: Date.now(),
+                  metadata: { logType: 'info' },
+                });
+              }
+            );
+          }
 
         } else {
           // 没有工具调用，直接结束

@@ -124,6 +124,22 @@ export const useAgent = (
       };
   }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode]);
 
+  // --- 技能触发检测：统一入口 ---
+  const triggerSkill = (text: string) => {
+    const triggerStore = useSkillTriggerStore.getState();
+    detectSkillTriggers(text, { files, triggerStore }, (notif) => {
+      addMessage({
+        id: generateId(),
+        role: 'system',
+        text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
+          ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
+          ` | 剩余活跃: ${notif.remainingRounds}轮`,
+        timestamp: Date.now(),
+        metadata: { logType: 'info' },
+      });
+    });
+  };
+
   const approveChange = useCallback((change: PendingChange) => {
     // 构造包含追踪功能的 Action 集合
     const fullActions = {
@@ -284,25 +300,10 @@ export const useAgent = (
     }
 
     // --- 技能触发检测：用户消息立即触发一次（不推进轮次） ---
-    const triggerStore = useSkillTriggerStore.getState();
-    detectSkillTriggers(
-      userMessage.text,
-      { files, triggerStore },
-      (notif) => {
-        addMessage({
-          id: generateId(),
-          role: 'system',
-          text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
-            ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
-            ` | 剩余活跃: ${notif.remainingRounds}轮`,
-          timestamp: Date.now(),
-          metadata: { logType: 'info' },
-        });
-      }
-    );
+    triggerSkill(userMessage.text);
 
     setTimeout(() => engine.processTurn(), 0);
-  }, [addMessage, currentSession?.messages, engine, currentSessionId, files]);
+  }, [addMessage, currentSession?.messages, engine, currentSessionId, files, triggerSkill]);
 
   const regenerateMessage = useCallback(async (messageId: string) => {
       deleteMessagesFrom(messageId, true);
@@ -311,14 +312,20 @@ export const useAgent = (
       useSkillTriggerStore.getState().recalibrate(newCount);
       // 清除所有 pendingChanges，避免孤立的 tool_calls
       pendingChanges.forEach(c => removePendingChange(c.id));
+      // 从消息列表取最后一条用户消息，触发技能检测
+      const lastUserMsg = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.messages.filter((m: ChatMessage) => m.role === 'user').pop();
+      if (lastUserMsg) {
+        triggerSkill(lastUserMsg.text);
+      }
       setTimeout(() => engine.processTurn(), 0);
-  }, [deleteMessagesFrom, engine, pendingChanges, removePendingChange, currentSessionId]);
+  }, [deleteMessagesFrom, engine, pendingChanges, removePendingChange, currentSessionId, files, triggerSkill]);
 
   const editUserMessage = useCallback(async (messageId: string, newText: string) => {
       editMessageContent(messageId, newText);
       deleteMessagesFrom(messageId, false);
+      triggerSkill(newText);
       setTimeout(() => engine.processTurn(), 0);
-  }, [editMessageContent, deleteMessagesFrom, engine]);
+  }, [editMessageContent, deleteMessagesFrom, engine, files, triggerSkill]);
 
   return {
     messages: currentSession?.messages || [],

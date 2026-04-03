@@ -35,6 +35,7 @@ export interface SkillTriggerState {
   reset: () => void;
   loadFromDB: (projectId: string) => Promise<void>;
   recalibrate: (newMessageCount: number) => void;
+  removeSkill: (skillId: string) => void;
 }
 
 export interface ActivationNotification {
@@ -91,6 +92,13 @@ export const useSkillTriggerStore = create<SkillTriggerState>((set, get) => ({
     set({ records: [] });
     lifecycleManager.reset();
     debouncedPersist([]);
+  },
+
+  removeSkill: (skillId) => {
+    const { records } = get();
+    const newRecords = records.filter(r => r.skillId !== skillId);
+    set({ records: newRecords });
+    debouncedPersist(newRecords);
   },
 
   loadFromDB: async (projectId) => {

@@ -1,8 +1,11 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Send, FileText, Folder, Square } from 'lucide-react';
+import { Send, FileText, Folder, Square, Sparkles, Brain } from 'lucide-react';
 import { FileNode, FileType } from '../types';
 import { getNodePath } from '../services/fileSystem';
+import { useSkillTriggerStore } from '../stores/skillTriggerStore';
+import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
+import { useAgentStore } from '../stores/agentStore';
 
 interface AgentInputProps {
   onSendMessage: (text: string) => void;
@@ -20,6 +23,32 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   const [cursorPos, setCursorPos] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+
+  // 获取当前激活的技能（订阅 records 变化）
+  const records = useSkillTriggerStore(state => state.records);
+  const activeSkills = useMemo(() => useSkillTriggerStore.getState().getActiveSkills(), [records]);
+
+  // 获取知识节点状态（per-session，订阅 sessions 和 currentSessionId 变化）
+  const sessions = useAgentStore(state => state.sessions);
+  const currentSessionId = useAgentStore(state => state.currentSessionId);
+  const allNodes = useKnowledgeGraphStore(state => state.nodes);
+
+  const knowledgeState = useMemo(() => {
+    const session = sessions.find(s => s.id === currentSessionId);
+    const recalledIds = session?.recalledKnowledgeNodeIds || [];
+    const hiddenIds = session?.hiddenKnowledgeNodeIds || [];
+
+    const recalledDisplay = recalledIds
+      .map(id => allNodes.find(n => n.id === id))
+      .filter(Boolean)
+      .map(n => ({ id: n!.id, name: n!.name }));
+
+    const residentDisplay = allNodes
+      .filter(n => (n.importance === 'critical' || n.importance === 'important') && !hiddenIds.includes(n.id))
+      .map(n => ({ id: n.id, name: n.name }));
+
+    return { recalledDisplay, residentDisplay };
+  }, [sessions, currentSessionId, allNodes]);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -244,6 +273,66 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                 </div>
               )}
             </>
+        )}
+
+        {/* 激活技能显示 */}
+        {activeSkills.length > 0 && (
+            <div className="mb-2 flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Sparkles size={12} className="text-yellow-400" />
+                    当前已激活技能：
+                </span>
+                {activeSkills.map(skill => (
+                    <span
+                        key={skill.skillId}
+                        className="text-xs px-2 py-0.5 pr-1 bg-yellow-500/20 text-yellow-300 rounded-full border border-yellow-500/30 flex items-center gap-1"
+                        title={`命中词：${skill.matchText}`}
+                    >
+                        <span>{skill.name.replace(/\s*\(.*?\)\s*$/, '')}</span>
+                        <button
+                            onClick={() => useSkillTriggerStore.getState().removeSkill(skill.skillId)}
+                            className="ml-1 text-yellow-300/60 hover:text-yellow-300 leading-none"
+                            title="关闭"
+                        >×</button>
+                    </span>
+                ))}
+            </div>
+        )}
+
+        {/* 记忆显示（常驻 + 召回） */}
+        {(knowledgeState.residentDisplay.length > 0 || knowledgeState.recalledDisplay.length > 0) && (
+            <div className="mb-2 flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                    <Brain size={12} className="text-cyan-400" />
+                    记忆：
+                </span>
+                {knowledgeState.residentDisplay.map(node => (
+                    <span
+                        key={node.id}
+                        className="text-xs px-2 py-0.5 pr-1 bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30 flex items-center gap-1"
+                    >
+                        <span>{node.name}</span>
+                        <button
+                            onClick={() => useAgentStore.getState().addHiddenKnowledgeNode(node.id)}
+                            className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
+                            title="本次对话隐藏"
+                        >×</button>
+                    </span>
+                ))}
+                {knowledgeState.recalledDisplay.map(node => (
+                    <span
+                        key={node.id}
+                        className="text-xs px-2 py-0.5 pr-1 bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30 flex items-center gap-1"
+                    >
+                        <span>{node.name}</span>
+                        <button
+                            onClick={() => useAgentStore.getState().removeRecalledKnowledgeNode(node.id)}
+                            className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
+                            title="关闭"
+                        >×</button>
+                    </span>
+                ))}
+            </div>
         )}
 
         <form onSubmit={handleSubmit} className="flex items-end space-x-2">
