@@ -91,12 +91,15 @@ const EMOTION_COLORS: Record<string, { color: string; bg: string }> = {
 const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ isOpen, onClose }) => {
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [curveView, setCurveView] = useState<CurveView>('both');
+  const [curveLevel, setCurveLevel] = useState<'event' | 'chapter' | 'day'>('event');
   const [withinChapters, setWithinChapters] = useState<number>(5);
 
   // 获取 store 数据
   const timeline = useWorldTimelineStore((s) => s.timeline);
   const loadTimeline = useWorldTimelineStore((s) => s.loadTimeline);
   const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
+  const getChapterEmotionCurve = useWorldTimelineStore((s) => s.getChapterEmotionCurve);
+  const getDayEmotionCurve = useWorldTimelineStore((s) => s.getDayEmotionCurve);
   const getHookEmotionCurve = useWorldTimelineStore((s) => s.getHookEmotionCurve);
   const getForeshadowingStats = useWorldTimelineStore((s) => s.getForeshadowingStats);
   const getOverdueForeshadowings = useWorldTimelineStore((s) => s.getOverdueForeshadowings);
@@ -143,6 +146,8 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
 
   // 读者情绪曲线
   const nodeEmotionCurve = useMemo(() => getNodeEmotionCurve(), [getNodeEmotionCurve]);
+  const chapterEmotionCurve = useMemo(() => getChapterEmotionCurve(), [getChapterEmotionCurve]);
+  const dayEmotionCurve = useMemo(() => getDayEmotionCurve(), [getDayEmotionCurve]);
 
   // 钩子情绪奖励曲线
   const hookEmotionCurve = useMemo(() => getHookEmotionCurve(), [getHookEmotionCurve]);
@@ -185,17 +190,23 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
     });
   }, [foreshadowings, timeline]);
 
-  // 情绪曲线数据计算
+  // 情绪曲线数据计算（根据 curveLevel 选择数据源）
+  const activeNodeCurve = useMemo(() => {
+    if (curveLevel === 'event') return nodeEmotionCurve;
+    if (curveLevel === 'chapter') return chapterEmotionCurve;
+    return dayEmotionCurve;
+  }, [curveLevel, nodeEmotionCurve, chapterEmotionCurve, dayEmotionCurve]);
+
   const nodeCurveStats = useMemo(() => {
-    if (nodeEmotionCurve.length === 0) return null;
-    const scores = nodeEmotionCurve.map(p => p.totalScore);
+    if (activeNodeCurve.length === 0) return null;
+    const scores = activeNodeCurve.map((p: any) => curveLevel === 'event' ? p.totalScore : p.cumulativeScore);
     const avg = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
     const max = Math.max(...scores);
     const min = Math.min(...scores);
     const variance = scores.reduce((s: number, v: number) => s + (v - avg) ** 2, 0) / scores.length;
     const stddev = Math.sqrt(variance);
     return { avg, max, min, stddev };
-  }, [nodeEmotionCurve]);
+  }, [activeNodeCurve, curveLevel]);
 
   const hookCurveStats = useMemo(() => {
     if (hookEmotionCurve.length === 0) return null;
@@ -365,8 +376,21 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
           ))}
         </div>
 
+        {/* 曲线粒度切换 */}
+        <div className="flex gap-1 text-xs">
+          {(['event', 'chapter', 'day'] as const).map(level => (
+            <button
+              key={level}
+              onClick={() => setCurveLevel(level)}
+              className={`px-2 py-0.5 rounded ${curveLevel === level ? 'bg-teal-700 text-white' : 'bg-gray-700 text-gray-400'}`}
+            >
+              {level === 'event' ? '事件' : level === 'chapter' ? '章节' : '天'}
+            </button>
+          ))}
+        </div>
+
         {/* 读者情绪曲线 */}
-        {(curveView === 'node' || curveView === 'both') && nodeEmotionCurve.length > 0 && (
+        {(curveView === 'node' || curveView === 'both') && activeNodeCurve.length > 0 && (
           <div className="bg-gray-800 rounded p-3">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp size={14} className="text-blue-400" />
@@ -380,32 +404,34 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
               </div>
             )}
             {renderMiniChart(
-              nodeEmotionCurve.map(p => ({
-                x: p.chapterIndex,
-                y: p.totalScore
+              activeNodeCurve.map((p: any) => ({
+                x: curveLevel === 'event' ? p.chapterIndex : (curveLevel === 'chapter' ? p.chapterIndex : p.day),
+                y: curveLevel === 'event' ? p.totalScore : p.cumulativeScore
               })),
-              Math.max(5, ...nodeEmotionCurve.map(p => p.totalScore)),
-              Math.min(-5, ...nodeEmotionCurve.map(p => p.totalScore)),
+              Math.max(5, ...activeNodeCurve.map((p: any) => curveLevel === 'event' ? p.totalScore : p.cumulativeScore)),
+              Math.min(-5, ...activeNodeCurve.map((p: any) => curveLevel === 'event' ? p.totalScore : p.cumulativeScore)),
               80
             )}
             {/* 情绪标签图例 */}
-            <div className="flex flex-wrap gap-1 mt-2">
-              {nodeEmotionCurve.map((p) =>
-                p.emotions.map((e: EmotionItem, idx: number) => {
-                  const colorDef = EMOTION_COLORS[e.type as string] || { color: '#888', bg: '#88833' };
-                  return (
-                    <span
-                      key={`${p.eventId}-${idx}`}
-                      className="text-xs px-1 py-0.5 rounded"
-                      style={{ backgroundColor: colorDef.bg, color: colorDef.color }}
-                      title={`第${p.chapterIndex}章`}
-                    >
-                      {e.type}{e.score >= 0 ? '+' : ''}{e.score}
-                    </span>
-                  );
-                })
-              )}
-            </div>
+            {curveLevel === 'event' && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {nodeEmotionCurve.map((p) =>
+                  p.emotions.map((e: EmotionItem, idx: number) => {
+                    const colorDef = EMOTION_COLORS[e.type as string] || { color: '#888', bg: '#88833' };
+                    return (
+                      <span
+                        key={`${p.eventId}-${idx}`}
+                        className="text-xs px-1 py-0.5 rounded"
+                        style={{ backgroundColor: colorDef.bg, color: colorDef.color }}
+                        title={`第${p.chapterIndex}章`}
+                      >
+                        {e.type}{e.score >= 0 ? '+' : ''}{e.score}
+                      </span>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         )}
 

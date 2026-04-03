@@ -1036,6 +1036,26 @@ export interface HookEmotionCurvePoint {
   isOverdue: boolean;            // 回收时是否逾期
 }
 
+// 章节情绪曲线数据点（章节内累加，每章从0重新统计）
+export interface ChapterEmotionPoint {
+  eventId: string;
+  chapterIndex: number;
+  eventIndex: number;
+  deltaScore: number;         // 当个事件的原始情绪分（正负相抵）
+  cumulativeScore: number;     // 该章节内的累加分（从本章第一个事件开始累加）
+  timestamp: StoryTimeStamp;
+}
+
+// 天情绪曲线数据点（天内累加，每天从0重新统计）
+export interface DayEmotionPoint {
+  eventId: string;
+  day: number;                // 天序号
+  eventIndex: number;          // 当天内的序号
+  deltaScore: number;         // 当个事件的原始情绪分
+  cumulativeScore: number;     // 该天内的累加分
+  timestamp: StoryTimeStamp;
+}
+
 // 伏笔统计
 export interface ForeshadowingStats {
   total: number;

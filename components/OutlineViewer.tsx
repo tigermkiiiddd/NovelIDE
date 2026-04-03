@@ -370,9 +370,12 @@ const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) 
 const TimelineCurvesPanel: React.FC = () => {
   const timeline = useWorldTimelineStore((s) => s.timeline);
   const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
+  const getChapterEmotionCurve = useWorldTimelineStore((s) => s.getChapterEmotionCurve);
+  const getDayEmotionCurve = useWorldTimelineStore((s) => s.getDayEmotionCurve);
   const getHookEmotionCurve = useWorldTimelineStore((s) => s.getHookEmotionCurve);
   const getForeshadowingStats = useWorldTimelineStore((s) => s.getForeshadowingStats);
   const chapterAnalysisStore = useChapterAnalysisStore((s) => s.data);
+  const [curveLevel, setCurveLevel] = useState<'event' | 'chapter' | 'day'>('event');
   const [curveView, setCurveView] = useState<'node' | 'hook' | 'both'>('both');
 
   // 获取伏笔数据
@@ -388,6 +391,8 @@ const TimelineCurvesPanel: React.FC = () => {
 
   const stats = useMemo(() => getForeshadowingStats(foreshadowings, maxChapter), [foreshadowings, maxChapter, getForeshadowingStats]);
   const nodeEmotionCurve = useMemo(() => getNodeEmotionCurve(), [getNodeEmotionCurve]);
+  const chapterEmotionCurve = useMemo(() => getChapterEmotionCurve(), [getChapterEmotionCurve]);
+  const dayEmotionCurve = useMemo(() => getDayEmotionCurve(), [getDayEmotionCurve]);
   const hookEmotionCurve = useMemo(() => getHookEmotionCurve(), [getHookEmotionCurve]);
 
   // 奖励分累计曲线数据
@@ -407,21 +412,28 @@ const TimelineCurvesPanel: React.FC = () => {
     });
   }, [foreshadowings, timeline]);
 
-  // 构建统一的系列数据
+  // 构建统一的系列数据（根据 curveLevel 选择情绪曲线数据源）
   const chartSeries = useMemo(() => {
-    const nodeData = nodeEmotionCurve.map((p: any) => ({ x: p.chapterIndex, y: p.totalScore }));
+    let nodeData: { x: number; y: number }[];
+    if (curveLevel === 'event') {
+      nodeData = nodeEmotionCurve.map((p: any) => ({ x: p.chapterIndex * 100 + p.eventIndex, y: p.totalScore }));
+    } else if (curveLevel === 'chapter') {
+      nodeData = chapterEmotionCurve.map((p: any) => ({ x: p.chapterIndex * 100 + p.eventIndex, y: p.cumulativeScore }));
+    } else {
+      nodeData = dayEmotionCurve.map((p: any) => ({ x: p.day * 100 + p.eventIndex, y: p.cumulativeScore }));
+    }
     const hookData = hookEmotionCurve.reduce((acc: any[], p: any) => {
       const last = acc.length > 0 ? acc[acc.length - 1].y : 0;
-      acc.push({ x: p.chapterIndex, y: last + p.bonus });
+      acc.push({ x: p.chapterIndex * 100 + p.eventIndex, y: last + p.bonus });
       return acc;
     }, []);
-    const rewardData = rewardCurveData.map(d => ({ x: d.chapter, y: d.score }));
+    const rewardData = rewardCurveData.map((d: any) => ({ x: d.chapter * 100, y: d.score }));
     return [
       { id: 'node', name: '读者情绪曲线', color: '#4ec9b0', data: nodeData },
       { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
       { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
     ];
-  }, [nodeEmotionCurve, hookEmotionCurve, rewardCurveData]);
+  }, [curveLevel, nodeEmotionCurve, chapterEmotionCurve, dayEmotionCurve, hookEmotionCurve, rewardCurveData]);
 
   if (!timeline) return null;
 
@@ -447,6 +459,19 @@ const TimelineCurvesPanel: React.FC = () => {
         </div>
       </div>
 
+      {/* 曲线粒度切换 */}
+      <div className="flex gap-1 mb-2">
+        {(['event', 'chapter', 'day'] as const).map(level => (
+          <button
+            key={level}
+            onClick={() => setCurveLevel(level)}
+            className={`px-2 py-0.5 text-xs rounded ${curveLevel === level ? 'bg-teal-700 text-white' : 'bg-gray-700 text-gray-400'}`}
+          >
+            {level === 'event' ? '事件' : level === 'chapter' ? '章节' : '天'}
+          </button>
+        ))}
+      </div>
+
       {/* 统一视图曲线图 */}
       <CombinedTimelineChart series={chartSeries} />
     </div>
@@ -457,11 +482,14 @@ const TimelineCurvesPanel: React.FC = () => {
 const ForeshadowingTrackerView: React.FC = () => {
   const timeline = useWorldTimelineStore((s) => s.timeline);
   const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
+  const getChapterEmotionCurve = useWorldTimelineStore((s) => s.getChapterEmotionCurve);
+  const getDayEmotionCurve = useWorldTimelineStore((s) => s.getDayEmotionCurve);
   const getHookEmotionCurve = useWorldTimelineStore((s) => s.getHookEmotionCurve);
   const getForeshadowingStats = useWorldTimelineStore((s) => s.getForeshadowingStats);
   const getOverdueForeshadowings = useWorldTimelineStore((s) => s.getOverdueForeshadowings);
   const getExpiringForeshadowings = useWorldTimelineStore((s) => s.getExpiringForeshadowings);
   const chapterAnalysisStore = useChapterAnalysisStore((s) => s.data);
+  const [curveLevel, setCurveLevel] = useState<'event' | 'chapter' | 'day'>('event');
   const [curveView, setCurveView] = useState<'node' | 'hook' | 'both'>('node');
   const [viewMode, setViewMode] = useState<'all' | 'pending' | 'fulfilled' | 'overdue'>('all');
 
@@ -480,6 +508,8 @@ const ForeshadowingTrackerView: React.FC = () => {
   const expiring = useMemo(() => getExpiringForeshadowings(foreshadowings, maxChapter, 5), [foreshadowings, maxChapter, getExpiringForeshadowings]);
   const overdue = useMemo(() => getOverdueForeshadowings(foreshadowings, maxChapter), [foreshadowings, maxChapter, getOverdueForeshadowings]);
   const nodeEmotionCurve = useMemo(() => getNodeEmotionCurve(), [getNodeEmotionCurve]);
+  const chapterEmotionCurve = useMemo(() => getChapterEmotionCurve(), [getChapterEmotionCurve]);
+  const dayEmotionCurve = useMemo(() => getDayEmotionCurve(), [getDayEmotionCurve]);
   const hookEmotionCurve = useMemo(() => getHookEmotionCurve(), [getHookEmotionCurve]);
 
   // 过滤伏笔列表
@@ -495,23 +525,31 @@ const ForeshadowingTrackerView: React.FC = () => {
     });
   }, [foreshadowings, viewMode, overdue, maxChapter]);
 
-  // 构建统一的系列数据用于伏笔追踪页面
+  // 构建统一的系列数据用于伏笔追踪页面（根据 curveLevel 选择情绪曲线数据源）
   const chartSeries = useMemo(() => {
-    const nodeData = foreshadowings.slice(0, 30).map((f: any, i: number) => ({ x: i + 1, y: (i + 1) * 2 }));
-    const hookData = foreshadowings.slice(0, 30).map((f: any, i: number) => ({
-      x: i + 1,
-      y: f.type === 'resolved' ? 5 : (f.type === 'developed' ? 2 : 3)
-    }));
+    let nodeData: { x: number; y: number }[];
+    if (curveLevel === 'event') {
+      nodeData = nodeEmotionCurve.map((p: any) => ({ x: p.chapterIndex * 100 + p.eventIndex, y: p.totalScore }));
+    } else if (curveLevel === 'chapter') {
+      nodeData = chapterEmotionCurve.map((p: any) => ({ x: p.chapterIndex * 100 + p.eventIndex, y: p.cumulativeScore }));
+    } else {
+      nodeData = dayEmotionCurve.map((p: any) => ({ x: p.day * 100 + p.eventIndex, y: p.cumulativeScore }));
+    }
+    const hookData = hookEmotionCurve.reduce((acc: any[], p: any) => {
+      const last = acc.length > 0 ? acc[acc.length - 1].y : 0;
+      acc.push({ x: p.chapterIndex * 100 + p.eventIndex, y: last + p.bonus });
+      return acc;
+    }, []);
     const rewardData = foreshadowings
       .filter((f: any) => f.type === 'resolved' && f.rewardScore)
-      .map((f: any, i: number) => ({ x: i + 1, y: f.rewardScore || 0 }));
+      .map((f: any, i: number) => ({ x: i * 100, y: f.rewardScore || 0 }));
 
     return [
       { id: 'node', name: '读者情绪', color: '#4ec9b0', data: nodeData },
       { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
       { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
     ];
-  }, [foreshadowings]);
+  }, [curveLevel, nodeEmotionCurve, chapterEmotionCurve, dayEmotionCurve, hookEmotionCurve, foreshadowings]);
 
   // 钩子图标
   const getHookIcon = (type?: string) => {
@@ -561,6 +599,19 @@ const ForeshadowingTrackerView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 曲线粒度切换 */}
+      <div className="flex gap-1 mb-2">
+        {(['event', 'chapter', 'day'] as const).map(level => (
+          <button
+            key={level}
+            onClick={() => setCurveLevel(level)}
+            className={`px-2 py-0.5 text-xs rounded ${curveLevel === level ? 'bg-teal-700 text-white' : 'bg-gray-700 text-gray-400'}`}
+          >
+            {level === 'event' ? '事件' : level === 'chapter' ? '章节' : '天'}
+          </button>
+        ))}
+      </div>
 
       {/* 统一视图曲线图 */}
       <CombinedTimelineChart series={chartSeries} />

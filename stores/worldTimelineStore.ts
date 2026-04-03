@@ -1118,6 +1118,92 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
         });
     },
 
+    getChapterEmotionCurve: () => {
+      const state = useWorldTimelineStore.getState();
+      if (!state.timeline) return [];
+
+      const events = state.timeline.events
+        .filter(e => e.emotions && e.emotions.length > 0)
+        .sort((a, b) => {
+          const ca = a.chapterId ? state.timeline!.chapters.find(c => c.id === a.chapterId)?.chapterIndex ?? 0 : 0;
+          const cb = b.chapterId ? state.timeline!.chapters.find(c => c.id === b.chapterId)?.chapterIndex ?? 0 : 0;
+          if (ca !== cb) return ca - cb;
+          return a.eventIndex - b.eventIndex;
+        });
+
+      const result: ChapterEmotionPoint[] = [];
+      let currentChapter = -1;
+      let cumulative = 0;
+
+      for (const e of events) {
+        const chapter = e.chapterId
+          ? state.timeline!.chapters.find(c => c.id === e.chapterId)
+          : undefined;
+        const chapterIndex = chapter?.chapterIndex ?? 0;
+
+        if (chapterIndex !== currentChapter) {
+          currentChapter = chapterIndex;
+          cumulative = 0;
+        }
+
+        const deltaScore = (e.emotions as EmotionItem[]).reduce((sum: number, item: EmotionItem) => sum + item.score, 0);
+        cumulative += deltaScore;
+
+        result.push({
+          eventId: e.id,
+          chapterIndex,
+          eventIndex: e.eventIndex,
+          deltaScore,
+          cumulativeScore: cumulative,
+          timestamp: e.timestamp
+        });
+      }
+
+      return result;
+    },
+
+    getDayEmotionCurve: () => {
+      const state = useWorldTimelineStore.getState();
+      if (!state.timeline) return [];
+
+      const events = state.timeline.events
+        .filter(e => e.emotions && e.emotions.length > 0)
+        .sort((a, b) => {
+          if (a.timestamp.day !== b.timestamp.day) return a.timestamp.day - b.timestamp.day;
+          if (a.timestamp.hour !== b.timestamp.hour) return a.timestamp.hour - b.timestamp.hour;
+          return a.timestamp.minute - b.timestamp.minute;
+        });
+
+      const result: DayEmotionPoint[] = [];
+      let currentDay = -1;
+      let cumulative = 0;
+      let dayEventIndex = 0;
+
+      for (const e of events) {
+        const day = e.timestamp.day;
+
+        if (day !== currentDay) {
+          currentDay = day;
+          cumulative = 0;
+          dayEventIndex = 0;
+        }
+
+        const deltaScore = (e.emotions as EmotionItem[]).reduce((sum: number, item: EmotionItem) => sum + item.score, 0);
+        cumulative += deltaScore;
+
+        result.push({
+          eventId: e.id,
+          day,
+          eventIndex: dayEventIndex++,
+          deltaScore,
+          cumulativeScore: cumulative,
+          timestamp: e.timestamp
+        });
+      }
+
+      return result;
+    },
+
     getHookEmotionCurve: () => {
       const state = useWorldTimelineStore.getState();
       if (!state.timeline) return [];

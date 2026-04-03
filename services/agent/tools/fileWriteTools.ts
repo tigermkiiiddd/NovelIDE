@@ -48,13 +48,16 @@ export const updateFileTool: ToolDefinition = {
     description: `⚠️ DANGER: Overwrite the ENTIRE content of an existing file.
 
 【仅限以下场景使用】
-- 创建新文件（用 createFile 更好）
-- 完全重写整个文件
+- 完全重写整个文件（文件必须已存在）
 - 文件内容极短（<10行）不值得精准定位
 
 【禁止场景】
+- ❌ 创建新文件 → 必须使用 createFile
 - ❌ 只修改部分内容 → 用 patchFile
 - ❌ 使用省略号 "...", "// ...", "<!-- unchanged -->" → 这些会导致数据丢失
+
+【文件不存在时的行为】
+如果文件不存在，工具将返回错误并拒绝执行。此时应使用 createFile 工具。
 
 [CRITICAL WARNING]: This tool REPLACES the file completely. You MUST provide the FULL file content.
 [WRITE TOOL]`,
@@ -78,6 +81,9 @@ export const patchFileTool: ToolDefinition = {
   function: {
     name: 'patchFile',
     description: `修改已有文件，支持一次修改多处。
+
+【前置条件】
+- 文件必须已存在。如果文件不存在，工具将返回错误，此时应使用 createFile。
 
 【🔥 核心原则：打包修改】
 - **同一文件有多处修改？全部打包到一个 patchFile 调用！**

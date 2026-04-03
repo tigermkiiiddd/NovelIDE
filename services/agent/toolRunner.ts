@@ -332,10 +332,24 @@ export const executeTool = async (
                     ? injectMatchedCharacters(args.content, files)
                     : args.content;
             } else if (name === 'updateFile') {
+                // Check if file exists - must be an existing file, not a new one
+                if (!existingFile) {
+                    return {
+                        type: 'ERROR',
+                        message: `❌ 文件不存在: "${filePath}"。updateFile 只能用于更新已存在的文件。如需创建新文件，请使用 createFile。`
+                    };
+                }
                 description = `Overwrite: ${filePath}`;
                 originalContent = baseContent;
                 newContent = args.content;
             } else if (name === 'patchFile') {
+                // Check if file exists - must be an existing file
+                if (!existingFile) {
+                    return {
+                        type: 'ERROR',
+                        message: `❌ 文件不存在: "${filePath}"。patchFile 只能用于修改已存在的文件。如需创建新文件，请使用 createFile。`
+                    };
+                }
                 description = `Patch: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
                 // 使用通用函数应用 patch（预览阶段用非严格模式）
