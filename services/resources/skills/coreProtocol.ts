@@ -8,13 +8,14 @@
  * 3. 简洁高效：每条规则一句话，避免冗余
  */
 
-import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem } from '../../../types';
+import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem, KnowledgeNode } from '../../../types';
 import { getFileTreeStructure, getNodePath } from '../../fileSystem';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 import { useRelationshipStore } from '../../../stores/relationshipStore';
 import { useSkillTriggerStore, getRemainingRounds } from '../../../stores/skillTriggerStore';
 import { lifecycleManager } from '../../../domains/agentContext/toolLifecycle';
 import { buildProjectOverviewPrompt } from '../../../utils/projectContext';
+import { buildMemoryStack } from '../../../domains/memory/memoryStackService';
 
 // Plan 模式已移除
 // export const PLAN_MODE_PROTOCOL = ...
@@ -110,7 +111,7 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 
 **a) 收集背景** — 自动读取相关文件/角色/设定
 必读：当前章节大纲、相关角色档案、文风规范
-选读：世界观设定、知识图谱、历史对话上下文
+选读：世界观设定、记忆宫殿、历史对话上下文
 
 **b) 方向确认（关键！）** — 使用 AskUserQuestion 确认顶层设计
 
@@ -275,8 +276,8 @@ export const DEFAULT_AGENT_SKILL = `## 身份
      其中 \`characters\` 字段列出本章所有登场角色，不可省略。
 6. **正文字数达标** - 必须保证正文内容达到单章字数目标({{WORDS_PER_CHAPTER}}字/章)，单次输出不足时可多次续写追加
 
-7. **知识图谱**：query_knowledge(查询) / manage_knowledge(增删改/reinforce强化) / link_knowledge(关联)。分类：设定/规则/禁止/风格。
-   ⚠️ **禁止存储角色信息**——知识图谱仅存创作规范等元知识，角色档案用 02_角色档案 文件管理。
+7. **记忆宫殿**：query_memory(查询) / manage_memory(增删改/reinforce强化) / link_memory(关联)。分类：设定/规则/禁止/风格。
+   ⚠️ **禁止存储角色信息**——记忆宫殿仅存创作规范等元知识，角色档案用 02_角色档案 文件管理。
 
 ---
 ## 五、工具使用规则
@@ -345,17 +346,17 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 
 **可用类别：**
 - file_write: 文件写入（updateFile, renameFile, deleteFile）
-- knowledge: 知识图谱（query_knowledge, manage_knowledge 等）
+- memory: 记忆宫殿（query_memory, manage_memory 等）
 - character: 角色档案（init_character_profile, update_character_profile 等）
 - relationship: 人际关系（query_relationships, manage_relationships 等）
 - outline: 大纲时间线（outline_getEvents, outline_manageChapters 等）
 
 **示例：**
-- 用户询问知识图谱内容 → 先调用 search_tools({ categories: ["knowledge"] }) → 然后使用知识工具
+- 用户询问记忆宫殿内容 → 先调用 search_tools({ categories: ["memory"] }) → 然后使用记忆工具
 - 用户要求规划大纲 → 先调用 search_tools({ categories: ["outline"] }) → 然后使用大纲工具
 
 **最佳实践：**
-- 可以一次激活多个类别：search_tools({ categories: ["knowledge", "outline"] })
+- 可以一次激活多个类别：search_tools({ categories: ["memory", "outline"] })
 - 首次对话开始时，立即激活预计会用到的主要工具类别
 - 始终激活的工具无需激活：listFiles, readFile, searchFiles, createFile, patchFile, manageTodos, managePlanNote
 
@@ -429,7 +430,7 @@ export const constructSystemPrompt = (
   todos: TodoItem[],
   messages?: any[],
   planMode?: boolean,
-  knowledgeNodes?: any[]  // 知识图谱数据
+  knowledgeNodes?: any[]  // 记忆宫殿数据
 ): string => {
   // --- 1. 变量组装 (Variable Assembly) ---
   const skillFolder = files.find(f => f.name === '98_技能配置');
@@ -558,37 +559,12 @@ export const constructSystemPrompt = (
     return section;
   };
 
-  // Knowledge Graph (知识图谱)
+  // Knowledge Graph (记忆宫殿) — now handled by memory stack
+  // L1 = critical nodes + character profiles, L2 = cross-Wing important nodes
+  // This function is kept as fallback but delegates to memory stack
   const getKnowledgeGraphSection = () => {
-    if (!knowledgeNodes || knowledgeNodes.length === 0) {
-      return '';
-    }
-
-    const critical = knowledgeNodes.filter((n: any) => n.importance === 'critical');
-    const important = knowledgeNodes.filter((n: any) => n.importance === 'important');
-
-    let output = '';
-
-    if (critical.length > 0) {
-      output += `## 📚 关键知识（必须遵守）\n> 共 ${critical.length} 条关键知识\n\n`;
-      output += critical.map((n: any) => {
-        let entry = `### ${n.name}\n- 分类: ${n.category}/${n.subCategory}\n- 标签: ${n.tags?.join(', ') || '无'}\n- 摘要: ${n.summary}`;
-        if (n.detail) entry += `\n- 详情: ${n.detail}`;
-        return entry;
-      }).join('\n\n');
-      output += '\n\n';
-    }
-
-    if (important.length > 0) {
-      output += `## 🔖 重要知识索引\n> 共 ${important.length} 条重要知识（需要详情时使用 query_knowledge 查询）\n\n`;
-      output += important.map((n: any) => {
-        const tags = n.tags?.length > 0 ? ` [${n.tags.join(', ')}]` : '';
-        return `- **${n.name}**: ${n.summary}${tags}`;
-      }).join('\n');
-      output += '\n\n';
-    }
-
-    return output;
+    // Memory stack handles this now — return empty, will be included via buildMemoryStack
+    return '';
   };
 
   // Foreshadowing (未收尾伏笔)
@@ -690,7 +666,6 @@ export const constructSystemPrompt = (
   // 技能库通过懒加载触发，不在这里动态传递列表
   const skillListSection = "";
   const characterProfilesSection = getCharacterProfilesSection();
-  const knowledgeGraphSection = getKnowledgeGraphSection();
   const foreshadowingSection = getForeshadowingSection();
 
   // --- 技能触发注入：活跃的技能内容 ---
@@ -719,20 +694,27 @@ export const constructSystemPrompt = (
     }
   }
 
-  const processedAgentInstruction = (agentInstruction || DEFAULT_AGENT_SKILL)
-    .replace(/\{\{PROJECT_INFO\}\}/g, projectInfo)
-    .replace(/\{\{PENDING_TODOS\}\}/g, pendingTodos)
-    .replace(/\{\{USER_INPUT_HISTORY\}\}/g, userInputHistory)
-    .replace(/\{\{FILE_TREE\}\}/g, fileTree)
-    .replace(/\{\{WORDS_PER_CHAPTER\}\}/g, wordsPerChapter)
-    .replace(/\{\{TEMPLATE_LIST\}\}/g, templateList)
-    .replace(/\{\{SKILL_LIST\}\}/g, skillListSection);
+  // --- 4层记忆栈构建 ---
+  const typedKnowledgeNodes = (knowledgeNodes || []) as KnowledgeNode[];
+  // 提取用户最后一条消息，用于 L2 按需加载的话题检测
+  const lastUserMessage = messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || null;
+  const memoryStackPrompt = buildMemoryStack({
+    agentInstruction: agentInstruction || DEFAULT_AGENT_SKILL,
+    projectInfo,
+    fileTree,
+    pendingTodos,
+    userInputHistory,
+    wordsPerChapter,
+    templateList,
+    skillList: skillListSection,
+    knowledgeNodes: typedKnowledgeNodes,
+    characterProfiles: characterProfilesSection,
+    userMessage: lastUserMessage,
+  });
 
   return `
-${processedAgentInstruction}
+${memoryStackPrompt}
 ${triggeredSkillsSection}
-${characterProfilesSection}
-${knowledgeGraphSection}
 ${foreshadowingSection}
 `;
 };

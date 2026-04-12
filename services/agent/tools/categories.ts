@@ -21,6 +21,9 @@ import {
   linkKnowledgeTool,
   listKnowledgeMetadataTool,
   listAllKnowledgeTool,
+  discoverTunnelsTool,
+  resolveConflictTool,
+  maintenanceTool,
 } from './knowledgeGraphTools';
 
 import {
@@ -75,12 +78,15 @@ export const alwaysOnTools: ToolDefinition[] = [
 
 export const categoryTools: Record<ToolCategory, ToolDefinition[]> = {
   file_write: [updateFileTool, renameFileTool, deleteFileTool],
-  knowledge: [
+  memory: [
     queryKnowledgeTool,
     manageKnowledgeTool,
     linkKnowledgeTool,
     listKnowledgeMetadataTool,
     listAllKnowledgeTool,
+    discoverTunnelsTool,
+    resolveConflictTool,
+    maintenanceTool,
   ],
   character: [
     initCharacterProfileTool,
@@ -125,7 +131,7 @@ export const getActivatedTools = (activatedCategories: ToolCategory[]): ToolDefi
 // 导出所有 lazy 类别
 export const lazyCategories: ToolCategory[] = [
   'file_write',
-  'knowledge',
+  'memory',
   'character',
   'relationship',
   'outline',

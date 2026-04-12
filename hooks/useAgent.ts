@@ -209,7 +209,7 @@ export const useAgent = (
     } else {
       console.log('[AutoAnalysis] ❌ 触发条件不满足');
     }
-    // 知识图谱：文档变更自动提取
+    // 记忆宫殿：文档变更自动提取
     const { autoExtraction } = useAgentStore.getState().aiConfig;
     if (autoExtraction?.document !== false &&
         change.fileName &&

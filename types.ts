@@ -718,6 +718,34 @@ export interface MemoryMetadataStats {
 // 知识图谱类型（新版本 - 使用中文标识）
 // ============================================
 
+// Wing/Room 结构化组织（MemPalace 风格）
+export type KnowledgeWing = 'world' | 'writing_rules' | 'characters' | 'plot' | 'project';
+
+export const WING_LABELS: Record<KnowledgeWing, string> = {
+  world: '世界设定',
+  writing_rules: '创作规范',
+  characters: '角色',
+  plot: '剧情',
+  project: '项目',
+};
+
+export const WING_ROOMS: Record<KnowledgeWing, string[]> = {
+  world: ['力量体系', '地理环境', '势力分布', '物品道具'],
+  writing_rules: ['叙事规则', '文风习惯', '用语忌讳', '格式规范', '写作技巧积累'],
+  characters: ['角色设定', '角色状态', '关系网络'],
+  plot: ['主线剧情', '支线剧情', '伏笔管理', 'Timeline'],
+  project: ['大纲', '项目设置', '模板'],
+};
+
+// 旧分类 → Wing/Room 迁移映射
+export const CATEGORY_TO_WING_ROOM: Record<KnowledgeCategory, { wing: KnowledgeWing; room: string }> = {
+  '设定': { wing: 'world', room: '世界设定' },
+  '规则': { wing: 'writing_rules', room: '叙事规则' },
+  '禁止': { wing: 'writing_rules', room: '用语忌讳' },
+  '风格': { wing: 'writing_rules', room: '文风习惯' },
+  '用户偏好': { wing: 'project', room: '项目设置' },
+};
+
 // 一级分类（预制，不可扩展）
 export type KnowledgeCategory = '设定' | '规则' | '禁止' | '风格' | '用户偏好';
 
@@ -799,6 +827,11 @@ export interface KnowledgeNode {
   };
   // 【新增】附件列表 - 关联到项目文档
   attachments?: MemoryAttachment[];
+  // Wing/Room 结构化组织（MemPalace 风格，迁移后填充）
+  wing?: KnowledgeWing;
+  room?: string;
+  // 语义向量（Transformers.js embedding，迁移后生成）
+  embedding?: number[];
   // 记忆智能元数据（可选，支持激活度/间隔重复算法）
   metadata?: KnowledgeNodeMetadata;
   // 时间戳

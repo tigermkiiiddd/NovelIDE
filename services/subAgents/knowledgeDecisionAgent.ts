@@ -1,6 +1,6 @@
 /**
  * @file knowledgeDecisionAgent.ts
- * @description 知识决策 Agent - 处理新知识图谱的提取和分类
+ * @description 记忆决策 Agent - 处理新记忆宫殿的提取和分类
  */
 
 import { AIService } from '../geminiService';
@@ -12,6 +12,10 @@ import {
   KnowledgeEdgeType,
   DEFAULT_SUB_CATEGORIES,
   ProjectMeta,
+  KnowledgeWing,
+  WING_LABELS,
+  WING_ROOMS,
+  CATEGORY_TO_WING_ROOM,
 } from '../../types';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
 import { buildProjectOverviewPrompt } from '../../utils/projectContext';
@@ -61,7 +65,7 @@ const quickEvalTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'quick_eval',
-    description: '快速评估内容是否值得进入知识图谱。[TERMINAL TOOL]',
+    description: '快速评估内容是否值得进入记忆宫殿。[TERMINAL TOOL]',
     parameters: {
       type: 'object',
       properties: {
@@ -100,7 +104,7 @@ const quickEvalConfig: SubAgentConfig<KnowledgeDecisionInput, QuickEvalOutput> =
     const projectOverview = buildProjectOverviewPrompt(input.project);
     return `${projectOverview}
 
-你是【知识评估器】。快速判断内容是否值得进入知识图谱。
+你是【记忆评估器】。快速判断内容是否值得进入记忆宫殿。
 
 ## ⚠️ 禁止提取的内容（直接返回 shouldProcess=false）
 - 角色相关的任何信息（角色档案系统管理）
@@ -146,7 +150,7 @@ ${input.content.slice(0, 4000)}
 `;
   },
 
-  getInitialMessage: () => '快速评估内容是否值得进入知识图谱。',
+  getInitialMessage: () => '快速评估内容是否值得进入记忆宫殿。',
 
   parseTerminalResult: (args) => ({
     shouldProcess: Boolean(args.shouldProcess),
@@ -158,13 +162,13 @@ ${input.content.slice(0, 4000)}
   handleTextResponse: () => '请直接调用 quick_eval 工具提交评估结果。',
 };
 
-// ==================== 阶段二：知识决策 ====================
+// ==================== 阶段二：记忆决策 ====================
 
 const listMetadataTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'list_knowledge_metadata',
-    description: '列出知识图谱中已存在的元数据。',
+    name: 'list_memory_catalog',
+    description: '列出记忆宫殿中已存在的元数据。',
     parameters: {
       type: 'object',
       properties: {},
@@ -175,8 +179,8 @@ const listMetadataTool: ToolDefinition = {
 const queryKnowledgeTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'query_knowledge',
-    description: '查询知识图谱中的节点。',
+    name: 'query_memory',
+    description: '查询记忆宫殿中的节点。',
     parameters: {
       type: 'object',
       properties: {
@@ -202,7 +206,7 @@ const submitDecisionTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'submit_decision',
-    description: '提交知识决策结果。[TERMINAL TOOL]',
+    description: '提交记忆决策结果。[TERMINAL TOOL]',
     parameters: {
       type: 'object',
       properties: {
@@ -226,8 +230,17 @@ const submitDecisionTool: ToolDefinition = {
             properties: {
               action: {
                 type: 'string',
-                enum: ['add', 'update', 'skip'],
-                description: '操作类型',
+                enum: ['add', 'update', 'skip', 'contradict'],
+                description: '操作类型。contradict 表示检测到与已有记忆矛盾，需标记冲突',
+              },
+              wing: {
+                type: 'string',
+                enum: ['world', 'writing_rules', 'characters', 'plot', 'project'],
+                description: 'Wing 分类（MemPalace 结构）',
+              },
+              room: {
+                type: 'string',
+                description: 'Room 分类（Wing 下的具体主题）',
               },
               category: {
                 type: 'string',
@@ -341,6 +354,8 @@ const executeQueryKnowledge = async (args: { query?: string; category?: Knowledg
       name: n.name,
       summary: n.summary,
       tags: n.tags,
+      wing: n.wing,
+      room: n.room,
     })),
   });
 };
@@ -359,7 +374,7 @@ const decisionConfig: SubAgentConfig<
     const projectOverview = buildProjectOverviewPrompt(input.project);
     return `${projectOverview}
 
-你是【知识决策器】。分析内容并决定如何更新知识图谱。
+你是【记忆决策器】。分析内容并决定如何更新记忆宫殿。
 
 ## 分类体系
 
@@ -368,6 +383,18 @@ const decisionConfig: SubAgentConfig<
 - **规则**: 必须遵守的创作规则
 - **禁止**: 不能做的事情
 - **风格**: 文风、写作风格
+
+### Wing/Room 结构化分类（MemPalace 风格）
+每个记忆节点必须分配到对应的 Wing 和 Room：
+
+${Object.entries(WING_ROOMS).map(([wing, rooms]) =>
+  `- **${WING_LABELS[wing as KnowledgeWing]}** (${wing}): ${rooms.join('、')}`
+).join('\n')}
+
+分类映射（自动建议，可调整）：
+${Object.entries(CATEGORY_TO_WING_ROOM).map(([cat, mapping]) =>
+  `- ${cat} → ${WING_LABELS[mapping.wing]}/${mapping.room}`
+).join('\n')}
 
 ### 二级分类（可扩展）
 默认分类：
@@ -388,8 +415,15 @@ const decisionConfig: SubAgentConfig<
 ## 操作原则
 1. **简洁优先**: 每个节点应该是一个精确的事实或规则
 2. **避免重复**: 查询现有节点，避免重复创建
-3. **合理分类**: 选择最合适的分类
+3. **合理分类**: 选择最合适的分类，并分配 Wing/Room
 4. **使用标签**: 用标签建立跨分类的关联
+5. **矛盾检测**: 如果新内容与已有记忆冲突，使用 contradict 操作标记
+
+## 操作类型
+- **add**: 添加新记忆节点（必须指定 wing 和 room）
+- **update**: 更新已有节点（必须提供 existingId）
+- **skip**: 跳过（不值得提取）
+- **contradict**: 检测到矛盾（标记冲突，提供 existingId 和 reason）
 
 ## 快速评估结果
 已经过初步评估，主要分类: ${input.quickEvalResult.category}
@@ -408,7 +442,7 @@ ${input.content.slice(0, 6000)}
   },
 
   getInitialMessage: (input) =>
-    `内容已通过初步评估。请先查询现有知识，然后提交决策。关键分类: ${input.quickEvalResult.category}`,
+    `内容已通过初步评估。请先查询现有记忆，然后提交决策。关键分类: ${input.quickEvalResult.category}`,
 
   parseTerminalResult: (args) => ({
     shouldExtract: Boolean(args.shouldExtract),
@@ -421,13 +455,13 @@ ${input.content.slice(0, 6000)}
     })),
   }),
 
-  handleTextResponse: () => '请使用工具查询现有知识，然后调用 submit_decision 提交决策。',
+  handleTextResponse: () => '请使用工具查询现有记忆，然后调用 submit_decision 提交决策。',
 
   executeCustomTool: async (toolName: string, args: any) => {
     switch (toolName) {
-      case 'list_knowledge_metadata':
+      case 'list_memory_catalog':
         return executeListMetadata();
-      case 'query_knowledge':
+      case 'query_memory':
         return executeQueryKnowledge(args);
       default:
         return null as any;
@@ -484,7 +518,7 @@ export class KnowledgeDecisionAgent extends BaseSubAgent<
       };
     }
 
-    // 阶段二：知识决策
+    // 阶段二：记忆决策
     onLog?.('[阶段二] 分析并决策...');
     const decisionAgent = new BaseSubAgent(decisionConfig);
     const decisionInput = {

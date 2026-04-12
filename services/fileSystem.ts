@@ -167,7 +167,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       lastModified: Date.now()
     }, null, 2)),
 
-    // --- 00_基础信息/长期记忆.json (知识图谱存储) ---
+    // --- 00_基础信息/长期记忆.json (记忆宫殿存储) ---
     createFile('长期记忆.json', infoFolder.id, JSON.stringify({
       nodes: [],
       edges: [],

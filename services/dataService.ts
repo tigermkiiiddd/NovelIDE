@@ -150,8 +150,8 @@ class DataService {
         }
       }
 
-      // 5. 检查知识图谱一致性（如果需要）
-      // 知识图谱目前是项目级的，暂不需要检查
+      // 5. 检查记忆宫殿一致性（如果需要）
+      // 记忆宫殿目前是项目级的，暂不需要检查
 
       result.repaired = result.orphanProfiles.length > 0 || result.orphanMemories.length > 0;
 

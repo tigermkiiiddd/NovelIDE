@@ -21,7 +21,7 @@ import {
   Save,
   User,
 } from 'lucide-react';
-import { KnowledgeNode, KnowledgeCategory, DEFAULT_SUB_CATEGORIES } from '../types';
+import { KnowledgeNode, KnowledgeCategory, KnowledgeWing, DEFAULT_SUB_CATEGORIES, WING_LABELS } from '../types';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 
 // ============================================
@@ -318,6 +318,23 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
             className="bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-sm w-20 focus:border-blue-500 focus:outline-none hover:border-gray-500"
           />
         </div>
+
+        {/* Wing/Room 标签 */}
+        {node.wing && (
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-xs px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded">
+              {WING_LABELS[node.wing as KnowledgeWing]}
+            </span>
+            {node.room && (
+              <>
+                <ChevronRight className="w-2.5 h-2.5 text-gray-600" />
+                <span className="text-xs px-1.5 py-0.5 bg-gray-800 text-gray-400 rounded">
+                  {node.room}
+                </span>
+              </>
+            )}
+          </div>
+        )}
 
         {/* 名称 */}
         <EditableText

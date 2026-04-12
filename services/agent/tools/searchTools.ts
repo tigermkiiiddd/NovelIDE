@@ -20,7 +20,7 @@ export const searchToolsDef: ToolDefinition = {
 
 可用类别：
 - file_write: 文件写入操作（updateFile, renameFile, deleteFile）
-- knowledge: 知识图谱（查询/管理/关联）
+- memory: 记忆宫殿（查询/管理/关联/通道发现/矛盾调解/维护）
 - character: 角色档案（初始化/更新/归档）
 - relationship: 人际关系（查询/管理/网络）
 - outline: 大纲时间线（事件/章节/卷/故事线/伏笔）
@@ -33,7 +33,7 @@ export const searchToolsDef: ToolDefinition = {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['file_write', 'knowledge', 'character', 'relationship', 'outline'],
+            enum: ['file_write', 'memory', 'character', 'relationship', 'outline'],
           },
           description: '要激活的工具类别列表',
         },
@@ -47,7 +47,7 @@ export const searchToolsDef: ToolDefinition = {
 export const executeSearchTools = (args: {
   categories: string[];
 }): string => {
-  const validCategories = ['file_write', 'knowledge', 'character', 'relationship', 'outline'] as const;
+  const validCategories = ['file_write', 'memory', 'character', 'relationship', 'outline'] as const;
   const requestedCategories = args.categories || [];
 
   // 过滤有效类别

@@ -1,6 +1,6 @@
 /**
  * @file knowledgeExtractionAgent.ts
- * @description 知识提取 Agent - 从文档/对话中提取知识节点
+ * @description 记忆提取 Agent - 从文档/对话中提取记忆节点
  */
 
 import { AIService } from '../geminiService';
@@ -33,7 +33,7 @@ export interface KnowledgeExtractionOutput {
 }
 
 export interface KnowledgeOperation {
-  action: 'add' | 'update' | 'link' | 'skip';
+  action: 'add' | 'update' | 'link' | 'contradict' | 'skip';
   node?: KnowledgeNodeDraft;
   nodeId?: string;
   from?: string;
@@ -55,7 +55,7 @@ const quickEvalTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'quick_eval',
-    description: '快速评估内容是否值得进入知识图谱。[TERMINAL TOOL]',
+    description: '快速评估内容是否值得进入记忆宫殿。[TERMINAL TOOL]',
     parameters: {
       type: 'object',
       properties: {
@@ -94,7 +94,7 @@ const quickEvalConfig: SubAgentConfig<KnowledgeExtractionInput, QuickEvalOutput>
     const projectOverview = buildProjectOverviewPrompt(undefined);
     return `${projectOverview}
 
-你是【知识评估器】。快速判断以下内容是否值得进入知识图谱。
+你是【记忆评估器】。快速判断以下内容是否值得进入记忆宫殿。
 
 ## ⚠️ 禁止提取的内容（直接返回 shouldProcess=false）
 - 角色相关的任何信息（描述、性格、背景、关系、口吻等）→ 角色档案系统管理
@@ -119,7 +119,7 @@ const quickEvalConfig: SubAgentConfig<KnowledgeExtractionInput, QuickEvalOutput>
 - 宁缺毋滥：不确定时返回 false
 - 快速判断：不要过度分析
 - 只看是否有**长期稳定**的价值
-- 角色相关信息（设定、性格、背景、关系）由角色档案系统管理，不属于知识图谱
+- 角色相关信息（设定、性格、背景、关系）由角色档案系统管理，不属于记忆宫殿
 
 ## 内容来源
 来源: ${input.source}
@@ -133,7 +133,7 @@ ${input.content.slice(0, 4000)}
 `;
   },
 
-  getInitialMessage: () => '快速评估内容是否值得进入知识图谱。',
+  getInitialMessage: () => '快速评估内容是否值得进入记忆宫殿。',
 
   parseTerminalResult: (args) => ({
     shouldProcess: Boolean(args.shouldProcess),
@@ -143,7 +143,7 @@ ${input.content.slice(0, 4000)}
   }),
 };
 
-// ==================== 阶段二：知识决策 ====================
+// ==================== 阶段二：记忆决策 ====================
 
 interface DecisionInput extends KnowledgeExtractionInput {
   evalResult: QuickEvalOutput;
@@ -153,7 +153,7 @@ const listNodesTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'list_nodes',
-    description: '列出已有的知识节点',
+    description: '列出已有的记忆节点',
     parameters: {
       type: 'object',
       properties: {
@@ -171,7 +171,7 @@ const submitDecisionTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'submit_decision',
-    description: '提交知识决策结果。[TERMINAL TOOL]',
+    description: '提交记忆决策结果。[TERMINAL TOOL]',
     parameters: {
       type: 'object',
       properties: {
@@ -189,13 +189,13 @@ const submitDecisionTool: ToolDefinition = {
         },
         operations: {
           type: 'array',
-          description: '知识操作列表',
+          description: '记忆操作列表',
           items: {
             type: 'object',
             properties: {
               action: {
                 type: 'string',
-                enum: ['add', 'update', 'link', 'skip'],
+                enum: ['add', 'update', 'link', 'contradict', 'skip'],
               },
               // add/update 时的节点数据
               category: { type: 'string', enum: ['设定', '规则', '禁止', '风格'] },
@@ -206,6 +206,9 @@ const submitDecisionTool: ToolDefinition = {
               detail: { type: 'string' },
               tags: { type: 'array', items: { type: 'string' } },
               importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
+              // Wing/Room 自动分类
+              wing: { type: 'string', enum: ['world', 'writing_rules', 'characters', 'plot', 'project'] },
+              room: { type: 'string' },
               // update/link 时的节点 ID
               nodeId: { type: 'string' },
               // link 时的边信息
@@ -236,13 +239,13 @@ const buildDecisionPrompt = (input: DecisionInput): string => {
 
   return `${projectOverview}
 
-你是【知识决策器】。根据评估结果，决定如何处理新内容。
+你是【记忆决策器】。根据评估结果，决定如何处理新内容。
 
 ## 评估结果
 - 分类建议: ${input.evalResult.category}
 - 关键词: ${input.evalResult.keywords.join(', ')}
 
-## 已有知识节点 (共${input.existingNodes.length}条)
+## 已有记忆节点 (共${input.existingNodes.length}条)
 ${existingNodesSummary || '(暂无)'}
 
 ## 二级分类参考
@@ -251,9 +254,19 @@ ${existingNodesSummary || '(暂无)'}
 - 禁止: 禁止词汇、禁止情节、禁止写法
 - 风格: 叙事风格、对话风格、描写风格
 
+## Wing/Room 宫殿结构（自动分类）
+- world (世界设定): 力量体系, 地理环境, 势力分布, 物品道具
+- writing_rules (创作规范): 叙事规则, 文风习惯, 用语忌讳, 格式规范, 写作技巧积累
+- characters (角色): 角色设定, 角色状态, 关系网络
+- plot (剧情): 主线剧情, 支线剧情, 伏笔管理, Timeline
+- project (项目): 大纲, 项目设置, 模板
+
+分类自动映射: 设定→world, 规则→writing_rules/叙事规则, 禁止→writing_rules/用语忌讳, 风格→writing_rules/文风习惯
+
 ## 操作类型
-1. **add**: 添加新知识节点
+1. **add**: 添加新记忆节点
    - 必须提供: category, subCategory, name, summary
+   - 可选: wing, room（不提供时自动映射）
    - 建议: ${input.evalResult.category !== 'none' ? `category="${input.evalResult.category}", subCategory="${suggestedSubCategory}"` : '根据内容判断'}
 
 2. **update**: 更新现有节点
@@ -262,7 +275,11 @@ ${existingNodesSummary || '(暂无)'}
 3. **link**: 建立节点关系
    - 必须提供: from, to, edgeType
 
-4. **skip**: 跳过处理
+4. **contradict**: 标记记忆冲突
+   - 必须提供: from (旧节点ID), to (新节点ID), reason
+   - 会创建一条"冲突"类型的边，标记两个节点间的矛盾
+
+5. **skip**: 跳过处理
 
 ## 待处理内容
 来源: ${input.source} ${input.sourceRef ? `(${input.sourceRef})` : ''}
@@ -286,7 +303,7 @@ const executeListNodes = (args: { category?: string }, ctx: ToolContext): string
   }
 
   if (nodes.length === 0) {
-    return '(暂无知识节点)';
+    return '(暂无记忆节点)';
   }
 
   return nodes
@@ -304,7 +321,7 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
 
   getSystemPrompt: buildDecisionPrompt,
 
-  getInitialMessage: () => '请查询已有知识节点，然后决定如何处理新内容。',
+  getInitialMessage: () => '请查询已有记忆节点，然后决定如何处理新内容。',
 
   parseTerminalResult: (args) => {
     const operations: KnowledgeOperation[] = (args.operations || []).map((op: any) => {
@@ -323,6 +340,8 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
               detail: op.detail,
               tags: Array.isArray(op.tags) ? op.tags : [],
               importance: op.importance || 'normal',
+              wing: op.wing,
+              room: op.room,
             } as KnowledgeNodeDraft,
           };
         case 'update':
@@ -337,6 +356,8 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
               detail: op.detail,
               tags: op.tags != null ? (Array.isArray(op.tags) ? op.tags : []) : undefined,
               importance: op.importance,
+              wing: op.wing,
+              room: op.room,
             } as Partial<KnowledgeNodeDraft>,
           };
         case 'link':
@@ -345,6 +366,13 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
             from: op.from || op.nodeId,
             to: op.to,
             edgeType: op.edgeType as KnowledgeEdgeType,
+          };
+        case 'contradict':
+          return {
+            action: 'contradict',
+            from: op.from || op.nodeId,
+            to: op.to,
+            reason: op.reason || '知识冲突',
           };
         case 'skip':
         default:
@@ -362,7 +390,7 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
     };
   },
 
-  handleTextResponse: () => '请使用工具查询已有知识节点，然后调用 submit_decision 提交决策。',
+  handleTextResponse: () => '请使用工具查询已有记忆节点，然后调用 submit_decision 提交决策。',
 };
 
 // ==================== 导出函数 ====================
@@ -391,7 +419,7 @@ export async function runKnowledgeExtractionAgent(
 
   if (onLog) onLog(`✅ [阶段一] 值得处理: ${evalResult.category}`);
 
-  // ========== 阶段二：知识决策 ==========
+  // ========== 阶段二：记忆决策 ==========
   if (onLog) onLog('🔍 [阶段二] 查询并决策...');
 
   const ctx: ToolContext = {

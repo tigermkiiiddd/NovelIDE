@@ -341,7 +341,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
         }
 
         documentExtractionTimeoutRef.current = setTimeout(() => {
-          // 正文文件由章节分析处理，不进入知识图谱
+          // 正文文件由章节分析处理，不进入记忆宫殿
           const { autoExtraction } = useAgentStore.getState().aiConfig;
           if (!filePath.startsWith('05_正文草稿/') && autoExtraction?.document !== false) {
             useKnowledgeGraphStore

@@ -85,15 +85,15 @@ export const useAgentEngine = ({
       const freshTodos = freshSession?.todos || [];
 
       // 3. 构建 System Prompt (LLM Input Part 1)
-      // 获取知识图谱数据
+      // 获取记忆宫殿数据
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
       const fullSystemInstruction = constructSystemPrompt(
         files,
         project,
         freshTodos,
-        freshSession?.messages,  // 传递会话消息历史
+        freshSession?.messages,  // 传递会话消息历史（用于 L2 按需话题检测）
         planMode,  // 传递 Plan 模式状态
-        knowledgeNodes  // 传递知识图谱节点
+        knowledgeNodes  // 传递记忆宫殿节点
       );
 
       // Lazy loading: 合并始终激活工具 + 目录 + search_tools + 已激活工具

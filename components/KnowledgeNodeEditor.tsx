@@ -9,7 +9,11 @@ import {
   KnowledgeCategory,
   KnowledgeNode,
   KnowledgeNodeDraft,
+  KnowledgeWing,
   DEFAULT_SUB_CATEGORIES,
+  WING_LABELS,
+  WING_ROOMS,
+  CATEGORY_TO_WING_ROOM,
 } from '../types';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 
@@ -44,6 +48,7 @@ interface Props {
   onSave: (draft: KnowledgeNodeDraft) => void;
   onCancel: () => void;
   defaultCategory?: KnowledgeCategory;
+  defaultWing?: KnowledgeWing;
 }
 
 // ============================================
@@ -55,6 +60,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
   onSave,
   onCancel,
   defaultCategory = '设定',
+  defaultWing,
 }) => {
   const store = useKnowledgeGraphStore();
   const availableSubCategories = store.availableSubCategories;
@@ -71,14 +77,24 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
   const [importance, setImportance] = useState<'critical' | 'important' | 'normal'>(
     node?.importance || 'normal'
   );
+  const [wing, setWing] = useState<KnowledgeWing | undefined>(
+    node?.wing || defaultWing || undefined
+  );
+  const [room, setRoom] = useState<string | undefined>(node?.room || undefined);
   const [newTag, setNewTag] = useState('');
 
-  // 分类变化时重置子分类
+  // 分类变化时重置子分类 + 自动更新 Wing/Room
   useEffect(() => {
     if (!availableSubCategories[category]?.includes(subCategory)) {
       setSubCategory(DEFAULT_SUB_CATEGORIES[category][0]);
     }
-  }, [category, availableSubCategories, subCategory]);
+    // 自动分配 Wing/Room
+    const mapping = CATEGORY_TO_WING_ROOM[category];
+    if (mapping && !wing) {
+      setWing(mapping.wing);
+      setRoom(mapping.room);
+    }
+  }, [category, availableSubCategories, subCategory, wing]);
 
   // 可用的子分类选项
   const subCategoryOptions = useMemo(() => {
@@ -127,6 +143,8 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
       tags,
       importance,
       parentId: node?.parentId,
+      wing,
+      room,
     };
 
     onSave(draft);
@@ -160,6 +178,46 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
               </option>
             ))}
           </select>
+        </div>
+
+        {/* Wing/Room 宫殿位置 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Wing</label>
+            <select
+              value={wing || ''}
+              onChange={(e) => {
+                const w = e.target.value as KnowledgeWing | '';
+                setWing(w || undefined);
+                // 重置 room 为新 Wing 的第一个
+                if (w && WING_ROOMS[w as KnowledgeWing]) {
+                  setRoom(WING_ROOMS[w as KnowledgeWing][0]);
+                } else {
+                  setRoom(undefined);
+                }
+              }}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
+            >
+              <option value="">自动</option>
+              {(Object.keys(WING_LABELS) as KnowledgeWing[]).map((w) => (
+                <option key={w} value={w}>{WING_LABELS[w]}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Room</label>
+            <select
+              value={room || ''}
+              onChange={(e) => setRoom(e.target.value || undefined)}
+              disabled={!wing}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            >
+              <option value="">自动</option>
+              {wing && WING_ROOMS[wing]?.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* 二级分类 */}

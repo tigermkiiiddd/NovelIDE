@@ -10,6 +10,9 @@ import {
   executeLinkKnowledge,
   executeListKnowledgeMetadata,
   executeListAllKnowledge,
+  executeDiscoverTunnels,
+  executeResolveConflict,
+  executeMaintenance,
 } from './tools/knowledgeGraphTools';
 import { executeOutlineTool, executeProcessOutlineInput } from './tools/timelineTools';
 import {
@@ -511,20 +514,29 @@ export const executeTool = async (
                     result = actions.updateProjectMeta(args);
                     break;
                 // --- KNOWLEDGE GRAPH TOOLS ---
-                case 'query_knowledge':
+                case 'query_memory':
                     result = await executeQueryKnowledge(args);
                     break;
-                case 'manage_knowledge':
+                case 'manage_memory':
                     result = await executeManageKnowledge(args);
                     break;
-                case 'link_knowledge':
+                case 'link_memory':
                     result = await executeLinkKnowledge(args);
                     break;
-                case 'list_knowledge_metadata':
+                case 'list_memory_catalog':
                     result = await executeListKnowledgeMetadata();
                     break;
-                case 'list_all_knowledge':
+                case 'list_all_memories':
                     result = await executeListAllKnowledge(args);
+                    break;
+                case 'discover_passages':
+                    result = await executeDiscoverTunnels();
+                    break;
+                case 'resolve_contradiction':
+                    result = await executeResolveConflict(args);
+                    break;
+                case 'memory_maintenance':
+                    result = await executeMaintenance(args);
                     break;
                 case 'manage_attachments':
                 // --- CHARACTER PROFILE TOOLS ---

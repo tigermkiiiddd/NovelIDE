@@ -31,31 +31,46 @@ export const toolCatalogEntries: ToolCatalogEntry[] = [
     category: 'file_write',
   },
 
-  // knowledge 系列
+  // 记忆宫殿系列
   {
-    name: 'query_knowledge',
-    description: '查询知识图谱中的相关知识节点',
-    category: 'knowledge',
+    name: 'query_memory',
+    description: '查询记忆宫殿中的相关知识节点',
+    category: 'memory',
   },
   {
-    name: 'manage_knowledge',
-    description: '批量添加、更新、删除知识节点，或强化/复习已有知识',
-    category: 'knowledge',
+    name: 'manage_memory',
+    description: '批量添加、更新、删除记忆节点，或强化/复习已有记忆',
+    category: 'memory',
   },
   {
-    name: 'link_knowledge',
-    description: '建立知识节点之间的关系（属于/细化/依赖/冲突）',
-    category: 'knowledge',
+    name: 'link_memory',
+    description: '建立记忆节点之间的关系（属于/细化/依赖/冲突）',
+    category: 'memory',
   },
   {
-    name: 'list_knowledge_metadata',
-    description: '列出可用的知识分类和标签',
-    category: 'knowledge',
+    name: 'list_memory_catalog',
+    description: '列出可用的记忆分类和标签',
+    category: 'memory',
   },
   {
-    name: 'list_all_knowledge',
-    description: '列出知识图谱中所有节点的列表，按分类分组',
-    category: 'knowledge',
+    name: 'list_all_memories',
+    description: '列出记忆宫殿中所有节点的列表，按分类分组',
+    category: 'memory',
+  },
+  {
+    name: 'discover_passages',
+    description: '自动发现跨星域之间的记忆通道（共享标签的跨 Wing 连接）',
+    category: 'memory',
+  },
+  {
+    name: 'resolve_contradiction',
+    description: '解决记忆宫殿中标记为冲突的矛盾节点（保留/合并/删除）',
+    category: 'memory',
+  },
+  {
+    name: 'memory_maintenance',
+    description: '执行记忆宫殿维护（列出冲突、清理冷却节点）',
+    category: 'memory',
   },
 
   // character 系列

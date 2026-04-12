@@ -1,6 +1,6 @@
 /**
  * @file knowledgeGraphStore.ts
- * @description 知识图谱状态管理 - 三级分类 + Tag系统 + 记忆智能算法
+ * @description 记忆宫殿状态管理 - 三级分类 + Tag系统 + 记忆智能算法
  */
 
 import { FileNode, KnowledgeNodeMetadata, KnowledgeNodeDynamicState, MemoryAttachment } from '../types';
@@ -10,8 +10,11 @@ import {
   KnowledgeNodeDraft,
   KnowledgeEdge,
   KnowledgeEdgeType,
+  KnowledgeWing,
   DEFAULT_SUB_CATEGORIES,
   SUB_CATEGORY_MIGRATION,
+  CATEGORY_TO_WING_ROOM,
+  WING_ROOMS,
 } from '../types';
 import { create } from 'zustand';
 import { useFileStore } from './fileStore';
@@ -27,6 +30,8 @@ import Fuse from 'fuse.js';
 import { extractKnowledgeFromDocument, extractKnowledgeFromDialogue, KnowledgeOperation } from '../services/subAgents/knowledgeExtractionAgent';
 import { AIService } from '../services/geminiService';
 import { useAgentStore } from './agentStore';
+import { findSemanticDuplicate } from '../domains/memory/vectorSearchService';
+import { generateEmbedding } from '../domains/memory/embeddingService';
 
 // ============================================
 // 类型定义
@@ -65,6 +70,10 @@ interface KnowledgeGraphState {
   getNodesByTag: (tag: string) => KnowledgeNode[];
   getNodesByTopic: (topic: string) => KnowledgeNode[];
   getChildNodes: (parentId: string) => KnowledgeNode[];
+  getNodesByWing: (wing: KnowledgeWing) => KnowledgeNode[];
+  getNodesByRoom: (wing: KnowledgeWing, room: string) => KnowledgeNode[];
+  getUnassignedNodes: () => KnowledgeNode[];
+  migrateNodesToWingRoom: () => number;
   searchNodes: (query: string) => KnowledgeNode[];
   searchNodesWithScore: (query: string, limit?: number) => { node: KnowledgeNode; score: number }[];
 
@@ -91,6 +100,15 @@ interface KnowledgeGraphState {
     bySubCategory: Record<string, number>;
     topTags: { tag: string; count: number }[];
   };
+
+  // Tunnel 自动发现
+  discoverTunnels: () => number;
+  getCrossWingConnections: () => Array<{ from: KnowledgeNode; to: KnowledgeNode; sharedTags: string[] }>;
+
+  // 记忆清理
+  cleanupCoolingNodes: (threshold?: number) => number;
+  resolveConflict: (edgeId: string, resolution: 'keep_old' | 'keep_new' | 'merge' | 'keep_both', mergedContent?: Partial<KnowledgeNode>) => boolean;
+  getConflicts: () => Array<{ edge: KnowledgeEdge; fromNode: KnowledgeNode; toNode: KnowledgeNode }>;
 
   // 加载/保存
   loadFromProject: (projectId: string) => Promise<void>;
@@ -268,6 +286,39 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
 
   getChildNodes: (parentId: string) => {
     return get().nodes.filter((node) => node.parentId === parentId);
+  },
+
+  getNodesByWing: (wing: KnowledgeWing) => {
+    return get().nodes.filter((node) => node.wing === wing);
+  },
+
+  getNodesByRoom: (wing: KnowledgeWing, room: string) => {
+    return get().nodes.filter((node) => node.wing === wing && node.room === room);
+  },
+
+  getUnassignedNodes: () => {
+    return get().nodes.filter((node) => !node.wing);
+  },
+
+  migrateNodesToWingRoom: () => {
+    const nodes = get().nodes;
+    let migrated = 0;
+    const updatedNodes = nodes.map((node) => {
+      if (node.wing) return node; // already assigned
+      const mapping = CATEGORY_TO_WING_ROOM[node.category];
+      if (mapping) {
+        migrated++;
+        return { ...node, wing: mapping.wing, room: mapping.room };
+      }
+      return node;
+    });
+
+    if (migrated > 0) {
+      set({ nodes: updatedNodes });
+      setTimeout(() => saveToFile(get()), 1000);
+      console.log(`[KnowledgeGraph] 迁移了 ${migrated} 个节点到 Wing/Room`);
+    }
+    return migrated;
   },
 
   searchNodes: (query: string) => {
@@ -454,12 +505,16 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       '用户偏好': 0,
     };
     const bySubCategory: Record<string, number> = {};
+    const byWing: Record<string, number> = {};
     const tagCounts: Record<string, number> = {};
 
     state.nodes.forEach((node) => {
       byCategory[node.category]++;
       const subKey = `${node.category}/${node.subCategory}`;
       bySubCategory[subKey] = (bySubCategory[subKey] || 0) + 1;
+      if (node.wing) {
+        byWing[node.wing] = (byWing[node.wing] || 0) + 1;
+      }
       node.tags.forEach((tag) => {
         tagCounts[tag] = (tagCounts[tag] || 0) + 1;
       });
@@ -475,8 +530,180 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       totalEdges: state.edges.length,
       byCategory,
       bySubCategory,
+      byWing,
       topTags,
     };
+  },
+
+  // ============================================
+  // Tunnel 自动发现
+  // ============================================
+
+  discoverTunnels: () => {
+    const state = get();
+    const nodes = state.nodes.filter(n => n.wing && n.category !== '用户偏好');
+    const edges = state.edges;
+    let tunnelsCreated = 0;
+
+    // 按标签分组，找跨 Wing 的共享标签
+    const tagNodeMap = new Map<string, KnowledgeNode[]>();
+    nodes.forEach(node => {
+      (node.tags || []).forEach(tag => {
+        const list = tagNodeMap.get(tag) || [];
+        list.push(node);
+        tagNodeMap.set(tag, list);
+      });
+    });
+
+    // 对每个有跨 Wing 节点的标签，创建 tunnel
+    const existingEdgeKey = new Set(
+      edges.map(e => `${e.from}->${e.to}:${e.type}`)
+    );
+
+    tagNodeMap.forEach((taggedNodes, tag) => {
+      // 按 Wing 分组
+      const byWing = new Map<KnowledgeWing, KnowledgeNode[]>();
+      taggedNodes.forEach(n => {
+        const list = byWing.get(n.wing!) || [];
+        list.push(n);
+        byWing.set(n.wing!, list);
+      });
+
+      // 至少 2 个不同的 Wing
+      if (byWing.size < 2) return;
+
+      // 取每个 Wing 的代表节点（最高 importance）
+      const representatives: KnowledgeNode[] = [];
+      byWing.forEach(wingNodes => {
+        wingNodes.sort((a, b) => {
+          const imp = { critical: 3, important: 2, normal: 1 };
+          return (imp[b.importance] || 0) - (imp[a.importance] || 0);
+        });
+        representatives.push(wingNodes[0]);
+      });
+
+      // 在代表节点之间创建 依赖 边（如果不存在）
+      for (let i = 0; i < representatives.length; i++) {
+        for (let j = i + 1; j < representatives.length; j++) {
+          const a = representatives[i];
+          const b = representatives[j];
+          const key1 = `${a.id}->${b.id}:依赖`;
+          const key2 = `${b.id}->${a.id}:依赖`;
+          if (!existingEdgeKey.has(key1) && !existingEdgeKey.has(key2)) {
+            get().addEdge(a.id, b.id, '依赖', `隧道：共享标签[${tag}]`);
+            existingEdgeKey.add(key1);
+            tunnelsCreated++;
+          }
+        }
+      }
+    });
+
+    if (tunnelsCreated > 0) {
+      console.log(`[KnowledgeGraph] 发现 ${tunnelsCreated} 条跨 Wing 隧道`);
+    }
+    return tunnelsCreated;
+  },
+
+  getCrossWingConnections: () => {
+    const state = get();
+    const connections: Array<{ from: KnowledgeNode; to: KnowledgeNode; sharedTags: string[] }> = [];
+
+    state.edges
+      .filter(e => e.type === '依赖' && e.note?.startsWith('隧道：'))
+      .forEach(edge => {
+        const fromNode = state.nodes.find(n => n.id === edge.from);
+        const toNode = state.nodes.find(n => n.id === edge.to);
+        if (fromNode && toNode && fromNode.wing !== toNode.wing) {
+          const sharedTags = (fromNode.tags || []).filter(t => (toNode.tags || []).includes(t));
+          connections.push({ from: fromNode, to: toNode, sharedTags });
+        }
+      });
+
+    return connections;
+  },
+
+  // ============================================
+  // 记忆清理 + 冲突解决
+  // ============================================
+
+  cleanupCoolingNodes: (threshold = 0.15) => {
+    const state = get();
+    let cleaned = 0;
+    const now = Date.now();
+
+    const updatedNodes = state.nodes.map(node => {
+      // 只处理 normal 节点（critical/important 不自动降级）
+      if (node.importance !== 'normal' || node.category === '用户偏好') return node;
+
+      const dynamic = getKnowledgeNodeDynamicState(node, now);
+      // 激活度和强度都低于阈值 → 降级为 inactive（通过降低 importance 标记）
+      // 实际策略：不删除，但标记为低优先级
+      if (dynamic.activation < threshold && dynamic.strength < threshold && dynamic.state === 'cooling') {
+        // 如果已经冷却超过 30 天且从未被 recall/reinforce，标记为需清理
+        const hoursSinceAccess = dynamic.hoursSinceAccess;
+        if (hoursSinceAccess > 720) { // 30 days
+          cleaned++;
+          return { ...node, updatedAt: now };
+        }
+      }
+      return node;
+    });
+
+    if (cleaned > 0) {
+      set({ nodes: updatedNodes });
+      setTimeout(() => saveToFile(get()), 1000);
+      console.log(`[KnowledgeGraph] ${cleaned} 个冷却节点已标记`);
+    }
+    return cleaned;
+  },
+
+  resolveConflict: (edgeId, resolution, mergedContent) => {
+    const state = get();
+    const edge = state.edges.find(e => e.id === edgeId);
+    if (!edge || edge.type !== '冲突') return false;
+
+    const fromNode = state.nodes.find(n => n.id === edge.from);
+    const toNode = state.nodes.find(n => n.id === edge.to);
+    if (!fromNode || !toNode) return false;
+
+    switch (resolution) {
+      case 'keep_old':
+        // 保留旧节点，删除新节点
+        get().deleteNode(edge.to);
+        get().removeEdge(edgeId);
+        break;
+      case 'keep_new':
+        // 保留新节点，删除旧节点
+        get().deleteNode(edge.from);
+        get().removeEdge(edgeId);
+        break;
+      case 'merge':
+        // 合并到旧节点，删除新节点
+        if (mergedContent) {
+          get().updateNode(edge.from, mergedContent);
+        }
+        get().deleteNode(edge.to);
+        get().removeEdge(edgeId);
+        break;
+      case 'keep_both':
+        // 移除冲突标记，保留两个节点
+        get().removeEdge(edgeId);
+        break;
+    }
+
+    return true;
+  },
+
+  getConflicts: () => {
+    const state = get();
+    return state.edges
+      .filter(e => e.type === '冲突')
+      .map(edge => {
+        const fromNode = state.nodes.find(n => n.id === edge.from);
+        const toNode = state.nodes.find(n => n.id === edge.to);
+        return { edge, fromNode: fromNode!, toNode: toNode! };
+      })
+      .filter(c => c.fromNode && c.toNode);
   },
 
   // ============================================
@@ -573,16 +800,38 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
         return null;
       }
 
-      // 应用操作
+      // 应用操作（带语义去重）
       let added = 0;
       let updated = 0;
       let linked = 0;
       let skipped = 0;
+      let contradicted = 0;
 
       for (const op of result.operations) {
         switch (op.action) {
           case 'add':
             if (op.node) {
+              // 语义去重：检查是否和已有节点重复
+              const contentText = `${op.node.name}。${op.node.summary}${op.node.detail ? `。${op.node.detail}` : ''}`;
+              try {
+                const dupId = await findSemanticDuplicate(contentText, get().nodes);
+                if (dupId) {
+                  // 语义重复 → 走 update 而非 add
+                  get().updateNode(dupId, {
+                    summary: op.node.summary,
+                    detail: op.node.detail || undefined,
+                    tags: op.node.tags,
+                    importance: op.node.importance,
+                    updatedAt: Date.now(),
+                  });
+                  updated++;
+                  console.log(`[KnowledgeGraph] 语义去重: "${op.node.name}" → 更新现有节点 ${dupId}`);
+                  break;
+                }
+              } catch (e) {
+                // embedding 模型未就绪时跳过去重，直接添加
+                console.warn('[KnowledgeGraph] 语义去重跳过（模型未就绪）:', e);
+              }
               get().addNode(op.node);
               added++;
             }
@@ -599,6 +848,12 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
               linked++;
             }
             break;
+          case 'contradict':
+            if (op.from && op.to) {
+              get().addEdge(op.from, op.to, '冲突', op.reason);
+              contradicted++;
+            }
+            break;
           case 'skip':
           default:
             skipped++;
@@ -611,6 +866,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
         updated,
         linked,
         skipped,
+        contradicted,
         summary: result.summary,
       };
     } catch (error: any) {
@@ -669,11 +925,29 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       let updated = 0;
       let linked = 0;
       let skipped = 0;
+      let contradicted = 0;
 
       for (const op of result.operations) {
         switch (op.action) {
           case 'add':
             if (op.node) {
+              const contentText = `${op.node.name}。${op.node.summary}${op.node.detail ? `。${op.node.detail}` : ''}`;
+              try {
+                const dupId = await findSemanticDuplicate(contentText, get().nodes);
+                if (dupId) {
+                  get().updateNode(dupId, {
+                    summary: op.node.summary,
+                    detail: op.node.detail || undefined,
+                    tags: op.node.tags,
+                    importance: op.node.importance,
+                    updatedAt: Date.now(),
+                  });
+                  updated++;
+                  break;
+                }
+              } catch (e) {
+                console.warn('[KnowledgeGraph] 语义去重跳过（模型未就绪）:', e);
+              }
               get().addNode(op.node);
               added++;
             }
@@ -690,6 +964,12 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
               linked++;
             }
             break;
+          case 'contradict':
+            if (op.from && op.to) {
+              get().addEdge(op.from, op.to, '冲突', op.reason);
+              contradicted++;
+            }
+            break;
           case 'skip':
           default:
             skipped++;
@@ -702,6 +982,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
         updated,
         linked,
         skipped,
+        contradicted,
         summary: result.summary,
       };
     } catch (error: any) {
@@ -781,7 +1062,7 @@ async function loadFromProjectInternal(projectId: string) {
       }));
 
     // 迁移旧的二级分类
-    const migratedNodes = projectNodes.map((node: KnowledgeNode) => {
+    let migratedNodes = projectNodes.map((node: KnowledgeNode) => {
       if (SUB_CATEGORY_MIGRATION[node.subCategory]) {
         return {
           ...node,
@@ -798,6 +1079,21 @@ async function loadFromProjectInternal(projectId: string) {
 
     if (migratedCount > 0) {
       console.log(`[KnowledgeGraph] 迁移了 ${migratedCount} 个节点的二级分类`);
+    }
+
+    // Wing/Room 自动迁移：为未分配 wing 的节点分配
+    migratedNodes = migratedNodes.map((node: KnowledgeNode) => {
+      if (node.wing) return node; // already assigned
+      const mapping = CATEGORY_TO_WING_ROOM[node.category];
+      if (mapping) {
+        return { ...node, wing: mapping.wing, room: mapping.room };
+      }
+      return node;
+    });
+
+    const wingMigratedCount = projectNodes.filter((n: KnowledgeNode) => !n.wing && CATEGORY_TO_WING_ROOM[n.category]).length;
+    if (wingMigratedCount > 0) {
+      console.log(`[KnowledgeGraph] 自动分配了 ${wingMigratedCount} 个节点到 Wing/Room`);
     }
 
     // 过滤掉已废弃的二级分类，只保留新的
@@ -836,7 +1132,7 @@ async function loadFromProjectInternal(projectId: string) {
     });
 
     // 如果有迁移，自动保存
-    if (migratedCount > 0) {
+    if (migratedCount > 0 || wingMigratedCount > 0) {
       setTimeout(() => saveToFile(useKnowledgeGraphStore.getState()), 500);
     }
   } catch (error) {
