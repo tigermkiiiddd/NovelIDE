@@ -69,7 +69,7 @@ export const toolCatalogEntries: ToolCatalogEntry[] = [
   },
   {
     name: 'memory_maintenance',
-    description: '执行记忆宫殿维护（列出冲突、清理冷却节点）',
+    description: '检查记忆宫殿状态（列出冲突、查看衰减节点）',
     category: 'memory',
   },
 

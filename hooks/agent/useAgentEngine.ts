@@ -5,12 +5,13 @@ import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
 import { allTools, getToolsForMode } from '../../services/agent/tools/index';
 import { getAllToolsForLLM, handleSearchToolsCall } from '../../services/agent/tools/indexLazy';
+import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
 import { useSkillTriggerStore, getRemainingRounds } from '../../stores/skillTriggerStore';
 import { lifecycleManager } from '../../domains/agentContext/toolLifecycle';
-import { detectSkillTriggers } from '../../domains/skillTrigger/skillTriggerService';
+import { detectSkillTriggersSemantic as detectSkillTriggers } from '../../domains/skillTrigger/skillTriggerService';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
 import {
@@ -95,6 +96,12 @@ export const useAgentEngine = ({
         planMode,  // 传递 Plan 模式状态
         knowledgeNodes  // 传递记忆宫殿节点
       );
+
+      // 后台语义增强 L2（为下一轮准备，不阻塞当前轮）
+      enhanceL2WithSemantics(
+        knowledgeNodes,
+        freshSession?.messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '',
+      ).catch(() => {}); // 静默失败，不影响主流程
 
       // Lazy loading: 合并始终激活工具 + 目录 + search_tools + 已激活工具
       const toolsForMode = getAllToolsForLLM();
@@ -483,7 +490,7 @@ export const useAgentEngine = ({
           // 即使 LLM 调用了工具，也需要检测是否触发了技能
           // 用户输入如"设计女主角"可能在工具轮中被触发
           const latestUserMsgForSkill = currentMessages.filter(m => m.role === 'user').pop();
-          detectSkillTriggers(latestUserMsgForSkill?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
+          await detectSkillTriggers(latestUserMsgForSkill?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
 
         } else {
           // 没有工具调用，直接结束
@@ -495,7 +502,7 @@ export const useAgentEngine = ({
 
           // --- 技能触发检测（纯文本回复轮） ---
           const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
-          detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
+          await detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
         }
       }
 

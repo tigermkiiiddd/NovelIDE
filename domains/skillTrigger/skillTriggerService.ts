@@ -1,6 +1,6 @@
 /**
  * 技能触发服务 - 纯函数模块
- * 提供 Fuse.js 模糊匹配和检测逻辑
+ * 提供 Fuse.js 模糊匹配 + 语义匹配和检测逻辑
  */
 
 import Fuse from 'fuse.js';
@@ -8,6 +8,7 @@ import type { FileNode } from '../../types';
 import type { SkillTriggerRecord } from '../../stores/skillTriggerStore';
 import type { ActivationNotification } from '../../stores/skillTriggerStore';
 import { lifecycleManager } from '../agentContext/toolLifecycle';
+import { generateEmbedding, cosineSimilarity } from '../memory/embeddingService';
 
 /**
  * 反提示词：包含以下关键字时不触发技能加载
@@ -197,5 +198,106 @@ export function detectSkillTriggers(
 
       onActivated?.(notif);
     }
+  }
+}
+
+/**
+ * 技能 embedding 缓存（避免重复生成）
+ * key = skillId, value = embedding
+ */
+const skillEmbeddingCache = new Map<string, number[]>();
+
+/**
+ * 清除技能 embedding 缓存
+ */
+export function clearSkillEmbeddingCache(): void {
+  skillEmbeddingCache.clear();
+}
+
+/**
+ * 异步版技能触发检测 — 在同步匹配基础上增加语义 fallback
+ * 当关键词+Fuse.js 都没命中时，用 embedding 相似度做最后检测
+ */
+export async function detectSkillTriggersSemantic(
+  text: string,
+  context: TriggerDetectionContext,
+  onActivated?: (notif: ActivationNotification) => void
+): Promise<void> {
+  // 先执行同步检测（快速）
+  const syncTriggered = new Set<string>();
+  const originalOnActivated = onActivated;
+  detectSkillTriggers(text, context, (notif) => {
+    syncTriggered.add(notif.skillId);
+    originalOnActivated?.(notif);
+  });
+
+  // 反提示词/正向触发检查在 detectSkillTriggers 中已做
+  // 如果没通过，也不做语义检测
+  if (containsSuppressionKeyword(text) || !containsPositiveTriggerKeyword(text)) {
+    return;
+  }
+
+  // 语义 fallback：对未命中的技能做 embedding 匹配
+  const { files, triggerStore } = context;
+  const skillFolder = files.find(f => f.name === '98_技能配置');
+  const subskillFolder = skillFolder
+    ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
+    : null;
+  const skillFiles = subskillFolder
+    ? files.filter(f => f.parentId === subskillFolder.id && f.type === 'FILE' && !f.hidden)
+    : [];
+
+  // 过滤已触发的
+  const remaining = skillFiles.filter(f => !syncTriggered.has(f.name));
+  if (remaining.length === 0) return;
+
+  try {
+    const queryEmb = await generateEmbedding(text);
+
+    for (const skillFile of remaining) {
+      const meta = skillFile.metadata || {};
+      const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
+      const summarys: string[] = meta.summarys || [];
+
+      // 获取或生成技能 embedding
+      let skillEmb = skillEmbeddingCache.get(skillFile.name);
+      if (!skillEmb) {
+        const matchText = buildMatchText(tags, summarys);
+        if (!matchText.trim()) continue;
+        skillEmb = await generateEmbedding(matchText);
+        skillEmbeddingCache.set(skillFile.name, skillEmb);
+      }
+
+      const sim = cosineSimilarity(queryEmb, skillEmb);
+      if (sim > 0.55) {
+        const existingRecord = triggerStore.triggerSkill({
+          skillId: skillFile.name,
+          name: meta.name || skillFile.name,
+          originalTags: tags,
+          matchText: `语义匹配(${sim.toFixed(2)})`,
+        });
+
+        const wasReset = lifecycleManager.getCurrentRound() > existingRecord.triggerRound;
+        const remaining = existingRecord.decayRounds - (lifecycleManager.getCurrentRound() - existingRecord.triggerRound);
+
+        const notif: ActivationNotification = {
+          skillId: existingRecord.skillId,
+          name: existingRecord.name,
+          matchedKeyword: `语义匹配(${sim.toFixed(2)})`,
+          remainingRounds: remaining,
+          isReset: wasReset,
+        };
+
+        console.log(
+          `[SkillTrigger-Semantic] ${wasReset ? '重置' : '激活'}: ${existingRecord.name}` +
+          ` | 语义相似度: ${sim.toFixed(3)} | 剩余: ${remaining}轮`
+        );
+
+        onActivated?.(notif);
+      }
+    }
+  } catch (e) {
+    // embedding 模型不可用时静默跳过
+    console.warn('[SkillTrigger-Semantic] embedding 不可用，跳过语义匹配');
   }
 }

@@ -4,6 +4,7 @@
  */
 
 import { KnowledgeNode, KnowledgeNodeMetadata, KnowledgeNodeDynamicState } from '../types';
+import { cosineSimilarity } from '../domains/memory/embeddingService';
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -245,16 +246,27 @@ const scoreField = (field: string, tokens: string[], exactWeight: number, tokenW
 export const scoreKnowledgeNodeRecall = (
   node: KnowledgeNode,
   query: string,
-  now = Date.now()
-): { lexical: number; importance: number; activation: number; strength: number; review: number; total: number } => {
+  now = Date.now(),
+  queryEmbedding?: number[]
+): { lexical: number; semantic: number; importance: number; activation: number; strength: number; review: number; total: number } => {
   const tokens = tokenize(query);
-  if (tokens.length === 0) return { lexical: 0, importance: 0, activation: 0, strength: 0, review: 0, total: 0 };
+  if (tokens.length === 0 && !queryEmbedding) return { lexical: 0, semantic: 0, importance: 0, activation: 0, strength: 0, review: 0, total: 0 };
 
   let lexical = 0;
-  lexical += scoreField(node.name, tokens, 24, 12);
-  lexical += (node.tags || []).reduce((sum, tag) => sum + scoreField(tag, tokens, 20, 10), 0);
-  lexical += scoreField(node.summary, tokens, 12, 5);
-  lexical += scoreField(node.detail || '', tokens, 8, 3);
+  if (tokens.length > 0) {
+    lexical += scoreField(node.name, tokens, 24, 12);
+    lexical += (node.tags || []).reduce((sum, tag) => sum + scoreField(tag, tokens, 20, 10), 0);
+    lexical += scoreField(node.summary, tokens, 12, 5);
+    lexical += scoreField(node.detail || '', tokens, 8, 3);
+  }
+
+  // 语义分数：query embedding vs node embedding
+  let semantic = 0;
+  if (queryEmbedding && node.embedding && node.embedding.length > 0) {
+    const sim = cosineSimilarity(queryEmbedding, node.embedding);
+    // 归一化到 0-30 范围（与 lexical 量级对齐）
+    semantic = sim * 30;
+  }
 
   const importance = IMPORTANCE_WEIGHTS[node.importance];
 
@@ -263,9 +275,9 @@ export const scoreKnowledgeNodeRecall = (
   const strength = dynamic.strength * 10;
   const review = dynamic.isDueForReview ? 4 + dynamic.reviewUrgency * 6 : dynamic.reviewUrgency * 2;
 
-  const total = lexical + importance + activation + strength + review;
+  const total = lexical + semantic + importance + activation + strength + review;
 
-  return { lexical, importance, activation, strength, review, total };
+  return { lexical, semantic, importance, activation, strength, review, total };
 };
 
 export const sortKnowledgeNodesForPrompt = (nodes: KnowledgeNode[], now = Date.now()): KnowledgeNode[] => {

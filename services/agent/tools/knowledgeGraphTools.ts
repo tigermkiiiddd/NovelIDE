@@ -474,7 +474,7 @@ export const executeManageKnowledge = async (args: {
           reason: a.reason,
         }));
 
-        const newNode = store.addNode({
+        const newNode = await store.addNodeWithEmbedding({
           category: n.category,
           subCategory: n.subCategory,
           topic: n.topic,
@@ -516,7 +516,7 @@ export const executeManageKnowledge = async (args: {
           continue;
         }
 
-        store.updateNode(update.nodeId, {
+        await store.updateNodeWithEmbedding(update.nodeId, {
           subCategory: update.subCategory,
           topic: update.topic,
           name: update.name,
@@ -856,24 +856,27 @@ export const executeResolveConflict = async (args: {
 };
 
 /**
- * 记忆维护（清理冷却节点）
+ * 记忆维护（检查冲突、查看衰减状态）
  */
 export const maintenanceTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'memory_maintenance',
-    description: `【记忆维护】执行记忆宫殿维护操作。
+    description: `【记忆维护】检查记忆宫殿状态。
 
 ## 操作
-- **list_conflicts**: 列出所有冲突的知识节点
-- **cleanup**: 清理长期冷却的 normal 节点
+- **list_conflicts**: 列出所有标记为冲突的知识节点对
+- **check_decay**: 查看需要复习的冷却节点（衰减只降低等级，不删除）
+
+⚠️ 记忆衰减是正常机制：activation/strength 随时间降低，节点状态从 active→stable→cooling→needs_review。
+这是降低优先级，不是删除。使用 manage_memory 的 reinforce 操作可以恢复衰减的记忆。
 `,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['list_conflicts', 'cleanup'],
+          enum: ['list_conflicts', 'check_decay'],
           description: '维护操作类型',
         },
       },
@@ -883,7 +886,7 @@ export const maintenanceTool: ToolDefinition = {
 };
 
 export const executeMaintenance = async (args: {
-  action: 'list_conflicts' | 'cleanup';
+  action: 'list_conflicts' | 'check_decay';
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
@@ -903,12 +906,28 @@ export const executeMaintenance = async (args: {
       });
     }
 
-    case 'cleanup': {
-      const cleaned = store.cleanupCoolingNodes();
+    case 'check_decay': {
+      // 查看需要复习的节点（衰减降低了等级，但不会删除）
+      const nodesNeedingReview = store.nodes.filter(n => {
+        const dynamic = getKnowledgeNodeDynamicState(n, Date.now());
+        return dynamic.state === 'needs_review';
+      });
+      const coolingNodes = store.nodes.filter(n => {
+        const dynamic = getKnowledgeNodeDynamicState(n, Date.now());
+        return dynamic.state === 'cooling' && n.importance === 'normal';
+      });
       return JSON.stringify({
         success: true,
-        cleanedNodes: cleaned,
-        message: cleaned > 0 ? `已清理 ${cleaned} 个冷却节点` : '无需清理',
+        summary: `共 ${store.nodes.length} 个记忆节点`,
+        needsReview: nodesNeedingReview.length,
+        cooling: coolingNodes.length,
+        reviewNodes: nodesNeedingReview.map(n => ({
+          id: n.id,
+          name: n.name,
+          summary: n.summary,
+          hint: '使用 manage_memory reinforce 恢复',
+        })),
+        note: '衰减只降低等级，不删除。使用 manage_memory 的 reinforce 操作可恢复。',
       });
     }
 

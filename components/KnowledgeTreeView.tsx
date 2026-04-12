@@ -184,7 +184,7 @@ interface Props {
 
 export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '' }) => {
   const store = useKnowledgeGraphStore();
-  const { nodes, edges, ensureInitialized, addNode, updateNode, deleteNode } = store;
+  const { nodes, edges, ensureInitialized, addNode, addNodeWithEmbedding, updateNode, deleteNode } = store;
 
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -768,14 +768,14 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       {/* 右侧详情面板 */}
       {selectedNodeId && (
         <div className={`w-full md:w-80 shrink-0 border-l border-gray-800 overflow-hidden ${isMobile && mobileTab === 'graph' ? 'hidden md:flex' : 'flex'} flex-col`}>
-          <KnowledgeNodePreview node={selectedNode} onUpdate={updateNode} onDelete={handleDelete} onAdd={() => setShowAddModal(true)} />
+          <KnowledgeNodePreview node={selectedNode} onUpdate={(id, updates) => { store.updateNodeWithEmbedding(id, updates); }} onDelete={handleDelete} onAdd={() => setShowAddModal(true)} />
         </div>
       )}
 
       {/* 添加模态框 */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <KnowledgeNodeEditor node={null} onSave={(draft) => { addNode(draft); setShowAddModal(false); }} onCancel={() => setShowAddModal(false)} defaultWing={defaultWingForAdd} />
+          <KnowledgeNodeEditor node={null} onSave={(draft) => { addNodeWithEmbedding(draft); setShowAddModal(false); }} onCancel={() => setShowAddModal(false)} defaultWing={defaultWingForAdd} />
         </div>
       )}
     </div>

@@ -142,7 +142,7 @@ export async function semanticSearch(
 export async function findSemanticDuplicate(
   newContent: string,
   existingNodes: KnowledgeNode[],
-  threshold: number = 0.85,
+  threshold: number = 0.65,
 ): Promise<string | null> {
   await initEmbeddingModel();
 

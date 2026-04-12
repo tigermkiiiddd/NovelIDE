@@ -55,7 +55,9 @@ interface KnowledgeGraphState {
 
   // 节点操作
   addNode: (draft: KnowledgeNodeDraft) => KnowledgeNode;
+  addNodeWithEmbedding: (draft: KnowledgeNodeDraft) => Promise<KnowledgeNode>;
   updateNode: (id: string, updates: Partial<KnowledgeNode>) => void;
+  updateNodeWithEmbedding: (id: string, updates: Partial<KnowledgeNode>) => Promise<void>;
   deleteNode: (id: string) => void;
   getNodeById: (id: string) => KnowledgeNode | undefined;
 
@@ -105,8 +107,7 @@ interface KnowledgeGraphState {
   discoverTunnels: () => number;
   getCrossWingConnections: () => Array<{ from: KnowledgeNode; to: KnowledgeNode; sharedTags: string[] }>;
 
-  // 记忆清理
-  cleanupCoolingNodes: (threshold?: number) => number;
+  // 冲突解决
   resolveConflict: (edgeId: string, resolution: 'keep_old' | 'keep_new' | 'merge' | 'keep_both', mergedContent?: Partial<KnowledgeNode>) => boolean;
   getConflicts: () => Array<{ edge: KnowledgeEdge; fromNode: KnowledgeNode; toNode: KnowledgeNode }>;
 
@@ -213,6 +214,36 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       ),
     }));
     setTimeout(() => saveToFile(get()), 1000);
+  },
+
+  addNodeWithEmbedding: async (draft: KnowledgeNodeDraft) => {
+    const node = get().addNode(draft);
+    try {
+      const text = `${node.name}。${node.summary}${node.detail ? `。${node.detail}` : ''}`;
+      const embedding = await generateEmbedding(text);
+      get().updateNode(node.id, { embedding } as any);
+    } catch (e) {
+      console.warn('[KnowledgeGraph] embedding 生成失败，节点已创建但无 embedding:', (e as Error).message);
+    }
+    return node;
+  },
+
+  updateNodeWithEmbedding: async (id: string, updates: Partial<KnowledgeNode>) => {
+    get().updateNode(id, updates);
+    // 文本字段变化时重新生成 embedding
+    const textFields = ['name', 'summary', 'detail'] as const;
+    if (textFields.some(f => f in updates)) {
+      try {
+        const node = get().nodes.find(n => n.id === id);
+        if (node) {
+          const text = `${updates.name ?? node.name}。${updates.summary ?? node.summary}${(updates.detail ?? node.detail) ? `。${(updates.detail ?? node.detail)}` : ''}`;
+          const embedding = await generateEmbedding(text);
+          get().updateNode(id, { embedding } as any);
+        }
+      } catch (e) {
+        console.warn('[KnowledgeGraph] embedding 更新失败:', (e as Error).message);
+      }
+    }
   },
 
   deleteNode: (id: string) => {
@@ -623,39 +654,8 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   },
 
   // ============================================
-  // 记忆清理 + 冲突解决
+  // 冲突解决
   // ============================================
-
-  cleanupCoolingNodes: (threshold = 0.15) => {
-    const state = get();
-    let cleaned = 0;
-    const now = Date.now();
-
-    const updatedNodes = state.nodes.map(node => {
-      // 只处理 normal 节点（critical/important 不自动降级）
-      if (node.importance !== 'normal' || node.category === '用户偏好') return node;
-
-      const dynamic = getKnowledgeNodeDynamicState(node, now);
-      // 激活度和强度都低于阈值 → 降级为 inactive（通过降低 importance 标记）
-      // 实际策略：不删除，但标记为低优先级
-      if (dynamic.activation < threshold && dynamic.strength < threshold && dynamic.state === 'cooling') {
-        // 如果已经冷却超过 30 天且从未被 recall/reinforce，标记为需清理
-        const hoursSinceAccess = dynamic.hoursSinceAccess;
-        if (hoursSinceAccess > 720) { // 30 days
-          cleaned++;
-          return { ...node, updatedAt: now };
-        }
-      }
-      return node;
-    });
-
-    if (cleaned > 0) {
-      set({ nodes: updatedNodes });
-      setTimeout(() => saveToFile(get()), 1000);
-      console.log(`[KnowledgeGraph] ${cleaned} 个冷却节点已标记`);
-    }
-    return cleaned;
-  },
 
   resolveConflict: (edgeId, resolution, mergedContent) => {
     const state = get();
@@ -680,7 +680,8 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       case 'merge':
         // 合并到旧节点，删除新节点
         if (mergedContent) {
-          get().updateNode(edge.from, mergedContent);
+          // merge 后内容变化，需要异步更新 embedding（fire-and-forget）
+          get().updateNodeWithEmbedding(edge.from, mergedContent);
         }
         get().deleteNode(edge.to);
         get().removeEdge(edgeId);
@@ -832,13 +833,13 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
                 // embedding 模型未就绪时跳过去重，直接添加
                 console.warn('[KnowledgeGraph] 语义去重跳过（模型未就绪）:', e);
               }
-              get().addNode(op.node);
+              await get().addNodeWithEmbedding(op.node);
               added++;
             }
             break;
           case 'update':
             if (op.nodeId && op.node) {
-              get().updateNode(op.nodeId, op.node);
+              await get().updateNodeWithEmbedding(op.nodeId, op.node);
               updated++;
             }
             break;
@@ -948,13 +949,13 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
               } catch (e) {
                 console.warn('[KnowledgeGraph] 语义去重跳过（模型未就绪）:', e);
               }
-              get().addNode(op.node);
+              await get().addNodeWithEmbedding(op.node);
               added++;
             }
             break;
           case 'update':
             if (op.nodeId && op.node) {
-              get().updateNode(op.nodeId, op.node);
+              await get().updateNodeWithEmbedding(op.nodeId, op.node);
               updated++;
             }
             break;
@@ -1135,6 +1136,9 @@ async function loadFromProjectInternal(projectId: string) {
     if (migratedCount > 0 || wingMigratedCount > 0) {
       setTimeout(() => saveToFile(useKnowledgeGraphStore.getState()), 500);
     }
+
+    // 异步回填缺少 embedding 的节点（后台执行，不阻塞加载）
+    backfillEmbeddings(allNodes);
   } catch (error) {
     console.error('[KnowledgeGraph] 加载数据失败:', error);
     // 即使加载失败，也保留全局用户偏好
@@ -1153,6 +1157,45 @@ async function loadFromProjectInternal(projectId: string) {
       isInitialized: true,
       isLoading: false,
     });
+  }
+}
+
+/**
+ * 后台回填缺少 embedding 的节点
+ * 不阻塞主流程，逐个生成并更新
+ */
+async function backfillEmbeddings(nodes: KnowledgeNode[]) {
+  const missing = nodes.filter(n => !n.embedding || n.embedding.length === 0);
+  if (missing.length === 0) return;
+
+  console.log(`[KnowledgeGraph] 开始回填 ${missing.length} 个节点的 embedding...`);
+
+  try {
+    // 尝试初始化 embedding 模型（首次会下载）
+    const { initEmbeddingModel } = await import('../domains/memory/embeddingService');
+    await initEmbeddingModel();
+
+    let filled = 0;
+    for (const node of missing) {
+      try {
+        const text = `${node.name}。${node.summary}${node.detail ? `。${node.detail}` : ''}`;
+        const embedding = await generateEmbedding(text);
+        // 直接更新 store 中的节点
+        useKnowledgeGraphStore.getState().updateNode(node.id, { embedding } as any);
+        filled++;
+      } catch (e) {
+        // 单个节点失败不影响整体
+        console.warn(`[KnowledgeGraph] 节点 ${node.name} embedding 生成失败:`, e);
+      }
+    }
+
+    if (filled > 0) {
+      console.log(`[KnowledgeGraph] embedding 回填完成: ${filled}/${missing.length}`);
+      setTimeout(() => saveToFile(useKnowledgeGraphStore.getState()), 1000);
+    }
+  } catch (e) {
+    // embedding 模型初始化失败（如网络问题），静默跳过
+    console.warn('[KnowledgeGraph] embedding 模型不可用，跳过回填:', (e as Error).message);
   }
 }
 

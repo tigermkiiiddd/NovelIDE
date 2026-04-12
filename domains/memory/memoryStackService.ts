@@ -10,6 +10,7 @@
 
 import { KnowledgeNode, KnowledgeWing, WING_LABELS, WING_ROOMS } from '../../types';
 import { useMemoryStackStore, MemoryLayer, MemoryStackContent } from '../../stores/memoryStackStore';
+import { generateEmbedding, cosineSimilarity } from './embeddingService';
 
 // Token 估算：中文约 1.5 token/字
 const estimateTokens = (text: string): number => Math.ceil(text.length * 1.5);
@@ -133,6 +134,108 @@ function detectRelevantWings(userMessage: string, nodes: KnowledgeNode[]): Set<K
   }
 
   return matched;
+}
+
+/**
+ * 语义检测相关 Wings — 用 embedding 相似度替代关键词匹配
+ * 当关键词检测无结果时作为 fallback
+ */
+async function detectRelevantWingsSemantic(
+  userMessage: string,
+  nodes: KnowledgeNode[],
+): Promise<Set<KnowledgeWing>> {
+  const important = nodes.filter(n => n.importance === 'important' && n.embedding && n.embedding.length > 0);
+  if (important.length === 0) return new Set();
+
+  try {
+    const queryEmb = await generateEmbedding(userMessage);
+    const matched = new Set<KnowledgeWing>();
+
+    // 对每个 Wing 找最高相似度的节点
+    const wingScores = new Map<KnowledgeWing, number>();
+    for (const node of important) {
+      if (!node.wing) continue;
+      const sim = cosineSimilarity(queryEmb, node.embedding!);
+      const current = wingScores.get(node.wing) || 0;
+      wingScores.set(node.wing, Math.max(current, sim));
+    }
+
+    // 相似度 > 0.4 的 Wing 视为相关
+    for (const [wing, score] of wingScores) {
+      if (score > 0.4) {
+        matched.add(wing);
+      }
+    }
+
+    return matched;
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * 异步版 loadL2OnDemand — 关键词检测 + 语义 fallback
+ */
+export async function loadL2OnDemandSemantic(
+  knowledgeNodes: KnowledgeNode[],
+  userMessage: string | null,
+  tokenBudget: number = 800,
+): Promise<MemoryStackContent> {
+  const important = knowledgeNodes.filter(n => n.importance === 'important');
+
+  if (important.length === 0 || !userMessage) {
+    return { layer: 'L2', content: '', tokenEstimate: 0, sources: [] };
+  }
+
+  // 先尝试关键词检测（快速、零成本）
+  let relevantWings = detectRelevantWings(userMessage, knowledgeNodes);
+
+  // 关键词无匹配 → 语义 fallback
+  if (relevantWings.size === 0) {
+    relevantWings = await detectRelevantWingsSemantic(userMessage, knowledgeNodes);
+  }
+
+  if (relevantWings.size === 0) {
+    return { layer: 'L2', content: '', tokenEstimate: 0, sources: [] };
+  }
+
+  // 按匹配的 Wing 过滤节点（复用同步版逻辑）
+  const matched = important.filter(n => n.wing && relevantWings.has(n.wing));
+  const unmatched = important.filter(n => !n.wing || !relevantWings.has(n.wing));
+
+  const selected: KnowledgeNode[] = [];
+  let usedTokens = 0;
+
+  for (const node of matched) {
+    if (usedTokens >= tokenBudget) break;
+    selected.push(node);
+    usedTokens += estimateTokens(`${node.name}: ${node.summary}`);
+  }
+
+  for (const node of unmatched.slice(0, 2)) {
+    if (usedTokens >= tokenBudget) break;
+    selected.push(node);
+    usedTokens += estimateTokens(`${node.name}: ${node.summary}`);
+  }
+
+  if (selected.length === 0) {
+    return { layer: 'L2', content: '', tokenEstimate: 0, sources: [] };
+  }
+
+  const wingNames = [...relevantWings].map(w => WING_LABELS[w]).join('、');
+  let section = `## 🔖 相关重要知识（话题: ${wingNames}）\n> 共 ${selected.length} 条相关记忆\n\n`;
+  section += selected.map(n => {
+    const tags = n.tags?.length > 0 ? ` [${n.tags.join(', ')}]` : '';
+    const wingInfo = n.wing ? ` (${WING_LABELS[n.wing]}${n.room ? `/${n.room}` : ''})` : '';
+    return `- **${n.name}**${wingInfo}: ${n.summary}${tags}`;
+  }).join('\n');
+
+  return {
+    layer: 'L2',
+    content: section,
+    tokenEstimate: estimateTokens(section),
+    sources: selected.map(n => n.id),
+  };
 }
 
 /**
@@ -272,6 +375,7 @@ export function buildMemoryStack(params: {
 /**
  * 用语义搜索替换 L2 内容（如果 embedding 可用）。
  * 在 useAgentEngine 的 async 上下文中调用，增强下一轮 system prompt。
+ * 使用关键词+语义双重检测，比同步版更精准。
  */
 export async function enhanceL2WithSemantics(
   knowledgeNodes: KnowledgeNode[],
@@ -285,31 +389,10 @@ export async function enhanceL2WithSemantics(
   if (!hasEmbeddings) return null;
 
   try {
-    const { semanticSearch } = require('./vectorSearchService');
-    const results = await semanticSearch(currentContext, important, tokenBudget);
-    if (results.length === 0) return null;
+    // 使用关键词+语义双重检测
+    const l2 = await loadL2OnDemandSemantic(knowledgeNodes, currentContext, tokenBudget);
 
-    const selected: KnowledgeNode[] = [];
-    let usedTokens = 0;
-    for (const r of results) {
-      if (usedTokens >= tokenBudget) break;
-      selected.push(r.node);
-      usedTokens += estimateTokens(`${r.node.name}: ${r.node.summary}`);
-    }
-
-    let section = `## 🔖 相关重要知识（语义匹配）\n> 共 ${selected.length}/${important.length} 条相关记忆\n\n`;
-    section += selected.map(n => {
-      const tags = n.tags?.length > 0 ? ` [${n.tags.join(', ')}]` : '';
-      const wingInfo = n.wing ? ` (${WING_LABELS[n.wing]}${n.room ? `/${n.room}` : ''})` : '';
-      return `- **${n.name}**${wingInfo}: ${n.summary}${tags}`;
-    }).join('\n');
-
-    const l2: MemoryStackContent = {
-      layer: 'L2',
-      content: section,
-      tokenEstimate: estimateTokens(section),
-      sources: selected.map(n => n.id),
-    };
+    if (!l2.content) return null;
 
     const store = useMemoryStackStore.getState();
     store.setLayer('L2', l2);

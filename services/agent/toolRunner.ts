@@ -504,8 +504,33 @@ export const executeTool = async (
                     result = actions.readFile(args.path, args.startLine, args.endLine);
                     if (!result.startsWith('Error')) actions.trackFileAccess(args.path);
                     break;
-                case 'searchFiles': 
-                    result = actions.searchFiles(args.query); 
+                case 'searchFiles':
+                    result = actions.searchFiles(args.query);
+                    // 如果子串匹配无结果，尝试语义搜索
+                    if (result.startsWith('No files found')) {
+                      try {
+                        const { semanticFileSearch, indexFilesForSearch } = require('../../domains/memory/fileSearchService');
+                        const { useFileStore } = require('../../stores/fileStore');
+                        const files = useFileStore.getState().files;
+                        // 增量索引（首次会较慢）
+                        await indexFilesForSearch(files);
+                        const semanticResults = await semanticFileSearch(args.query, files);
+                        if (semanticResults.length > 0) {
+                          const { getNodePath } = require('../../services/fileSystem');
+                          const resultList = semanticResults.map(r => {
+                            const file = files.find((f: FileNode) => f.id === r.fileId);
+                            if (!file) return '';
+                            const path = getNodePath(file, files);
+                            return `[FILE] ${path} (相关度: ${(r.score * 100).toFixed(0)}%)`;
+                          }).filter(Boolean).join('\n');
+                          if (resultList) {
+                            result = `语义搜索结果（"${args.query}"）：\n${resultList}`;
+                          }
+                        }
+                      } catch {
+                        // 语义搜索失败，保持子串搜索结果
+                      }
+                    }
                     break;
                 case 'listFiles': 
                     result = actions.listFiles(); 
