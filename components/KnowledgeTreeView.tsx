@@ -2,7 +2,7 @@
  * @file KnowledgeTreeView.tsx
  * @description 记忆宫殿 — 星象观测台 (Celestial Observatory)
  *
- * 力导向图可视化：5 个 Wing 星域，Room 星团聚类，知识节点如星辰闪烁。
+ * 力导向图可视化：2 个 Wing 星域（world + writing_rules），Room 星团聚类，知识节点如星辰闪烁。
  * 使用 react-force-graph-2d + d3-force-3d。
  */
 
@@ -18,9 +18,6 @@ import {
   Plus,
   Globe,
   BookOpen,
-  Users,
-  GitBranch,
-  FolderKanban,
 } from 'lucide-react';
 import {
   KnowledgeNode,
@@ -40,17 +37,11 @@ import { KnowledgeNodePreview } from './KnowledgeNodePreview';
 const WING_COLORS: Record<KnowledgeWing, { light: string; main: string; dark: string; rgb: string }> = {
   world: { light: '#60a5fa', main: '#3b82f6', dark: '#1e40af', rgb: '59,130,246' },
   writing_rules: { light: '#fbbf24', main: '#f59e0b', dark: '#b45309', rgb: '245,158,11' },
-  characters: { light: '#34d399', main: '#10b981', dark: '#047857', rgb: '16,185,129' },
-  plot: { light: '#a78bfa', main: '#8b5cf6', dark: '#6d28d9', rgb: '139,92,246' },
-  project: { light: '#22d3ee', main: '#06b6d4', dark: '#0e7490', rgb: '6,182,212' },
 };
 
 const WING_ICONS: Record<KnowledgeWing, React.ReactNode> = {
   world: <Globe className="w-3.5 h-3.5" />,
   writing_rules: <BookOpen className="w-3.5 h-3.5" />,
-  characters: <Users className="w-3.5 h-3.5" />,
-  plot: <GitBranch className="w-3.5 h-3.5" />,
-  project: <FolderKanban className="w-3.5 h-3.5" />,
 };
 
 const EDGE_STYLES: Record<KnowledgeEdgeType, { color: string; dash: number[] }> = {

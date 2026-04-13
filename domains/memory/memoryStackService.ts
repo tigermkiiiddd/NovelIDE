@@ -52,30 +52,22 @@ export function buildL0Identity(
 
 export function buildL1KeyFacts(
   knowledgeNodes: KnowledgeNode[],
-  characterProfiles: string,
 ): MemoryStackContent {
   const parts: string[] = [];
 
-  // Critical 节点 — 全量注入
-  const critical = knowledgeNodes.filter(n => n.importance === 'critical');
+  // L1 只注入 writing_rules Wing 的 critical 节点（name + summary，无 detail）
+  const critical = knowledgeNodes.filter(
+    n => n.importance === 'critical' && n.wing === 'writing_rules'
+  );
   if (critical.length > 0) {
     let section = `## 📚 关键知识（必须遵守）\n> 共 ${critical.length} 条关键知识\n\n`;
     section += critical.map(n => {
-      let entry = `### ${n.name}\n- 分类: ${n.category}/${n.subCategory}`;
-      if (n.wing) {
-        const wingLabel = WING_LABELS[n.wing];
-        entry += ` | Wing: ${wingLabel}${n.room ? `/${n.room}` : ''}`;
-      }
-      entry += `\n- 标签: ${n.tags?.join(', ') || '无'}\n- 摘要: ${n.summary}`;
-      if (n.detail) entry += `\n- 详情: ${n.detail}`;
+      let entry = `### ${n.name}`;
+      if (n.tags?.length) entry += ` [${n.tags.join(', ')}]`;
+      entry += `\n${n.summary}`;
       return entry;
     }).join('\n\n');
     parts.push(section);
-  }
-
-  // 角色档案索引
-  if (characterProfiles) {
-    parts.push(characterProfiles);
   }
 
   const content = parts.join('\n\n');
@@ -91,13 +83,12 @@ export function buildL1KeyFacts(
 // L2: 按需加载（话题检测 → Wing/Room 匹配）
 // ============================================
 
-// Wing 话题关键词映射（对齐 MemPalace 的 topic detection）
+// Wing 话题关键词映射（精简为 2 个 Wing）
 const WING_KEYWORDS: Record<KnowledgeWing, string[]> = {
-  world: ['世界', '设定', '魔法', '力量', '体系', '地理', '环境', '势力', '物品', '道具', '种族', '历史', '背景', '大陆'],
+  world: ['世界', '设定', '魔法', '力量', '体系', '地理', '环境', '势力', '物品', '道具', '种族', '历史', '背景', '大陆',
+          '角色', '人物', '性格', '关系', '剧情', '大纲', '伏笔', '主线', '支线', '章节', '事件', '时间线', '冲突', '转折',
+          '项目', '模板', '计划', '目标'],
   writing_rules: ['规则', '风格', '叙事', '描写', '对话', '禁止', '忌讳', '格式', '规范', '技巧', '文风', '用语', '写法'],
-  characters: ['角色', '人物', '性格', '关系', '状态', '外貌', '背景', '口吻', '语气'],
-  plot: ['剧情', '大纲', '伏笔', '主线', '支线', '章节', '事件', '时间线', '冲突', '转折'],
-  project: ['项目', '模板', '计划', '目标', '设置', '大纲', '结构'],
 };
 
 /**
@@ -333,7 +324,6 @@ export function buildMemoryStack(params: {
   templateList: string;
   skillList: string;
   knowledgeNodes: KnowledgeNode[];
-  characterProfiles: string;
   userMessage?: string | null;
   l2TokenBudget?: number;
 }): string {
@@ -352,8 +342,8 @@ export function buildMemoryStack(params: {
   );
   store.setLayer('L0', l0);
 
-  // Build L1
-  const l1 = buildL1KeyFacts(params.knowledgeNodes, params.characterProfiles);
+  // Build L1 — 只注入 writing_rules critical 节点
+  const l1 = buildL1KeyFacts(params.knowledgeNodes);
   store.setLayer('L1', l1);
 
   // Build L2 — 按需加载：根据用户消息检测话题，只加载匹配的 Wing（对齐 MemPalace）

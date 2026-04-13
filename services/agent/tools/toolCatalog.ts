@@ -48,28 +48,13 @@ export const toolCatalogEntries: ToolCatalogEntry[] = [
     category: 'memory',
   },
   {
-    name: 'list_memory_catalog',
-    description: '列出可用的记忆分类和标签',
+    name: 'memory_status',
+    description: '查看记忆宫殿全貌（翼/房间/节点数/冲突/衰减）',
     category: 'memory',
   },
   {
-    name: 'list_all_memories',
-    description: '列出记忆宫殿中所有节点的列表，按分类分组',
-    category: 'memory',
-  },
-  {
-    name: 'discover_passages',
-    description: '自动发现跨星域之间的记忆通道（共享标签的跨 Wing 连接）',
-    category: 'memory',
-  },
-  {
-    name: 'resolve_contradiction',
-    description: '解决记忆宫殿中标记为冲突的矛盾节点（保留/合并/删除）',
-    category: 'memory',
-  },
-  {
-    name: 'memory_maintenance',
-    description: '检查记忆宫殿状态（列出冲突、查看衰减节点）',
+    name: 'traverse_memory',
+    description: '从指定节点出发沿关系图遍历，发现关联知识',
     category: 'memory',
   },
 

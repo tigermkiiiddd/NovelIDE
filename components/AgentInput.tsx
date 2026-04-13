@@ -5,6 +5,7 @@ import { FileNode, FileType } from '../types';
 import { getNodePath } from '../services/fileSystem';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
+import { useMemoryStackStore } from '../stores/memoryStackStore';
 import { useAgentStore } from '../stores/agentStore';
 
 interface AgentInputProps {
@@ -28,27 +29,34 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   const records = useSkillTriggerStore(state => state.records);
   const activeSkills = useMemo(() => useSkillTriggerStore.getState().getActiveSkills(), [records]);
 
-  // 获取知识节点状态（per-session，订阅 sessions 和 currentSessionId 变化）
+  // 获取知识节点状态 — 从 memoryStackStore 读取实际注入的节点，不重复判断
   const sessions = useAgentStore(state => state.sessions);
   const currentSessionId = useAgentStore(state => state.currentSessionId);
   const allNodes = useKnowledgeGraphStore(state => state.nodes);
+  const stackLayers = useMemoryStackStore(state => state.layers);
 
   const knowledgeState = useMemo(() => {
     const session = sessions.find(s => s.id === currentSessionId);
-    const recalledIds = session?.recalledKnowledgeNodeIds || [];
     const hiddenIds = session?.hiddenKnowledgeNodeIds || [];
 
-    const recalledDisplay = recalledIds
+    // 常驻记忆 = L1 实际注入的节点（critical）
+    const l1Sources = stackLayers.L1?.sources || [];
+    const residentDisplay = l1Sources
+      .map(id => allNodes.find(n => n.id === id))
+      .filter(n => n && !hiddenIds.includes(n!.id))
+      .map(n => ({ id: n!.id, name: n!.name }));
+
+    // 召回记忆 = L2 按需注入的节点 + 工具召回的节点
+    const l2Sources = stackLayers.L2?.sources || [];
+    const recalledIds = session?.recalledKnowledgeNodeIds || [];
+    const allRecalled = [...new Set([...l2Sources, ...recalledIds])];
+    const recalledDisplay = allRecalled
       .map(id => allNodes.find(n => n.id === id))
       .filter(Boolean)
       .map(n => ({ id: n!.id, name: n!.name }));
 
-    const residentDisplay = allNodes
-      .filter(n => (n.importance === 'critical' || n.importance === 'important') && !hiddenIds.includes(n.id))
-      .map(n => ({ id: n.id, name: n.name }));
-
     return { recalledDisplay, residentDisplay };
-  }, [sessions, currentSessionId, allNodes]);
+  }, [sessions, currentSessionId, allNodes, stackLayers]);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
 

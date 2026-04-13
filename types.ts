@@ -718,23 +718,19 @@ export interface MemoryMetadataStats {
 // 知识图谱类型（新版本 - 使用中文标识）
 // ============================================
 
-// Wing/Room 结构化组织（MemPalace 风格）
-export type KnowledgeWing = 'world' | 'writing_rules' | 'characters' | 'plot' | 'project';
+// Wing/Room 结构化组织（精简为 2 个 Wing）
+// writing_rules = 元认知规则（L1 始终注入）
+// world = 所有事实性知识（L2 按需 / L3 工具查询）
+export type KnowledgeWing = 'world' | 'writing_rules';
 
 export const WING_LABELS: Record<KnowledgeWing, string> = {
-  world: '世界设定',
+  world: '世界知识',
   writing_rules: '创作规范',
-  characters: '角色',
-  plot: '剧情',
-  project: '项目',
 };
 
 export const WING_ROOMS: Record<KnowledgeWing, string[]> = {
-  world: ['力量体系', '地理环境', '势力分布', '物品道具'],
-  writing_rules: ['叙事规则', '文风习惯', '用语忌讳', '格式规范', '写作技巧积累'],
-  characters: ['角色设定', '角色状态', '关系网络'],
-  plot: ['主线剧情', '支线剧情', '伏笔管理', 'Timeline'],
-  project: ['大纲', '项目设置', '模板'],
+  world: ['力量体系', '地理环境', '势力分布', '物品道具', '角色索引', '剧情线索', '伏笔'],
+  writing_rules: ['叙事规则', '文风习惯', '用语忌讳', '格式规范', '写作技巧积累', '工具规则', '系统保护'],
 };
 
 // 旧分类 → Wing/Room 迁移映射
@@ -743,7 +739,7 @@ export const CATEGORY_TO_WING_ROOM: Record<KnowledgeCategory, { wing: KnowledgeW
   '规则': { wing: 'writing_rules', room: '叙事规则' },
   '禁止': { wing: 'writing_rules', room: '用语忌讳' },
   '风格': { wing: 'writing_rules', room: '文风习惯' },
-  '用户偏好': { wing: 'project', room: '项目设置' },
+  '用户偏好': { wing: 'world', room: '项目设置' },
 };
 
 // 一级分类（预制，不可扩展）

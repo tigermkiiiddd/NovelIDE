@@ -19,11 +19,8 @@ import {
   queryKnowledgeTool,
   manageKnowledgeTool,
   linkKnowledgeTool,
-  listKnowledgeMetadataTool,
-  listAllKnowledgeTool,
-  discoverTunnelsTool,
-  resolveConflictTool,
-  maintenanceTool,
+  memoryStatusTool,
+  traverseMemoryTool,
 } from './knowledgeGraphTools';
 
 import {
@@ -82,11 +79,8 @@ export const categoryTools: Record<ToolCategory, ToolDefinition[]> = {
     queryKnowledgeTool,
     manageKnowledgeTool,
     linkKnowledgeTool,
-    listKnowledgeMetadataTool,
-    listAllKnowledgeTool,
-    discoverTunnelsTool,
-    resolveConflictTool,
-    maintenanceTool,
+    memoryStatusTool,
+    traverseMemoryTool,
   ],
   character: [
     initCharacterProfileTool,

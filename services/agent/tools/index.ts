@@ -7,11 +7,8 @@ import {
   queryKnowledgeTool,
   manageKnowledgeTool,
   linkKnowledgeTool,
-  listKnowledgeMetadataTool,
-  listAllKnowledgeTool,
-  discoverTunnelsTool,
-  resolveConflictTool,
-  maintenanceTool,
+  memoryStatusTool,
+  traverseMemoryTool,
 } from './knowledgeGraphTools';
 import {
   getEventsTool,
@@ -39,10 +36,8 @@ const readTools: ToolDefinition[] = [
   listFilesTool,
   readFileTool,
   queryKnowledgeTool,
-  listKnowledgeMetadataTool,
-  listAllKnowledgeTool,
-  discoverTunnelsTool,
-  maintenanceTool,
+  memoryStatusTool,
+  traverseMemoryTool,
   queryRelationshipsTool,
   getRelationshipGraphTool,
   getVolumesTool,
@@ -60,7 +55,6 @@ const writeTools: ToolDefinition[] = [
   updateProjectMetaTool,
   manageKnowledgeTool,
   linkKnowledgeTool,
-  resolveConflictTool,
   // ⚠️ outline 写入通过 SubAgent，主 Agent 只能调用 processOutlineInput
   processOutlineInputTool,
   // 角色档案工具

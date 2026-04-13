@@ -8,11 +8,8 @@ import {
   executeQueryKnowledge,
   executeManageKnowledge,
   executeLinkKnowledge,
-  executeListKnowledgeMetadata,
-  executeListAllKnowledge,
-  executeDiscoverTunnels,
-  executeResolveConflict,
-  executeMaintenance,
+  executeMemoryStatus,
+  executeTraverseMemory,
 } from './tools/knowledgeGraphTools';
 import { executeOutlineTool, executeProcessOutlineInput } from './tools/timelineTools';
 import {
@@ -548,20 +545,11 @@ export const executeTool = async (
                 case 'link_memory':
                     result = await executeLinkKnowledge(args);
                     break;
-                case 'list_memory_catalog':
-                    result = await executeListKnowledgeMetadata();
+                case 'memory_status':
+                    result = await executeMemoryStatus();
                     break;
-                case 'list_all_memories':
-                    result = await executeListAllKnowledge(args);
-                    break;
-                case 'discover_passages':
-                    result = await executeDiscoverTunnels();
-                    break;
-                case 'resolve_contradiction':
-                    result = await executeResolveConflict(args);
-                    break;
-                case 'memory_maintenance':
-                    result = await executeMaintenance(args);
+                case 'traverse_memory':
+                    result = await executeTraverseMemory(args);
                     break;
                 case 'manage_attachments':
                 // --- CHARACTER PROFILE TOOLS ---

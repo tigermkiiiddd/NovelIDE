@@ -335,11 +335,18 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
     const nodes = get().nodes;
     let migrated = 0;
     const updatedNodes = nodes.map((node) => {
-      if (node.wing) return node; // already assigned
-      const mapping = CATEGORY_TO_WING_ROOM[node.category];
-      if (mapping) {
+      // 旧 Wing（characters/plot/project）→ world
+      if (node.wing && ['characters', 'plot', 'project'].includes(node.wing)) {
         migrated++;
-        return { ...node, wing: mapping.wing, room: mapping.room };
+        return { ...node, wing: 'world' as const };
+      }
+      // 未分配 Wing 的节点 → 按分类映射
+      if (!node.wing) {
+        const mapping = CATEGORY_TO_WING_ROOM[node.category];
+        if (mapping) {
+          migrated++;
+          return { ...node, wing: mapping.wing, room: mapping.room };
+        }
       }
       return node;
     });
@@ -347,7 +354,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
     if (migrated > 0) {
       set({ nodes: updatedNodes });
       setTimeout(() => saveToFile(get()), 1000);
-      console.log(`[KnowledgeGraph] 迁移了 ${migrated} 个节点到 Wing/Room`);
+      console.log(`[KnowledgeGraph] 迁移了 ${migrated} 个节点（含旧 Wing 合并）`);
     }
     return migrated;
   },
@@ -1117,6 +1124,57 @@ async function loadFromProjectInternal(projectId: string) {
 
     // 合并项目节点和用户偏好节点
     const allNodes = [...migratedNodes, ...globalUserPreferences];
+
+    // 确保 writing_rules Wing 有默认的 critical 规则节点
+    const existingCriticalNames = new Set(
+      allNodes.filter(n => n.importance === 'critical' && n.wing === 'writing_rules').map(n => n.name)
+    );
+    const defaultRuleNodes: KnowledgeNode[] = [];
+    const now = Date.now();
+
+    const defaultRules = [
+      {
+        name: '文件格式规范',
+        summary: '所有新建 .md 文件必须含 YAML frontmatter（summarys + tags）。正文草稿额外需要 characters 字段列出登场角色。正文字数须达标。',
+        tags: ['格式', 'frontmatter', '规范'],
+        room: '格式规范',
+      },
+      {
+        name: '系统保护规则',
+        summary: '禁止修改 98_技能配置、99_创作规范、subskill 目录。禁止在 03_剧情大纲 下创建 md 文件。角色文件必须是 前缀_姓名.md 格式。',
+        tags: ['禁止', '保护', '系统'],
+        room: '系统保护',
+      },
+      {
+        name: '创作流程规范',
+        summary: '先查后写——写任何内容前先查设定摘要。模板规范——创建文档须遵循 99_创作规范 中的模板。设定一致性——新内容需与已有设定自洽。',
+        tags: ['流程', '规范', '一致性'],
+        room: '叙事规则',
+      },
+    ];
+
+    for (const rule of defaultRules) {
+      if (!existingCriticalNames.has(rule.name)) {
+        defaultRuleNodes.push({
+          id: `default_rule_${rule.name}`,
+          category: '规则',
+          subCategory: rule.room === '系统保护' ? '创作规则' : rule.room,
+          name: rule.name,
+          summary: rule.summary,
+          tags: rule.tags,
+          importance: 'critical',
+          wing: 'writing_rules',
+          room: rule.room,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    if (defaultRuleNodes.length > 0) {
+      allNodes.push(...defaultRuleNodes);
+      console.log(`[KnowledgeGraph] 创建了 ${defaultRuleNodes.length} 个默认 writing_rules 节点`);
+    }
 
     // 合并标签
     const allTags = [...(data.availableTags || []), ...userPreferenceTags];

@@ -164,11 +164,11 @@ ${input.content.slice(0, 4000)}
 
 // ==================== 阶段二：记忆决策 ====================
 
-const listMetadataTool: ToolDefinition = {
+const memoryStatusTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'list_memory_catalog',
-    description: '列出记忆宫殿中已存在的元数据。',
+    name: 'memory_status',
+    description: '查看记忆宫殿的整体状态（翼/房间/节点数/冲突/衰减）。',
     parameters: {
       type: 'object',
       properties: {},
@@ -235,7 +235,7 @@ const submitDecisionTool: ToolDefinition = {
               },
               wing: {
                 type: 'string',
-                enum: ['world', 'writing_rules', 'characters', 'plot', 'project'],
+                enum: ['world', 'writing_rules'],
                 description: 'Wing 分类（MemPalace 结构）',
               },
               room: {
@@ -311,13 +311,23 @@ const submitDecisionTool: ToolDefinition = {
 };
 
 // 工具执行函数
-const executeListMetadata = async () => {
+const executeMemoryStatusLocal = async () => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
+  const nodes = store.nodes.filter(n => n.category !== '用户偏好');
+  const wings: Record<string, Record<string, number>> = {};
+  for (const n of nodes) {
+    const wing = n.wing || 'unassigned';
+    const room = n.room || '未分类';
+    if (!wings[wing]) wings[wing] = {};
+    wings[wing][room] = (wings[wing][room] || 0) + 1;
+  }
+
   return JSON.stringify({
-    availableSubCategories: store.availableSubCategories,
-    availableTags: store.availableTags,
+    totalNodes: nodes.length,
+    wings,
+    topTags: store.availableTags.slice(0, 20),
     stats: store.getStats(),
   });
 };
@@ -367,7 +377,7 @@ const decisionConfig: SubAgentConfig<
   name: 'KnowledgeDecisionAgent',
   maxLoops: 8,
   temperature: 0.2,
-  tools: [listMetadataTool, queryKnowledgeTool, submitDecisionTool],
+  tools: [memoryStatusTool, queryKnowledgeTool, submitDecisionTool],
   terminalToolName: 'submit_decision',
 
   getSystemPrompt: (input) => {
@@ -459,8 +469,8 @@ ${input.content.slice(0, 6000)}
 
   executeCustomTool: async (toolName: string, args: any) => {
     switch (toolName) {
-      case 'list_memory_catalog':
-        return executeListMetadata();
+      case 'memory_status':
+        return executeMemoryStatusLocal();
       case 'query_memory':
         return executeQueryKnowledge(args);
       default:

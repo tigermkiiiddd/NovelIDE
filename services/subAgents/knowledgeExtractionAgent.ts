@@ -207,7 +207,7 @@ const submitDecisionTool: ToolDefinition = {
               tags: { type: 'array', items: { type: 'string' } },
               importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
               // Wing/Room 自动分类
-              wing: { type: 'string', enum: ['world', 'writing_rules', 'characters', 'plot', 'project'] },
+              wing: { type: 'string', enum: ['world', 'writing_rules'] },
               room: { type: 'string' },
               // update/link 时的节点 ID
               nodeId: { type: 'string' },

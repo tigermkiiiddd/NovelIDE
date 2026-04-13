@@ -1,6 +1,7 @@
 /**
  * @file knowledgeGraphTools.ts
- * @description 记忆宫殿 AI 工具 - 三级分类 + Tag系统 + 记忆智能
+ * @description 记忆宫殿 AI 工具 — 5 个工具对标 MemPalace
+ *   query_memory / manage_memory / link_memory / memory_status / traverse_memory
  */
 
 import { ToolDefinition } from '../types';
@@ -10,15 +11,16 @@ import {
 import {
   KnowledgeCategory,
   KnowledgeNode,
-  KnowledgeNodeDraft,
   KnowledgeEdgeType,
-  DEFAULT_SUB_CATEGORIES,
 } from '../../../types';
 import {
   scoreKnowledgeNodeRecall,
+  getKnowledgeNodeDynamicState,
 } from '../../../utils/knowledgeIntelligence';
 import Fuse from 'fuse.js';
 import { semanticSearch } from '../../../domains/memory/vectorSearchService';
+import { semanticFileSearch } from '../../../domains/memory/fileSearchService';
+import { useFileStore } from '../../../stores/fileStore';
 
 // ============================================
 // 工具定义
@@ -31,23 +33,42 @@ export const queryKnowledgeTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'query_memory',
-    description: `【记忆查询】从记忆宫殿中查询相关知识节点。
+    description: `【记忆查询】从记忆宫殿中查询知识节点，结果不足时自动补充搜索项目文件。
 
-## 分类体系
-- **设定（是什么）**: 世界设定、物品设定、场景设定
-- **规则（必须遵守）**: 创作规则、叙事规则、逻辑规则
-- **禁止（绝对不能）**: 禁止词汇、禁止情节、禁止写法
-- **风格（建议偏好）**: 叙事风格、对话风格、描写风格
+## 宫殿结构
+- **writing_rules 翼**（创作规范）：叙事规则、文风习惯、用语忌讳、格式规范、系统保护、写作技巧积累
+- **world 翼**（世界知识）：力量体系、地理环境、势力分布、物品道具
 
 ## 查询方式
-1. 按一级分类过滤
-2. 按二级分类过滤
-3. 按标签过滤
-4. 按关键词搜索
+1. 按关键词搜索（名称、摘要、标签 + 语义匹配）
+2. 按 wing 过滤（只查创作规范或只查世界知识）
+3. 按 room 过滤（只查某个房间）
+4. 按标签过滤
+
+## 文件搜索补充
+当记忆节点结果不足时，会自动用 embedding 搜索项目文件（角色档案、设定文档等），在 fileResults 字段中返回匹配的文件。
 
 ## 排序策略
-- **relevance**: 按相关性排序（默认）
+- **relevance**: 按相关性排序（默认，综合匹配度+重要度+激活度）
 - **activation**: 按激活度排序（优先返回常用知识）
+
+## 返回格式
+\`\`\`json
+{
+  "success": true,
+  "count": 3,
+  "results": [
+    { "id": "kg-xxx", "name": "灵力规则", "wing": "world", "room": "力量体系",
+      "summary": "施法消耗灵力，灵力耗尽昏迷...",
+      "tags": ["魔法", "规则"], "importance": "important",
+      "score": 85, "activation": "0.72" }
+  ],
+  "fileResults": [
+    { "fileName": "魔法体系设定.md", "score": 78, "matchType": "semantic" }
+  ],
+  "mode": "memory+file"
+}
+\`\`\`
 `,
     parameters: {
       type: 'object',
@@ -56,14 +77,14 @@ export const queryKnowledgeTool: ToolDefinition = {
           type: 'string',
           description: '搜索关键词，会匹配名称、摘要和标签',
         },
-        category: {
+        wing: {
           type: 'string',
-          enum: ['设定', '规则', '禁止', '风格'],
-          description: '按一级分类过滤（可选）',
+          enum: ['writing_rules', 'world'],
+          description: '按翼过滤（可选）',
         },
-        subCategory: {
+        room: {
           type: 'string',
-          description: '按二级分类过滤（可选）',
+          description: '按房间过滤（可选）',
         },
         tags: {
           type: 'array',
@@ -93,64 +114,87 @@ export const manageKnowledgeTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'manage_memory',
-    description: `【记忆管理】批量添加、更新、删除记忆节点，或强化/复习已有记忆。
+    description: `【记忆宫殿管理】在记忆宫殿中添加、更新、删除知识节点，或强化/复习已有记忆。
 
-## 记忆 vs 文档的区别
-- **记忆（记忆宫殿）**：AI 推理用，简短摘要（见下方字数限制）
-- **文档（文件）**：内容创作用，完整原文
-- **长篇原文必须放进附件（attachments），禁止写入节点内容**
+## ⚠️ 记忆宫殿仅存元认知规则，禁止存故事内容！
+**可以存**：写作规则、文风禁忌、叙事技巧、用语限制、创作偏好、世界观规则
+**禁止存**：剧情大纲、角色信息、伏笔内容、事件记录、章节内容
+- 剧情/事件 → Timeline 工具（processOutlineInput / outline_getEvents）
+- 角色 → 角色档案文件（02_角色档案/）+ character 工具
+- 伏笔 → foreshadowing 系统（章节分析自动提取）
 
-## 记忆节点字数限制
+## 宫殿结构（2 个翼）
+记忆宫殿有 2 个翼（Wing），每个翼下有多个房间（Room）：
+
+### writing_rules 翼 — 创作规范（始终注入系统提示词）
+存放 AI 必须遵守的写作规则和禁忌。
+- 叙事规则：叙事技巧、POV规则、节奏控制
+- 文风习惯：用词偏好、句式习惯、语气风格
+- 用语忌讳：禁止词汇、禁止写法、禁止情节
+- 格式规范：文件格式、命名规则、frontmatter
+- 系统保护：不可修改的目录和文件
+- 写作技巧积累：创作经验、最佳实践
+
+### world 翼 — 世界知识（按需注入）
+存放世界观相关的规则性知识。
+- 力量体系：魔法/灵力/技能的规则与限制
+- 地理环境：世界地理与场景规则
+- 势力分布：组织架构与权力关系
+- 物品道具：重要物品的设定规则
+
+## 字数限制
 - **名称（name）**：≤20字
 - **摘要（summary）**：≤50字
 - **详情（detail）**：≤300字
-- 过长的内容应拆分为多个节点
 
-## 附件（attachments）用法
-- 创建节点时通过 attachments 关联源文档路径
-- AI 读取时会按需加载附件中的完整原文
-
-## 分类体系
-- **设定（是什么）**: 世界设定、物品设定、场景设定
-- **规则（必须遵守）**: 创作规则、叙事规则、逻辑规则
-- **禁止（绝对不能）**: 禁止词汇、禁止情节、禁止写法
-- **风格（建议偏好）**: 叙事风格、对话风格、描写风格
-
-## 操作类型
-- **add**: 批量添加节点（传入 nodes 数组）
-- **update**: 批量更新节点（传入 updates 数组，每项包含 nodeId 和更新内容）
+## 操作
+- **add**: 添加节点（传入 nodes 数组）
+- **update**: 更新节点（传入 updates 数组，需含 nodeId）
 - **delete**: 删除节点（传入 nodeIds 数组）
-- **reinforce**: 强化知识（传入 nodeIds 数组）
+- **reinforce**: 强化记忆（传入 nodeIds 数组，恢复衰减的 activation）
 - **review**: 标记已复习（传入 nodeIds 数组）
+- **resolve**: 解决冲突边（先通过 memory_status 查看冲突列表获取 edgeId）
+  - keep_old: 保留旧节点，删除新节点
+  - keep_new: 保留新节点，删除旧节点
+  - merge: 合并到旧节点（需提供 mergedName/Summary/Detail），删除新节点
+  - keep_both: 都保留，移除冲突标记
 `,
     parameters: {
       type: 'object',
       properties: {
         action: {
           type: 'string',
-          enum: ['add', 'update', 'delete', 'reinforce', 'review'],
+          enum: ['add', 'update', 'delete', 'reinforce', 'review', 'resolve'],
           description: '操作类型',
         },
-        // add 操作的节点数组
         nodes: {
           type: 'array',
           description: '要添加的节点列表',
           items: {
             type: 'object',
             properties: {
-              category: { type: 'string', enum: ['设定', '规则', '禁止', '风格'] },
-              subCategory: { type: 'string' },
-              topic: { type: 'string' },
-              name: { type: 'string' },
-              summary: { type: 'string' },
-              detail: { type: 'string' },
-              tags: { type: 'array', items: { type: 'string' } },
-              importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
+              wing: {
+                type: 'string',
+                enum: ['writing_rules', 'world'],
+                description: '翼：writing_rules=创作规范（始终注入），world=世界知识（按需注入）',
+              },
+              room: {
+                type: 'string',
+                description: '房间：翼下的具体分类（见描述中的房间列表）',
+              },
+              name: { type: 'string', description: '知识名称（≤20字）' },
+              summary: { type: 'string', description: '一句话概括（≤50字）' },
+              detail: { type: 'string', description: '详细说明（≤300字，可选）' },
+              tags: { type: 'array', items: { type: 'string' }, description: '标签' },
+              importance: {
+                type: 'string',
+                enum: ['critical', 'important', 'normal'],
+                description: 'critical=始终注入，important=按需注入，normal=仅工具查询',
+              },
             },
-            required: ['category', 'subCategory', 'name', 'summary'],
+            required: ['wing', 'room', 'name', 'summary'],
           },
         },
-        // update 操作的更新数组
         updates: {
           type: 'array',
           description: '要更新的节点列表（update 时使用）',
@@ -158,8 +202,7 @@ export const manageKnowledgeTool: ToolDefinition = {
             type: 'object',
             properties: {
               nodeId: { type: 'string', description: '节点ID' },
-              subCategory: { type: 'string' },
-              topic: { type: 'string' },
+              room: { type: 'string' },
               name: { type: 'string' },
               summary: { type: 'string' },
               detail: { type: 'string' },
@@ -175,6 +218,28 @@ export const manageKnowledgeTool: ToolDefinition = {
           items: { type: 'string' },
           description: '节点ID列表（delete/reinforce/review 时使用）',
         },
+        // resolve 操作参数
+        resolveEdgeId: {
+          type: 'string',
+          description: '冲突边ID（resolve 时使用）',
+        },
+        resolution: {
+          type: 'string',
+          enum: ['keep_old', 'keep_new', 'merge', 'keep_both'],
+          description: '冲突解决方式（resolve 时使用）',
+        },
+        mergedName: {
+          type: 'string',
+          description: '合并后的名称（resolution=merge 时使用）',
+        },
+        mergedSummary: {
+          type: 'string',
+          description: '合并后的摘要（resolution=merge 时使用）',
+        },
+        mergedDetail: {
+          type: 'string',
+          description: '合并后的详情（resolution=merge 时使用）',
+        },
       },
       required: ['action'],
     },
@@ -188,13 +253,26 @@ export const linkKnowledgeTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'link_memory',
-    description: `【记忆关联】建立记忆节点之间的关系。
+    description: `【记忆关联】建立或移除记忆节点之间的关系。
 
-## 关系类型
-- **属于**: A 属于 B（如：火球术 属于 火系魔法）
-- **细化**: A 细化 B（如：施法限制 细化 魔法规则）
-- **依赖**: A 依赖 B（如：设定A 依赖 设定B）
-- **冲突**: A 与 B 冲突（如：规则A 冲突 规则B）
+## 什么时候用
+- 添加新设定后，把它和已有设定建立关联（如"火球术 依赖 灵力规则"）
+- 发现两个规则矛盾时，标记"冲突"关系
+- 用 traverse_memory 查看关联时，关系越丰富，遍历发现的知识越多
+
+## 关系类型（有方向：from → to）
+- **属于**: from 属于 to（如 from=火球术, to=火系魔法 → 火球术 属于 火系魔法）
+- **细化**: from 细化 to（如 from=施法限制, to=魔法规则 → 施法限制 细化 魔法规则）
+- **依赖**: from 依赖 to（如 from=火球术, to=灵力规则 → 火球术 依赖 灵力规则才能施放）
+- **冲突**: from 与 to 矛盾（系统会自动追踪，可用 manage_memory resolve 解决）
+
+## 返回
+\`\`\`json
+{ "success": true, "edge": { "from": "kg-xxx", "to": "kg-yyy", "type": "依赖" } }
+\`\`\`
+
+## 节点 ID 从哪来
+先通过 query_memory 或 memory_status 获取节点 ID，再用此工具建立关系。
 `,
     parameters: {
       type: 'object',
@@ -206,20 +284,20 @@ export const linkKnowledgeTool: ToolDefinition = {
         },
         from: {
           type: 'string',
-          description: '源节点ID',
+          description: '源节点ID（关系起点）',
         },
         to: {
           type: 'string',
-          description: '目标节点ID',
+          description: '目标节点ID（关系终点）',
         },
         type: {
           type: 'string',
           enum: ['属于', '细化', '依赖', '冲突'],
-          description: '关系类型',
+          description: '关系类型（注意方向：from → to）',
         },
         note: {
           type: 'string',
-          description: '关系说明（可选）',
+          description: '关系说明，解释为什么有这个关系（可选但推荐）',
         },
       },
       required: ['action', 'from', 'to', 'type'],
@@ -228,15 +306,50 @@ export const linkKnowledgeTool: ToolDefinition = {
 };
 
 /**
- * 列出知识元数据
+ * 记忆宫殿全貌
  */
-export const listKnowledgeMetadataTool: ToolDefinition = {
+export const memoryStatusTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'list_memory_catalog',
-    description: `【记忆目录】列出可用的二级分类和标签。
+    name: 'memory_status',
+    description: `【记忆全貌】查看记忆宫殿的整体状态。
 
-用于了解当前记忆宫殿中有哪些可用的分类和标签。
+## 什么时候用
+- 开始写作任务前，了解当前有哪些可用的设定和规则
+- 不确定某个知识是否存在，先看全貌再决定是添加还是查询
+- 检查是否有冲突需要处理、是否有衰减节点需要强化
+
+## 返回内容
+\`\`\`json
+{
+  "totalNodes": 15,
+  "totalEdges": 8,
+  "wings": {
+    "writing_rules": {
+      "叙事规则": 3,
+      "用语忌讳": 2,
+      "格式规范": 1
+    },
+    "world": {
+      "力量体系": 4,
+      "地理环境": 2,
+      "势力分布": 3
+    }
+  },
+  "conflicts": 1,
+  "conflictDetails": [{"edgeId":"kg-xxx", "from":"规则A", "to":"规则B"}],
+  "needsReview": 2,
+  "cooling": 3,
+  "topTags": ["魔法", "禁止", "战斗", ...]
+}
+\`\`\`
+
+## 字段说明
+- **wings**: 按 翼→房间 分组的节点数量。翼只有 writing_rules（创作规范）和 world（世界知识）
+- **conflicts**: 标记为"冲突"的节点对数量。冲突由系统自动检测，需用 manage_memory 的 resolve 操作处理
+- **needsReview**: 衰减严重的节点数（activation 很低），可用 manage_memory 的 reinforce 操作恢复
+- **cooling**: 正在衰减但尚未需要复习的节点数（仅 normal 重要度的）
+- **topTags**: 最常用的标签列表
 `,
     parameters: {
       type: 'object',
@@ -246,26 +359,73 @@ export const listKnowledgeMetadataTool: ToolDefinition = {
 };
 
 /**
- * 列出所有记忆节点
+ * 记忆遍历
  */
-export const listAllKnowledgeTool: ToolDefinition = {
+export const traverseMemoryTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'list_all_memories',
-    description: `【记忆全览】返回记忆宫殿中所有节点的列表，按分类分组。
+    name: 'traverse_memory',
+    description: `【记忆遍历】从指定节点出发，沿关系图走 N 步，发现关联知识。
 
-当需要了解项目当前有哪些知识/设定/规则/禁止/风格时使用此工具。
-返回每个节点的 id、名称、摘要、分类、标签和重要程度。
+## 什么时候用
+- 写某个设定时，想看看和它相关的其他设定（如：写"火球术"→发现它依赖"灵力规则"→发现"灵力规则"关联"禁止灵力外挂"）
+- 检查某个规则影响了哪些设定（反向追踪）
+- 联想创作灵感，从一个概念出发发现隐藏关联
+
+## 和 query_memory 的区别
+- query_memory: 按关键词搜索，返回匹配结果（不知道关系链）
+- traverse_memory: 沿关系边走，返回关联路径（知道 A→B→C 的链路）
+
+## 关系类型
+- **属于**: A 属于 B（如火球术 属于 火系魔法）
+- **细化**: A 细化 B（如施法限制 细化 魔法规则）
+- **依赖**: A 依赖 B（如设定A 依赖 设定B，或隧道自动发现的跨翼关联）
+- **冲突**: A 与 B 矛盾（需要解决）
+
+## 返回格式
+\`\`\`json
+{
+  "start": { "id": "kg-xxx", "name": "火球术", "wing": "world", "room": "力量体系", "summary": "..." },
+  "reachedCount": 3,
+  "reached": [
+    { "id": "kg-yyy", "name": "灵力规则", "wing": "world", "room": "力量体系",
+      "summary": "施法消耗灵力...",
+      "tags": ["魔法", "规则"],
+      "distance": 1,
+      "path": "火球术 →依赖→ 灵力规则" },
+    { "id": "kg-zzz", "name": "禁止灵力外挂", "wing": "writing_rules", "room": "用语忌讳",
+      "summary": "...",
+      "tags": ["禁止"],
+      "distance": 2,
+      "path": "火球术 →依赖→ 灵力规则 →依赖→ 禁止灵力外挂" }
+  ]
+}
+\`\`\`
+
+## depth 说明
+- depth=1: 只找直接关联的节点（邻居）
+- depth=2: 找邻居的邻居（默认，适合大多数场景）
+- depth=3: 三层关联（范围大但可能不相关）
 `,
     parameters: {
       type: 'object',
       properties: {
-        importance: {
+        nodeId: {
           type: 'string',
-          enum: ['critical', 'important', 'normal'],
-          description: '按重要程度过滤（可选，不传则返回全部）',
+          description: '起始节点 ID（可从 query_memory 或 memory_status 获取）',
+        },
+        depth: {
+          type: 'number',
+          default: 2,
+          description: '遍历深度：1=直接关联，2=两层（默认），3=三层。建议用 2',
+        },
+        edgeTypes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '只沿特定关系类型走（可选）：属于/细化/依赖/冲突',
         },
       },
+      required: ['nodeId'],
     },
   },
 };
@@ -276,8 +436,8 @@ export const listAllKnowledgeTool: ToolDefinition = {
 
 export const executeQueryKnowledge = async (args: {
   query?: string;
-  category?: KnowledgeCategory;
-  subCategory?: string;
+  wing?: 'writing_rules' | 'world';
+  room?: string;
   tags?: string[];
   sortBy?: 'relevance' | 'activation';
   limit?: number;
@@ -285,18 +445,18 @@ export const executeQueryKnowledge = async (args: {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { query, category, subCategory, tags, sortBy = 'relevance', limit = 10 } = args;
+  const { query, wing, room, tags, sortBy = 'relevance', limit = 10 } = args;
 
   let nodes = store.nodes;
 
-  // 按分类过滤
-  if (category) {
-    nodes = nodes.filter((n) => n.category === category);
+  // 按翼过滤
+  if (wing) {
+    nodes = nodes.filter((n) => n.wing === wing);
   }
 
-  // 按二级分类过滤
-  if (subCategory) {
-    nodes = nodes.filter((n) => n.subCategory === subCategory);
+  // 按房间过滤
+  if (room) {
+    nodes = nodes.filter((n) => n.room === room);
   }
 
   // 按标签过滤
@@ -313,6 +473,20 @@ export const executeQueryKnowledge = async (args: {
       try {
         const semanticResults = await semanticSearch(query, nodes, limit);
         if (semanticResults.length > 0) {
+          // 如果记忆节点不足，补充搜索文件
+          let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
+          if (semanticResults.length < limit) {
+            try {
+              const files = useFileStore.getState().files;
+              const remaining = limit - semanticResults.length;
+              const fResults = await semanticFileSearch(query, files, remaining);
+              fileResults = fResults.map(r => {
+                const file = files.find(f => f.id === r.fileId);
+                return { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType };
+              });
+            } catch { /* ignore */ }
+          }
+
           return JSON.stringify({
             success: true,
             total: semanticResults.length,
@@ -331,7 +505,7 @@ export const executeQueryKnowledge = async (args: {
               score: Math.round(r.score * 100),
               activation: r.node.metadata?.activation?.toFixed(2),
             })),
-            mode: 'semantic',
+            ...(fileResults.length > 0 ? { fileResults, mode: 'semantic+file' } : { mode: 'semantic' }),
           });
         }
       } catch (e) {
@@ -397,6 +571,26 @@ export const executeQueryKnowledge = async (args: {
 
   const results = nodes.slice(0, limit);
 
+  // 如果记忆节点结果不足且有查询，补充搜索文件内容
+  let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
+  if (query && results.length < limit) {
+    try {
+      const files = useFileStore.getState().files;
+      const remaining = limit - results.length;
+      const fileSearchResults = await semanticFileSearch(query, files, remaining);
+      fileResults = fileSearchResults.map(r => {
+        const file = files.find(f => f.id === r.fileId);
+        return {
+          fileName: file ? file.name : r.fileId,
+          score: Math.round(r.score * 100),
+          matchType: r.matchType,
+        };
+      });
+    } catch {
+      // fileSearchService 不可用时静默失败
+    }
+  }
+
   return JSON.stringify({
     success: true,
     count: results.length,
@@ -410,15 +604,15 @@ export const executeQueryKnowledge = async (args: {
       tags: n.tags,
       importance: n.importance,
     })),
+    ...(fileResults.length > 0 ? { fileResults, mode: 'memory+file' } : {}),
   });
 };
 
 export const executeManageKnowledge = async (args: {
-  action: 'add' | 'update' | 'delete' | 'reinforce' | 'review';
+  action: 'add' | 'update' | 'delete' | 'reinforce' | 'review' | 'resolve';
   nodes?: Array<{
-    category: KnowledgeCategory;
-    subCategory: string;
-    topic?: string;
+    wing: 'writing_rules' | 'world';
+    room: string;
     name: string;
     summary: string;
     detail?: string;
@@ -431,8 +625,7 @@ export const executeManageKnowledge = async (args: {
   }>;
   updates?: Array<{
     nodeId: string;
-    subCategory?: string;
-    topic?: string;
+    room?: string;
     name?: string;
     summary?: string;
     detail?: string;
@@ -440,9 +633,27 @@ export const executeManageKnowledge = async (args: {
     importance?: 'critical' | 'important' | 'normal';
   }>;
   nodeIds?: string[];
+  // resolve 操作参数
+  resolveEdgeId?: string;
+  resolution?: 'keep_old' | 'keep_new' | 'merge' | 'keep_both';
+  mergedName?: string;
+  mergedSummary?: string;
+  mergedDetail?: string;
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
+
+  // wing+room → category+subCategory 映射
+  const wingRoomToCategory = (wing: string, room: string): { category: KnowledgeCategory; subCategory: string } => {
+    if (wing === 'writing_rules') {
+      // writing_rules → 映射到 规则/禁止/风格
+      if (room.includes('忌讳') || room.includes('禁止')) return { category: '禁止', subCategory: room };
+      if (room.includes('风格') || room.includes('文风') || room.includes('习惯')) return { category: '风格', subCategory: room };
+      return { category: '规则', subCategory: room };
+    }
+    // world → 映射到 设定
+    return { category: '设定', subCategory: room };
+  };
 
   const { action, nodes, updates, nodeIds } = args;
 
@@ -452,21 +663,36 @@ export const executeManageKnowledge = async (args: {
         return JSON.stringify({ success: false, error: '缺少节点列表' });
       }
 
-      const addedNodes: Array<{ id: string; name: string; category: string }> = [];
+      const addedNodes: Array<{ id: string; name: string; wing: string; room: string }> = [];
       const errors: string[] = [];
 
+      const validWings = ['writing_rules', 'world'];
+      const validRooms: Record<string, string[]> = {
+        writing_rules: ['叙事规则', '文风习惯', '用语忌讳', '格式规范', '系统保护', '写作技巧积累'],
+        world: ['力量体系', '地理环境', '势力分布', '物品道具'],
+      };
+
       for (const n of nodes) {
-        // 验证
+        // 验证 wing
+        if (!validWings.includes(n.wing)) {
+          errors.push(`"${n.name}" wing "${n.wing}" 不合法，必须为: ${validWings.join('/')}`);
+          continue;
+        }
+        // 验证 room
+        const allowedRooms = validRooms[n.wing] || [];
+        if (allowedRooms.length > 0 && !allowedRooms.includes(n.room)) {
+          errors.push(`"${n.name}" room "${n.room}" 不合法。${n.wing} 翼可选: ${allowedRooms.join('/')}`);
+          continue;
+        }
         if (n.name.length > 20) {
-          errors.push(`"${n.name}" 名称过长`);
+          errors.push(`"${n.name}" 名称过长（≤20字）`);
           continue;
         }
         if (n.summary.length > 50) {
-          errors.push(`"${n.name}" 摘要过长`);
+          errors.push(`"${n.name}" 摘要过长（≤50字）`);
           continue;
         }
 
-        // 处理附件
         const attachments = n.attachments?.map(a => ({
           filePath: a.filePath,
           fileName: a.filePath.split('/').pop() || a.filePath,
@@ -474,21 +700,24 @@ export const executeManageKnowledge = async (args: {
           reason: a.reason,
         }));
 
+        const { category, subCategory } = wingRoomToCategory(n.wing, n.room);
         const newNode = await store.addNodeWithEmbedding({
-          category: n.category,
-          subCategory: n.subCategory,
-          topic: n.topic,
+          category,
+          subCategory,
           name: n.name,
           summary: n.summary,
           detail: n.detail,
           tags: n.tags || [],
           importance: n.importance || 'normal',
+          wing: n.wing,
+          room: n.room,
           attachments,
         });
         addedNodes.push({
           id: newNode.id,
           name: newNode.name,
-          category: newNode.category,
+          wing: newNode.wing || n.wing,
+          room: newNode.room || n.room,
         });
       }
 
@@ -624,6 +853,37 @@ export const executeManageKnowledge = async (args: {
       });
     }
 
+    case 'resolve': {
+      const { resolveEdgeId, resolution } = args;
+      if (!resolveEdgeId || !resolution) {
+        return JSON.stringify({ success: false, error: 'resolve 操作需要 resolveEdgeId 和 resolution 参数' });
+      }
+
+      const conflicts = store.getConflicts();
+      const conflict = conflicts.find(c => c.edge.id === resolveEdgeId);
+      if (!conflict) {
+        return JSON.stringify({
+          success: false,
+          error: `未找到冲突边 ${resolveEdgeId}。当前冲突: ${conflicts.map(c => c.edge.id).join(', ') || '无'}`,
+        });
+      }
+
+      const mergedContent: Partial<KnowledgeNode> = {};
+      if (resolution === 'merge') {
+        if (args.mergedName) mergedContent.name = args.mergedName;
+        if (args.mergedSummary) mergedContent.summary = args.mergedSummary;
+        if (args.mergedDetail) mergedContent.detail = args.mergedDetail;
+      }
+
+      const ok = store.resolveConflict(resolveEdgeId, resolution, resolution === 'merge' ? mergedContent : undefined);
+
+      return JSON.stringify({
+        success: ok,
+        resolution,
+        resolved: `${conflict.fromNode.name} vs ${conflict.toNode.name}`,
+      });
+    }
+
     default:
       return JSON.stringify({ success: false, error: `未知操作: ${action}` });
   }
@@ -674,266 +934,136 @@ export const executeLinkKnowledge = async (args: {
   }
 };
 
-export const executeListKnowledgeMetadata = async () => {
+// ============================================
+// memory_status 执行函数
+// ============================================
+
+export const executeMemoryStatus = async () => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
+  const now = Date.now();
+  const nodes = store.nodes.filter(n => n.category !== '用户偏好');
+
+  // 按 wing → room 聚合
+  const wings: Record<string, Record<string, number>> = {};
+  for (const n of nodes) {
+    const wing = n.wing || 'unassigned';
+    const room = n.room || '未分类';
+    if (!wings[wing]) wings[wing] = {};
+    wings[wing][room] = (wings[wing][room] || 0) + 1;
+  }
+
+  // 冲突统计
+  const conflicts = store.getConflicts();
+
+  // 衰减统计
+  let needsReview = 0;
+  let cooling = 0;
+  for (const n of nodes) {
+    const dynamic = getKnowledgeNodeDynamicState(n, now);
+    if (dynamic.state === 'needs_review') needsReview++;
+    else if (dynamic.state === 'cooling') cooling++;
+  }
+
+  // 可用标签
+  const topTags = store.availableTags.slice(0, 20);
+
   return JSON.stringify({
     success: true,
-    availableSubCategories: store.availableSubCategories,
-    availableTags: store.availableTags,
-    stats: store.getStats(),
+    totalNodes: nodes.length,
+    totalEdges: store.edges.length,
+    wings,
+    conflicts: conflicts.length,
+    conflictDetails: conflicts.length > 0
+      ? conflicts.map(c => ({ edgeId: c.edge.id, from: c.fromNode.name, to: c.toNode.name }))
+      : undefined,
+    needsReview,
+    cooling,
+    topTags,
   });
 };
 
-export const executeListAllKnowledge = async (args?: {
-  importance?: 'critical' | 'important' | 'normal';
+// ============================================
+// traverse_memory 执行函数
+// ============================================
+
+export const executeTraverseMemory = async (args: {
+  nodeId: string;
+  depth?: number;
+  edgeTypes?: KnowledgeEdgeType[];
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  let nodes = store.nodes;
+  const { nodeId, depth: rawDepth = 2, edgeTypes } = args;
+  const maxDepth = Math.min(rawDepth, 3);
 
-  if (args?.importance) {
-    nodes = nodes.filter((n) => n.importance === args.importance);
+  const startNode = store.getNodeById(nodeId);
+  if (!startNode) {
+    return JSON.stringify({ success: false, error: `节点 ${nodeId} 不存在` });
   }
 
-  // 按分类分组
-  const grouped: Record<string, Array<{
+  // BFS 遍历
+  const visited = new Set<string>([nodeId]);
+  const reached: Array<{
     id: string;
     name: string;
+    wing: string | undefined;
+    room: string | undefined;
     summary: string;
-    subCategory: string;
     tags: string[];
-    importance: string;
-  }>> = {};
+    distance: number;
+    path: string;
+  }> = [];
 
-  for (const n of nodes) {
-    if (!grouped[n.category]) grouped[n.category] = [];
-    grouped[n.category].push({
-      id: n.id,
-      name: n.name,
-      summary: n.summary,
-      subCategory: n.subCategory,
-      tags: n.tags,
-      importance: n.importance,
-    });
+  let frontier = new Set<string>([nodeId]);
+
+  for (let d = 1; d <= maxDepth; d++) {
+    const nextFrontier = new Set<string>();
+    for (const curId of frontier) {
+      const edges = store.getEdgesForNode(curId);
+      for (const edge of edges) {
+        // 过滤关系类型
+        if (edgeTypes && edgeTypes.length > 0 && !edgeTypes.includes(edge.type)) continue;
+
+        const neighborId = edge.from === curId ? edge.to : edge.from;
+        if (visited.has(neighborId)) continue;
+
+        visited.add(neighborId);
+        nextFrontier.add(neighborId);
+
+        const neighbor = store.getNodeById(neighborId);
+        if (!neighbor) continue;
+
+        reached.push({
+          id: neighbor.id,
+          name: neighbor.name,
+          wing: neighbor.wing,
+          room: neighbor.room,
+          summary: neighbor.summary,
+          tags: neighbor.tags,
+          distance: d,
+          path: `${startNode.name} →${edge.type}→ ${neighbor.name}`,
+        });
+      }
+    }
+    frontier = nextFrontier;
+    if (frontier.size === 0) break;
   }
 
   return JSON.stringify({
     success: true,
-    total: nodes.length,
-    grouped,
-  });
-};
-
-/**
- * 发现跨 Wing 隧道
- */
-export const discoverTunnelsTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'discover_passages',
-    description: `【发现通道】自动发现跨 Wing（星域）之间的记忆通道连接。
-
-基于共享标签检测不同 Wing 中相关的记忆节点，并自动建立"依赖"关系。
-通道帮助发现隐藏的知识关联，如世界观设定与创作规则之间的约束关系。
-
-返回发现的通道数量和详情。
-`,
-    parameters: {
-      type: 'object',
-      properties: {},
+    start: {
+      id: startNode.id,
+      name: startNode.name,
+      wing: startNode.wing,
+      room: startNode.room,
+      summary: startNode.summary,
     },
-  },
-};
-
-export const executeDiscoverTunnels = async () => {
-  const store = useKnowledgeGraphStore.getState();
-  await store.ensureInitialized();
-
-  const count = store.discoverTunnels();
-  const connections = store.getCrossWingConnections();
-
-  return JSON.stringify({
-    success: true,
-    tunnelsDiscovered: count,
-    totalTunnels: connections.length,
-    connections: connections.slice(0, 20).map(c => ({
-      from: { id: c.from.id, name: c.from.name, wing: c.from.wing },
-      to: { id: c.to.id, name: c.to.name, wing: c.to.wing },
-      sharedTags: c.sharedTags,
-    })),
+    reachedCount: reached.length,
+    reached: reached.slice(0, 20),
   });
-};
-
-/**
- * 解决记忆冲突
- */
-export const resolveConflictTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'resolve_contradiction',
-    description: `【矛盾调解】解决记忆宫殿中标记为"冲突"的知识节点矛盾。
-
-## 使用场景
-当两个知识节点之间存在矛盾（通过自动检测或手动标记），使用此工具解决冲突。
-
-## 解决方式
-- **keep_old**: 保留旧节点，删除新节点
-- **keep_new**: 保留新节点，删除旧节点
-- **merge**: 合并两者到旧节点（需要提供合并后的内容），删除新节点
-- **keep_both**: 两个都保留，移除冲突标记
-
-需要先通过 list_all_memories 或 query_memory 找到冲突边的 edgeId。
-`,
-    parameters: {
-      type: 'object',
-      properties: {
-        edgeId: {
-          type: 'string',
-          description: '冲突边的 ID',
-        },
-        resolution: {
-          type: 'string',
-          enum: ['keep_old', 'keep_new', 'merge', 'keep_both'],
-          description: '解决方式',
-        },
-        mergedName: {
-          type: 'string',
-          description: '合并后的名称（merge 时使用）',
-        },
-        mergedSummary: {
-          type: 'string',
-          description: '合并后的摘要（merge 时使用）',
-        },
-        mergedDetail: {
-          type: 'string',
-          description: '合并后的详情（merge 时使用）',
-        },
-      },
-      required: ['edgeId', 'resolution'],
-    },
-  },
-};
-
-export const executeResolveConflict = async (args: {
-  edgeId: string;
-  resolution: 'keep_old' | 'keep_new' | 'merge' | 'keep_both';
-  mergedName?: string;
-  mergedSummary?: string;
-  mergedDetail?: string;
-}) => {
-  const store = useKnowledgeGraphStore.getState();
-  await store.ensureInitialized();
-
-  const { edgeId, resolution } = args;
-
-  // 验证冲突存在
-  const conflicts = store.getConflicts();
-  const conflict = conflicts.find(c => c.edge.id === edgeId);
-  if (!conflict) {
-    return JSON.stringify({
-      success: false,
-      error: `未找到冲突边 ${edgeId}。当前冲突: ${conflicts.map(c => c.edge.id).join(', ') || '无'}`,
-    });
-  }
-
-  const mergedContent: Partial<KnowledgeNode> = {};
-  if (resolution === 'merge') {
-    if (args.mergedName) mergedContent.name = args.mergedName;
-    if (args.mergedSummary) mergedContent.summary = args.mergedSummary;
-    if (args.mergedDetail) mergedContent.detail = args.mergedDetail;
-  }
-
-  const ok = store.resolveConflict(edgeId, resolution, resolution === 'merge' ? mergedContent : undefined);
-
-  return JSON.stringify({
-    success: ok,
-    resolution,
-    resolved: `${conflict.fromNode.name} vs ${conflict.toNode.name}`,
-  });
-};
-
-/**
- * 记忆维护（检查冲突、查看衰减状态）
- */
-export const maintenanceTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'memory_maintenance',
-    description: `【记忆维护】检查记忆宫殿状态。
-
-## 操作
-- **list_conflicts**: 列出所有标记为冲突的知识节点对
-- **check_decay**: 查看需要复习的冷却节点（衰减只降低等级，不删除）
-
-⚠️ 记忆衰减是正常机制：activation/strength 随时间降低，节点状态从 active→stable→cooling→needs_review。
-这是降低优先级，不是删除。使用 manage_memory 的 reinforce 操作可以恢复衰减的记忆。
-`,
-    parameters: {
-      type: 'object',
-      properties: {
-        action: {
-          type: 'string',
-          enum: ['list_conflicts', 'check_decay'],
-          description: '维护操作类型',
-        },
-      },
-      required: ['action'],
-    },
-  },
-};
-
-export const executeMaintenance = async (args: {
-  action: 'list_conflicts' | 'check_decay';
-}) => {
-  const store = useKnowledgeGraphStore.getState();
-  await store.ensureInitialized();
-
-  switch (args.action) {
-    case 'list_conflicts': {
-      const conflicts = store.getConflicts();
-      return JSON.stringify({
-        success: true,
-        conflictCount: conflicts.length,
-        conflicts: conflicts.map(c => ({
-          edgeId: c.edge.id,
-          from: { id: c.fromNode.id, name: c.fromNode.name, summary: c.fromNode.summary },
-          to: { id: c.toNode.id, name: c.toNode.name, summary: c.toNode.summary },
-          note: c.edge.note,
-        })),
-      });
-    }
-
-    case 'check_decay': {
-      // 查看需要复习的节点（衰减降低了等级，但不会删除）
-      const nodesNeedingReview = store.nodes.filter(n => {
-        const dynamic = getKnowledgeNodeDynamicState(n, Date.now());
-        return dynamic.state === 'needs_review';
-      });
-      const coolingNodes = store.nodes.filter(n => {
-        const dynamic = getKnowledgeNodeDynamicState(n, Date.now());
-        return dynamic.state === 'cooling' && n.importance === 'normal';
-      });
-      return JSON.stringify({
-        success: true,
-        summary: `共 ${store.nodes.length} 个记忆节点`,
-        needsReview: nodesNeedingReview.length,
-        cooling: coolingNodes.length,
-        reviewNodes: nodesNeedingReview.map(n => ({
-          id: n.id,
-          name: n.name,
-          summary: n.summary,
-          hint: '使用 manage_memory reinforce 恢复',
-        })),
-        note: '衰减只降低等级，不删除。使用 manage_memory 的 reinforce 操作可恢复。',
-      });
-    }
-
-    default:
-      return JSON.stringify({ success: false, error: `未知操作: ${args.action}` });
-  }
 };
 
 // ============================================
@@ -944,9 +1074,6 @@ export const knowledgeGraphToolDefinitions = [
   queryKnowledgeTool,
   manageKnowledgeTool,
   linkKnowledgeTool,
-  listKnowledgeMetadataTool,
-  listAllKnowledgeTool,
-  discoverTunnelsTool,
-  resolveConflictTool,
-  maintenanceTool,
+  memoryStatusTool,
+  traverseMemoryTool,
 ];
