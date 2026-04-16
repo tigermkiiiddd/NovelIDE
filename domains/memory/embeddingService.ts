@@ -3,7 +3,8 @@
  * @description Transformers.js embedding 封装 — 浏览器端向量生成
  *
  * 使用 @huggingface/transformers 在浏览器中运行 embedding 模型。
- * 模型首次加载时下载到浏览器缓存（Cache API），后续直接使用缓存。
+ * 模型文件通过 Cache API 下载，并自动备份到 IndexedDB。
+ * 手机上 Cache API 易被清除，IndexedDB 作为持久化备份。
  */
 
 import { pipeline, env } from '@huggingface/transformers';
@@ -11,6 +12,9 @@ import { pipeline, env } from '@huggingface/transformers';
 // 模型配置
 const EMBEDDING_MODEL = 'Xenova/bge-small-zh-v1.5';
 const EMBEDDING_DIMENSIONS = 512;
+const CACHE_NAME = 'transformers-cache';
+const IDB_DB = 'embedding-model-store';
+const IDB_STORE = 'files';
 
 // 强制从 CDN 下载，不用本地路径
 env.allowLocalModels = false;
@@ -51,21 +55,110 @@ export function getEmbeddingStatus(): EmbeddingProgress {
   return { progress: 0, status: 'idle', message: '模型未加载', completedFiles: [], currentFile: '' };
 }
 
-/**
- * 清理坏的缓存（URL 指向 localhost 的）
- */
-async function cleanBadCache(): Promise<void> {
-  try {
-    const cache = await caches.open('transformers-cache');
-    const keys = await cache.keys();
-    for (const req of keys) {
-      // 删除指向 localhost 的缓存条目（应该指向 CDN）
-      if (req.url.includes('localhost')) {
-        await cache.delete(req);
+// ==================== IndexedDB 备份 ====================
+
+function openIDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
       }
-    }
-  } catch { /* ignore */ }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
+
+async function idbPut(key: string, value: ArrayBuffer): Promise<void> {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function idbGet(key: string): Promise<ArrayBuffer | undefined> {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGetAllKeys(): Promise<string[]> {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).getAllKeys();
+    req.onsuccess = () => resolve(req.result as string[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/**
+ * 将 Cache API 中的模型文件备份到 IndexedDB
+ */
+async function backupCacheToIDB(): Promise<void> {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const keys = await cache.keys();
+    let backedUp = 0;
+    for (const req of keys) {
+      if (req.url.includes('localhost')) continue;
+      const response = await cache.match(req);
+      if (!response) continue;
+      const buffer = await response.arrayBuffer();
+      await idbPut(req.url, buffer);
+      backedUp++;
+    }
+    if (backedUp > 0) {
+      console.log(`[EmbeddingService] 已备份 ${backedUp} 个模型文件到 IndexedDB`);
+    }
+  } catch (e) {
+    console.warn('[EmbeddingService] IndexedDB 备份失败:', e);
+  }
+}
+
+/**
+ * 从 IndexedDB 恢复模型文件到 Cache API
+ * 返回 true 表示恢复了文件（模型可能可以直接加载）
+ */
+async function restoreCacheFromIDB(): Promise<boolean> {
+  try {
+    const keys = await idbGetAllKeys();
+    if (keys.length === 0) return false;
+
+    const cache = await caches.open(CACHE_NAME);
+    let restored = 0;
+    for (const url of keys) {
+      // 如果 Cache API 中已有该文件，跳过
+      const existing = await cache.match(url);
+      if (existing) continue;
+
+      const buffer = await idbGet(url);
+      if (!buffer) continue;
+
+      await cache.put(url, new Response(buffer));
+      restored++;
+    }
+
+    if (restored > 0) {
+      console.log(`[EmbeddingService] 从 IndexedDB 恢复了 ${restored} 个模型文件到缓存`);
+    }
+    return restored > 0;
+  } catch (e) {
+    console.warn('[EmbeddingService] IndexedDB 恢复失败:', e);
+    return false;
+  }
+}
+
+// ==================== 模型加载 ====================
 
 /**
  * 初始化 embedding 模型
@@ -83,18 +176,18 @@ export async function initEmbeddingModel(): Promise<void> {
   isLoading = true;
 
   try {
-    // 请求持久化存储，防止浏览器在存储压力下清除模型缓存
+    // 请求持久化存储
     try {
       if (navigator.storage?.persist) {
         const granted = await navigator.storage.persist();
-        console.log('[EmbeddingService] 持久化存储:', granted ? '已授权' : '未授权（缓存可能被清除）');
+        console.log('[EmbeddingService] 持久化存储:', granted ? '已授权' : '未授权');
       }
     } catch { /* ignore */ }
 
-    // 清理坏缓存
-    await cleanBadCache();
+    // 先尝试从 IndexedDB 恢复到 Cache API
+    await restoreCacheFromIDB();
 
-    progressCallback?.({ progress: 5, status: 'loading', message: '正在准备模型下载...', completedFiles: [], currentFile: '' });
+    progressCallback?.({ progress: 5, status: 'loading', message: '正在准备模型...', completedFiles: [], currentFile: '' });
 
     const completedFiles: string[] = [];
 
@@ -124,6 +217,9 @@ export async function initEmbeddingModel(): Promise<void> {
         }
       },
     });
+
+    // 模型加载成功后，备份到 IndexedDB（后台执行，不阻塞）
+    backupCacheToIDB();
 
     progressCallback?.({ progress: 100, status: 'ready', message: '模型已就绪', completedFiles: [], currentFile: '' });
     console.log('[EmbeddingService] 模型加载完成');
