@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { AIConfig, AIProvider, OpenAIBackend } from '../types';
-import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Zap, Brain } from 'lucide-react';
+import { AIConfig, AIProvider, OpenAIBackend, ModelRouteId, ModelRoute, ModelRoutes } from '../types';
+import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Brain } from 'lucide-react';
 import { generateId } from '../services/fileSystem';
 
 interface AISettingsFormProps {
@@ -29,8 +29,15 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
           finalConfig.baseUrl = activeBackend.baseUrl;
           finalConfig.apiKey = activeBackend.apiKey;
           finalConfig.modelName = activeBackend.modelName;
-          finalConfig.lightweightModelName = activeBackend.lightweightModelName;
           finalConfig.maxOutputTokens = activeBackend.maxOutputTokens;
+      }
+
+      // Migration: lightweightModelName → extraction route
+      if (!finalConfig.modelRoutes?.extraction && finalConfig.lightweightModelName) {
+          finalConfig.modelRoutes = {
+              ...finalConfig.modelRoutes,
+              extraction: { modelName: finalConfig.lightweightModelName }
+          };
       }
 
       onSave(finalConfig);
@@ -74,6 +81,27 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
               b.id === prev.activeOpenAIBackendId ? { ...b, ...updates } : b
           )
       }));
+  };
+
+  const updateModelRoute = (routeId: ModelRouteId, updates: Partial<ModelRoute>) => {
+      setTempConfig(prev => {
+          const current = prev.modelRoutes?.[routeId] || {};
+          const merged = { ...current, ...updates };
+
+          // Clean up undefined values
+          const cleaned: Record<string, string> = {};
+          if (merged.backendId) cleaned.backendId = merged.backendId;
+          if (merged.modelName) cleaned.modelName = merged.modelName;
+
+          const newRoutes = { ...prev.modelRoutes };
+          if (Object.keys(cleaned).length > 0) {
+              (newRoutes as any)[routeId] = cleaned;
+          } else {
+              delete (newRoutes as any)[routeId];
+          }
+
+          return { ...prev, modelRoutes: newRoutes };
+      });
   };
 
   // Check if current model is Gemini (for safety settings hint)
@@ -200,25 +228,6 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             />
                         </div>
 
-                        {/* Lightweight Model for Auto Tasks */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Zap size={16}/>
-                                轻量模型（自动任务）
-                            </label>
-                            <input
-                                type="text"
-                                value={activeBackend.lightweightModelName || ''}
-                                onChange={e => updateActiveBackend({ lightweightModelName: e.target.value || undefined })}
-                                placeholder={activeBackend.modelName || 'gpt-4o-mini'}
-                                className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
-                            />
-                            <p className="text-xs text-gray-500 mt-2">
-                                用于章节分析等轻量自动任务的模型。若留空则使用主模型。
-                                建议使用更便宜、快速的模型（如 deepseek-coder、gpt-4o-mini）。
-                            </p>
-                        </div>
-
                         {/* Max Output Tokens */}
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
@@ -310,6 +319,55 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                     <div className="text-xs text-gray-500">{item.desc}</div>
                                 </div>
                             </label>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Model Routes */}
+            <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
+                    <Cpu size={16} className="text-amber-400" />
+                    模型路由
+                </h4>
+                <p className="text-xs text-gray-500 mb-4">
+                    不同类型的任务可使用不同供应商/模型。留空表示使用当前活跃供应商。
+                </p>
+                <div className="space-y-3">
+                    {([
+                        { id: 'main' as ModelRouteId, label: '主对话', desc: '核心对话引擎' },
+                        { id: 'polish' as ModelRouteId, label: '润色', desc: '文本润色/项目设定补全' },
+                        { id: 'outline' as ModelRouteId, label: '大纲', desc: '时间线/大纲构建' },
+                        { id: 'extraction' as ModelRouteId, label: '提取', desc: '知识图谱/章节分析/角色提取' },
+                        { id: 'subAgent' as ModelRouteId, label: '子Agent', desc: '其他子Agent任务' },
+                    ]).map(route => {
+                        const current = tempConfig.modelRoutes?.[route.id];
+                        return (
+                            <div key={route.id} className="flex flex-col sm:flex-row sm:items-center gap-2 p-2 bg-gray-900/50 rounded-lg">
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-gray-300">{route.label}</div>
+                                    <div className="text-[10px] text-gray-600">{route.desc}</div>
+                                </div>
+                                <div className="flex gap-2 flex-1">
+                                    <select
+                                        value={current?.backendId || ''}
+                                        onChange={e => updateModelRoute(route.id, { backendId: e.target.value || undefined })}
+                                        className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:border-blue-500 focus:outline-none appearance-none"
+                                    >
+                                        <option value="">活跃供应商</option>
+                                        {tempConfig.openAIBackends?.map(b => (
+                                            <option key={b.id} value={b.id}>{b.name}</option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        type="text"
+                                        value={current?.modelName || ''}
+                                        onChange={e => updateModelRoute(route.id, { modelName: e.target.value || undefined })}
+                                        placeholder="默认模型"
+                                        className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:border-blue-500 focus:outline-none font-mono"
+                                    />
+                                </div>
+                            </div>
                         );
                     })}
                 </div>

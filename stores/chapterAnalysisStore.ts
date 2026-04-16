@@ -23,6 +23,7 @@ import { useProjectStore } from './projectStore';
 import { useCharacterMemoryStore } from './characterMemoryStore';
 import { useEntityVersionStore } from './entityVersionStore';
 import { AIService } from '../services/geminiService';
+import { createRoutedAIService } from '../services/modelRouter';
 import { runChapterAnalysisAgent, applyMergeActions } from '../services/subAgents/chapterAnalysisAgent';
 import { getNodePath } from '../services/fileSystem';
 import { getOfficialCharacterList } from '../utils/characterUtils';
@@ -456,11 +457,7 @@ export const useChapterAnalysisStore: UseBoundStore<StoreApi<ChapterAnalysisStat
         // 2. 获取 AIService 实例
         const agentStore = useAgentStore.getState();
         const aiConfig = agentStore.aiConfig;
-        const lightConfig = {
-          ...aiConfig,
-          modelName: aiConfig.lightweightModelName || aiConfig.modelName
-        };
-        const aiService = new AIService(lightConfig);
+        const aiService = createRoutedAIService(aiConfig, 'extraction');
 
         // 3. 提取章节标题
         const chapterTitle = file.name.replace(/\.md$/, '');

@@ -6,6 +6,7 @@
 export interface ToolSummary {
   action: string;    // 操作类型
   summary: string;   // 摘要文本
+  icon?: string;     // 图标
 }
 
 /**
@@ -183,13 +184,6 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
         summary: restArgs.skillName
           ? `激活技能: ${restArgs.skillName}`
           : '激活技能'
-      };
-
-    // 搜索
-    case 'callSearchAgent':
-      return {
-        action: 'search',
-        summary: restArgs.query ? `搜索: "${truncate(restArgs.query, 40)}"` : '搜索'
       };
 
     // 子代理

@@ -24,11 +24,11 @@ import {
 } from './tools/relationshipTools';
 import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../utils/diffUtils';
 import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
-import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
 import { executeDeepThinking, isVirtualThinkingPath, resolveVirtualFile, writeVirtualFile, syncPadToFileStore } from './tools/deepThinkingTools';
 import { executeSearchTools } from './tools/searchTools';
 import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
+import { executeQueryEvolution, executeManageEvolution } from './tools/evolutionTools';
 
 import { useVersionStore } from '../../stores/versionStore';
 
@@ -285,7 +285,7 @@ export const executeTool = async (
     }
 
     // Log Start (Immediate Feedback) - Except for SubAgent which handles its own internal logging
-    if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput') {
+    if (onUiLog && name !== 'processOutlineInput') {
         onUiLog(`${startLog}`);
     }
 
@@ -578,25 +578,6 @@ export const executeTool = async (
         else if (name === 'search_tools') {
             result = executeSearchTools(args);
         }
-        // --- SUB AGENT ENTRY POINT ---
-        else if (name === 'call_search_agent') {
-            if (!aiService) return { type: 'ERROR', message: 'AI Service not available for Sub-Agent' };
-            
-            // Log thinking and request for sub-agent call (Sub Agent handles its own detailed logging)
-            if(onUiLog) {
-                 const reqDesc = args.request_description ? `📋 **任务**: ${args.request_description}\n` : '';
-                 onUiLog(`${startLog}${reqDesc}`);
-            }
-
-            result = await runSearchSubAgent(
-                aiService,
-                args.request_description,
-                files,
-                actions, // Pass the read-only tools
-                onUiLog,
-                signal // Pass signal to sub-agent
-            );
-        }
         else {
             // Map generic tools to implementation props
             switch (name) {
@@ -742,13 +723,20 @@ export const executeTool = async (
                     const skillResult = executeActivateSkill(args.skillName || '', args.reason || '');
                     result = JSON.stringify(skillResult);
                     break;
+                // --- EVOLUTION (SELF-EVOLVING MEMORY) TOOLS ---
+                case 'query_evolution':
+                    result = executeQueryEvolution(args);
+                    break;
+                case 'manage_evolution':
+                    result = await executeManageEvolution(args);
+                    break;
                 default:
                     result = `Error: Unknown tool ${name}`;
             }
         }
         
         // Log Completion (Append to the start log) - Except for SubAgent which handles its own internal logging
-        if (onUiLog && name !== 'call_search_agent' && name !== 'processOutlineInput') {
+        if (onUiLog && name !== 'processOutlineInput') {
             // Truncate output for UI performance if it's too massive (the full result is still returned to the Agent)
             const MAX_UI_LENGTH = 1000;
             let displayResult = result;

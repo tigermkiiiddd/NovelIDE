@@ -273,9 +273,20 @@ export interface OpenAIBackend {
   baseUrl: string;
   apiKey: string;
   modelName: string;
-  lightweightModelName?: string; // 轻量模型
+  lightweightModelName?: string; // 轻量模型 (legacy, use modelRoutes instead)
   maxOutputTokens?: number;      // 最长输出
 }
+
+// --- Model Routing Types ---
+
+export type ModelRouteId = 'main' | 'polish' | 'outline' | 'extraction' | 'subAgent';
+
+export interface ModelRoute {
+  backendId?: string;   // 引用 openAIBackends 中的 ID，空=用活跃供应商
+  modelName?: string;   // 模型名覆盖，空=用 backend 的默认模型
+}
+
+export type ModelRoutes = Partial<Record<ModelRouteId, ModelRoute>>;
 
 export interface AIConfig {
   provider: AIProvider;
@@ -290,6 +301,9 @@ export interface AIConfig {
   // Multi-Provider Support
   openAIBackends?: OpenAIBackend[];
   activeOpenAIBackendId?: string;
+
+  // 模型路由：不同任务类型使用不同供应商/模型
+  modelRoutes?: ModelRoutes;
 
   // 自动提取开关
   autoExtraction?: {

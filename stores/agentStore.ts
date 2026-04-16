@@ -26,7 +26,7 @@ const debounce = <T extends (...args: any[]) => any>(
 };
 
 // Lazy tool loading categories
-export type ToolCategory = 'memory' | 'character' | 'relationship' | 'outline';
+type ToolCategory = 'memory' | 'character' | 'relationship' | 'outline';
 
 interface AgentState {
   // Config
@@ -123,7 +123,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
                   ...DEFAULT_AI_CONFIG,
                   ...config,
                   openAIBackends: config.openAIBackends || DEFAULT_AI_CONFIG.openAIBackends,
-                  activeOpenAIBackendId: config.activeOpenAIBackendId || DEFAULT_AI_CONFIG.activeOpenAIBackendId
+                  activeOpenAIBackendId: config.activeOpenAIBackendId || DEFAULT_AI_CONFIG.activeOpenAIBackendId,
+                  modelRoutes: config.modelRoutes || DEFAULT_AI_CONFIG.modelRoutes,
               };
               set({ aiConfig: mergedConfig });
           }

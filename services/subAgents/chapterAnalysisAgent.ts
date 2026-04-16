@@ -561,7 +561,6 @@ export async function detectCharactersInChapter(
   characterList: string[],
   signal?: AbortSignal
 ): Promise<string[]> {
-  const lightweightModel = (aiService as any).config?.lightweightModelName;
   const systemPrompt = `你是一个【角色登场检测专家】。
 你的任务是从章节内容中识别哪些角色登场了。
 
@@ -595,7 +594,7 @@ ${chapterContent.slice(0, 15000)} // 限制长度避免超出上下文
       'submit_detected_characters', // 强制调用工具
       1000, // 限制输出长度
       0.3,  // 低温度
-      lightweightModel // 使用轻量模型
+      undefined // model 不再覆盖，由路由层控制
     );
 
     // 解析工具调用结果

@@ -10,6 +10,7 @@ import { useAgentStore } from '../stores/agentStore';
 import { useProjectStore } from '../stores/projectStore';
 import { CharacterCategoryName, CharacterProfileV2 } from '../types';
 import { AIService } from '../services/geminiService';
+import { createRoutedAIService } from '../services/modelRouter';
 import { buildProjectOverviewPrompt } from '../utils/projectContext';
 import { ToolDefinition } from '../services/agent/types';
 
@@ -523,12 +524,8 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
         return false;
       }
 
-      const lightConfig = {
-        ...aiConfig,
-        modelName: aiConfig.lightweightModelName || aiConfig.modelName,
-      };
-      const aiService = new AIService(lightConfig);
-      console.log('[CharacterProfile] 使用模型:', lightConfig.modelName);
+      const aiService = createRoutedAIService(aiConfig, 'extraction');
+
 
       // 构建项目概览
       const projectOverview = buildProjectOverviewPrompt(currentProject);
@@ -608,11 +605,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       }
 
       // 创建 AI 服务
-      const lightConfig = {
-        ...aiConfig,
-        modelName: aiConfig.lightweightModelName || aiConfig.modelName,
-      };
-      const aiService = new AIService(lightConfig);
+      const aiService = createRoutedAIService(aiConfig, 'extraction');
 
       // 构建项目概览
       const projectOverview = buildProjectOverviewPrompt(currentProject);

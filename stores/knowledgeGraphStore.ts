@@ -29,6 +29,7 @@ import {
 import Fuse from 'fuse.js';
 import { extractKnowledgeFromDocument, extractKnowledgeFromDialogue, KnowledgeOperation } from '../services/subAgents/knowledgeExtractionAgent';
 import { AIService } from '../services/geminiService';
+import { createRoutedAIService } from '../services/modelRouter';
 import { useAgentStore } from './agentStore';
 import { findSemanticDuplicate } from '../domains/memory/vectorSearchService';
 import { generateEmbedding } from '../domains/memory/embeddingService';
@@ -776,11 +777,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       // 获取 AI 配置
       const agentStore = useAgentStore.getState();
       const aiConfig = agentStore.aiConfig;
-      const lightConfig = {
-        ...aiConfig,
-        modelName: aiConfig.lightweightModelName || aiConfig.modelName,
-      };
-      const aiService = new AIService(lightConfig);
+      const aiService = createRoutedAIService(aiConfig, 'extraction');
 
       // 调用知识提取 agent
       const result = await extractKnowledgeFromDocument(
@@ -898,11 +895,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
 
       const agentStore = useAgentStore.getState();
       const aiConfig = agentStore.aiConfig;
-      const lightConfig = {
-        ...aiConfig,
-        modelName: aiConfig.lightweightModelName || aiConfig.modelName,
-      };
-      const aiService = new AIService(lightConfig);
+      const aiService = createRoutedAIService(aiConfig, 'extraction');
 
       const result = await extractKnowledgeFromDialogue(
         aiService,

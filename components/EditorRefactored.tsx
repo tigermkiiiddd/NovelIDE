@@ -19,6 +19,7 @@ import { useAgentStore } from '../stores/agentStore';
 import { useProjectStore } from '../stores/projectStore';
 import { getNodePath, generateId } from '../services/fileSystem';
 import { AIService } from '../services/geminiService';
+import { createRoutedAIService } from '../services/modelRouter';
 import { runPolishSubAgent } from '../services/subAgents/polishAgent';
 import { FileNode } from '../types';
 import DiffViewer from './DiffViewer';
@@ -219,7 +220,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
     setIsPolishing(true);
     try {
       const { aiConfig } = useAgentStore.getState();
-      const aiService = new AIService(aiConfig);
+      const aiService = createRoutedAIService(aiConfig, 'polish');
 
       const result = await runPolishSubAgent(
         aiService,

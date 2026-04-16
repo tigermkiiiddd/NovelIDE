@@ -868,13 +868,11 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
             const isLast = index === messages.length - 1;
             const prevMsg = index > 0 ? messages[index-1] : null;
 
-            // 检查是否是 SubAgent (processOutlineInput 或 call_search_agent) 工具的输出
+            // 检查是否是 SubAgent (processOutlineInput) 工具的输出
             // 注意：需要同时检查 rawParts（执行完成后）和 metadata.executingTools（执行过程中）
             const isSubAgentOutput = msg.rawParts?.some((p: any) =>
-                p.functionResponse?.name === 'processOutlineInput' ||
-                p.functionResponse?.name === 'call_search_agent'
-            ) || msg.metadata?.executingTools === 'processOutlineInput' ||
-               msg.metadata?.executingTools === 'call_search_agent';
+                p.functionResponse?.name === 'processOutlineInput'
+            ) || msg.metadata?.executingTools === 'processOutlineInput';
 
             // 1. SubAgent 输出 - 使用折叠气泡显示
             if (msg.isToolOutput && isSubAgentOutput) {

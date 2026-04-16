@@ -16,9 +16,6 @@ export enum ToolType {
   // 任务管理
   MANAGE_TODOS = 'manageTodos',
 
-  // 搜索
-  CALL_SEARCH_AGENT = 'call_search_agent',
-
   // 计划笔记
   MANAGE_PLAN_NOTE = 'managePlanNote',
 
@@ -99,9 +96,6 @@ const PARAM_VALUE_CONFIG: Record<ToolType, Record<string, { type: ContentType; v
     todo: { type: ContentType.TASK, value: ContentValue.MEDIUM, decayRounds: 4 },
     task: { type: ContentType.TASK, value: ContentValue.MEDIUM, decayRounds: 4 }
   },
-  [ToolType.CALL_SEARCH_AGENT]: {
-    query: { type: ContentType.QUERY, value: ContentValue.MEDIUM, decayRounds: 3 }
-  },
   [ToolType.MANAGE_PLAN_NOTE]: {
     noteId: { type: ContentType.NOTE, value: ContentValue.MEDIUM, decayRounds: 3 },
     content: { type: ContentType.NOTE, value: ContentValue.MEDIUM, decayRounds: 3 },
@@ -141,9 +135,6 @@ const RESULT_VALUE_CONFIG: Record<ToolType, Record<string, { type: ContentType; 
   },
   [ToolType.MANAGE_TODOS]: {
     todos: { type: ContentType.LIST, value: ContentValue.MEDIUM, decayRounds: 4 }
-  },
-  [ToolType.CALL_SEARCH_AGENT]: {
-    results: { type: ContentType.LIST, value: ContentValue.MEDIUM, decayRounds: 3 }
   },
   [ToolType.MANAGE_PLAN_NOTE]: {
     status: { type: ContentType.STATUS, value: ContentValue.LOW, decayRounds: 1 }
@@ -305,15 +296,6 @@ export const getToolDecayConfigs = (toolType: ToolType): ToolDecayConfigs => {
         call: { value: ContentValue.LOW, decayRounds: 12 },
         path: { value: ContentValue.LOW, decayRounds: 4 },
         content: { value: ContentValue.LOW, decayRounds: 4 },
-        status: { value: ContentValue.MEDIUM, decayRounds: 30 },
-        results: { value: ContentValue.MEDIUM, decayRounds: 4 }
-      };
-
-    case ToolType.CALL_SEARCH_AGENT:
-      return {
-        call: { value: ContentValue.LOW, decayRounds: 12 },
-        path: { value: ContentValue.LOW, decayRounds: 4 },
-        content: { value: ContentValue.MEDIUM, decayRounds: 10 },
         status: { value: ContentValue.MEDIUM, decayRounds: 30 },
         results: { value: ContentValue.MEDIUM, decayRounds: 4 }
       };

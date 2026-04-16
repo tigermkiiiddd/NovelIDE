@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useProjectStore } from '../stores/projectStore';
 import { useAgentStore } from '../stores/agentStore';
 import { AIService } from '../services/geminiService';
+import { createRoutedAIService } from '../services/modelRouter';
 import { exportProject, importProject } from '../services/projectService';
 import { getDisplayVersion } from '../utils/version';
 import { getPresetById } from '../services/resources/presets';
@@ -193,7 +194,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   const handleRunPolish = async () => {
       setIsPolishing(true);
       try {
-          const service = new AIService(aiConfig);
+          const service = createRoutedAIService(aiConfig, 'polish');
           const selectedPreset = selectedPresetId ? getPresetById(selectedPresetId) : undefined;
           const genreLabel = selectedPreset ? selectedPreset.name : (genre || '小说');
           const genreRole = `请作为一名资深${genreLabel}创作顾问，帮我完善以下小说项目的设定。`;

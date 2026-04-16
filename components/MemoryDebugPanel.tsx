@@ -83,8 +83,8 @@ const statusOf = (c: MessageClassification, rounds: number): DecayStatus[] => {
     if (c.toolDecayConfigs.content) {
       s.push(calc('content', c.toolDecayConfigs.content.value, c.toolDecayConfigs.content.decayRounds));
     }
-    if (c.isToolResult && c.toolDecayConfigs.response) {
-      s.push(calc('response', c.toolDecayConfigs.response.value, c.toolDecayConfigs.response.decayRounds));
+    if (c.isToolResult && c.toolDecayConfigs.results) {
+      s.push(calc('results', c.toolDecayConfigs.results.value, c.toolDecayConfigs.results.decayRounds));
     }
     return s;
   }
@@ -140,7 +140,7 @@ const compressionOf = (
 };
 
 const roleLabel = (role: string) => role === 'user' ? '用户' : role === 'model' ? 'AI' : '系统';
-const toolLabel = (type: ToolType) => ({ readFile: 'readFile', createFile: 'createFile', writeFile: 'writeFile', patchFile: 'patchFile', updateFile: 'updateFile', deleteFile: 'deleteFile', listFiles: 'listFiles', manageTodos: 'manageTodos', call_search_agent: 'search', managePlanNote: 'planNote', updateProjectMeta: 'meta', unknown: 'unknown' }[type] || 'unknown');
+const toolLabel = (type: ToolType) => ({ readFile: 'readFile', createFile: 'createFile', writeFile: 'writeFile', patchFile: 'patchFile', updateFile: 'updateFile', deleteFile: 'deleteFile', listFiles: 'listFiles', manageTodos: 'manageTodos', managePlanNote: 'planNote', updateProjectMeta: 'meta', unknown: 'unknown' }[type] || 'unknown');
 const promptLabel = (state: PromptState) => state === 'full' ? '完整保留' : state === 'compressed' ? '已压缩' : '已移除';
 const promptClass = (state: PromptState) => state === 'full' ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300' : state === 'compressed' ? 'border border-amber-500/30 bg-amber-500/10 text-amber-300' : 'border border-rose-500/30 bg-rose-500/10 text-rose-300';
 const sectionClass = (change: ChangeType) => change === 'compressed' ? 'border-amber-500/30 bg-amber-500/10' : change === 'removed' ? 'border-rose-500/30 bg-rose-500/10' : 'border-gray-700 bg-gray-900/50';

@@ -3,6 +3,7 @@
  */
 
 import { AIService } from '../../geminiService';
+import { createRoutedAIService } from '../../modelRouter';
 import { runTimelineSubAgent, TimelineInput, TimelineContext } from '../../subAgents/timelineAgent';
 import { useAgentStore } from '../../../stores/agentStore';
 import { useWorldTimelineStore, toHours } from '../../../stores/worldTimelineStore';
@@ -228,7 +229,7 @@ export const executeProcessOutlineInput = async (
     }))
   };
 
-  const aiService = new AIService(agentStore.aiConfig);
+  const aiService = createRoutedAIService(agentStore.aiConfig, 'outline');
   const input: TimelineInput = {
     userInput: args.userInput,
     projectId: getProjectId() || '',
@@ -612,9 +613,9 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         for (const e of events) {
           if (e.duration) {
             const { value, unit } = e.duration;
-            if (unit === 'minute') totalDurationHours += value / 60;
-            else if (unit === 'hour') totalDurationHours += value;
+            if (unit === 'hour') totalDurationHours += value;
             else if (unit === 'day') totalDurationHours += value * 24;
+            else totalDurationHours += value / 60; // minute fallback
           }
         }
 
@@ -637,8 +638,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           insertAfterMinutes = (afterEvent.timestamp.day - 1) * 24 * 60 + afterEvent.timestamp.hour * 60 + (afterEvent.timestamp.minute || 0);
           // 加上 afterEvent 自己的持续时间
           if (afterEvent.duration) {
-            const durationMinutes = afterEvent.duration.unit === 'minute' ? afterEvent.duration.value :
-                                    afterEvent.duration.unit === 'hour' ? afterEvent.duration.value * 60 :
+            const durationMinutes = afterEvent.duration.unit === 'hour' ? afterEvent.duration.value * 60 :
                                     afterEvent.duration.value * 24 * 60;
             insertAfterMinutes += durationMinutes;
           }
@@ -678,8 +678,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
         let currentMinutes = insertAfterMinutes;
         for (const e of events) {
           const durationMinutes = e.duration
-            ? (e.duration.unit === 'minute' ? e.duration.value :
-               e.duration.unit === 'hour' ? e.duration.value * 60 :
+            ? (e.duration.unit === 'hour' ? e.duration.value * 60 :
                e.duration.value * 24 * 60)
             : 60; // 默认1小时
 
@@ -729,7 +728,7 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
             foreshadowingCount: foreshadowingIds.length
           });
 
-          currentHours += durationHours;
+          currentMinutes += durationMinutes;
         }
 
         result.insertOffset = { hours: totalDurationHours, afterEventIndex };
