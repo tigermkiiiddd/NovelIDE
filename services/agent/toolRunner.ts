@@ -1,5 +1,5 @@
 
-import { FileNode, TodoItem, PendingChange, FileType, PlanNote, EditDiff, BatchEdit, StringMatchEdit, MatchPosition } from '../../types';
+import { FileNode, TodoItem, PendingChange, FileType, PlanNote, EditDiff, BatchEdit, StringMatchEdit, MatchPosition, ChatSession, ThinkingPad } from '../../types';
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
@@ -26,9 +26,10 @@ import { applyPatchInMemory, computeLineDiff, groupDiffIntoHunks } from '../../u
 import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
+import { executeDeepThinking, isVirtualThinkingPath, resolveVirtualFile, writeVirtualFile, syncPadToFileStore } from './tools/deepThinkingTools';
 import { executeSearchTools } from './tools/searchTools';
-import { executeActivateSkill } from './tools/skillTools';
-import { injectSkillByCodeTrigger } from '../../domains/skillTrigger/skillTriggerService';
+import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
+
 import { useVersionStore } from '../../stores/versionStore';
 
 /**
@@ -238,6 +239,9 @@ export interface ToolContext {
         updateLine?: (planId: string, lineId: string, text: string) => void;
         replaceAllLines?: (planId: string, lines: string[]) => void;
     }
+    // Deep Thinking: Session accessor for virtual file routing
+    getSession?: () => ChatSession | null;
+    updateThinkingPads?: (pads: ThinkingPad[]) => void;
 }
 
 export type ToolExecutionResult = 
@@ -285,9 +289,29 @@ export const executeTool = async (
         onUiLog(`${startLog}`);
     }
 
+    // --- 0. deep_thinking tool execution (before anything else) ---
+    if (name === 'deep_thinking') {
+        const session = context.getSession?.();
+        if (!session) {
+            return { type: 'ERROR', message: 'Session not available for deep_thinking operations' };
+        }
+        const dtResult = executeDeepThinking(args, session);
+        if (dtResult.updatedPads) {
+            context.updateThinkingPads?.(dtResult.updatedPads);
+        }
+        if (onUiLog) {
+            const actionLabels: Record<string, string> = {
+                create: '创建深度分析空间', list: '查看活跃分析空间',
+                archive: '归档分析空间', view_log: '查看变更日志',
+            };
+            onUiLog(`🧠 **深度思考**: ${actionLabels[args.action] || args.action}${args.title ? ` — ${args.title}` : ''}`);
+        }
+        return { type: 'EXECUTED', result: dtResult.result };
+    }
+
     // --- 1. Check for Approval Requirements (Write Operations) ---
     const requiresApproval = ['write', 'createFile', 'updateFile', 'edit', 'patchFile', 'deleteFile', 'renameFile'];
-    
+
     if (requiresApproval.includes(name)) {
         try {
             const changeId = generateId();
@@ -297,7 +321,59 @@ export const executeTool = async (
             
             // Normalize path arg
             const filePath = args.path || args.oldPath;
-            
+
+            // --- Virtual .thinking/ path interception (no approval needed) ---
+            if (filePath && isVirtualThinkingPath(filePath)) {
+                const session = context.getSession?.();
+                if (!session) {
+                    return { type: 'ERROR', message: 'Session not available for virtual file operations' };
+                }
+
+                if (name === 'write' || name === 'createFile' || name === 'updateFile') {
+                    const updatedPads = writeVirtualFile(filePath, args.content, session, 'update');
+                    context.updateThinkingPads?.(updatedPads);
+                    // 同步到 fileStore 供用户查看
+                    const titleSlug = filePath.replace('.thinking/', '').split('/')[0];
+                    const updatedPad = updatedPads.find(p => {
+                      const slug = p.title.replace(/[/\\:*?"<>|：＋+（）()\[\]{}!！?？.。，,、]/g, '').replace(/\s+/g, '').slice(0, 30);
+                      return slug === titleSlug || p.id === titleSlug;
+                    });
+                    if (updatedPad) syncPadToFileStore(updatedPad);
+                    return { type: 'EXECUTED', result: `Virtual file updated: ${filePath}` };
+                }
+
+                if (name === 'edit' || name === 'patchFile') {
+                    const existingContent = resolveVirtualFile(filePath, session);
+                    if (existingContent === null) {
+                        return { type: 'ERROR', message: `Virtual file not found: ${filePath}` };
+                    }
+                    let patchedContent: string;
+                    if (args.edits) {
+                        patchedContent = applyEditsSimple(existingContent, args.edits);
+                    } else if (args.startLine !== undefined && args.endLine !== undefined && args.newContent !== undefined) {
+                        patchedContent = applyPatchInMemory(existingContent, args.startLine, args.endLine, args.newContent);
+                    } else {
+                        return { type: 'ERROR', message: 'Missing edit/patch data for virtual file' };
+                    }
+                    const updatedPads = writeVirtualFile(filePath, patchedContent, session, 'refine');
+                    context.updateThinkingPads?.(updatedPads);
+                    // 同步到 fileStore
+                    const titleSlug2 = filePath.replace('.thinking/', '').split('/')[0];
+                    const updatedPad2 = updatedPads.find(p => {
+                      const slug = p.title.replace(/[/\\:*?"<>|：＋+（）()\[\]{}!！?？.。，,、]/g, '').replace(/\s+/g, '').slice(0, 30);
+                      return slug === titleSlug2 || p.id === titleSlug2;
+                    });
+                    if (updatedPad2) syncPadToFileStore(updatedPad2);
+                    return { type: 'EXECUTED', result: `Virtual file edited: ${filePath}` };
+                }
+
+                if (name === 'deleteFile') {
+                    return { type: 'ERROR', message: 'Cannot delete virtual thinking files.' };
+                }
+
+                return { type: 'ERROR', message: `Unsupported operation on virtual path: ${name}` };
+            }
+
             // Resolve file for diff preview (Physical File)
             const existingFile = findNodeByPath(files, filePath);
             
@@ -526,8 +602,28 @@ export const executeTool = async (
             switch (name) {
                 case 'read':
                 case 'readFile':
-                    result = actions.readFile(args.path, args.startLine, args.endLine);
-                    if (!result.startsWith('Error')) actions.trackFileAccess(args.path);
+                    // Virtual .thinking/ path interception for reads
+                    if (args.path && isVirtualThinkingPath(args.path)) {
+                        const session = context.getSession?.();
+                        if (!session) {
+                            result = 'Error: Session not available';
+                            break;
+                        }
+                        const virtualContent = resolveVirtualFile(args.path, session);
+                        if (virtualContent === null) {
+                            result = `Error: Virtual file not found: ${args.path}`;
+                        } else {
+                            const lines = virtualContent.split('\n');
+                            const start = Math.max(1, args.startLine || 1);
+                            const end = Math.min(lines.length, (args.endLine || start + 299));
+                            const displayLines = lines.slice(start - 1, end);
+                            result = `[Virtual Thinking File]\nFile: ${args.path}\nTotal Lines: ${lines.length}\n---\n` +
+                                displayLines.map((line, idx) => `${String(start + idx).padEnd(4)} | ${line}`).join('\n');
+                        }
+                    } else {
+                        result = actions.readFile(args.path, args.startLine, args.endLine);
+                        if (!result.startsWith('Error')) actions.trackFileAccess(args.path);
+                    }
                     break;
                 case 'grep':
                     result = actions.grepFiles(
@@ -639,6 +735,9 @@ export const executeTool = async (
                     result = await executeOutlineTool(name, args);
                     break;
                 // --- SKILL TOOLS ---
+                case 'skills_list':
+                    result = executeSkillsList(args.category);
+                    break;
                 case 'activate_skill':
                     const skillResult = executeActivateSkill(args.skillName || '', args.reason || '');
                     result = JSON.stringify(skillResult);
@@ -663,21 +762,7 @@ export const executeTool = async (
             onUiLog(`✅ **Result**:\n${displayResult}`);
         }
 
-        // --- Post-hook: Channel 1 — Code-triggered skill injection ---
-        try {
-          const { useFileStore } = require('../../stores/fileStore');
-          const { useSkillTriggerStore } = require('../../stores/skillTriggerStore');
-          const triggerContext = {
-            files: useFileStore.getState().files,
-            triggerStore: useSkillTriggerStore.getState(),
-          };
-          const injected = injectSkillByCodeTrigger(name, args, triggerContext);
-          if (injected.length > 0 && onUiLog) {
-            onUiLog(`🔧 **自动注入技能**: ${injected.join(', ')}`);
-          }
-        } catch {
-          // post-hook 不应影响主流程
-        }
+        // 技能激活由 Agent 自主决定，不再代码注入
 
         return { type: 'EXECUTED', result };
 

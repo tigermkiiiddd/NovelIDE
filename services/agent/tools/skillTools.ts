@@ -1,13 +1,10 @@
 /**
  * @file skillTools.ts
- * @description 通道 3: Agent 主动搜索 + 渐进式注入的 skill 工具
+ * @description 渐进式技能加载工具（参考 hermes 的 progressive disclosure 设计）
  *
- * 使用场景：Agent 在执行任务过程中发现需要某个 skill 的知识，主动调用激活。
- * 执行逻辑：
- * 1. Agent 调用 activate_skill → 从文件系统读取完整 skill 内容
- * 2. 如果有题材补丁 → 自动拼接
- * 3. 注入到下一轮 system prompt（走 skillTriggerStore 统一注入）
- * 4. 返回确认信息
+ * 两步设计：
+ * 1. skills_list() — 列出可用技能的 name + description（省 token，发现阶段）
+ * 2. activate_skill() — 加载完整内容到下一轮 system prompt（使用阶段）
  */
 
 import type { ToolDefinition } from '../types';
@@ -15,24 +12,47 @@ import { useFileStore } from '../../../stores/fileStore';
 import { useSkillTriggerStore } from '../../../stores/skillTriggerStore';
 import { useProjectStore } from '../../../stores/projectStore';
 import { FileType } from '../../../types';
+import { parseFileMeta } from '../../fileSystem';
 
 // ==================== 工具定义 ====================
 
+/** Tier 1: 技能发现 — 只返回 name + description */
+export const skillsListTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'skills_list',
+    description:
+      '列出所有可用技能的名称和简介（渐进式加载 Tier 1）。' +
+      '遇到不熟悉的任务类型时调用，先看有什么技能可用，再用 activate_skill 加载。' +
+      '[READ TOOL — 不需要审批]',
+    parameters: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          description: '按分类过滤（创作/规划/设计/审核）',
+        },
+      },
+      required: [],
+    },
+  },
+};
+
+/** Tier 2: 技能加载 — 注入完整内容到下一轮 system prompt */
 export const activateSkillTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'activate_skill',
     description:
-      '主动激活一个技能，加载完整内容到上下文。' +
-      '当你觉得自己需要更专业的知识来完成当前任务时调用（如写打斗场景、设计角色、审核文本等）。' +
-      '先看技能目录（system prompt 中已列出），选合适的激活。内容将在下一轮对话生效。' +
+      '加载技能的完整方法论到上下文中（渐进式加载 Tier 2）。' +
+      '先用 skills_list 查看可用技能，选合适的再激活。内容在下一轮对话生效。' +
       '[READ TOOL — 不需要审批]',
     parameters: {
       type: 'object',
       properties: {
         skillName: {
           type: 'string',
-          description: '技能名称（从技能目录中选择，如"正文扩写"、"角色设计"、"编辑审核"）',
+          description: '技能名称（从 skills_list 结果中选择，如"深度思考方法论"、"角色设计"）',
         },
         reason: {
           type: 'string',
@@ -44,7 +64,62 @@ export const activateSkillTool: ToolDefinition = {
   },
 };
 
-// ==================== 工具执行 ====================
+// ==================== 技能文件收集 ====================
+
+interface SkillEntry {
+  file: import('../../../types').FileNode;
+  category: string;
+  meta: Record<string, any>;
+}
+
+function collectSkills(category?: string): SkillEntry[] {
+  const files = useFileStore.getState().files;
+  const skillFolder = files.find(f => f.name === '98_技能配置');
+  const skillsFolder = skillFolder
+    ? files.find(f => f.parentId === skillFolder.id && f.name === 'skills' && f.type === FileType.FOLDER)
+    : null;
+
+  if (!skillsFolder) return [];
+
+  const categoryFolders = files.filter(
+    f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER && f.name !== '核心'
+  );
+
+  const results: SkillEntry[] = [];
+  for (const catFolder of categoryFolders) {
+    if (category && catFolder.name !== category) continue;
+
+    const skillFiles = files.filter(
+      f => f.parentId === catFolder.id && f.type === 'FILE' && !f.hidden
+    );
+
+    for (const sf of skillFiles) {
+      const meta = parseFileMeta(sf.content);
+      results.push({ file: sf, category: catFolder.name, meta });
+    }
+  }
+  return results;
+}
+
+// ==================== skills_list 执行 ====================
+
+export function executeSkillsList(category?: string): string {
+  const skills = collectSkills(category);
+
+  if (skills.length === 0) {
+    return '当前没有可用技能。';
+  }
+
+  const lines = skills.map(({ meta, category: cat }) => {
+    const name = meta.name || '(未命名)';
+    const desc = meta.description || meta.summarys?.[0] || '';
+    return `- **${name}** [${cat}]：${desc}`;
+  });
+
+  return `可用技能（${skills.length}个）：\n${lines.join('\n')}\n\n用 activate_skill(name) 加载完整内容。`;
+}
+
+// ==================== activate_skill 执行 ====================
 
 export interface ActivateSkillResult {
   success: boolean;
@@ -54,10 +129,6 @@ export interface ActivateSkillResult {
   hasPatch?: boolean;
 }
 
-/**
- * 执行 activate_skill 工具
- * 查找 skill 文件 → 激活到 triggerStore → 检查补丁
- */
 export function executeActivateSkill(
   skillName: string,
   reason: string
@@ -65,92 +136,63 @@ export function executeActivateSkill(
   const files = useFileStore.getState().files;
   const triggerStore = useSkillTriggerStore.getState();
 
-  // 1. 在 skills/ 目录下查找匹配的 skill 文件
-  const skillFolder = files.find(f => f.name === '98_技能配置');
-  const skillsFolder = skillFolder
-    ? files.find(f => f.parentId === skillFolder.id && f.name === 'skills' && f.type === FileType.FOLDER)
-    : null;
-
-  if (!skillsFolder) {
-    return { success: false, message: '未找到技能目录' };
-  }
-
-  const categoryFolders = files.filter(
-    f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER && f.name !== '核心'
-  );
-
-  // 按名称匹配（支持模糊匹配：部分名称、中文名、英文名）
+  const skills = collectSkills();
   const normalizedName = skillName.toLowerCase().trim();
-  let matchedFile: FileNode | null = null;
-  let matchedCategory = '';
 
-  for (const catFolder of categoryFolders) {
-    const skillFiles = files.filter(
-      f => f.parentId === catFolder.id && f.type === 'FILE' && !f.hidden
-    );
-
-    for (const sf of skillFiles) {
-      const meta = sf.metadata || {};
-      const name = (meta.name || '').toLowerCase();
-      const fileName = sf.name.toLowerCase();
-
-      // 精确匹配
-      if (name.includes(normalizedName) || fileName.includes(normalizedName)) {
-        matchedFile = sf;
-        matchedCategory = catFolder.name;
-        break;
-      }
+  // 按名称匹配
+  let matched: SkillEntry | null = null;
+  for (const s of skills) {
+    const name = (s.meta.name || '').toLowerCase();
+    const fileName = s.file.name.toLowerCase();
+    if (name.includes(normalizedName) || fileName.includes(normalizedName)) {
+      matched = s;
+      break;
     }
-    if (matchedFile) break;
   }
 
-  if (!matchedFile) {
-    // 列出可用技能帮助 Agent 选择
-    const available = categoryFolders.flatMap(catFolder => {
-      const catFiles = files.filter(
-        f => f.parentId === catFolder.id && f.type === 'FILE' && !f.hidden
-      );
-      return catFiles.map(f => {
-        const meta = f.metadata || {};
-        return `[${catFolder.name}] ${meta.name || f.name}`;
-      });
-    });
+  if (!matched) {
+    const available = skills.map(s => `[${s.category}] ${s.meta.name || s.file.name}`).join('\n');
     return {
       success: false,
-      message: `未找到技能 "${skillName}"。可用技能：\n${available.join('\n')}`,
+      message: `未找到技能 "${skillName}"。可用技能：\n${available}\n\n提示：先用 skills_list 查看所有技能。`,
     };
   }
 
-  // 2. 激活 skill
-  const meta = matchedFile.metadata || {};
+  // 激活
   triggerStore.triggerSkill({
-    skillId: matchedFile.name,
-    name: meta.name || matchedFile.name,
-    originalTags: (meta.tags || []).filter((t: string) => t !== '技能'),
+    skillId: matched.file.name,
+    name: matched.meta.name || matched.file.name,
+    originalTags: (matched.meta.tags || []).filter((t: string) => t !== '技能'),
     matchText: `Agent主动激活: ${reason}`,
-    category: matchedCategory,
+    category: matched.category,
     source: 'agent',
   });
 
-  // 3. 检查题材补丁
+  // 检查题材补丁
   const project = useProjectStore.getState().project;
   const genre = project?.genre;
   let hasPatch = false;
 
   if (genre) {
-    const patchFolder = categoryFolders.find(f => f.name === '补丁');
+    const skillFolder = files.find(f => f.name === '98_技能配置');
+    const skillsFolder = skillFolder
+      ? files.find(f => f.parentId === skillFolder.id && f.name === 'skills' && f.type === FileType.FOLDER)
+      : null;
+    const patchFolder = skillsFolder
+      ? files.find(f => f.parentId === skillsFolder.id && f.name === '补丁' && f.type === FileType.FOLDER)
+      : null;
+
     if (patchFolder) {
-      const baseName = matchedFile.name.replace('技能_', '').replace('.md', '');
+      const baseName = matched.file.name.replace('技能_', '').replace('.md', '');
       const patchName = `${genre}_${baseName}.md`;
       const patchFile = files.find(
         f => f.parentId === patchFolder.id && f.name === patchName && !f.hidden
       );
       if (patchFile) {
         hasPatch = true;
-        // 补丁也激活
         triggerStore.triggerSkill({
           skillId: patchFile.name,
-          name: `补丁: ${meta.name} - ${genre}`,
+          name: `补丁: ${matched.meta.name} - ${genre}`,
           originalTags: (patchFile.metadata?.tags || []),
           matchText: `题材补丁自动关联`,
           category: '补丁',
@@ -163,9 +205,9 @@ export function executeActivateSkill(
 
   return {
     success: true,
-    message: `已激活 [${matchedCategory}] ${meta.name || matchedFile.name}。${hasPatch ? `检测到 ${genre} 题材补丁，已一并加载。` : ''}完整内容将在下一轮对话生效。`,
-    skillId: matchedFile.name,
-    category: matchedCategory,
+    message: `已激活 [${matched.category}] ${matched.meta.name || matched.file.name}。${hasPatch ? `检测到 ${genre} 题材补丁，已一并加载。` : ''}完整内容将在下一轮对话生效。`,
+    skillId: matched.file.name,
+    category: matched.category,
     hasPatch,
   };
 }

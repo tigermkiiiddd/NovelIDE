@@ -231,6 +231,18 @@ export const useAgentTools = ({
             signal,
             getShadowContent,
             actions: dynamicActions,
+            // Deep Thinking: session accessor
+            getSession: () => {
+                const store = useAgentStore.getState();
+                return store.sessions.find(s => s.id === sessionId) || null;
+            },
+            updateThinkingPads: (pads) => {
+                useAgentStore.getState().updateCurrentSession(session => ({
+                    ...session,
+                    thinkingPads: pads,
+                    lastModified: Date.now(),
+                }));
+            },
             // Plan Mode
             planMode,
             currentPlanNote,

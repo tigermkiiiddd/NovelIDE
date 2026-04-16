@@ -80,7 +80,7 @@ export const queryKnowledgeTool: ToolDefinition = {
         wing: {
           type: 'string',
           enum: ['writing_rules', 'world'],
-          description: '按翼过滤（可选）',
+          description: '按翼过滤（可选）：writing_rules=创作规范 | world=世界知识',
         },
         room: {
           type: 'string',
@@ -176,11 +176,11 @@ export const manageKnowledgeTool: ToolDefinition = {
               wing: {
                 type: 'string',
                 enum: ['writing_rules', 'world'],
-                description: '翼：writing_rules=创作规范（始终注入），world=世界知识（按需注入）',
+                description: '翼（必填，只能二选一）：writing_rules=创作规范 | world=世界知识',
               },
               room: {
                 type: 'string',
-                description: '房间：翼下的具体分类（见描述中的房间列表）',
+                description: '房间（必填）。writing_rules 可选: 叙事规则/文风习惯/用语忌讳/格式规范/系统保护/写作技巧积累。world 可选: 力量体系/地理环境/势力分布/物品道具',
               },
               name: { type: 'string', description: '知识名称（≤20字）' },
               summary: { type: 'string', description: '一句话概括（≤50字）' },

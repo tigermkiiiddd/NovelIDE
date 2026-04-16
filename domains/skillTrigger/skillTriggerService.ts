@@ -13,6 +13,7 @@ import type { SkillTriggerRecord } from '../../stores/skillTriggerStore';
 import type { ActivationNotification } from '../../stores/skillTriggerStore';
 import { lifecycleManager } from '../agentContext/toolLifecycle';
 import { generateEmbedding, cosineSimilarity } from '../memory/embeddingService';
+import { parseFileMeta } from '../../services/fileSystem';
 
 // ==================== 意图分类 ====================
 
@@ -177,7 +178,7 @@ export function detectSkillTriggers(
   const skillEntries = collectSkillFiles(context.files, categories.length > 0 ? categories : undefined);
 
   for (const { file: skillFile, category } of skillEntries) {
-    const meta = skillFile.metadata || {};
+    const meta = parseFileMeta(skillFile.content);
     const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
     const summarys: string[] = meta.summarys || [];
     const matchText = buildMatchText(tags, summarys);
@@ -254,7 +255,7 @@ export async function detectSkillTriggersSemantic(
     const queryEmb = await generateEmbedding(text);
 
     for (const { file: skillFile, category } of remaining) {
-      const meta = skillFile.metadata || {};
+      const meta = parseFileMeta(skillFile.content);
       const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
       const summarys: string[] = meta.summarys || [];
 

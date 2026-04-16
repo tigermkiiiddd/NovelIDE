@@ -119,6 +119,34 @@ export interface ChatSession {
   // 知识节点状态（按会话持久化）
   recalledKnowledgeNodeIds: string[];   // 本次对话召回的节点ID
   hiddenKnowledgeNodeIds: string[];     // 本次对话隐藏的常驻节点ID
+  // 深度思考空间（跟对话一起持久化）
+  thinkingPads?: ThinkingPad[];
+}
+
+// --- Deep Thinking Types ---
+
+export interface ChangelogEntry {
+  timestamp: number;
+  action: 'create' | 'update' | 'append' | 'refine';
+  summary: string;   // ≤50字，描述改了什么
+  diff?: string;      // 被替换的旧内容片段
+}
+
+export interface ThinkingPage {
+  content: string;    // markdown 内容
+  changelog: ChangelogEntry[];
+}
+
+export interface ThinkingPad {
+  id: string;
+  title: string;
+  pages: {
+    p1_constraint: ThinkingPage;
+    p2_breadth: ThinkingPage;
+    p3_depth: ThinkingPage;
+  };
+  createdAt: number;
+  updatedAt: number;
 }
 
 // --- Plan Notebook Types ---

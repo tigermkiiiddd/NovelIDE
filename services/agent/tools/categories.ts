@@ -22,6 +22,7 @@ import {
 
 // Agent 控制
 import { thinkingTool, finalAnswerTool } from './agentControlTools';
+import { deepThinkingTool } from './deepThinkingTools';
 
 // 项目 & 任务
 import { updateProjectMetaTool } from './projectTools';
@@ -29,7 +30,7 @@ import { manageTodosTool } from './todoTools';
 import { managePlanNoteTool } from './planTools';
 
 // 技能 & 搜索（始终可用）
-import { activateSkillTool } from './skillTools';
+import { activateSkillTool, skillsListTool } from './skillTools';
 
 // 二级：记忆宫殿
 import {
@@ -76,6 +77,7 @@ import {
 export const alwaysOnTools: ToolDefinition[] = [
   // Agent 控制（始终在最前面）
   thinkingTool,
+  deepThinkingTool,
   finalAnswerTool,
   // 文件读写
   listFilesTool,
@@ -91,6 +93,7 @@ export const alwaysOnTools: ToolDefinition[] = [
   manageTodosTool,
   managePlanNoteTool,
   // 技能
+  skillsListTool,
   activateSkillTool,
 ];
 

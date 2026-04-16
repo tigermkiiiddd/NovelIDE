@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers } from 'lucide-react';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers, Brain } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
@@ -58,6 +58,58 @@ interface AgentChatProps {
   currentPlanNote?: PlanNote | null;
   onOpenPlanViewer?: () => void;
 }
+
+// --- Thinking Pad File Tabs (chat 顶部文件入口) ---
+const ThinkingPadTabs: React.FC = () => {
+  const sessions = useAgentStore(state => state.sessions);
+  const currentSessionId = useAgentStore(state => state.currentSessionId);
+  const setVirtualFile = useFileStore(state => state.setVirtualFile);
+
+  const session = sessions.find(s => s.id === currentSessionId);
+  const pads = session?.thinkingPads || [];
+
+  if (pads.length === 0) return null;
+
+  const pageLabels = [
+    { key: 'p1_constraint' as const, suffix: '01_约束.md' },
+    { key: 'p2_breadth' as const, suffix: '02_广度.md' },
+    { key: 'p3_depth' as const, suffix: '03_深度.md' },
+  ];
+
+  const handleOpen = (pad: any, pageKey: 'p1_constraint' | 'p2_breadth' | 'p3_depth', fileName: string) => {
+    const content = pad.pages[pageKey].content;
+    const fileNode: FileNode = {
+      id: `thinking-${pad.id}-${pageKey}`,
+      parentId: null,
+      name: fileName,
+      type: FileType.FILE,
+      content,
+      lastModified: pad.updatedAt,
+    };
+    setVirtualFile(fileNode);
+  };
+
+  return (
+    <div className="flex items-center gap-1 px-3 py-1.5 bg-gray-900/50 border-b border-gray-800/50 overflow-x-auto shrink-0">
+      <Brain size={11} className="text-amber-400/70 shrink-0 mr-1" />
+      {pads.map(pad => (
+        <React.Fragment key={pad.id}>
+          {pageLabels.map(({ key, suffix }) => (
+            <button
+              key={`${pad.id}-${key}`}
+              onClick={() => handleOpen(pad, key, `${pad.title}/${suffix}`)}
+              className="px-2 py-0.5 text-[10px] font-mono rounded bg-gray-800/80 text-amber-300/80 hover:bg-amber-900/30 hover:text-amber-300 transition-colors whitespace-nowrap shrink-0"
+              title={`在编辑器中打开 ${pad.title}/${suffix}`}
+            >
+              {pad.title.slice(0, 8)}·{suffix.includes('约束') ? 'P1' : suffix.includes('广度') ? 'P2' : 'P3'}
+            </button>
+          ))}
+          <span className="w-px h-3 bg-gray-700 mx-0.5 shrink-0" />
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
 
 const AgentChat: React.FC<AgentChatProps> = ({
   messages,
@@ -292,6 +344,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
             </button>
         </div>
       </div>
+
+      {/* Deep Thinking File Tabs */}
+      <ThinkingPadTabs />
 
       {showHistory ? (
         // --- History View ---

@@ -10,7 +10,7 @@ export const updateProjectMetaTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):正在应用的更改摘要。' },
+        thinking: { type: 'string', description: '思考过程(用中文)，≤100字。' },
         name: { type: 'string', description: 'New project name (Book Title).' },
         description: { type: 'string', description: '核心梗/简介，严格≤300字。' },
         genre: { type: 'string', description: 'Genre (e.g. Fantasy, Sci-Fi).' },

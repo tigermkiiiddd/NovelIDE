@@ -9,7 +9,7 @@ export const manageTodosTool: ToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):说明待办事项的更新策略。' },
+        thinking: { type: 'string', description: '思考过程(用中文)，≤100字。' },
         action: {
           type: 'string',
           enum: ['add', 'complete', 'remove', 'update'],

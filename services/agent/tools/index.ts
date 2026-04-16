@@ -16,3 +16,4 @@ export * from './characterProfileTools';
 export * from './relationshipTools';
 export * from './skillTools';
 export * from './searchTools';
+export * from './deepThinkingTools';

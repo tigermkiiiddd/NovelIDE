@@ -14,7 +14,7 @@ import { useFileStore } from '../stores/fileStore';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { findNodeByPath } from '../services/fileSystem';
 import { getWindowedMessages, MAX_CONTEXT_MESSAGES } from '../domains/agentContext/windowing';
-import { detectSkillTriggers } from '../domains/skillTrigger/skillTriggerService';
+
 
 // Facade Hook
 export const useAgent = (
@@ -124,20 +124,9 @@ export const useAgent = (
       };
   }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode]);
 
-  // --- 技能触发检测：统一入口 ---
-  const triggerSkill = (text: string) => {
-    const triggerStore = useSkillTriggerStore.getState();
-    detectSkillTriggers(text, { files, triggerStore }, (notif) => {
-      addMessage({
-        id: generateId(),
-        role: 'system',
-        text: `✨ [技能${notif.isReset ? '重置' : '激活'}] ${notif.name}` +
-          ` | 命中: ${notif.matchedKeyword || '模糊匹配'}` +
-          ` | 剩余活跃: ${notif.remainingRounds}轮`,
-        timestamp: Date.now(),
-        metadata: { logType: 'info' },
-      });
-    });
+  // --- 技能激活由 Agent 自主通过 activate_skill 工具决定 ---
+  const triggerSkill = (_text: string) => {
+    // no-op: 保留接口兼容性，技能激活已改为 Agent 自主决定
   };
 
   const approveChange = useCallback((change: PendingChange) => {

@@ -9,7 +9,7 @@
  */
 
 import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem, KnowledgeNode } from '../../../types';
-import { getFileTreeStructure, getNodePath } from '../../fileSystem';
+import { getFileTreeStructure, getNodePath, parseFileMeta } from '../../fileSystem';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 import { useSkillTriggerStore, getRemainingRounds } from '../../../stores/skillTriggerStore';
 import { lifecycleManager } from '../../../domains/agentContext/toolLifecycle';
@@ -33,6 +33,7 @@ export const DEFAULT_SOUL = `## 身份
 - 简洁直接，不废话
 - 主动确认，不猜测
 - 先查后写，不做无根之谈
+- 被纠正时不解释原因，直接改正后给出犯错反思报告。
 
 ## 用户偏好
 <!-- 用户可在此积累偏好，例如： -->
@@ -49,6 +50,7 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 |------|----------|------|------|
 | 闲聊 | 打招呼、问候、无任务意图 | 直接 final_answer | 无 |
 | 追问 | 对前一轮话题的追问、补充 | 直接回答或继续操作 | 看情况 |
+| 指令 | 用户给了具体参数（换什么、改成什么、去掉什么） | 直接执行→报告结果 | 对应工具 |
 | 反馈 | 对已有内容的修改意见 | 读取目标→修改→final_answer | read+edit/write |
 | 新话题 | 新的需求、新的创作方向 | 先说方案，等用户确认 | 无（先不读文件）|
 | 创作 | 明确要求写内容 | 收集背景→确认方向→执行 | read+write |
@@ -58,11 +60,19 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 
 ## 思考循环
 
-1. **thinking** — 意图+行动，≤100字，禁止展开分析
+1. **thinking** — 每轮必先调用。分4个板块：
+   - surface：用户原话关键事实
+   - intent：用户真正意图（注意与表面意思的差异）
+   - plan：用什么工具做什么，**必须写明"不做什么"的边界**
+   - reflection（选填）：被纠正后/不确定时才填
 2. **行动** — 调工具或回复
 3. **final_answer** — 完成或需要用户确认时调用，终止循环
 
 **禁止连续多轮只调工具不说话。首轮必须先回文字再做事。**
+
+## 深度思考（复杂任务专用）
+
+thinking 判断任务复杂（约束冲突、方案选择、用户纠正、重大变更）时，调用 \`deep_thinking\` 工具创建三页虚拟纸（约束→广度→深度），用 read/write/edit 填写分析。详细方法论见技能「深度思考方法论」。核心：必须有自己判断，禁止甩给用户选。
 
 ---
 ## 项目概况
@@ -75,6 +85,11 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - 修改前必读：写操作前先 readFile
 - 记忆只存长期规则（写作规则/世界观/用语禁忌），不存故事内容和角色信息，宁缺毋滥
 - 重复检测：添加前先 query_memory 搜索
+- write 用于用户要求创建内容（写章节、建角色档案等）。系统内部改动（元数据、记忆宫殿）不需要创建文件来记录
+- 工具执行失败时，向用户报告错误原因，让用户决定下一步。不要自行换工具替代
+- 同类操作被用户连续否定2次以上时，放弃该方向，报告当前状态，请用户指定新方向
+- 技能提供了框架但不改变任务规模。用户要求改一个值就改一个值，不因技能被激活就扩大操作
+- 涉及替换/修改指令时，先确认修改的对象范围（是改称呼方式、改内容、还是改角色本身），不确定时问一句
 
 ---
 ## 工具速查
@@ -84,6 +99,7 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - **final_answer**：唯一终止方式，必须调用
 - **记忆宫殿**：query_memory / manage_memory / link_memory / memory_status / traverse_memory
 - **项目元数据**：updateProjectMeta
+- **技能系统**（必须遵守）：回复前先用 skills_list 扫描可用技能。如果任务与某个技能相关，必须用 activate_skill 加载再操作。宁可多加载一个不需要的技能，也不要错过关键方法论。技能包含专业知识和已验证的工作流。
 - 不描述行动，直接调工具；工具结果直接接受
 
 ---
@@ -154,10 +170,10 @@ export const constructSystemPrompt = (
   // 1.1 Resolve Soul (用户可编辑，从文件系统读取)
   let soulFile = skillsFolder
     ? files.find(f => {
-        if (f.name !== 'soul.md' || f.type !== FileType.FILE) return false;
-        const parentFolder = files.find(p => p.id === f.parentId);
-        return parentFolder?.name === '核心';
-      })
+      if (f.name !== 'soul.md' || f.type !== FileType.FILE) return false;
+      const parentFolder = files.find(p => p.id === f.parentId);
+      return parentFolder?.name === '核心';
+    })
     : null;
   // Fallback: search globally
   if (!soulFile) soulFile = files.find(f => f.name === 'soul.md' && f.type === FileType.FILE);
@@ -176,26 +192,29 @@ export const constructSystemPrompt = (
       f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER && SKILL_CATEGORIES.includes(f.name)
     );
 
-    const allSkillEntries: string[] = [];
+    const categoryLines: string[] = [];
     for (const catFolder of categoryFolders) {
       const catSkills = files.filter(
         f => f.parentId === catFolder.id && f.type === FileType.FILE && !f.hidden
       );
 
-      const catEntries = catSkills.map(f => {
-        const meta = f.metadata || {};
-        if (!meta.name) return null;
-        const path = getNodePath(f, files);
-        const tags = meta.tags ? `标签: ${meta.tags.join(', ')}` : '';
-        const summaryText = meta.summarys?.[0] || '';
-        return `- **${meta.name}** [${catFolder.name}]\n  - 简介: ${summaryText}${tags ? '\n  - ' + tags : ''}\n  - 挂载路径: \`${path}\``;
-      }).filter(Boolean);
+      const entries: string[] = [];
+      for (const f of catSkills) {
+        const meta = parseFileMeta(f.content);
+        const name = meta.name;
+        if (!name) continue;
+        const desc = meta.summarys?.[0] || meta.description || '';
+        entries.push(desc ? `    - ${name}: ${desc}` : `    - ${name}`);
+      }
 
-      allSkillEntries.push(...catEntries);
+      if (entries.length > 0) {
+        categoryLines.push(`  ${catFolder.name}:`);
+        categoryLines.push(...entries);
+      }
     }
 
-    if (allSkillEntries.length > 0) {
-      emergentSkillsData = allSkillEntries.join('\n');
+    if (categoryLines.length > 0) {
+      emergentSkillsData = categoryLines.join('\n');
     }
   }
 
@@ -248,8 +267,11 @@ export const constructSystemPrompt = (
   // --- 3. 最终组装 (Final Assembly) ---
   // 替换占位符
   const wordsPerChapter = String(project?.wordsPerChapter || '未定');
-  // 技能库通过懒加载触发，不在这里动态传递列表
-  const skillListSection = "";
+  // 技能索引：每轮注入可用技能的 name + description（渐进式 Tier 1）
+  let skillListSection = '';
+  if (emergentSkillsData !== "(无额外技能)") {
+    skillListSection = `\n<available_skills>\n${emergentSkillsData}\n</available_skills>\n`;
+  }
 
   // --- 技能触发注入：活跃的技能内容 ---
   let triggeredSkillsSection = '';
@@ -264,12 +286,12 @@ export const constructSystemPrompt = (
       // 在 skills/ 下所有分类子目录中查找 skill 文件
       const skillFile = triggerSkillsDir
         ? files.find(f => {
-            if (f.name !== record.skillId || f.type !== FileType.FILE) return false;
-            const parentFolder = files.find(p => p.id === f.parentId);
-            if (!parentFolder) return false;
-            // 确保父目录是 skills/ 下的子目录
-            return files.some(sf => sf.id === parentFolder.id && sf.parentId === triggerSkillsDir.id);
-          })
+          if (f.name !== record.skillId || f.type !== FileType.FILE) return false;
+          const parentFolder = files.find(p => p.id === f.parentId);
+          if (!parentFolder) return false;
+          // 确保父目录是 skills/ 下的子目录
+          return files.some(sf => sf.id === parentFolder.id && sf.parentId === triggerSkillsDir.id);
+        })
         : null;
       if (!skillFile?.content) return null;
       const remaining = getRemainingRounds(record, lifecycleManager.getCurrentRound());

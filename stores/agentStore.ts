@@ -201,6 +201,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           lastModified: Date.now(),
           recalledKnowledgeNodeIds: [],
           hiddenKnowledgeNodeIds: [],
+          thinkingPads: [],
         };
 
         // 新建会话时重置技能触发状态
@@ -238,6 +239,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           });
           // Persist current session ID
           dbAPI.saveCurrentSessionId(session.projectId, id);
+
+          // 恢复深度思考虚拟文件到 fileStore
+          if (session.thinkingPads && session.thinkingPads.length > 0) {
+            import('../services/agent/tools/deepThinkingTools').then(({ syncAllPadsToFileStore }) => {
+              syncAllPadsToFileStore(session);
+            });
+          }
         }
       },
 

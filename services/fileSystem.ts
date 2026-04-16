@@ -15,7 +15,8 @@ import {
   SKILL_PLEASURE_RHYTHM_MANAGER,
   SKILL_OUTLINE_ARCHITECT,
   SKILL_TEXT_POLISH,
-  SKILL_PROJECT_INIT
+  SKILL_PROJECT_INIT,
+  SKILL_DEEP_THINKING
 } from './templates';
 import { GenrePreset } from './resources/presets';
 
@@ -39,6 +40,24 @@ const createFile = (name: string, parentId: string, content: string, extra?: Par
   lastModified: Date.now(),
   ...extra,
 });
+
+/** 从文件内容的 YAML header 解析元数据（name, tags, summarys 等） */
+export function parseFileMeta(content: string): Record<string, any> {
+  const match = content?.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+  const meta: Record<string, any> = {};
+  for (const line of match[1].split('\n')) {
+    const m = line.match(/^(\w+):\s*(.*)$/);
+    if (!m) continue;
+    const [, key, value] = m;
+    if (value.startsWith('[')) {
+      try { meta[key] = JSON.parse(value.replace(/'/g, '"')); } catch { meta[key] = value; }
+    } else {
+      meta[key] = value.trim();
+    }
+  }
+  return meta;
+}
 
 // Helper for simple default content with metadata
 const withMeta = (content: string, summary: string, tags: string[] = []) => {
@@ -141,6 +160,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
     '技能_世界观构建.md': SKILL_WORLD_BUILDER,
     '技能_项目初始化.md': SKILL_PROJECT_INIT,
+    '技能_深度思考.md': SKILL_DEEP_THINKING,
   };
 
   // 设计 skills (通用骨架)

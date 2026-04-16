@@ -28,9 +28,12 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
     case 'thinking':
       return {
         action: 'think',
-        summary: restArgs.reasoning
-          ? `思考: ${restArgs.reasoning}`
-          : '内部推理'
+        summary: [
+          restArgs.surface ? `📋 ${restArgs.surface}` : '',
+          restArgs.intent ? `🎯 ${truncate(restArgs.intent, 60)}` : '',
+          restArgs.plan ? `📝 ${truncate(restArgs.plan, 60)}` : '',
+          restArgs.reflection ? `🔄 ${truncate(restArgs.reflection, 40)}` : '',
+        ].filter(Boolean).join(' | ') || '内部推理'
       };
 
     case 'final_answer':
@@ -40,6 +43,21 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
           ? `回复: ${truncate(restArgs.answer, 80)}`
           : '最终回复'
       };
+
+    case 'deep_thinking': {
+      const dtLabels: Record<string, string> = {
+        'create': '创建深度分析空间',
+        'list': '查看活跃分析空间',
+        'archive': '归档分析空间',
+        'view_log': '查看变更日志',
+      };
+      return {
+        action: 'deep_think',
+        summary: restArgs.action
+          ? `${dtLabels[restArgs.action] || restArgs.action}${restArgs.title ? `: ${truncate(restArgs.title, 30)}` : restArgs.padId ? ` (${restArgs.padId.slice(0, 8)})` : ''}`
+          : '深度分析'
+      };
+    }
 
     // 文件操作
     case 'write':
@@ -153,6 +171,12 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       };
 
     // 技能
+    case 'skills_list':
+      return {
+        action: 'skill',
+        summary: '浏览可用技能列表',
+        icon: '📚',
+      };
     case 'activate_skill':
       return {
         action: 'skill',

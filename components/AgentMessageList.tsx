@@ -5,6 +5,7 @@ import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
 import { useUiStore } from '../stores/uiStore';
 import { useFileStore } from '../stores/fileStore';
+import { useAgentStore } from '../stores/agentStore';
 import { generateToolSummary } from '../utils/toolSummaryUtils';
 import { findNodeByPath } from '../services/fileSystem';
 import { AgentErrorInfo, AgentErrorCategory } from '../types/agentErrors';
@@ -553,6 +554,97 @@ const SubAgentOutputBlock: React.FC<{
     );
 };
 
+// --- Deep Thinking Card (Chat 面板可展开卡片) ---
+const DeepThinkingCard: React.FC<{ args: any }> = ({ args }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    const [activePage, setActivePage] = useState<'p1' | 'p2' | 'p3'>('p1');
+    const sessions = useAgentStore(state => state.sessions);
+    const currentSessionId = useAgentStore(state => state.currentSessionId);
+
+    const session = sessions.find(s => s.id === currentSessionId);
+    const pads = session?.thinkingPads || [];
+    const action = args?.action;
+
+    // create 时找到刚创建的 pad（最新的），list/view_log 时显示摘要
+    const latestPad = pads.length > 0 ? pads[pads.length - 1] : null;
+
+    const pageLabels: Record<string, string> = { p1: 'P1 约束', p2: 'P2 广度', p3: 'P3 深度' };
+    const pageKeys: Record<string, 'p1_constraint' | 'p2_breadth' | 'p3_depth'> = {
+        p1: 'p1_constraint', p2: 'p2_breadth', p3: 'p3_depth',
+    };
+
+    const activeContent = latestPad ? latestPad.pages[pageKeys[activePage]].content : '';
+
+    if (action === 'list') {
+        return (
+            <div className="mt-1 text-xs font-mono bg-[#0d1117] rounded-lg border border-amber-700/50 overflow-hidden">
+                <div className="px-3 py-2 bg-amber-900/20 text-amber-300 flex items-center gap-2">
+                    <Brain size={12} className="text-amber-400" />
+                    <span>思考空间列表（{pads.length}个）</span>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="mt-1 text-xs font-mono bg-[#0d1117] rounded-lg border border-amber-700/50 overflow-hidden">
+            {/* 标题栏 */}
+            <div
+                className="px-3 py-2 bg-amber-900/20 border-b border-amber-700/30 flex items-center gap-2 cursor-pointer select-none"
+                onClick={() => setIsExpanded(!isExpanded)}
+            >
+                <Brain size={12} className="text-amber-400 shrink-0" />
+                <span className="text-amber-300 font-medium flex-1">
+                    {latestPad ? latestPad.title : '深度分析'}
+                </span>
+                <span className="text-[10px] text-amber-400/60">
+                    {pads.length > 0 ? `${pads.length}个思考空间` : ''}
+                </span>
+                {isExpanded
+                    ? <ChevronDown size={12} className="text-amber-400/60" />
+                    : <ChevronRight size={12} className="text-amber-400/60" />
+                }
+            </div>
+
+            {/* 展开内容 */}
+            {isExpanded && latestPad && (
+                <div className="border-t border-amber-700/20">
+                    {/* 页签切换 */}
+                    <div className="flex border-b border-gray-800">
+                        {(['p1', 'p2', 'p3'] as const).map(page => (
+                            <button
+                                key={page}
+                                className={`flex-1 px-3 py-1.5 text-center transition-colors ${
+                                    activePage === page
+                                        ? 'bg-amber-900/30 text-amber-300 border-b-2 border-amber-400'
+                                        : 'text-gray-500 hover:text-gray-300'
+                                }`}
+                                onClick={(e) => { e.stopPropagation(); setActivePage(page); }}
+                            >
+                                {pageLabels[page]}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* 内容区 */}
+                    <div className="p-3 max-h-80 overflow-y-auto">
+                        <pre className="whitespace-pre-wrap text-gray-300 text-xs leading-relaxed font-sans">
+                            {activeContent || '（空白）'}
+                        </pre>
+                    </div>
+
+                    {/* 编辑次数 */}
+                    {latestPad.pages[pageKeys[activePage]].changelog.length > 0 && (
+                        <div className="px-3 py-1.5 border-t border-gray-800 text-[10px] text-gray-500">
+                            {latestPad.pages[pageKeys[activePage]].changelog.length} 次编辑
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- Tool Call Block (Input Visualization) ---
 // 判断是否是子Agent的工具（processOutlineInput 是入口）
 const isSubAgentTool = (name: string) => {
@@ -579,6 +671,11 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
             setActiveFileId(fileNode.id);
         }
     };
+
+    // 深度思考：专用可展开卡片
+    if (name === 'deep_thinking' && !isDebugMode) {
+        return <DeepThinkingCard args={restArgs} />;
+    }
 
     // 普通模式：只显示摘要 + thinking
     if (!isDebugMode) {
@@ -940,10 +1037,10 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             </div>
                         )}
 
-                        {/* TOOL CALL VISUALIZATION (Input) - Skip final_answer (redundant with text) and thinking (internal) */}
-                        {isModel && toolCalls && toolCalls.filter((tc: any) => tc.name !== 'final_answer' && tc.name !== 'thinking').length > 0 && (
+                        {/* TOOL CALL VISUALIZATION (Input) — 显示所有工具调用 */}
+                        {isModel && toolCalls && toolCalls.length > 0 && (
                             <div className="mt-3 space-y-2">
-                                {toolCalls.filter((tc: any) => tc.name !== 'final_answer' && tc.name !== 'thinking').map((tc: any, idx: number) => (
+                                {toolCalls.map((tc: any, idx: number) => (
                                     <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} isDebugMode={isDebugMode} />
                                 ))}
                             </div>

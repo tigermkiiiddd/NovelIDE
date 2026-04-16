@@ -560,7 +560,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
     // Room membership: 星团引力线
     if (link.linkType === 'room_membership') {
       const wing = (typeof src === 'object' ? src.wing || src.roomWing : undefined) as KnowledgeWing | undefined;
-      const colors = wing ? WING_COLORS[wing] : WING_COLORS.world;
+      const colors = (wing && WING_COLORS[wing]) || WING_COLORS.world;
       ctx.strokeStyle = `rgba(${colors.rgb}, 0.2)`;
       ctx.lineWidth = 1.5;
       ctx.beginPath();

@@ -8,9 +8,8 @@ import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService'
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
-import { useSkillTriggerStore, getRemainingRounds } from '../../stores/skillTriggerStore';
+
 import { lifecycleManager } from '../../domains/agentContext/toolLifecycle';
-import { detectSkillTriggersSemantic as detectSkillTriggers } from '../../domains/skillTrigger/skillTriggerService';
 import { useAgentContext } from './useAgentContext';
 import { useAgentTools } from './useAgentTools';
 import {
@@ -325,10 +324,57 @@ export const useAgentEngine = ({
         );
         if (finishReasonError) {
           console.warn('[AgentEngine] finish_reason issue:', finishReasonError);
-          // 如果是截断，记录警告但继续处理（响应仍可用）
-          if (aiMetadata?.finishReason === 'length') {
-            // 将警告添加到消息元数据
-            // 后续会在消息 metadata 中标记
+        }
+
+        // --- P0: 截断保护 ---
+        // 当 finishReason='length' 且有 tool_calls 时，验证每个 args 的 JSON 完整性
+        // 不完整的工具调用不执行，合成 error tool response 替代
+        if (aiMetadata?.finishReason === 'length') {
+          const rawToolParts = parts.filter((p: any) => p.functionCall);
+          if (rawToolParts.length > 0) {
+            const truncatedTools: string[] = [];
+            for (const tp of rawToolParts) {
+              const args = tp.functionCall.args;
+              // 尝试 JSON 序列化验证完整性
+              try {
+                if (args !== undefined && args !== null) {
+                  JSON.stringify(args); // 如果 args 是对象，能 stringify 说明完整
+                }
+              } catch {
+                truncatedTools.push(tp.functionCall.name);
+              }
+              // args 为 undefined 或空字符串也视为截断
+              if (args === undefined || args === null || args === '') {
+                truncatedTools.push(tp.functionCall.name);
+              }
+            }
+
+            if (truncatedTools.length > 0) {
+              console.warn(`[AgentEngine] 截断检测：${truncatedTools.join(', ')} 参数不完整，跳过执行`);
+              // 为截断的工具生成错误响应（不执行）
+              addMessage({
+                id: generateId(),
+                role: 'model',
+                text: '',
+                rawParts: rawToolParts.map((tp: any) => ({
+                  functionCall: tp.functionCall
+                })),
+                timestamp: Date.now(),
+                metadata: { loopCount, responseWarnings: [`⚠️ 参数被截断，工具未执行: ${truncatedTools.join(', ')}`] },
+              });
+              // 合成 error tool response
+              for (const tp of rawToolParts) {
+                addMessage({
+                  id: generateId(),
+                  role: 'system',
+                  text: `❌ 参数被截断，未执行。请缩短参数后重试。`,
+                  rawParts: [{ functionResponse: { name: tp.functionCall.name, id: tp.functionCall.id, response: { result: 'Error: 参数被截断，请重试' } } }],
+                  isToolOutput: true,
+                  timestamp: Date.now(),
+                });
+              }
+              continue; // 继续循环，让 LLM 重试
+            }
           }
         }
 
@@ -405,24 +451,42 @@ export const useAgentEngine = ({
               }
             }
 
+            // 生成标准 tool response（让 historyBuilder 不丢弃）
+            addMessage({
+              id: generateId(),
+              role: 'system',
+              text: '',
+              rawParts: [{ functionResponse: { name: 'final_answer', id: finalAnswerPart.functionCall.id, response: { result: 'ok', status: args.status || 'completed' } } }],
+              isToolOutput: true,
+              timestamp: Date.now(),
+            });
+
             console.log(`[AgentEngine-EXIT] final_answer 调用，状态: ${args.status}`);
             keepGoing = false;
-
-            // 技能检测
-            const latestUserMsg = currentMessages.filter((m: any) => m.role === 'user').pop();
-            await detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
             continue;
           }
 
-          // --- thinking 工具：只记录，不执行，不生成 UI 消息 ---
-          const thinkingParts = toolParts.filter((p: any) => p.functionCall.name === 'thinking');
-          const actionParts = toolParts.filter((p: any) => p.functionCall.name !== 'thinking');
+          // --- thinking 工具：静默记录（deep_thinking 走正常工具执行路径） ---
+          const thinkingParts = toolParts.filter((p: any) =>
+            p.functionCall.name === 'thinking'
+          );
+          const actionParts = toolParts.filter((p: any) =>
+            p.functionCall.name !== 'thinking'
+          );
 
-          // 为 thinking 工具生成静默的 function response
+          // 为 thinking 工具生成 function response（保留在历史中，UI 通过 ToolCallBlock 显示）
           if (thinkingParts.length > 0) {
             thinkingParts.forEach((tp: any) => {
-              console.log(`[AgentEngine] thinking: ${(tp.functionCall.args?.reasoning || '').slice(0, 200)}`);
-              // 静默回传 tool response（不显示在 UI）
+              const args = tp.functionCall.args || {};
+
+              console.log(
+                `[AgentEngine] thinking:\n` +
+                `  表面: ${(args.surface || '').slice(0, 100)}\n` +
+                `  意图: ${(args.intent || '').slice(0, 200)}\n` +
+                `  计划: ${(args.plan || '').slice(0, 150)}\n` +
+                `  反思: ${(args.reflection || '').slice(0, 150) || '(无)'}`
+              );
+
               addMessage({
                 id: generateId(),
                 role: 'system',
@@ -430,7 +494,6 @@ export const useAgentEngine = ({
                 rawParts: [{ functionResponse: { name: 'thinking', id: tp.functionCall.id, response: { result: 'ok' } } }],
                 isToolOutput: true,
                 timestamp: Date.now(),
-                skipInHistory: true,
               });
             });
           }
@@ -532,14 +595,7 @@ export const useAgentEngine = ({
             console.error('[ToolResult挂载] error:', e, String(e));
           }
 
-          // AI thinking 独立显示，不再触发技能激活
-          // (技能激活改为通过用户意图 / 工具名 触发，不再依赖 thinking 文本匹配)
-
-          // --- 工具执行完成后：技能触发检测 ---
-          // 即使 LLM 调用了工具，也需要检测是否触发了技能
-          // 用户输入如"设计女主角"可能在工具轮中被触发
-          const latestUserMsgForSkill = currentMessages.filter(m => m.role === 'user').pop();
-          await detectSkillTriggers(latestUserMsgForSkill?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
+          // AI thinking 独立显示，技能激活由 Agent 通过 activate_skill 工具自主决定
 
         } else {
           // 没有工具调用，直接结束
@@ -548,10 +604,6 @@ export const useAgentEngine = ({
             `  loop#=${loopCount} textPart=${!!textPart} parts=${parts.length}`
           );
           keepGoing = false;
-
-          // --- 技能触发检测（纯文本回复轮） ---
-          const latestUserMsg = currentMessages.filter(m => m.role === 'user').pop();
-          await detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
         }
       }
 
@@ -640,8 +692,9 @@ export const useAgentEngine = ({
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
-      setLoading(false);
     }
+    isProcessingRef.current = false;  // P1: 防止状态锁死
+    setLoading(false);
   }, [setLoading]);
 
   return {
