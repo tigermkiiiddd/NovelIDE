@@ -3,6 +3,7 @@ export const SKILL_EXPECTATION_MANAGER = `---
 name: 期待感管理 (Expectation Manager)
 summarys: ['本技能专注于期待感管理，运用 GAP 三角模型（差距-期待-满足）设计情绪曲线，提供五维期待模型、满足感分级体系和延迟满足法则。']
 tags: ["技能", "期待感", "爽点设计", "期待管理", "爽点节奏", "情绪高点", "爆点", "燃点", "高潮设计"]
+category: 设计
 ---
 
 # 核心指令：期待感管理师

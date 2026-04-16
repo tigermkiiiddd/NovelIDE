@@ -26,7 +26,7 @@ const debounce = <T extends (...args: any[]) => any>(
 };
 
 // Lazy tool loading categories
-export type ToolCategory = 'file_write' | 'file_search' | 'memory' | 'character' | 'relationship' | 'outline';
+export type ToolCategory = 'memory' | 'character' | 'relationship' | 'outline';
 
 interface AgentState {
   // Config

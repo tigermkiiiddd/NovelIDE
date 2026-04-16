@@ -509,7 +509,8 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
     }
 
     // 球内文字
-    const label = node.name.length > 3 ? node.name.slice(0, 3) : node.name;
+    const nodeName = node.name || '';
+    const label = nodeName.length > 3 ? nodeName.slice(0, 3) : nodeName;
     let fontSize = Math.max(8, radius * 0.48);
     ctx.font = `bold ${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
     const maxW = radius * 1.5;

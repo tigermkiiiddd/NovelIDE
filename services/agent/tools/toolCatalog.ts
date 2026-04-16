@@ -1,37 +1,19 @@
 /**
  * @file toolCatalog.ts
- * @description 工具目录 - 轻量级 name + description，仅用于首次展示
+ * @description 二级工具目录 — 轻量级 name + description
+ * 未激活时 Agent 只看到这些目录条目（无参数 schema），通过 search_tools 激活后获得完整定义
  */
 
 import type { ToolCategory } from '../../../stores/agentStore';
 
-// 工具目录条目（轻量级，只包含 name 和 description）
 export interface ToolCatalogEntry {
   name: string;
   description: string;
   category: ToolCategory;
 }
 
-// 工具目录 - 每个 lazy 类别的工具目录条目
 export const toolCatalogEntries: ToolCatalogEntry[] = [
-  // file_write 系列
-  {
-    name: 'updateFile',
-    description: '覆写整个文件内容（用于大改或重写）',
-    category: 'file_write',
-  },
-  {
-    name: 'renameFile',
-    description: '重命名文件（不改路径，只改文件名）',
-    category: 'file_write',
-  },
-  {
-    name: 'deleteFile',
-    description: '删除文件或文件夹',
-    category: 'file_write',
-  },
-
-  // 记忆宫殿系列
+  // memory 系列
   {
     name: 'query_memory',
     description: '查询记忆宫殿中的相关知识节点',
@@ -155,28 +137,12 @@ export const toolCatalogEntries: ToolCatalogEntry[] = [
   },
 ];
 
-// 转换为 ToolDefinition 格式（用于发送给 LLM）
-export const getToolCatalog = (): import('../types').ToolDefinition[] => {
-  return toolCatalogEntries.map((entry) => ({
-    type: 'function' as const,
-    function: {
-      name: entry.name,
-      description: entry.description,
-      parameters: {
-        type: 'object' as const,
-        properties: {},
-        required: [],
-      },
-    },
-  }));
-};
-
 // 获取指定类别的目录条目
 export const getCatalogByCategory = (category: ToolCategory): ToolCatalogEntry[] => {
   return toolCatalogEntries.filter((entry) => entry.category === category);
 };
 
-// 获取已激活类别后，从 catalog 中过滤掉
+// 获取已激活类别后，从 catalog 中过滤掉已激活的条目
 export const getFilteredCatalog = (activatedCategories: ToolCategory[]): import('../types').ToolDefinition[] => {
   const filteredEntries = toolCatalogEntries.filter(
     (entry) => !activatedCategories.includes(entry.category)

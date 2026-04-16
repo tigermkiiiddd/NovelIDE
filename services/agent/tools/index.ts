@@ -1,76 +1,10 @@
-
-import { listFilesTool, readFileTool } from './fileReadTools';
-import { createFileTool, updateFileTool, patchFileTool, renameFileTool, deleteFileTool } from './fileWriteTools';
-import { updateProjectMetaTool } from './projectTools';
-import { manageTodosTool } from './todoTools';
-import {
-  queryKnowledgeTool,
-  manageKnowledgeTool,
-  linkKnowledgeTool,
-  memoryStatusTool,
-  traverseMemoryTool,
-} from './knowledgeGraphTools';
-import {
-  getEventsTool,
-  getChaptersTool,
-  getVolumesTool,
-  getStoryLinesTool,
-  processOutlineInputTool
-} from '../toolDefinitions/timeline';
-import {
-  initCharacterProfileTool,
-  updateCharacterProfileTool,
-  manageSubCategoryTool,
-  archiveEntryTool,
-} from './characterProfileTools';
-import {
-  queryRelationshipsTool,
-  manageRelationshipsTool,
-  getRelationshipGraphTool,
-} from './relationshipTools';
-import { callSearchAgentTool } from './subAgentTools';
-import { ToolDefinition } from '../types';
-
-// 主 Agent 可用的工具
-const readTools: ToolDefinition[] = [
-  listFilesTool,
-  readFileTool,
-  queryKnowledgeTool,
-  memoryStatusTool,
-  traverseMemoryTool,
-  queryRelationshipsTool,
-  getRelationshipGraphTool,
-  getVolumesTool,
-  getChaptersTool,
-  getEventsTool,
-  getStoryLinesTool,
-];
-
-const writeTools: ToolDefinition[] = [
-  createFileTool,
-  updateFileTool,
-  patchFileTool,
-  renameFileTool,
-  deleteFileTool,
-  updateProjectMetaTool,
-  manageKnowledgeTool,
-  linkKnowledgeTool,
-  // ⚠️ outline 写入通过 SubAgent，主 Agent 只能调用 processOutlineInput
-  processOutlineInputTool,
-  // 角色档案工具
-  initCharacterProfileTool,
-  updateCharacterProfileTool,
-  manageSubCategoryTool,
-  archiveEntryTool,
-  // 人际关系工具
-  manageRelationshipsTool,
-  // 子代理工具
-  callSearchAgentTool,
-];
-
-export const allTools: ToolDefinition[] = [...readTools, ...writeTools, manageTodosTool];
-
-export const getToolsForMode = (planMode: boolean): ToolDefinition[] => allTools;
+/**
+ * @file index.ts
+ * @description 工具 re-export hub
+ *
+ * 工具注册的唯一入口是 categories.ts（分级）+ indexLazy.ts（组合）
+ * 此文件仅做 re-export，供 toolRunner.ts 导入各工具的执行函数
+ */
 
 export * from './fileReadTools';
 export * from './fileWriteTools';
@@ -80,4 +14,5 @@ export * from './knowledgeGraphTools';
 export * from './timelineTools';
 export * from './characterProfileTools';
 export * from './relationshipTools';
-export * from './subAgentTools';
+export * from './skillTools';
+export * from './searchTools';

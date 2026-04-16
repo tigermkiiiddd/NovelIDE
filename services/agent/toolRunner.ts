@@ -3,7 +3,6 @@ import { FileNode, TodoItem, PendingChange, FileType, PlanNote, EditDiff, BatchE
 import { generateId, findNodeByPath } from '../fileSystem';
 import { processManageTodos } from './tools/todoTools';
 import { processManagePlanNote } from './tools/planTools';
-import { formatThinkingResult } from './tools/thinkingTools';
 import {
   executeQueryKnowledge,
   executeManageKnowledge,
@@ -28,6 +27,8 @@ import { applyEditsSimple, findAllMatches } from '../../utils/patchUtils';
 import { runSearchSubAgent } from '../subAgents/searchAgent';
 import { AIService } from '../geminiService';
 import { executeSearchTools } from './tools/searchTools';
+import { executeActivateSkill } from './tools/skillTools';
+import { injectSkillByCodeTrigger } from '../../domains/skillTrigger/skillTriggerService';
 import { useVersionStore } from '../../stores/versionStore';
 
 /**
@@ -223,6 +224,8 @@ export interface ToolContext {
         readFile: (path: string, startLine?: number, endLine?: number) => string;
         searchFiles: (query: string) => string;
         listFiles: () => string;
+        globFiles: (pattern: string, basePath?: string, headLimit?: number) => string;
+        grepFiles: (pattern: string, basePath?: string, context?: number, outputMode?: string, globFilter?: string, headLimit?: number, ignoreCase?: boolean, multiline?: boolean) => string;
         deleteFile: (path: string) => string;
         renameFile: (oldPath: string, newName: string) => string;
         updateProjectMeta: (updates: any) => string;
@@ -283,7 +286,7 @@ export const executeTool = async (
     }
 
     // --- 1. Check for Approval Requirements (Write Operations) ---
-    const requiresApproval = ['createFile', 'updateFile', 'patchFile', 'deleteFile', 'renameFile'];
+    const requiresApproval = ['write', 'createFile', 'updateFile', 'edit', 'patchFile', 'deleteFile', 'renameFile'];
     
     if (requiresApproval.includes(name)) {
         try {
@@ -306,58 +309,82 @@ export const executeTool = async (
             }
 
             // Pre-calculate Diff Metadata for UI
-            if (name === 'createFile') {
-                // Check if file already exists - this is an error
-                if (existingFile) {
-                    return {
-                        type: 'ERROR',
-                        message: `❌ 文件已存在: "${filePath}"。createFile 只能用于创建新文件。如需更新已存在的文件，请使用 updateFile 或 patchFile。`
-                    };
-                }
-                // Enforce character file naming convention: [前缀]_[姓名].md
-                if (filePath.includes('02_角色档案/')) {
-                    const fileName = filePath.split('/').pop() || '';
-                    const validFormat = /^[^_]+_[^_].+\.md$/;
-                    if (!validFormat.test(fileName)) {
+            if (name === 'write' || name === 'createFile' || name === 'updateFile') {
+                if (name === 'write') {
+                    // Unified write: auto-detect create vs update
+                    if (existingFile) {
+                        description = `Overwrite: ${filePath}`;
+                        originalContent = baseContent;
+                        newContent = args.content;
+                    } else {
+                        // Enforce character file naming convention
+                        if (filePath.includes('02_角色档案/')) {
+                            const fileName = filePath.split('/').pop() || '';
+                            const validFormat = /^[^_]+_[^_].+\.md$/;
+                            if (!validFormat.test(fileName)) {
+                                return {
+                                    type: 'ERROR',
+                                    message: `❌ 角色档案命名不合规: "${fileName}"。\n必须使用 [前缀]_[姓名].md 格式，例如：主角_陈浩.md、配角_林晓月.md`
+                                };
+                            }
+                        }
+                        description = `Create file: ${filePath}`;
+                        originalContent = '';
+                        newContent = filePath.includes('05_正文草稿/')
+                            ? injectMatchedCharacters(args.content, files)
+                            : args.content;
+                    }
+                } else if (name === 'createFile') {
+                    // Legacy: explicit create
+                    if (existingFile) {
                         return {
                             type: 'ERROR',
-                            message: `❌ 角色档案命名不合规: "${fileName}"。\n必须使用 [前缀]_[姓名].md 格式，例如：主角_陈浩.md、配角_林晓月.md`
+                            message: `❌ 文件已存在: "${filePath}"。如需更新已存在的文件，请使用 write 或 edit。`
                         };
                     }
+                    if (filePath.includes('02_角色档案/')) {
+                        const fileName = filePath.split('/').pop() || '';
+                        const validFormat = /^[^_]+_[^_].+\.md$/;
+                        if (!validFormat.test(fileName)) {
+                            return {
+                                type: 'ERROR',
+                                message: `❌ 角色档案命名不合规: "${fileName}"。\n必须使用 [前缀]_[姓名].md 格式，例如：主角_陈浩.md、配角_林晓月.md`
+                            };
+                        }
+                    }
+                    description = `Create file: ${filePath}`;
+                    originalContent = '';
+                    newContent = filePath.includes('05_正文草稿/')
+                        ? injectMatchedCharacters(args.content, files)
+                        : args.content;
+                } else {
+                    // Legacy: explicit update
+                    if (!existingFile) {
+                        return {
+                            type: 'ERROR',
+                            message: `❌ 文件不存在: "${filePath}"。如需创建新文件，请使用 write。`
+                        };
+                    }
+                    description = `Overwrite: ${filePath}`;
+                    originalContent = baseContent;
+                    newContent = args.content;
                 }
-                description = `Create file: ${filePath}`;
-                originalContent = '';
-                // Auto-inject matched characters for draft files
-                newContent = filePath.includes('05_正文草稿/')
-                    ? injectMatchedCharacters(args.content, files)
-                    : args.content;
-            } else if (name === 'updateFile') {
-                // Check if file exists - must be an existing file, not a new one
-                if (!existingFile) {
-                    return {
-                        type: 'ERROR',
-                        message: `❌ 文件不存在: "${filePath}"。updateFile 只能用于更新已存在的文件。如需创建新文件，请使用 createFile。`
-                    };
-                }
-                description = `Overwrite: ${filePath}`;
-                originalContent = baseContent;
-                newContent = args.content;
-            } else if (name === 'patchFile') {
+            } else if (name === 'edit' || name === 'patchFile') {
                 // Check if file exists - must be an existing file
                 if (!existingFile) {
                     return {
                         type: 'ERROR',
-                        message: `❌ 文件不存在: "${filePath}"。patchFile 只能用于修改已存在的文件。如需创建新文件，请使用 createFile。`
+                        message: `❌ 文件不存在: "${filePath}"。edit 只能用于修改已存在的文件。如需创建新文件，请使用 write。`
                     };
                 }
-                description = `Patch: ${filePath} (${args.edits.length} edits)`;
+                description = `Edit: ${filePath} (${args.edits.length} edits)`;
                 originalContent = baseContent;
                 // 使用通用函数应用 patch（预览阶段用非严格模式）
                 const patchResult = applyEditsSimple(baseContent, args.edits);
 
                 // 检测 patch 是否成功应用
                 if (patchResult === baseContent) {
-                    console.error('[toolRunner] patchFile failed: no changes applied', {
+                    console.error('[toolRunner] edit failed: no changes applied', {
                         filePath,
                         baseContentLength: baseContent.length,
                         editsCount: args.edits.length,
@@ -366,16 +393,16 @@ export const executeTool = async (
 
                     return {
                         type: 'ERROR',
-                        message: `❌ patchFile 失败: 无法在文件中找到要替换的内容。
+                        message: `❌ edit 失败: 无法在文件中找到要替换的内容。
 
 【可能原因】
 1. 文件内容已被修改，oldContent 不再存在
 2. oldContent 与文件内容不完全匹配（空格、换行、引号差异）
 
 【建议】
-1. 使用 readFile 重新读取文件，确认当前内容
+1. 使用 read 重新读取文件，确认当前内容
 2. 使用更精确的 oldContent（包含更多上下文）
-3. 或改用 updateFile 直接替换整个文件内容
+3. 或改用 write 直接替换整个文件内容
 
 【搜索的内容】
 "${args.edits[0]?.oldContent?.substring(0, 200) || 'N/A'}"`
@@ -411,9 +438,9 @@ export const executeTool = async (
                 timestamp: Date.now(),
                 description: `${description}\n${args.thinking ? `思考: ${args.thinking}` : ''}`,
                 // Generate editDiffs for all write operations
-                editDiffs: name === 'patchFile'
+                editDiffs: (name === 'patchFile' || name === 'edit')
                     ? generateEditDiffs(baseContent, args.edits, changeId)
-                    : (name === 'updateFile' || name === 'createFile') && originalContent !== null && newContent !== null
+                    : (name === 'updateFile' || name === 'createFile' || name === 'write') && originalContent !== null && newContent !== null
                         ? generateEditDiffsFromComparison(originalContent, newContent, changeId)
                         : undefined
             };
@@ -497,13 +524,28 @@ export const executeTool = async (
         else {
             // Map generic tools to implementation props
             switch (name) {
+                case 'read':
                 case 'readFile':
                     result = actions.readFile(args.path, args.startLine, args.endLine);
                     if (!result.startsWith('Error')) actions.trackFileAccess(args.path);
                     break;
+                case 'grep':
+                    result = actions.grepFiles(
+                      args.pattern,
+                      args.path,
+                      args.context,
+                      args.output_mode,
+                      args.glob,
+                      args.head_limit,
+                      args.ignoreCase,
+                      args.multiline
+                    );
+                    break;
                 case 'searchFiles':
-                    result = actions.searchFiles(args.query);
+                    // Legacy: original substring search + semantic fallback
+                    result = actions.searchFiles(args.pattern || args.query);
                     // 如果子串匹配无结果，尝试语义搜索
+                    const searchQuery = args.pattern || args.query;
                     if (result.startsWith('No files found')) {
                       try {
                         const { semanticFileSearch, indexFilesForSearch } = require('../../domains/memory/fileSearchService');
@@ -511,17 +553,17 @@ export const executeTool = async (
                         const files = useFileStore.getState().files;
                         // 增量索引（首次会较慢）
                         await indexFilesForSearch(files);
-                        const semanticResults = await semanticFileSearch(args.query, files);
+                        const semanticResults = await semanticFileSearch(searchQuery, files);
                         if (semanticResults.length > 0) {
                           const { getNodePath } = require('../../services/fileSystem');
-                          const resultList = semanticResults.map(r => {
+                          const resultList = semanticResults.map((r: any) => {
                             const file = files.find((f: FileNode) => f.id === r.fileId);
                             if (!file) return '';
                             const path = getNodePath(file, files);
                             return `[FILE] ${path} (相关度: ${(r.score * 100).toFixed(0)}%)`;
                           }).filter(Boolean).join('\n');
                           if (resultList) {
-                            result = `语义搜索结果（"${args.query}"）：\n${resultList}`;
+                            result = `语义搜索结果（"${searchQuery}"）：\n${resultList}`;
                           }
                         }
                       } catch {
@@ -529,11 +571,18 @@ export const executeTool = async (
                       }
                     }
                     break;
-                case 'listFiles': 
-                    result = actions.listFiles(); 
+                case 'glob':
+                    result = actions.globFiles(args.pattern, args.path, args.head_limit);
+                    break;
+                case 'listFiles':
+                    result = actions.listFiles();
                     break;
                 case 'updateProjectMeta':
-                    result = actions.updateProjectMeta(args);
+                    if (args.description && args.description.length > 300) {
+                        result = `Error: 核心梗(description)超过300字限制（当前${args.description.length}字），请精简后重试。`;
+                    } else {
+                        result = actions.updateProjectMeta(args);
+                    }
                     break;
                 // --- KNOWLEDGE GRAPH TOOLS ---
                 case 'query_memory':
@@ -589,6 +638,11 @@ export const executeTool = async (
                 case 'outline_manageStoryLines':
                     result = await executeOutlineTool(name, args);
                     break;
+                // --- SKILL TOOLS ---
+                case 'activate_skill':
+                    const skillResult = executeActivateSkill(args.skillName || '', args.reason || '');
+                    result = JSON.stringify(skillResult);
+                    break;
                 default:
                     result = `Error: Unknown tool ${name}`;
             }
@@ -609,6 +663,22 @@ export const executeTool = async (
             onUiLog(`✅ **Result**:\n${displayResult}`);
         }
 
+        // --- Post-hook: Channel 1 — Code-triggered skill injection ---
+        try {
+          const { useFileStore } = require('../../stores/fileStore');
+          const { useSkillTriggerStore } = require('../../stores/skillTriggerStore');
+          const triggerContext = {
+            files: useFileStore.getState().files,
+            triggerStore: useSkillTriggerStore.getState(),
+          };
+          const injected = injectSkillByCodeTrigger(name, args, triggerContext);
+          if (injected.length > 0 && onUiLog) {
+            onUiLog(`🔧 **自动注入技能**: ${injected.join(', ')}`);
+          }
+        } catch {
+          // post-hook 不应影响主流程
+        }
+
         return { type: 'EXECUTED', result };
 
     } catch (e: any) {
@@ -626,6 +696,18 @@ export const executeApprovedChange = (change: PendingChange, actions: ToolContex
         const a = change.args as Record<string, unknown>;
 
         switch (change.toolName) {
+            case 'write': {
+                // Unified write: create or update based on whether file existed at approval time
+                const path = a.path as string;
+                const content = (change.newContent ?? a.content) as string;
+                // fileId was set from existingFile?.id — if null, it was a create
+                if (!change.fileId) {
+                    result = actions.createFile(path, content);
+                } else {
+                    result = actions.updateFile(path, content);
+                }
+                break;
+            }
             case 'createFile':
                 // Use newContent (may have been enriched, e.g. auto-injected characters)
                 result = actions.createFile(a.path as string, (change.newContent ?? a.content) as string);
@@ -633,6 +715,7 @@ export const executeApprovedChange = (change: PendingChange, actions: ToolContex
             case 'updateFile':
                 result = actions.updateFile(a.path as string, a.content as string);
                 break;
+            case 'edit':
             case 'patchFile':
                 result = actions.patchFile(a.path as string, a.edits as BatchEdit[]);
                 break;

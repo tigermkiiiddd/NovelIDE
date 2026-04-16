@@ -1141,7 +1141,7 @@ async function loadFromProjectInternal(projectId: string) {
       },
       {
         name: '系统保护规则',
-        summary: '禁止修改 98_技能配置、99_创作规范、subskill 目录。禁止在 03_剧情大纲 下创建 md 文件。角色文件必须是 前缀_姓名.md 格式。',
+        summary: '禁止修改 98_技能配置 目录结构。禁止在 03_剧情大纲 下创建 md 文件。角色文件必须是 前缀_姓名.md 格式。',
         tags: ['禁止', '保护', '系统'],
         room: '系统保护',
       },

@@ -592,7 +592,7 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
                     onClick={canOpenFile ? handleOpenFile : undefined}
                 >
                     <Wrench size={12} className="text-blue-400 shrink-0"/>
-                    <span className="font-medium truncate flex-1">{summary.summary}</span>
+                    <span className="font-medium flex-1">{summary.summary}</span>
                     {canOpenFile && (
                         <span className="text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded shrink-0">
                             打开
@@ -940,10 +940,10 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             </div>
                         )}
 
-                        {/* TOOL CALL VISUALIZATION (Input) - Always visible in Model message if present */}
-                        {isModel && toolCalls && toolCalls.length > 0 && (
+                        {/* TOOL CALL VISUALIZATION (Input) - Skip final_answer (redundant with text) and thinking (internal) */}
+                        {isModel && toolCalls && toolCalls.filter((tc: any) => tc.name !== 'final_answer' && tc.name !== 'thinking').length > 0 && (
                             <div className="mt-3 space-y-2">
-                                {toolCalls.map((tc: any, idx: number) => (
+                                {toolCalls.filter((tc: any) => tc.name !== 'final_answer' && tc.name !== 'thinking').map((tc: any, idx: number) => (
                                     <ToolCallBlock key={`tc-block-${idx}`} name={tc.name} args={tc.args} isDebugMode={isDebugMode} />
                                 ))}
                             </div>

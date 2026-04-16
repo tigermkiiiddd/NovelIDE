@@ -17,6 +17,8 @@ export interface AgentToolsImplementation {
     readFile: (path: string, startLine?: number, endLine?: number) => string;
     searchFiles: (query: string) => string;
     listFiles: () => string;
+    globFiles: (pattern: string, basePath?: string, headLimit?: number) => string;
+    grepFiles: (pattern: string, basePath?: string, context?: number, outputMode?: string, globFilter?: string, headLimit?: number, ignoreCase?: boolean, multiline?: boolean) => string;
     deleteFile: (path: string) => string;
     renameFile: (oldPath: string, newName: string) => string;
     updateProjectMeta: (updates: any) => string;

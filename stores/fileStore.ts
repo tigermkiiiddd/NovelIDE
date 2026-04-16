@@ -44,6 +44,8 @@ interface FileState {
   deleteFile: (pathOrId: string) => string;
   renameFile: (oldPath: string, newPath: string) => string;
   listFiles: () => string;
+  globFiles: (pattern: string, basePath?: string, headLimit?: number) => string;
+  grepFiles: (pattern: string, basePath?: string, context?: number, outputMode?: string, globFilter?: string, headLimit?: number, ignoreCase?: boolean, multiline?: boolean) => string;
 
   // Internal Helper
   _saveToDB: () => void;
@@ -402,6 +404,250 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
   },
 
   listFiles: () => getFileTreeStructure(get().files),
+
+  globFiles: (pattern: string, basePath?: string, headLimit?: number) => {
+    const { files } = get();
+
+    // Convert glob pattern to regex
+    const globToRegex = (p: string): RegExp => {
+      const escaped = p
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*\*/g, '{{GLOBSTAR}}')
+        .replace(/\*/g, '[^/]*')
+        .replace(/{{GLOBSTAR}}/g, '.*');
+      return new RegExp(`^${escaped}$`, 'i');
+    };
+
+    const regex = globToRegex(pattern);
+
+    // Collect descendants of a folder (for path scoping)
+    const getDescendantIds = (folderId: string): Set<string> => {
+      const ids = new Set<string>();
+      const queue = [folderId];
+      while (queue.length > 0) {
+        const pid = queue.shift()!;
+        for (const f of files) {
+          if (f.parentId === pid && !ids.has(f.id)) {
+            ids.add(f.id);
+            if (f.type === FileType.FOLDER) queue.push(f.id);
+          }
+        }
+      }
+      return ids;
+    };
+
+    let scopeIds: Set<string> | null = null;
+    if (basePath) {
+      const baseFolder = findNodeByPath(files, basePath);
+      if (baseFolder) scopeIds = getDescendantIds(baseFolder.id);
+    }
+
+    let matched = files
+      .filter(f => !f.hidden && f.type === FileType.FILE)
+      .map(f => ({ node: f, path: getNodePath(f, files) }))
+      .filter(({ node, path }) => {
+        if (scopeIds && !scopeIds.has(node.id)) return false;
+        return regex.test(path);
+      });
+
+    if (headLimit && headLimit > 0) {
+      matched = matched.slice(0, headLimit);
+    }
+
+    if (matched.length === 0) {
+      return `No files matching "${pattern}"${basePath ? ` in ${basePath}` : ''}.`;
+    }
+
+    const total = matched.length;
+    const truncated = headLimit && total >= headLimit;
+
+    const lines = matched.map(({ node, path }) => {
+      const meta = node.metadata || {};
+      const tags = meta.tags?.length ? ` [Tags: ${meta.tags.join(',')}]` : '';
+      const summary = meta.summarys?.length ? ` [Sum: ${meta.summarys[0]}]` : '';
+      const characters = meta.characters?.length ? ` [Chars: ${meta.characters.join(',')}]` : '';
+      return `[FILE] ${path}${tags}${characters}${summary}`;
+    });
+
+    if (truncated) lines.push(`\n(showing first ${headLimit} results)`);
+
+    return lines.join('\n');
+  },
+
+  grepFiles: (pattern: string, basePath?: string, context: number = 2, outputMode: string = 'content', globFilter?: string, headLimit?: number, ignoreCase: boolean = true, multiline: boolean = false) => {
+    const { files } = get();
+
+    // Build regex
+    const flags = `${ignoreCase ? 'i' : ''}${multiline ? 's' : ''}g`;
+    let regex: RegExp;
+    try {
+      regex = new RegExp(pattern, flags);
+    } catch {
+      regex = new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+    }
+
+    // --- File scoping helpers ---
+    const getDescendantIds = (folderId: string): Set<string> => {
+      const ids = new Set<string>();
+      const queue = [folderId];
+      while (queue.length > 0) {
+        const pid = queue.shift()!;
+        for (const f of files) {
+          if (f.parentId === pid && !ids.has(f.id)) {
+            ids.add(f.id);
+            if (f.type === FileType.FOLDER) queue.push(f.id);
+          }
+        }
+      }
+      return ids;
+    };
+
+    // Glob filter regex
+    let globRegex: RegExp | null = null;
+    if (globFilter) {
+      const escaped = globFilter
+        .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*\*/g, '{{GLOBSTAR}}')
+        .replace(/\*/g, '[^/]*')
+        .replace(/{{GLOBSTAR}}/g, '.*');
+      globRegex = new RegExp(`^${escaped}$`, 'i');
+    }
+
+    // Scope files
+    let scopeIds: Set<string> | null = null;
+    if (basePath) {
+      const baseFolder = findNodeByPath(files, basePath);
+      if (baseFolder) scopeIds = getDescendantIds(baseFolder.id);
+    }
+
+    const scopeFiles = files.filter(f => {
+      if (f.hidden || f.type !== FileType.FILE || !f.content) return false;
+      if (scopeIds && !scopeIds.has(f.id)) return false;
+      if (globRegex) {
+        const path = getNodePath(f, files);
+        if (!globRegex.test(path)) return false;
+      }
+      return true;
+    });
+
+    // --- Search ---
+    const results: string[] = [];
+    let totalEntries = 0;
+    let truncated = false;
+
+    // Strip YAML frontmatter, return body content and body start line
+    const stripFrontmatter = (text: string): { body: string; bodyStartLine: number } => {
+      const match = text.match(/^---\n([\s\S]*?)\n---\n/);
+      if (!match) return { body: text, bodyStartLine: 0 };
+      return { body: text.slice(match[0].length), bodyStartLine: match[0].split('\n').length - 1 };
+    };
+
+    for (const file of scopeFiles) {
+      if (truncated) break;
+
+      const path = getNodePath(file, files);
+      const fullContent = file.content!;
+      const { body: bodyContent, bodyStartLine } = stripFrontmatter(fullContent);
+
+      // Multiline mode: search body content only
+      if (multiline) {
+        regex.lastIndex = 0;
+        const matches = [...bodyContent.matchAll(regex)];
+        if (matches.length === 0) continue;
+
+        if (outputMode === 'files_with_matches') {
+          results.push(path);
+          totalEntries++;
+          if (headLimit && totalEntries >= headLimit) { truncated = true; break; }
+          continue;
+        }
+        if (outputMode === 'count') {
+          results.push(`${path}: ${matches.length}`);
+          totalEntries++;
+          if (headLimit && totalEntries >= headLimit) { truncated = true; break; }
+          continue;
+        }
+
+        // content mode — report match positions
+        const lines = bodyContent.split('\n');
+        let shown = 0;
+        for (const m of matches) {
+          if (headLimit && totalEntries >= headLimit) { truncated = true; break; }
+          const beforeMatch = bodyContent.substring(0, m.index!);
+          const startLine = beforeMatch.split('\n').length - 1;
+          const matchText = m[0];
+          const matchLineCount = matchText.split('\n').length;
+          const endLine = startLine + matchLineCount - 1;
+
+          const ctxStart = Math.max(0, startLine - context);
+          const ctxEnd = Math.min(lines.length - 1, endLine + context);
+
+          if (shown === 0) results.push(`--- ${path} ---`);
+          for (let i = ctxStart; i <= ctxEnd; i++) {
+            const marker = (i >= startLine && i <= endLine) ? '>' : ' ';
+            const lineText = lines[i].length > 200 ? lines[i].substring(0, 200) + '...' : lines[i];
+            // Offset line numbers by bodyStartLine so they match the real file
+            results.push(`  ${String(i + 1 + bodyStartLine).padStart(4)}${marker}| ${lineText}`);
+          }
+          results.push('');
+          shown++;
+          totalEntries++;
+        }
+        continue;
+      }
+
+      // Line-by-line mode (default): search body only
+      const lines = bodyContent.split('\n');
+      const matchLines: number[] = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        regex.lastIndex = 0;
+        if (regex.test(lines[i])) {
+          matchLines.push(i);
+        }
+      }
+
+      if (matchLines.length === 0) continue;
+
+      if (outputMode === 'files_with_matches') {
+        results.push(path);
+        totalEntries++;
+        if (headLimit && totalEntries >= headLimit) { truncated = true; break; }
+        continue;
+      }
+
+      if (outputMode === 'count') {
+        results.push(`${path}: ${matchLines.length}`);
+        totalEntries++;
+        if (headLimit && totalEntries >= headLimit) { truncated = true; break; }
+        continue;
+      }
+
+      // content mode
+      results.push(`--- ${path} (${matchLines.length} matches) ---`);
+      for (const lineIdx of matchLines) {
+        if (headLimit && totalEntries >= headLimit) { truncated = true; break; }
+        const start = Math.max(0, lineIdx - context);
+        const end = Math.min(lines.length - 1, lineIdx + context);
+        for (let i = start; i <= end; i++) {
+          const marker = i === lineIdx ? '>' : ' ';
+          const lineText = lines[i].length > 200 ? lines[i].substring(0, 200) + '...' : lines[i];
+          // Offset line numbers by bodyStartLine so they match the real file
+          results.push(`  ${String(i + 1 + bodyStartLine).padStart(4)}${marker}| ${lineText}`);
+        }
+        results.push('');
+        totalEntries++;
+      }
+    }
+
+    if (results.length === 0) {
+      return `No matches for "${pattern}"${basePath ? ` in ${basePath}` : ''}.`;
+    }
+
+    if (truncated) results.push(`\n(truncated at ${headLimit} entries)`);
+
+    return results.join('\n');
+  },
 
   switchPreset: (newPresetId?: string) => {
     const { files, _saveToDB } = get();

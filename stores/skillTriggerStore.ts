@@ -25,6 +25,9 @@ export interface SkillTriggerRecord {
   matchText: string;         // tags + summarys（用于匹配）
   triggerRound: number;      // 触发时的轮次
   decayRounds: number;      // 衰减轮次（固定为8）
+  category?: string;         // 技能分类：创作/规划/设计/审核
+  source?: 'user' | 'code' | 'agent';  // 注入来源
+  isPatch?: boolean;         // 是否为题材补丁
 }
 
 export interface SkillTriggerState {

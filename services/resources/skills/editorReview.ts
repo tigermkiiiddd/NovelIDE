@@ -3,6 +3,7 @@ export const SKILL_EDITOR_REVIEW = `---
 name: 编辑审核 (Editor Review)
 summarys: ['本技能模拟毒舌编辑视角，对文本进行批判性审视，重点检查逻辑漏洞、爽点缺失、人设OOC、行文注水等男频网文常见问题。']
 tags: ["技能", "审核", "检查逻辑", "找出漏洞", "OOC", "人设OOC", "逻辑漏洞", "爽点缺失", "行文注水", "毒舌编辑"]
+category: 审核
 ---
 
 # 核心指令：毒舌编辑模式

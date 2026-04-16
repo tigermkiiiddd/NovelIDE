@@ -1,9 +1,10 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import VConsole from 'vconsole';
 import ErrorBoundary from './components/ErrorBoundary';
 import ProjectManager from './components/ProjectManager';
 import MainLayout from './components/MainLayout';
+import LoadingPage from './components/LoadingPage';
 import ToastContainer from './components/Toast';
 import { useProjectStore } from './stores/projectStore';
 import { useAgentStore } from './stores/agentStore';
@@ -24,6 +25,7 @@ if (typeof window !== 'undefined') {
 }
 
 export default function App() {
+  const [appReady, setAppReady] = useState(false);
   const currentProjectId = useProjectStore(state => state.currentProjectId);
   const selectProject = useProjectStore(state => state.selectProject);
   const loadProjects = useProjectStore(state => state.loadProjects);
@@ -42,6 +44,11 @@ export default function App() {
   const handleBack = async () => {
     await selectProject(null);
   };
+
+  // Loading phase: download embedding model + show progress
+  if (!appReady) {
+    return <LoadingPage onReady={() => setAppReady(true)} />;
+  }
 
   return (
     <ErrorBoundary>

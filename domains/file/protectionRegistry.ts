@@ -36,25 +36,44 @@ const matchPrefixInDir = (dirPath: string, prefix: string) =>
 // --- Rules (ordered by priority: most specific first) ---
 
 const RULES: ProtectionRule[] = [
-  // IMMUTABLE folders (system directories)
-  { level: ProtectionLevel.IMMUTABLE, match: matchExactFolder('98_技能配置') },
-  { level: ProtectionLevel.IMMUTABLE, match: matchExactFolder('99_创作规范') },
-  { level: ProtectionLevel.IMMUTABLE, match: matchExactFolder('subskill') },
+  // AUTO_REBUILD folders: 可删除，删除后自动恢复目录结构
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('98_技能配置') },
+  // DEPRECATED: 99_创作规范 protection removed — content migrating to memory palace + skills
+  // { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('99_创作规范') },
 
-  // AUTO_REBUILD: agent_core.md
-  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFile('agent_core.md') },
+  // AUTO_REBUILD: skills 根目录和分类子目录（可删除，自动恢复）
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('skills') },
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('核心') },
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('创作') },
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('规划') },
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('设计') },
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('审核') },
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFolder('补丁') },
 
-  // AUTO_REBUILD: subskill files (技能_*.md under 98_技能配置/subskill)
+  // AUTO_REBUILD: soul.md (用户可编辑，删除后从默认值重建)
+  { level: ProtectionLevel.AUTO_REBUILD, match: matchExactFile('soul.md') },
+
+  // AUTO_REBUILD: skill files under 98_技能配置/skills/*/ (技能_*.md)
   {
     level: ProtectionLevel.AUTO_REBUILD,
     match: (filePath: string, isFolder: boolean) =>
       !isFolder &&
-      filePath.startsWith('/98_技能配置/subskill/') &&
-      filePath.slice('/98_技能配置/subskill/'.length).startsWith('技能_'),
+      filePath.startsWith('/98_技能配置/skills/') &&
+      filePath.includes('技能_'),
   },
 
-  // AUTO_REBUILD: all files under 99_创作规范
-  { level: ProtectionLevel.AUTO_REBUILD, match: matchUnderDir('/99_创作规范') },
+  // AUTO_REBUILD: patch files under 98_技能配置/skills/补丁/
+  {
+    level: ProtectionLevel.AUTO_REBUILD,
+    match: (filePath: string, isFolder: boolean) =>
+      !isFolder &&
+      filePath.startsWith('/98_技能配置/skills/补丁/'),
+  },
+
+  // DEPRECATED: subskill folder kept as legacy reference (no protection)
+
+  // DEPRECATED: 99_创作规范 files no longer auto-rebuild — content migrating to skills
+  // { level: ProtectionLevel.AUTO_REBUILD, match: matchUnderDir('/99_创作规范') },
 
   // PERSISTENT: 长期记忆.json (any location)
   { level: ProtectionLevel.PERSISTENT, match: matchExactFile('长期记忆.json') },
@@ -68,7 +87,7 @@ const RULES: ProtectionRule[] = [
 
 /**
  * 获取文件/文件夹的保护等级
- * @param filePath 文件的完整路径（如 /98_技能配置/subskill/技能_大纲构建.md）
+ * @param filePath 文件的完整路径（如 /98_技能配置/skills/创作/技能_正文扩写.md）
  * @param isFolder 是否为文件夹
  */
 export function getProtectionLevel(filePath: string, isFolder: boolean): ProtectionLevel {

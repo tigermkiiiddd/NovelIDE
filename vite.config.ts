@@ -8,6 +8,10 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 6388,
         host: '0.0.0.0',
+        headers: {
+          'Cross-Origin-Opener-Policy': 'same-origin',
+          'Cross-Origin-Embedder-Policy': 'credentialless',
+        },
       },
       plugins: [react()],
       define: {
@@ -18,6 +22,9 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      optimizeDeps: {
+        exclude: ['@huggingface/transformers', 'onnxruntime-web'],
       },
       build: {
         rollupOptions: {

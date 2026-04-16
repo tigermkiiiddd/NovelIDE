@@ -4,7 +4,8 @@ import {
   PROJECT_PROFILE_TEMPLATE,
   STYLE_GUIDE_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
-  DEFAULT_AGENT_SKILL,
+  DEFAULT_SOUL,
+  DEFAULT_PROTOCOL,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
@@ -119,26 +120,40 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   const skillFolder = createFolder('98_技能配置', rootId);
   const rulesFolder = createFolder('99_创作规范', rootId);
 
-  // 新增 subskill 文件夹 (Inside skillFolder)
-  const subskillFolder = createFolder('subskill', skillFolder.id);
+  // --- skills/ 分类目录结构 (第一级 skill 管理) ---
+  const skillsFolder = createFolder('skills', skillFolder.id);
+  const coreCatFolder = createFolder('核心', skillsFolder.id);
+  const createCatFolder = createFolder('创作', skillsFolder.id);
+  const planCatFolder = createFolder('规划', skillsFolder.id);
+  const designCatFolder = createFolder('设计', skillsFolder.id);
+  const reviewCatFolder = createFolder('审核', skillsFolder.id);
+  const patchCatFolder = createFolder('补丁', skillsFolder.id);
 
-  // 技能文件映射（通用 + 题材分离）
-  // 通用技能 - 与题材无关，始终创建
-  const UNIVERSAL_SKILLS: Record<string, string> = {
-    '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+  // 技能文件映射 — 按分类组织
+  // 创作 skills
+  const CREATE_SKILLS: Record<string, string> = {
     '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
-    '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
     '技能_去AI化润色.md': SKILL_TEXT_POLISH,
-    '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+  };
+
+  // 规划 skills
+  const PLAN_SKILLS: Record<string, string> = {
+    '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+    '技能_世界观构建.md': SKILL_WORLD_BUILDER,
     '技能_项目初始化.md': SKILL_PROJECT_INIT,
   };
 
-  // 题材技能 - 根据预设选择性加载
-  const GENRE_SKILL_MAP: Record<string, string> = {
-    '技能_世界观构建.md': SKILL_WORLD_BUILDER,
+  // 设计 skills (通用骨架)
+  const DESIGN_SKILLS: Record<string, string> = {
     '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
     '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
     '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
+    '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+  };
+
+  // 审核 skills
+  const REVIEW_SKILLS: Record<string, string> = {
+    '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
   };
 
   // 基础文件列表
@@ -152,7 +167,13 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     inspirationFolder,
     draftFolder,
     skillFolder,
-    subskillFolder,
+    skillsFolder,
+    coreCatFolder,
+    createCatFolder,
+    planCatFolder,
+    designCatFolder,
+    reviewCatFolder,
+    patchCatFolder,
     rulesFolder,
 
     // --- 00-05 业务文件夹初始为空 (用户要求) ---
@@ -182,39 +203,41 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       version: 1,
     }, null, 2)),
 
-    // --- 98_技能配置 (Agent Skills) ---
-    createFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL),
+    // --- 98_技能配置/skills/核心/ (soul + protocol) ---
+    createFile('soul.md', coreCatFolder.id, DEFAULT_SOUL),
+    createFile('protocol.md', coreCatFolder.id, DEFAULT_PROTOCOL),
   ];
 
-  // --- Sub Skills (通用技能始终创建 + 题材技能根据预设加载) ---
-  // 始终创建通用技能
-  Object.entries(UNIVERSAL_SKILLS).forEach(([name, content]) => {
-    files.push(createFile(name, subskillFolder.id, content));
+  // --- 分类 Skill 创建 ---
+  // 创作 skills
+  Object.entries(CREATE_SKILLS).forEach(([name, content]) => {
+    files.push(createFile(name, createCatFolder.id, content));
   });
 
-  // 根据预设创建题材技能
-  if (preset && preset.skills.length > 0) {
-    // 使用预设指定的技能，标记 sourcePresetId
+  // 规划 skills
+  Object.entries(PLAN_SKILLS).forEach(([name, content]) => {
+    files.push(createFile(name, planCatFolder.id, content));
+  });
+
+  // 设计 skills (通用骨架)
+  Object.entries(DESIGN_SKILLS).forEach(([name, content]) => {
+    files.push(createFile(name, designCatFolder.id, content));
+  });
+
+  // 审核 skills
+  Object.entries(REVIEW_SKILLS).forEach(([name, content]) => {
+    files.push(createFile(name, reviewCatFolder.id, content));
+  });
+
+  // --- 题材补丁 (如果有预设且含 customSkills) ---
+  if (preset && preset.customSkills) {
     const pid = preset.id;
-    preset.skills.forEach(skillName => {
-      // 跳过通用技能（已创建）
-      if (UNIVERSAL_SKILLS[skillName]) return;
-      // 优先使用题材定制版本
-      const customContent = preset.customSkills?.[skillName];
-      const skillContent = customContent || GENRE_SKILL_MAP[skillName];
-      if (skillContent) {
-        files.push(createFile(skillName, subskillFolder.id, skillContent, { sourcePresetId: pid }));
-      }
-    });
-    // 爽点节奏管理技能始终加载
-    if (!preset.skills.includes('技能_爽点节奏管理.md')) {
-      const customRhythm = preset.customSkills?.['技能_爽点节奏管理.md'];
-      files.push(createFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER, { sourcePresetId: pid }));
-    }
-  } else {
-    // 默认加载全部题材技能
-    Object.entries(GENRE_SKILL_MAP).forEach(([name, content]) => {
-      files.push(createFile(name, subskillFolder.id, content));
+    // 题材定制 skill 以补丁形式存入 补丁/ 目录
+    Object.entries(preset.customSkills).forEach(([skillName, content]) => {
+      // 去掉 "技能_" 前缀，加题材名前缀作为补丁文件名
+      const baseName = skillName.replace('技能_', '').replace('.md', '');
+      const patchName = `${preset.genre || preset.id}_${baseName}.md`;
+      files.push(createFile(patchName, patchCatFolder.id, content, { sourcePresetId: pid }));
     });
   }
 

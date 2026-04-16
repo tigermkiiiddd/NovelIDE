@@ -79,16 +79,18 @@ The ReAct loop:
 `fileService.ts` contains:
 - System file protection logic (protected folders/files)
 - File tree building and validation
-- Protected folders: `98_技能配置`, `99_创作规范`, `subskill`
+- Protected folders: `98_技能配置` (IMMUTABLE), `skills/` category subdirs (IMMUTABLE)
+- Protected files: `protocol.md` (IMMUTABLE), `soul.md` (AUTO_REBUILD)
 - Protected prefixes: `技能_`, `指南_`, `模板_`
 
 ## Key Patterns
 
 ### System Prompt Construction (`services/resources/skills/coreProtocol.ts`)
-- `DEFAULT_AGENT_SKILL` - Core protocol defining agent behavior, prime directives, and workflow SOP
-- `PLAN_MODE_PROTOCOL` - Additional rules when Plan mode is active (restricts write operations)
-- `constructSystemPrompt()` - Assembles: agent protocol + plan mode + project context + todos + file tree
-- Lazy-loads sub-skills: only paths are injected; agent must `readFile` to activate
+- `DEFAULT_SOUL` - Agent identity, personality, user preferences (user-editable via `soul.md`)
+- `DEFAULT_PROTOCOL` - Tool rules, decision chains, workflow constraints (system-protected via `protocol.md`)
+- `constructSystemPrompt()` - Assembles: soul + protocol + project context + todos + file tree
+- Three-channel skill injection: code trigger, user text trigger (semantic-first), agent proactive (`activate_skill` tool)
+- Skills organized under `98_技能配置/skills/{核心,创作,规划,设计,审核,补丁}/`
 
 ### Persisting Store Pattern
 ```typescript

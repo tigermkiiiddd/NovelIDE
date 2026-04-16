@@ -3,7 +3,6 @@ import { useRef, useCallback, useMemo } from 'react';
 import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote } from '../../types';
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
-import { allTools, getToolsForMode } from '../../services/agent/tools/index';
 import { getAllToolsForLLM, handleSearchToolsCall } from '../../services/agent/tools/indexLazy';
 import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService';
 import { useAgentStore } from '../../stores/agentStore';
@@ -391,14 +390,64 @@ export const useAgentEngine = ({
         if (toolParts.length > 0) {
           await new Promise(resolve => setTimeout(resolve, 0));
 
-          // 并发执行所有工具调用
-          console.log(`[AgentEngine] 并发执行 ${toolParts.length} 个工具: [${toolParts.map((p: any) => p.functionCall.name).join(', ')}]`);
+          // --- 检测 final_answer：提取 answer 并终止循环 ---
+          const finalAnswerPart = toolParts.find((p: any) => p.functionCall.name === 'final_answer');
+          if (finalAnswerPart) {
+            const args = finalAnswerPart.functionCall.args || {};
+            const answerText = args.answer || textPart?.text || '';
+
+            // 如果 answer 非空，更新最后一条 model 消息为最终回复
+            if (answerText) {
+              const currentMsgs = useAgentStore.getState().sessions.find(s => s.id === currentSessionId)?.messages || [];
+              const lastModelMsg = [...currentMsgs].reverse().find(m => m.role === 'model');
+              if (lastModelMsg) {
+                editMessageContent(lastModelMsg.id, answerText);
+              }
+            }
+
+            console.log(`[AgentEngine-EXIT] final_answer 调用，状态: ${args.status}`);
+            keepGoing = false;
+
+            // 技能检测
+            const latestUserMsg = currentMessages.filter((m: any) => m.role === 'user').pop();
+            await detectSkillTriggers(latestUserMsg?.text || '', { files, triggerStore: useSkillTriggerStore.getState() });
+            continue;
+          }
+
+          // --- thinking 工具：只记录，不执行，不生成 UI 消息 ---
+          const thinkingParts = toolParts.filter((p: any) => p.functionCall.name === 'thinking');
+          const actionParts = toolParts.filter((p: any) => p.functionCall.name !== 'thinking');
+
+          // 为 thinking 工具生成静默的 function response
+          if (thinkingParts.length > 0) {
+            thinkingParts.forEach((tp: any) => {
+              console.log(`[AgentEngine] thinking: ${(tp.functionCall.args?.reasoning || '').slice(0, 200)}`);
+              // 静默回传 tool response（不显示在 UI）
+              addMessage({
+                id: generateId(),
+                role: 'system',
+                text: '',
+                rawParts: [{ functionResponse: { name: 'thinking', id: tp.functionCall.id, response: { result: 'ok' } } }],
+                isToolOutput: true,
+                timestamp: Date.now(),
+                skipInHistory: true,
+              });
+            });
+          }
+
+          // 如果只有 thinking 没有其他工具，继续循环
+          if (actionParts.length === 0) {
+            continue;
+          }
+
+          // 并发执行剩余工具调用
+          console.log(`[AgentEngine] 并发执行 ${actionParts.length} 个工具: [${actionParts.map((p: any) => p.functionCall.name).join(', ')}]`);
 
           // 为每个工具预先创建 UI 消息
-          const toolMsgIds: string[] = toolParts.map(() => generateId());
+          const toolMsgIds: string[] = actionParts.map(() => generateId());
 
           // 创建初始 UI 状态消息（全部先出现）
-          toolParts.forEach((toolPart: any, idx: number) => {
+          actionParts.forEach((toolPart: any, idx: number) => {
             const toolName = toolPart.functionCall.name;
             addMessage({
               id: toolMsgIds[idx],
@@ -412,7 +461,7 @@ export const useAgentEngine = ({
 
           // 并发执行所有工具
           const toolResults = await Promise.all(
-            toolParts.map(async (toolPart: any, idx: number) => {
+            actionParts.map(async (toolPart: any, idx: number) => {
               const toolMsgId = toolMsgIds[idx];
               let streamedLog = '';
               let hasError = false;

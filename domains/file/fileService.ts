@@ -14,10 +14,8 @@
 
 import { FileNode, FileType } from '../../types';
 import {
-  DEFAULT_AGENT_SKILL,
-  STYLE_GUIDE_TEMPLATE,
-  CHARACTER_CARD_TEMPLATE,
-  PROJECT_PROFILE_TEMPLATE,
+  DEFAULT_SOUL,
+  DEFAULT_PROTOCOL,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
@@ -34,7 +32,7 @@ import {
   SKILL_STRAND_WEAVE,
   SKILL_PROJECT_INIT
 } from '../../services/templates';
-import { getPresetById, PRESETS } from '../../services/resources/presets';
+import { getPresetById } from '../../services/resources/presets';
 import {
   ProtectionLevel,
   getProtectionLevel,
@@ -171,80 +169,73 @@ export class FileService {
     // 1. 确保 98_技能配置 文件夹
     const skillFolder = ensureFolder('98_技能配置', 'root');
 
-    // 2. 确保 agent_core.md 文件（使用 DEFAULT_AGENT_SKILL 常量）
-    ensureFile('agent_core.md', skillFolder.id, DEFAULT_AGENT_SKILL);
+    // 1.1 确保 skills/ 分类目录结构
+    const skillsFolder = ensureFolder('skills', skillFolder.id);
+    const coreCatFolder = ensureFolder('核心', skillsFolder.id);
+    const createCatFolder = ensureFolder('创作', skillsFolder.id);
+    const planCatFolder = ensureFolder('规划', skillsFolder.id);
+    const designCatFolder = ensureFolder('设计', skillsFolder.id);
+    const reviewCatFolder = ensureFolder('审核', skillsFolder.id);
+    const patchCatFolder = ensureFolder('补丁', skillsFolder.id);
 
-    // 3. 确保 99_创作规范 文件夹
-    const rulesFolder = ensureFolder('99_创作规范', 'root');
+    // 2. 确保 核心 skill: soul.md (protocol 由代码驱动，不存文件)
+    ensureFile('soul.md', coreCatFolder.id, DEFAULT_SOUL);
 
-    // 4. 确保创作规范文件（使用正确的模板常量）
-    // 文风规范：优先使用预设版本，标记 sourcePresetId
-    const styleGuide = preset?.styleGuide || STYLE_GUIDE_TEMPLATE;
-    ensureFile('指南_文风规范.md', rulesFolder.id, styleGuide, presetId ? { sourcePresetId: presetId } : undefined);
-    ensureFile('模板_项目档案.md', rulesFolder.id, PROJECT_PROFILE_TEMPLATE);
-    ensureFile('模板_角色档案.md', rulesFolder.id, CHARACTER_CARD_TEMPLATE);
+    // 3. 确保 99_创作规范 文件夹（仅保留目录，不创建模板文件）
+    ensureFolder('99_创作规范', 'root');
 
-    // 4.1 恢复预设特定模板到 99_创作规范，标记 sourcePresetId
-    if (preset && preset.templates) {
-      Object.entries(preset.templates).forEach(([fileName, content]) => {
-        ensureFile(fileName, rulesFolder.id, content, { sourcePresetId: presetId });
-      });
-    }
-
-    // 5. 确保 subskill 子文件夹
-    const subskillFolder = ensureFolder('subskill', skillFolder.id);
-
-    // 6. 技能文件映射（通用 + 题材分离）
-    // 通用技能 - 与题材无关，始终创建/恢复
-    const UNIVERSAL_SKILLS: Record<string, string> = {
-      '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+    // 4. 技能文件映射 — 按分类组织
+    // 创作 skills
+    const CREATE_SKILLS: Record<string, string> = {
       '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
-      '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
       '技能_去AI化润色.md': SKILL_TEXT_POLISH,
-      '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
-      // 写作技法 Skills
       '技能_对话写作.md': SKILL_DIALOGUE_WRITING,
       '技能_战斗场景.md': SKILL_COMBAT_SCENES,
       '技能_情绪渲染.md': SKILL_EMOTION_RENDERING,
       '技能_场景描写.md': SKILL_SCENE_DESCRIPTION,
+    };
+
+    // 规划 skills
+    const PLAN_SKILLS: Record<string, string> = {
+      '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+      '技能_世界观构建.md': SKILL_WORLD_BUILDER,
       '技能_线束编织.md': SKILL_STRAND_WEAVE,
       '技能_项目初始化.md': SKILL_PROJECT_INIT,
     };
 
-    // 题材技能 - 根据预设选择性加载
-    const GENRE_SKILL_MAP: Record<string, string> = {
-      '技能_世界观构建.md': SKILL_WORLD_BUILDER,
+    // 设计 skills (通用骨架)
+    const DESIGN_SKILLS: Record<string, string> = {
       '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
       '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
       '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
+      '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
     };
 
-    // 始终恢复通用技能
-    Object.entries(UNIVERSAL_SKILLS).forEach(([name, content]) => {
-      ensureFile(name, subskillFolder.id, content);
+    // 审核 skills
+    const REVIEW_SKILLS: Record<string, string> = {
+      '技能_编辑审核.md': SKILL_EDITOR_REVIEW,
+    };
+
+    // 恢复各分类 skills
+    Object.entries(CREATE_SKILLS).forEach(([name, content]) => {
+      ensureFile(name, createCatFolder.id, content);
+    });
+    Object.entries(PLAN_SKILLS).forEach(([name, content]) => {
+      ensureFile(name, planCatFolder.id, content);
+    });
+    Object.entries(DESIGN_SKILLS).forEach(([name, content]) => {
+      ensureFile(name, designCatFolder.id, content);
+    });
+    Object.entries(REVIEW_SKILLS).forEach(([name, content]) => {
+      ensureFile(name, reviewCatFolder.id, content);
     });
 
-    // 恢复题材技能
-    if (preset && preset.skills.length > 0) {
-      // 恢复预设指定的技能，优先使用定制版本，标记 sourcePresetId
-      preset.skills.forEach(skillName => {
-        // 跳过通用技能（已恢复）
-        if (UNIVERSAL_SKILLS[skillName]) return;
-        const customContent = preset.customSkills?.[skillName];
-        const skillContent = customContent || GENRE_SKILL_MAP[skillName];
-        if (skillContent) {
-          ensureFile(skillName, subskillFolder.id, skillContent, { sourcePresetId: presetId });
-        }
-      });
-      // 爽点节奏管理始终恢复
-      if (!preset.skills.includes('技能_爽点节奏管理.md')) {
-        const customRhythm = preset.customSkills?.['技能_爽点节奏管理.md'];
-        ensureFile('技能_爽点节奏管理.md', subskillFolder.id, customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER, { sourcePresetId: presetId });
-      }
-    } else {
-      // 无预设时恢复全部题材技能
-      Object.entries(GENRE_SKILL_MAP).forEach(([name, content]) => {
-        ensureFile(name, subskillFolder.id, content);
+    // 题材补丁恢复
+    if (preset && preset.customSkills) {
+      Object.entries(preset.customSkills).forEach(([skillName, content]) => {
+        const baseName = skillName.replace('技能_', '').replace('.md', '');
+        const patchName = `${preset.genre || preset.id}_${baseName}.md`;
+        ensureFile(patchName, patchCatFolder.id, content, { sourcePresetId: presetId });
       });
     }
 
@@ -284,8 +275,8 @@ export class FileService {
   }
 
   /**
-   * 切换题材预设 - 按 sourcePresetId 隐藏/显示文件，不修改内容
-   * 每个预设的同名文件是独立的 FileNode，切换只是隐藏/显示
+   * 切换题材预设 - 按 sourcePresetId 隐藏/显示补丁文件，不修改内容
+   * 通用 skill（创作/规划/设计/审核）始终可见，只有补丁文件随预设切换
    * @param files 当前文件列表
    * @param newPresetId 新的预设ID（undefined 表示无预设）
    */
@@ -295,21 +286,8 @@ export class FileService {
     const skillFolder = updatedFiles.find(
       f => f.name === '98_技能配置' && f.parentId === 'root' && f.type === FileType.FOLDER
     );
-    const rulesFolder = updatedFiles.find(
-      f => f.name === '99_创作规范' && f.parentId === 'root' && f.type === FileType.FOLDER
-    );
-    const subskillFolder = skillFolder
-      ? updatedFiles.find(f => f.name === 'subskill' && f.parentId === skillFolder.id && f.type === FileType.FOLDER)
-      : null;
 
-    if (!skillFolder || !rulesFolder || !subskillFolder) return updatedFiles;
-
-    const GENRE_SKILL_MAP: Record<string, string> = {
-      '技能_世界观构建.md': SKILL_WORLD_BUILDER,
-      '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
-      '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
-      '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
-    };
+    if (!skillFolder) return updatedFiles;
 
     // --- Step 1: 隐藏所有有 sourcePresetId 的题材文件 ---
     updatedFiles.forEach(f => {
@@ -318,138 +296,48 @@ export class FileService {
       }
     });
 
-    // --- Step 2: 隐藏旧版无 sourcePresetId 的题材文件（兼容旧数据） ---
-    const UNIVERSAL_SKILL_NAMES = new Set([
-      '技能_大纲构建.md', '技能_正文扩写.md', '技能_编辑审核.md',
-      '技能_去AI化润色.md', '技能_分层约束设计.md',
-      '技能_对话写作.md', '技能_战斗场景.md', '技能_情绪渲染.md',
-      '技能_场景描写.md', '技能_线束编织.md', '技能_项目初始化.md',
-    ]);
-    const UNIVERSAL_TEMPLATE_NAMES = new Set([
-      '模板_项目档案.md', '模板_角色档案.md',
-    ]);
-
-    // 收集所有预设中出现的题材文件名
-    const ALL_GENRE_NAMES = new Set<string>();
-    PRESETS.forEach(p => {
-      p.skills.forEach(s => { if (!UNIVERSAL_SKILL_NAMES.has(s)) ALL_GENRE_NAMES.add(s); });
-      Object.keys(p.templates).forEach(t => { if (!UNIVERSAL_TEMPLATE_NAMES.has(t)) ALL_GENRE_NAMES.add(t); });
-    });
-    ALL_GENRE_NAMES.add('指南_文风规范.md');
-
-    // 对无 sourcePresetId 的旧题材文件：打上旧预设标记并隐藏
-    updatedFiles.forEach(f => {
-      if (!f.sourcePresetId && f.hidden !== true) {
-        const inSubskill = f.parentId === subskillFolder.id && f.type === FileType.FILE;
-        const inRules = f.parentId === rulesFolder.id && f.type === FileType.FILE;
-        if ((inSubskill || inRules) && ALL_GENRE_NAMES.has(f.name)) {
-          f.hidden = true;
-          // 不打 sourcePresetId — 这些文件不属于任何新预设，是无预设状态的默认文件
-        }
-      }
-    });
-
-    // --- Step 3: 恢复/创建新预设的文件 ---
+    // --- Step 2: 恢复/创建新预设的补丁文件 ---
     if (newPresetId) {
       const newPreset = getPresetById(newPresetId);
       if (newPreset) {
-        // 3a. 取消隐藏匹配 sourcePresetId 的文件
+        // 2a. 取消隐藏匹配 sourcePresetId 的文件
         updatedFiles.forEach(f => {
           if (f.sourcePresetId === newPresetId) {
             f.hidden = false;
           }
         });
 
-        // 3b. 确保新预设的 subskill 文件存在（不存在则创建）
-        if (newPreset.skills.length > 0) {
-          newPreset.skills.forEach(skillName => {
-            if (UNIVERSAL_SKILL_NAMES.has(skillName)) return;
-            const exists = updatedFiles.find(
-              f => f.sourcePresetId === newPresetId && f.parentId === subskillFolder.id && f.name === skillName
-            );
-            if (!exists) {
-              const customContent = newPreset.customSkills?.[skillName];
-              const skillContent = customContent || GENRE_SKILL_MAP[skillName];
-              if (skillContent) {
+        // 2b. 确保新预设的补丁文件存在
+        if (newPreset.customSkills) {
+          const skillsFolder = updatedFiles.find(
+            f => f.name === 'skills' && f.parentId === skillFolder.id && f.type === FileType.FOLDER
+          );
+          const patchFolder = skillsFolder
+            ? updatedFiles.find(f => f.name === '补丁' && f.parentId === skillsFolder.id && f.type === FileType.FOLDER)
+            : null;
+
+          if (patchFolder) {
+            Object.entries(newPreset.customSkills).forEach(([skillName, content]) => {
+              const baseName = skillName.replace('技能_', '').replace('.md', '');
+              const patchName = `${newPreset.genre || newPreset.id}_${baseName}.md`;
+              const exists = updatedFiles.find(
+                f => f.sourcePresetId === newPresetId && f.parentId === patchFolder.id && f.name === patchName
+              );
+              if (!exists) {
                 updatedFiles.push({
                   id: this.generateId(),
-                  parentId: subskillFolder.id,
-                  name: skillName,
+                  parentId: patchFolder.id,
+                  name: patchName,
                   type: FileType.FILE,
-                  content: skillContent,
+                  content,
                   lastModified: Date.now(),
                   sourcePresetId: newPresetId,
                 });
               }
-            }
-          });
-          // 爽点节奏管理始终确保
-          if (!newPreset.skills.includes('技能_爽点节奏管理.md')) {
-            const exists = updatedFiles.find(
-              f => f.sourcePresetId === newPresetId && f.parentId === subskillFolder.id && f.name === '技能_爽点节奏管理.md'
-            );
-            if (!exists) {
-              const customRhythm = newPreset.customSkills?.['技能_爽点节奏管理.md'];
-              updatedFiles.push({
-                id: this.generateId(),
-                parentId: subskillFolder.id,
-                name: '技能_爽点节奏管理.md',
-                type: FileType.FILE,
-                content: customRhythm || SKILL_PLEASURE_RHYTHM_MANAGER,
-                lastModified: Date.now(),
-                sourcePresetId: newPresetId,
-              });
-            }
+            });
           }
-        }
-
-        // 3c. 确保新预设的模板文件存在
-        if (newPreset.templates) {
-          Object.entries(newPreset.templates).forEach(([fileName, content]) => {
-            const exists = updatedFiles.find(
-              f => f.sourcePresetId === newPresetId && f.parentId === rulesFolder.id && f.name === fileName
-            );
-            if (!exists) {
-              updatedFiles.push({
-                id: this.generateId(),
-                parentId: rulesFolder.id,
-                name: fileName,
-                type: FileType.FILE,
-                content,
-                lastModified: Date.now(),
-                sourcePresetId: newPresetId,
-              });
-            }
-          });
-        }
-
-        // 3d. 确保新预设的文风规范存在
-        const styleExists = updatedFiles.find(
-          f => f.sourcePresetId === newPresetId && f.parentId === rulesFolder.id && f.name === '指南_文风规范.md'
-        );
-        if (!styleExists) {
-          updatedFiles.push({
-            id: this.generateId(),
-            parentId: rulesFolder.id,
-            name: '指南_文风规范.md',
-            type: FileType.FILE,
-            content: newPreset.styleGuide || STYLE_GUIDE_TEMPLATE,
-            lastModified: Date.now(),
-            sourcePresetId: newPresetId,
-          });
         }
       }
-    } else {
-      // 无预设：取消隐藏无 sourcePresetId 的旧题材文件
-      updatedFiles.forEach(f => {
-        if (!f.sourcePresetId && f.hidden && ALL_GENRE_NAMES.has(f.name)) {
-          const inSubskill = f.parentId === subskillFolder.id && f.type === FileType.FILE;
-          const inRules = f.parentId === rulesFolder.id && f.type === FileType.FILE;
-          if (inSubskill || inRules) {
-            f.hidden = false;
-          }
-        }
-      });
     }
 
     return updatedFiles;

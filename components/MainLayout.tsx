@@ -154,6 +154,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
       readFile,
       searchFiles,
       listFiles,
+      globFiles,
+      grepFiles,
       renameFile
   } = useFileStore(
     useShallow(state => ({
@@ -166,6 +168,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         readFile: state.readFile,
         searchFiles: state.searchFiles,
         listFiles: state.listFiles,
+        globFiles: state.globFiles,
+        grepFiles: state.grepFiles,
         renameFile: state.renameFile
     }))
   );
@@ -213,6 +217,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
   } = useAgent(files, currentProject, activeFile, {
       createFile, updateFile, patchFile, readFile, searchFiles, listFiles, renameFile,
       deleteFile,
+      globFiles, grepFiles,
       updateProjectMeta: handleAgentUpdateProject
   });
 

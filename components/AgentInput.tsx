@@ -24,6 +24,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   const [cursorPos, setCursorPos] = useState(0);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+  const [memoryExpanded, setMemoryExpanded] = useState(false);
 
   // 获取当前激活的技能（订阅 records 变化）
   const records = useSkillTriggerStore(state => state.records);
@@ -55,7 +56,44 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
       .filter(Boolean)
       .map(n => ({ id: n!.id, name: n!.name }));
 
-    return { recalledDisplay, residentDisplay };
+    // 活跃文档 = 对话中 readFile 过、且未衰减的文件
+    const messages = session?.messages || [];
+    // readFile 的 content 维度衰减 8 轮后 args 被清空，AI 实质不再持有文件内容
+    const READFILE_CONTENT_DECAY = 8;
+    // 从后往前计算轮次
+    let roundCounter = 0;
+    const roundsMap = new Map<string, number>();
+    for (let i = messages.length - 1; i >= 0; i--) {
+      roundsMap.set(messages[i].id, roundCounter);
+      if (messages[i].role === 'user' || messages[i].role === 'model') roundCounter++;
+    }
+    // 收集未衰减的 readFile 路径（去重，保留最近的）
+    const seenPaths = new Set<string>();
+    const activeFiles: Array<{ path: string; name: string }> = [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      const rounds = roundsMap.get(msg.id) ?? 0;
+      if (rounds >= READFILE_CONTENT_DECAY) continue;
+      // 从 rawParts 中提取 readFile 调用
+      if (msg.rawParts) {
+        for (const part of msg.rawParts) {
+          if ('functionCall' in part && part.functionCall.name === 'readFile') {
+            const args = typeof part.functionCall.args === 'string'
+              ? JSON.parse(part.functionCall.args)
+              : part.functionCall.args;
+            const filePath = args?.path as string;
+            if (filePath && !seenPaths.has(filePath)) {
+              seenPaths.add(filePath);
+              const fileName = filePath.split('/').pop() || filePath;
+              activeFiles.push({ path: filePath, name: fileName });
+            }
+          }
+        }
+      }
+    }
+    activeFiles.reverse(); // 恢复时间正序
+
+    return { recalledDisplay, residentDisplay, activeFiles };
   }, [sessions, currentSessionId, allNodes, stackLayers]);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -307,39 +345,60 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
             </div>
         )}
 
-        {/* 记忆显示（常驻 + 召回） */}
-        {(knowledgeState.residentDisplay.length > 0 || knowledgeState.recalledDisplay.length > 0) && (
-            <div className="mb-2 flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-400 flex items-center gap-1">
+        {/* 记忆 + 活跃文档，默认折叠只显示数量 */}
+        {(knowledgeState.residentDisplay.length > 0 || knowledgeState.recalledDisplay.length > 0 || knowledgeState.activeFiles.length > 0) && (
+            <div className="mb-2">
+                <button
+                    onClick={() => setMemoryExpanded(prev => !prev)}
+                    className="text-xs text-gray-400 flex items-center gap-1 hover:text-gray-300 transition-colors"
+                >
                     <Brain size={12} className="text-cyan-400" />
-                    记忆：
-                </span>
-                {knowledgeState.residentDisplay.map(node => (
-                    <span
-                        key={node.id}
-                        className="text-xs px-2 py-0.5 pr-1 bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30 flex items-center gap-1"
-                    >
-                        <span>{node.name}</span>
-                        <button
-                            onClick={() => useAgentStore.getState().addHiddenKnowledgeNode(node.id)}
-                            className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
-                            title="本次对话隐藏"
-                        >×</button>
-                    </span>
-                ))}
-                {knowledgeState.recalledDisplay.map(node => (
-                    <span
-                        key={node.id}
-                        className="text-xs px-2 py-0.5 pr-1 bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30 flex items-center gap-1"
-                    >
-                        <span>{node.name}</span>
-                        <button
-                            onClick={() => useAgentStore.getState().removeRecalledKnowledgeNode(node.id)}
-                            className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
-                            title="关闭"
-                        >×</button>
-                    </span>
-                ))}
+                    记忆：{knowledgeState.residentDisplay.length + knowledgeState.recalledDisplay.length} 条
+                    {knowledgeState.activeFiles.length > 0 && (
+                      <span className="text-gray-500">· 文档：{knowledgeState.activeFiles.length} 个</span>
+                    )}
+                    <span className={`transition-transform ${memoryExpanded ? 'rotate-90' : ''}`}>▸</span>
+                </button>
+                {memoryExpanded && (
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                        {knowledgeState.residentDisplay.map(node => (
+                            <span
+                                key={node.id}
+                                className="text-xs px-2 py-0.5 pr-1 bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30 flex items-center gap-1"
+                            >
+                                <span>{node.name}</span>
+                                <button
+                                    onClick={() => useAgentStore.getState().addHiddenKnowledgeNode(node.id)}
+                                    className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
+                                    title="本次对话隐藏"
+                                >×</button>
+                            </span>
+                        ))}
+                        {knowledgeState.recalledDisplay.map(node => (
+                            <span
+                                key={node.id}
+                                className="text-xs px-2 py-0.5 pr-1 bg-cyan-500/20 text-cyan-300 rounded-full border border-cyan-500/30 flex items-center gap-1"
+                            >
+                                <span>{node.name}</span>
+                                <button
+                                    onClick={() => useAgentStore.getState().removeRecalledKnowledgeNode(node.id)}
+                                    className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
+                                    title="关闭"
+                                >×</button>
+                            </span>
+                        ))}
+                        {knowledgeState.activeFiles.map(f => (
+                            <span
+                                key={f.path}
+                                className="text-xs px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30 flex items-center gap-1"
+                                title={f.path}
+                            >
+                                <FileText size={10} className="shrink-0" />
+                                <span>{f.name}</span>
+                            </span>
+                        ))}
+                    </div>
+                )}
             </div>
         )}
 

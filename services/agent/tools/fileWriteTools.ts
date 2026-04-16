@@ -1,17 +1,13 @@
 
 import { ToolDefinition } from '../types';
 
-export const createFileTool: ToolDefinition = {
+export const writeFileTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'createFile',
-    description: `Create a new markdown file with content at a specific path. [WRITE TOOL]
+    name: 'write',
+    description: `Create or overwrite a file. If the file exists, it is replaced entirely.
 
-⚠️ IMPORTANT: This tool can ONLY create NEW files. If the file already exists, this tool will fail with a conflict error. To update an existing file, use \`updateFile\` or \`patchFile\` instead.
-
-⚠️ CRITICAL: All markdown files MUST start with YAML frontmatter metadata.
-
-General format (all files):
+All markdown files MUST start with YAML frontmatter:
 \`\`\`
 ---
 summarys: ["一句话摘要"]
@@ -19,193 +15,90 @@ tags: ["标签1", "标签2"]
 ---
 \`\`\`
 
-Draft format (05_正文草稿/ files ONLY) — must add characters field:
+Files in 05_正文草稿/ must also include a characters field:
 \`\`\`
 ---
 summarys: ["本章剧情摘要"]
 tags: ["正文", "第X卷", "第X章"]
 characters: ["角色A", "角色B"]
 ---
-\`\`\`
-
-Skipping the frontmatter is NOT allowed.`,
+\`\`\``,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么要创建这个文件？是否符合命名规范？是否包含了必需的 metadata 头部？' },
-        path: { type: 'string', description: 'The FULL PATH including folder and extension (e.g., "03_剧情大纲/第一章_细纲.md"). The folder must exist.' },
-        content: { type: 'string', description: 'The COMPLETE content of the file. MUST start with YAML frontmatter metadata (---\\nsummarys: [...]\\ntags: [...]\\n---) followed by the actual content.' }
+        path: { type: 'string', description: 'Full file path (e.g., "05_正文草稿/chapter1.md"). Folder must exist.' },
+        content: { type: 'string', description: 'Complete file content including frontmatter. Must not use "..." or omit existing content when overwriting.' },
       },
-      required: ['thinking', 'path', 'content']
-    }
-  }
-};
-
-export const updateFileTool: ToolDefinition = {
-  type: 'function',
-  function: {
-    name: 'updateFile',
-    description: `⚠️ DANGER: Overwrite the ENTIRE content of an existing file.
-
-【仅限以下场景使用】
-- 完全重写整个文件（文件必须已存在）
-- 文件内容极短（<10行）不值得精准定位
-
-【禁止场景】
-- ❌ 创建新文件 → 必须使用 createFile
-- ❌ 只修改部分内容 → 用 patchFile
-- ❌ 使用省略号 "...", "// ...", "<!-- unchanged -->" → 这些会导致数据丢失
-
-【文件不存在时的行为】
-如果文件不存在，工具将返回错误并拒绝执行。此时应使用 createFile 工具。
-
-[CRITICAL WARNING]: This tool REPLACES the file completely. You MUST provide the FULL file content.
-[WRITE TOOL]`,
-    parameters: {
-      type: 'object',
-      properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么必须用 updateFile 而不是 patchFile？确认你有完整内容且无省略。' },
-        path: { type: 'string', description: 'The FULL PATH of the file to update (e.g., "05_正文草稿/chapter1.md").' },
-        content: {
-          type: 'string',
-          description: 'The COMPLETE, BYTE-FOR-BYTE content of the file. DO NOT OMIT ANYTHING. DO NOT USE "...". If you omit lines, they are deleted. If the file is large, prefer `patchFile`.'
-        }
-      },
-      required: ['thinking', 'path', 'content']
-    }
-  }
+      required: ['path', 'content'],
+    },
+  },
 };
 
 export const patchFileTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'patchFile',
-    description: `修改已有文件，支持一次修改多处。
-
-【前置条件】
-- 文件必须已存在。如果文件不存在，工具将返回错误，此时应使用 createFile。
-
-【🔥 核心原则：打包修改】
-- **同一文件有多处修改？全部打包到一个 patchFile 调用！**
-- 每批最多 10 个 edits，超过则分多次调用
-- 只有一处修改时，正常传入单个 edit 即可
-
-【"精确匹配"是什么意思？】
-- 指 oldContent 必须**精确复制**原文（空格、换行、标点完全一致）
-- **不是说只能改一处！** 多处修改请打包到 edits 数组
-
-【三种操作模式】
-
-📌 **single** - 单点替换
-- oldContent 在文件中只能匹配一处，多处匹配会报错
-- 需要：oldContent, newContent
-
-📌 **global** - 全局替换
-- 替换所有匹配项
-- 需要：oldContent, newContent
-
-📌 **insert** - 插入内容
-- after="某内容" 在其后插入，after="" 在文件末尾插入
-- before="某内容" 在其前插入
-- 需要：after 或 before, newContent
-
-【示例 - 批量修改同一文件】
-
-\`\`\`json
-{
-  "path": "05_正文草稿/chapter1.md",
-  "edits": [
-    { "mode": "single", "oldContent": "*去死吧！*", "newContent": "*去死吧，怪物！*" },
-    { "mode": "single", "oldContent": "*怪物……*", "newContent": "*还能站起来……*" },
-    { "mode": "global", "oldContent": "景天", "newContent": "景田" },
-    { "mode": "insert", "after": "第一章结束", "newContent": "\\n\\n第二章开始" }
-  ]
-}
-\`\`\`
-
-【关键规则】
-- oldContent 必须**精确复制**原文（空格、换行、标点完全一致）
-- 多处修改打包到一个调用，减少审批次数
-- 每批最多 10 个 edits
-
-[WRITE TOOL]`,
+    name: 'edit',
+    description: 'Perform string replacements on an existing file. Supports batch edits (up to 10 per call). File must exist.',
     parameters: {
       type: 'object',
       properties: {
-        thinking: {
-          type: 'string',
-          description: '思考过程(用中文):(1) 我要对这个文件做几处修改？(2) 是否有多个修改需要打包？(3) 每个 oldContent 是否精确复制自原文？'
-        },
-        path: {
-          type: 'string',
-          description: 'The FULL PATH of the file to patch.'
-        },
+        path: { type: 'string', description: 'Full file path.' },
         edits: {
           type: 'array',
-          description: '修改列表。多处修改打包到一个数组，单处修改正常传入即可。每批最多10个。',
+          description: 'Array of edits. Multiple edits on the same file should be batched into one call.',
           items: {
             type: 'object',
             properties: {
+              oldContent: { type: 'string', description: 'Exact text to find (must be unique in file unless using global mode).' },
+              newContent: { type: 'string', description: 'Replacement text.' },
               mode: {
                 type: 'string',
                 enum: ['single', 'global', 'insert'],
-                description: '操作模式：single=单点替换, global=全局替换, insert=插入'
+                description: 'single: replace one match (fails if multiple). global: replace all matches. insert: insert newContent after/before a marker.',
               },
-              oldContent: {
-                type: 'string',
-                description: '[single/global] 要查找的原始内容（必须精确匹配）'
-              },
-              after: {
-                type: 'string',
-                description: '[insert] 在此内容之后插入。空字符串=文件末尾'
-              },
-              before: {
-                type: 'string',
-                description: '[insert] 在此内容之前插入'
-              },
-              newContent: {
-                type: 'string',
-                description: '新内容/插入内容'
-              }
+              after: { type: 'string', description: '[insert mode] Insert after this text. Empty string = end of file.' },
+              before: { type: 'string', description: '[insert mode] Insert before this text.' },
             },
-            required: ['mode', 'newContent']
-          }
-        }
+            required: ['mode', 'newContent'],
+          },
+        },
       },
-      required: ['thinking', 'path', 'edits']
-    }
-  }
+      required: ['path', 'edits'],
+    },
+  },
 };
 
 export const renameFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'renameFile',
-    description: 'Rename a file. Currently only supports renaming the filename, not moving folders. [WRITE TOOL]',
+    description: 'Rename a file (filename only, no folder moves).',
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么需要重命名？' },
-        oldPath: { type: 'string', description: 'The current full path (e.g. "05_正文草稿/old.md")' },
-        newName: { type: 'string', description: 'The new FILENAME only (e.g. "new.md")' }
+        oldPath: { type: 'string', description: 'Current full path (e.g., "05_正文草稿/old.md")' },
+        newName: { type: 'string', description: 'New filename only (e.g., "new.md")' },
       },
-      required: ['thinking', 'oldPath', 'newName']
-    }
-  }
+      required: ['oldPath', 'newName'],
+    },
+  },
 };
 
 export const deleteFileTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'deleteFile',
-    description: 'Delete a file or folder. [WRITE TOOL]',
+    description: 'Delete a file or folder.',
     parameters: {
       type: 'object',
-      properties: { 
-        thinking: { type: 'string', description: '思考过程(用中文):为什么必须删除这个文件？安全吗？' },
-        path: { type: 'string', description: 'The full path of the file or folder to delete.' } 
+      properties: {
+        path: { type: 'string', description: 'Full path of file or folder to delete.' },
       },
-      required: ['thinking', 'path']
-    }
-  }
+      required: ['path'],
+    },
+  },
 };
+
+// Legacy aliases
+export const createFileTool = writeFileTool;
+export const updateFileTool = writeFileTool;

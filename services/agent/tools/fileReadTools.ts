@@ -3,69 +3,97 @@ import { useFileStore } from '../../../stores/fileStore';
 import { FileType, FileNode } from '../../../types';
 import { ToolDefinition } from '../types';
 
-export const listFilesTool: ToolDefinition = {
+export const globTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'listFiles',
-    description: 'List the entire project file structure. [DO NOT USE FOR CHITCHAT OR GREETINGS]. Only use this when the user explicitly asks about project structure, or when you need to find a file path to execute a specific task.',
-    parameters: { 
-      type: 'object', 
+    name: 'glob',
+    description: 'Find files by name/path pattern. Supports * and ** wildcards. Returns matching file paths with metadata.',
+    parameters: {
+      type: 'object',
       properties: {
-          thinking: { type: 'string', description: '思考过程(用中文):为什么现在需要列出文件？你在寻找什么？' }
+        pattern: {
+          type: 'string',
+          description: 'Glob pattern to match files. Examples: "02_角色档案/*.md", "05_正文草稿/**/*.md", "*大纲*", "**/*.json". Use "*" for any filename, "**" for recursive.',
+        },
+        path: {
+          type: 'string',
+          description: 'Optional directory to search in (e.g., "02_角色档案"). Defaults to root.',
+        },
+        head_limit: {
+          type: 'integer',
+          description: 'Max results to return. Default: unlimited.',
+        },
       },
-      required: ['thinking']
-    }
-  }
+      required: ['pattern'],
+    },
+  },
 };
 
 export const readFileTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'readFile',
-    description: `Read the content of a specific file. [READ TOOL]
-
-【🔥 读取策略】
-- **默认读取 300 行** - 大多数文件都不超过 300 行，直接调用即可读完全部内容
-- **只有超长文件才需要分块** - 如果文件 > 300 行，才使用 startLine/endLine 分块读取
-- **不要零碎读取！** - 每次只读几十行是浪费调用，应该一次读取更多
-
-【输出格式】"LineNum | Content"，行号用于 patchFile 工具
-
-【示例】
-- 文件 < 300 行 → \`readFile({ path: "01_世界观/xxx.md" })\` 一次读完
-- 文件 > 300 行 → 先读 1-300，再读 301-600...
-
-⚠️ 角色文件自动注入：当读取 02_角色档案 目录下的角色文件时，系统会自动在文件内容后追加【角色动态状态】`,
+    name: 'read',
+    description: `Read file content with line numbers. Default: first 300 lines. Use startLine/endLine to paginate.
+Files under 02_角色档案/ auto-append character dynamic status.`,
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):(1) 这个文件大概多长？(2) 是否需要分块读取？(3) 我期望获取什么信息？' },
-        path: { type: 'string', description: 'The FULL PATH of the file (e.g., "05_正文草稿/chapter1.md"). Do not use just the filename.' },
-        startLine: { type: 'integer', description: 'Start line number (default 1). Only use for files > 300 lines.' },
-        endLine: { type: 'integer', description: 'End line number. Defaults to startLine + 299 (reading 300 lines). Only use for files > 300 lines.' }
+        path: { type: 'string', description: 'Full file path (e.g., "05_正文草稿/chapter1.md")' },
+        startLine: { type: 'integer', description: 'Start line (1-based). Default: 1.' },
+        endLine: { type: 'integer', description: 'End line. Default: startLine + 299.' },
       },
-      required: ['thinking', 'path']
-    }
-  }
+      required: ['path'],
+    },
+  },
 };
 
-export const searchFilesTool: ToolDefinition = {
+export const grepTool: ToolDefinition = {
   type: 'function',
   function: {
-    name: 'searchFiles',
-    description: `Search for files by name or content keywords. [READ TOOL]
-
-【尽职调查原则】如果搜索返回多个文件，你**必须逐一阅读所有文件**，不能只读一个就下结论。
-- 搜索返回 N 个文件 → 必须阅读所有 N 个文件
-- 阅读时发现引用其他文件 → 继续追查
-- 只有阅读完所有相关文件后，才能形成结论`,
+    name: 'grep',
+    description: 'Search file contents by pattern. Supports regex, glob file filtering, and multiple output modes.',
     parameters: {
       type: 'object',
       properties: {
-        thinking: { type: 'string', description: '思考过程(用中文):为什么要搜索？选择了哪些关键词？你打算如何处理多个搜索结果？' },
-        query: { type: 'string', description: 'The search keyword (e.g., "李逍遥", "细纲").' }
+        pattern: {
+          type: 'string',
+          description: 'Regex pattern. Examples: "李逍遥", "魔法体系", "伏笔.*回收"',
+        },
+        path: {
+          type: 'string',
+          description: 'Directory to search in (e.g., "05_正文草稿"). Default: all files.',
+        },
+        glob: {
+          type: 'string',
+          description: 'Glob filter for file names (e.g., "*.md", "02_角色档案/*"). Only search matching files.',
+        },
+        output_mode: {
+          type: 'string',
+          enum: ['content', 'files_with_matches', 'count'],
+          description: 'content: matching lines with context (default). files_with_matches: file paths only. count: match count per file.',
+        },
+        context: {
+          type: 'integer',
+          description: 'Context lines around each match (content mode only). Default: 2.',
+        },
+        head_limit: {
+          type: 'integer',
+          description: 'Max results to return. Default: unlimited. Use to prevent context explosion on broad searches.',
+        },
+        ignoreCase: {
+          type: 'boolean',
+          description: 'Case-insensitive search. Default: true.',
+        },
+        multiline: {
+          type: 'boolean',
+          description: 'Allow patterns to match across newlines (e.g., "```[\\s\\S]*?```"). Default: false.',
+        },
       },
-      required: ['thinking', 'query']
-    }
-  }
+      required: ['pattern'],
+    },
+  },
 };
+
+// Legacy aliases for backward compat (toolRunner switch-case)
+export const listFilesTool = globTool;
+export const searchFilesTool = grepTool;

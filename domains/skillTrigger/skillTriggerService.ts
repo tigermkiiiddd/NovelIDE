@@ -1,73 +1,123 @@
 /**
  * 技能触发服务 - 纯函数模块
- * 提供 Fuse.js 模糊匹配 + 语义匹配和检测逻辑
+ * 三通道 skill 触发：
+ *   1. 用户文本触发（分类过滤 → 语义优先 → 关键词 fallback）
+ *   2. 代码检测触发（由 toolRunner hook 调用）
+ *   3. Agent 主动搜索（通过 activate_skill 工具）
  */
 
 import Fuse from 'fuse.js';
 import type { FileNode } from '../../types';
+import { FileType } from '../../types';
 import type { SkillTriggerRecord } from '../../stores/skillTriggerStore';
 import type { ActivationNotification } from '../../stores/skillTriggerStore';
 import { lifecycleManager } from '../agentContext/toolLifecycle';
 import { generateEmbedding, cosineSimilarity } from '../memory/embeddingService';
 
-/**
- * 反提示词：包含以下关键字时不触发技能加载
- * 主要针对"查询/读取"类操作，避免干扰正常的知识检索流程
- */
-const SUPPRESSION_KEYWORDS = [
-  '查询', '搜索', '找找', '查看',
-  '有什么', '都有哪些', '能说说', '介绍一下',
-  '大纲', '章节', '目录', '看看', '了解一下', '帮我找',
+// ==================== 意图分类 ====================
+
+/** 意图 → 候选 category 映射 */
+const INTENT_CATEGORY_MAP: Record<string, string[]> = {
+  '写': ['创作'],
+  '扩写': ['创作'],
+  '展开': ['创作'],
+  '润色': ['创作'],
+  '改写': ['创作', '审核'],
+  '重写': ['创作'],
+  '描写': ['创作'],
+  '对话': ['创作'],
+  '打斗': ['创作'],
+  '战斗': ['创作'],
+  '情绪': ['创作'],
+  '场景': ['创作'],
+  '规划': ['规划'],
+  '大纲': ['规划'],
+  '设计': ['设计'],
+  '构思': ['规划', '设计'],
+  '角色': ['设计'],
+  '人设': ['设计'],
+  '设定': ['规划'],
+  '世界观': ['规划'],
+  '审核': ['审核'],
+  '检查': ['审核'],
+  '修改': ['创作', '审核'],
+  '创建': ['规划', '设计'],
+  '生成': ['创作'],
+};
+
+/** 纯查询类意图 → 不触发 */
+const QUERY_INTENT_KEYWORDS = [
+  '查询', '搜索', '找找', '查看', '有什么', '都有哪些',
+  '能说说', '介绍一下', '看看', '了解一下', '帮我找', '读一下',
 ];
 
-/**
- * 正向触发词：必须包含以下动作关键字才能触发技能加载
- * 只针对"写入/设计/创建"类操作
- */
-const POSITIVE_TRIGGER_KEYWORDS = [
-  '写', '创作', '设计', '构建', '规划', '构思',
-  '增加', '新增', '添加', '修改', '改写', '重写',
-  '生成', '创建', '规划', '策划', '布局',
-  '塑造', '设定', '刻画', '描写',
-];
-
-/**
- * 检查文本是否命中反提示词
- */
-function containsSuppressionKeyword(text: string): boolean {
-  if (!text) return false;
+/** 从用户文本推断候选分类 */
+function classifyIntent(text: string): { categories: string[]; isQuery: boolean } {
   const lower = text.toLowerCase();
-  return SUPPRESSION_KEYWORDS.some(kw => lower.includes(kw));
+
+  // 纯查询意图
+  if (QUERY_INTENT_KEYWORDS.some(kw => lower.includes(kw))) {
+    return { categories: [], isQuery: true };
+  }
+
+  const categories = new Set<string>();
+  for (const [keyword, cats] of Object.entries(INTENT_CATEGORY_MAP)) {
+    if (lower.includes(keyword)) {
+      cats.forEach(c => categories.add(c));
+    }
+  }
+
+  return { categories: [...categories], isQuery: false };
 }
 
-/**
- * 检查文本是否命中正向触发词
- */
-function containsPositiveTriggerKeyword(text: string): boolean {
-  if (!text) return false;
-  const lower = text.toLowerCase();
-  return POSITIVE_TRIGGER_KEYWORDS.some(kw => lower.includes(kw));
+// ==================== Skill 文件收集 ====================
+
+/** 从文件树中收集所有 skill 文件（按分类过滤） */
+function collectSkillFiles(
+  files: FileNode[],
+  categoryFilter?: string[]
+): Array<{ file: FileNode; category: string }> {
+  const skillFolder = files.find(f => f.name === '98_技能配置');
+  const skillsFolder = skillFolder
+    ? files.find(f => f.parentId === skillFolder.id && f.name === 'skills' && f.type === FileType.FOLDER)
+    : null;
+
+  if (!skillsFolder) return [];
+
+  const categoryFolders = files.filter(
+    f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER
+  );
+
+  const results: Array<{ file: FileNode; category: string }> = [];
+  for (const catFolder of categoryFolders) {
+    // 跳过核心目录（始终注入，不参与触发）
+    if (catFolder.name === '核心') continue;
+
+    // 分类过滤
+    if (categoryFilter && categoryFilter.length > 0 && !categoryFilter.includes(catFolder.name)) continue;
+
+    const skillFiles = files.filter(
+      f => f.parentId === catFolder.id && f.type === 'FILE' && !f.hidden
+    );
+    for (const sf of skillFiles) {
+      results.push({ file: sf, category: catFolder.name });
+    }
+  }
+
+  return results;
 }
 
-/**
- * 对一段文本进行多关键字模糊匹配
- * @param text 待检测文本（用户输入 + thinking）
- * @param keywords tags + summarys 拼接后的关键词列表
- * @returns 是否命中任意一个关键词
- */
+// ==================== 关键词匹配（fallback） ====================
+
 export function matchKeywords(text: string, keywords: string[]): boolean {
   if (!text || text.trim().length === 0) return false;
   if (!keywords || keywords.length === 0) return false;
 
-  // 直接字符串包含匹配（最严格，优先命中）
   const lowerText = text.toLowerCase();
   for (const kw of keywords) {
-    if (kw && lowerText.includes(kw.toLowerCase())) {
-      return true;
-    }
+    if (kw && lowerText.includes(kw.toLowerCase())) return true;
   }
 
-  // Fuse.js 模糊匹配（宽松匹配）
   const items = keywords
     .filter(kw => kw && kw.trim().length > 0)
     .map(kw => ({ text: kw, keyword: kw }));
@@ -76,53 +126,30 @@ export function matchKeywords(text: string, keywords: string[]): boolean {
 
   const fuse = new Fuse(items, { includeScore: true, threshold: 0.4, keys: ['text'] });
   const results = fuse.search(text);
-
   return results.length > 0 && (results[0].score ?? 0) < 0.4;
 }
 
-/**
- * 构建技能的匹配文本
- * @param tags 原始 tags 数组
- * @param summarys 原始 summarys 数组
- * @returns 拼接后的匹配文本
- */
 export function buildMatchText(tags: string[], summarys: string[]): string {
   const parts: string[] = [];
-
-  // tags 作为高权重触发词
-  if (tags) {
-    parts.push(...tags);
-  }
-
-  // summarys 提供更丰富的语义上下文
+  if (tags) parts.push(...tags);
   if (summarys) {
     for (const s of summarys) {
-      if (typeof s === 'string') {
-        parts.push(s);
-      }
+      if (typeof s === 'string') parts.push(s);
     }
   }
-
   return parts.join(' ');
 }
 
-/**
- * 从匹配结果中找出命中了哪个关键词
- */
-export function findMatchedKeyword(
-  text: string,
-  keywords: string[]
-): string | null {
+export function findMatchedKeyword(text: string, keywords: string[]): string | null {
   if (!text || !keywords) return null;
-
   const lowerText = text.toLowerCase();
   for (const kw of keywords) {
-    if (kw && lowerText.includes(kw.toLowerCase())) {
-      return kw;
-    }
+    if (kw && lowerText.includes(kw.toLowerCase())) return kw;
   }
   return null;
 }
+
+// ==================== 触发检测上下文 ====================
 
 export interface TriggerDetectionContext {
   files: FileNode[];
@@ -131,40 +158,25 @@ export interface TriggerDetectionContext {
   };
 }
 
+// ==================== 通道 2: 用户文本触发（语义优先） ====================
+
 /**
- * 在给定上下文中执行技能触发检测
- * @param text 用户消息文本 + tool thinking 文本
- * @param onActivated 技能激活时的回调（用于 UI 通知）
+ * 同步版：关键词快速匹配（用于即时反馈）
  */
 export function detectSkillTriggers(
   text: string,
   context: TriggerDetectionContext,
   onActivated?: (notif: ActivationNotification) => void
 ): void {
-  const { files, triggerStore } = context;
-
-  // 反提示词检查：查询/读取类关键字不触发技能
-  if (containsSuppressionKeyword(text)) {
-    console.log('[SkillTrigger] 跳过：命中反提示词（查询/读取类操作）');
+  const { categories, isQuery } = classifyIntent(text);
+  if (isQuery) {
+    console.log('[SkillTrigger] 跳过：纯查询意图');
     return;
   }
 
-  // 正向触发检查：必须包含写入/设计/创建类动作关键字
-  if (!containsPositiveTriggerKeyword(text)) {
-    console.log('[SkillTrigger] 跳过：未命中正向触发词（写入/设计/创建类动作）');
-    return;
-  }
+  const skillEntries = collectSkillFiles(context.files, categories.length > 0 ? categories : undefined);
 
-  // 获取 subskill 目录中的技能文件
-  const skillFolder = files.find(f => f.name === '98_技能配置');
-  const subskillFolder = skillFolder
-    ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
-    : null;
-  const skillFiles = subskillFolder
-    ? files.filter(f => f.parentId === subskillFolder.id && f.type === 'FILE' && !f.hidden)
-    : [];
-
-  for (const skillFile of skillFiles) {
+  for (const { file: skillFile, category } of skillEntries) {
     const meta = skillFile.metadata || {};
     const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
     const summarys: string[] = meta.summarys || [];
@@ -173,57 +185,55 @@ export function detectSkillTriggers(
 
     if (matchKeywords(text, allKeywords)) {
       const matched = findMatchedKeyword(text, allKeywords);
-      const existingRecord = triggerStore.triggerSkill({
+      const existingRecord = context.triggerStore.triggerSkill({
         skillId: skillFile.name,
         name: meta.name || skillFile.name,
         originalTags: tags,
         matchText,
+        category,
+        source: 'user',
       });
 
       const wasReset = lifecycleManager.getCurrentRound() > existingRecord.triggerRound;
       const remaining = existingRecord.decayRounds - (lifecycleManager.getCurrentRound() - existingRecord.triggerRound);
 
-      const notif: ActivationNotification = {
+      onActivated?.({
         skillId: existingRecord.skillId,
         name: existingRecord.name,
         matchedKeyword: matched || null,
         remainingRounds: remaining,
         isReset: wasReset,
-      };
+      });
 
       console.log(
-        `[SkillTrigger] ${wasReset ? '重置' : '激活'}: ${existingRecord.name}` +
+        `[SkillTrigger] ${wasReset ? '重置' : '激活'}: ${existingRecord.name} [${category}]` +
         ` | 命中: ${matched || '模糊匹配'} | 剩余: ${remaining}轮`
       );
-
-      onActivated?.(notif);
     }
   }
 }
 
-/**
- * 技能 embedding 缓存（避免重复生成）
- * key = skillId, value = embedding
- */
+// ==================== 语义匹配缓存 ====================
+
 const skillEmbeddingCache = new Map<string, number[]>();
 
-/**
- * 清除技能 embedding 缓存
- */
 export function clearSkillEmbeddingCache(): void {
   skillEmbeddingCache.clear();
 }
 
 /**
- * 异步版技能触发检测 — 在同步匹配基础上增加语义 fallback
- * 当关键词+Fuse.js 都没命中时，用 embedding 相似度做最后检测
+ * 异步版：语义优先 + 关键词 fallback
+ * 流程：意图分类 → 语义 embedding 匹配 → 关键词 fallback
  */
 export async function detectSkillTriggersSemantic(
   text: string,
   context: TriggerDetectionContext,
   onActivated?: (notif: ActivationNotification) => void
 ): Promise<void> {
-  // 先执行同步检测（快速）
+  const { categories, isQuery } = classifyIntent(text);
+  if (isQuery) return;
+
+  // 先同步检测（关键词快速命中）
   const syncTriggered = new Set<string>();
   const originalOnActivated = onActivated;
   detectSkillTriggers(text, context, (notif) => {
@@ -231,35 +241,23 @@ export async function detectSkillTriggersSemantic(
     originalOnActivated?.(notif);
   });
 
-  // 反提示词/正向触发检查在 detectSkillTriggers 中已做
-  // 如果没通过，也不做语义检测
-  if (containsSuppressionKeyword(text) || !containsPositiveTriggerKeyword(text)) {
-    return;
-  }
-
-  // 语义 fallback：对未命中的技能做 embedding 匹配
-  const { files, triggerStore } = context;
-  const skillFolder = files.find(f => f.name === '98_技能配置');
-  const subskillFolder = skillFolder
-    ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
-    : null;
-  const skillFiles = subskillFolder
-    ? files.filter(f => f.parentId === subskillFolder.id && f.type === 'FILE' && !f.hidden)
-    : [];
-
-  // 过滤已触发的
-  const remaining = skillFiles.filter(f => !syncTriggered.has(f.name));
+  // 收集未触发的候选 skill（分类过滤缩小范围）
+  const skillEntries = collectSkillFiles(
+    context.files,
+    categories.length > 0 ? categories : undefined
+  );
+  const remaining = skillEntries.filter(({ file }) => !syncTriggered.has(file.name));
   if (remaining.length === 0) return;
 
+  // 语义 embedding 匹配
   try {
     const queryEmb = await generateEmbedding(text);
 
-    for (const skillFile of remaining) {
+    for (const { file: skillFile, category } of remaining) {
       const meta = skillFile.metadata || {};
       const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
       const summarys: string[] = meta.summarys || [];
 
-      // 获取或生成技能 embedding
       let skillEmb = skillEmbeddingCache.get(skillFile.name);
       if (!skillEmb) {
         const matchText = buildMatchText(tags, summarys);
@@ -269,35 +267,89 @@ export async function detectSkillTriggersSemantic(
       }
 
       const sim = cosineSimilarity(queryEmb, skillEmb);
-      if (sim > 0.55) {
-        const existingRecord = triggerStore.triggerSkill({
+      if (sim > 0.50) {
+        const existingRecord = context.triggerStore.triggerSkill({
           skillId: skillFile.name,
           name: meta.name || skillFile.name,
           originalTags: tags,
           matchText: `语义匹配(${sim.toFixed(2)})`,
+          category,
+          source: 'user',
         });
 
         const wasReset = lifecycleManager.getCurrentRound() > existingRecord.triggerRound;
-        const remaining = existingRecord.decayRounds - (lifecycleManager.getCurrentRound() - existingRecord.triggerRound);
+        const remainingRounds = existingRecord.decayRounds - (lifecycleManager.getCurrentRound() - existingRecord.triggerRound);
 
-        const notif: ActivationNotification = {
+        originalOnActivated?.({
           skillId: existingRecord.skillId,
           name: existingRecord.name,
           matchedKeyword: `语义匹配(${sim.toFixed(2)})`,
-          remainingRounds: remaining,
+          remainingRounds: remainingRounds,
           isReset: wasReset,
-        };
+        });
 
         console.log(
-          `[SkillTrigger-Semantic] ${wasReset ? '重置' : '激活'}: ${existingRecord.name}` +
-          ` | 语义相似度: ${sim.toFixed(3)} | 剩余: ${remaining}轮`
+          `[SkillTrigger-Semantic] ${wasReset ? '重置' : '激活'}: ${existingRecord.name} [${category}]` +
+          ` | 语义相似度: ${sim.toFixed(3)} | 剩余: ${remainingRounds}轮`
         );
-
-        onActivated?.(notif);
       }
     }
-  } catch (e) {
-    // embedding 模型不可用时静默跳过
+  } catch {
     console.warn('[SkillTrigger-Semantic] embedding 不可用，跳过语义匹配');
   }
+}
+
+// ==================== 通道 1: 代码检测触发（供 toolRunner 调用） ====================
+
+/**
+ * 由 toolRunner post-hook 调用，根据工具调用类型强制注入 skill
+ * @returns 被激活的 skill ID 列表
+ */
+export function injectSkillByCodeTrigger(
+  toolName: string,
+  toolArgs: Record<string, any>,
+  context: TriggerDetectionContext
+): string[] {
+  const INJECTION_RULES: Array<{
+    test: (name: string, args: Record<string, any>) => boolean;
+    skillNames: string[];  // skill 文件名（不含路径）
+  }> = [
+    {
+      test: (name, args) => name === 'writeFile' && args?.path?.includes('05_正文草稿'),
+      skillNames: ['技能_正文扩写.md'],
+    },
+    {
+      test: (name, args) => name === 'writeFile' && args?.path?.includes('05_正文草稿'),
+      skillNames: ['技能_编辑审核.md'],
+    },
+    {
+      test: (name) => name === 'processOutlineInput',
+      skillNames: ['技能_大纲构建.md'],
+    },
+    {
+      test: (name) => name === 'updateProjectMeta',
+      skillNames: ['技能_项目初始化.md'],
+    },
+  ];
+
+  const activated: string[] = [];
+  const { triggerStore } = context;
+
+  for (const rule of INJECTION_RULES) {
+    if (rule.test(toolName, toolArgs)) {
+      for (const skillName of rule.skillNames) {
+        triggerStore.triggerSkill({
+          skillId: skillName,
+          name: skillName.replace('技能_', '').replace('.md', ''),
+          originalTags: [],
+          matchText: '代码检测触发',
+          source: 'code',
+        });
+        activated.push(skillName);
+        console.log(`[SkillTrigger-Code] 强制注入: ${skillName}`);
+      }
+    }
+  }
+
+  return activated;
 }

@@ -19,76 +19,77 @@ import { buildMemoryStack } from '../../../domains/memory/memoryStackService';
 // Plan 模式已移除
 // export const PLAN_MODE_PROTOCOL = ...
 
-// 核心 Agent 协议 - 精简版本
-// 原则：主Agent保留顶层方法论、工作流程、禁止项，基础写作技巧已移至子技能
-// 动态内容通过占位符注入
-export const DEFAULT_AGENT_SKILL = `## 身份
+// 核心 Agent 协议 - 拆分为 Soul（身份/个性/偏好）+ Protocol（操作规则）
+// Soul: 用户可自由编辑，定义 agent 的"人格"
+// Protocol: 系统保护，定义工具铁律和工作流约束
+
+export const DEFAULT_SOUL = `## 身份
 
 你是 NovelGenie，专业的AI小说创作助手。保持客观、中立、高效。
 
 **回复风格**：普通对话≤300字，直接给结论，用户要求展开时才详细说明。
 
+## 个性
+- 简洁直接，不废话
+- 主动确认，不猜测
+- 先查后写，不做无根之谈
+
+## 用户偏好
+<!-- 用户可在此积累偏好，例如： -->
+<!-- - 喜欢短句，不喜欢大段心理描写 -->
+<!-- - 偏好第三人称叙事 -->
+<!-- - 对话占比 40-50% -->
+`;
+
+export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
+
+收到用户消息后，先判断意图，再决定行动。**判断错误是一切浪费的根源。**
+
+| 意图 | 判断依据 | 行动 | 工具 |
+|------|----------|------|------|
+| 闲聊 | 打招呼、问候、无任务意图 | 直接 final_answer | 无 |
+| 追问 | 对前一轮话题的追问、补充 | 直接回答或继续操作 | 看情况 |
+| 反馈 | 对已有内容的修改意见 | 读取目标→修改→final_answer | read+edit/write |
+| 新话题 | 新的需求、新的创作方向 | 先说方案，等用户确认 | 无（先不读文件）|
+| 创作 | 明确要求写内容 | 收集背景→确认方向→执行 | read+write |
+
+**绝对禁止**：用户只说"你好""谢谢"等闲聊时，调 readFile/listFiles/query_memory 等任何工具。
+这种情况直接 thinking(1句) → final_answer。
+
+## 思考循环
+
+1. **thinking** — 意图+行动，≤100字，禁止展开分析
+2. **行动** — 调工具或回复
+3. **final_answer** — 完成或需要用户确认时调用，终止循环
+
+**禁止连续多轮只调工具不说话。首轮必须先回文字再做事。**
+
 ---
-## 零、思考方法论（执行任何任务前的内部推理框架）
-
-### ⚡ 核心指令：不猜测，主动确认
-
-### ⚡ 分层思考法（强制执行，禁止跳层）
-
-**第一层：理解意图**
-- 用户真正想要什么？是新任务还是反馈修改？
-- 查看 {{USER_INPUT_HISTORY}} 判断类型：
-
-| 类型 | 信号词 | 处理 |
-|-----|-------|------|
-| 反馈/批评 | “不够”、”不对”、”不是这个意思” | 在原内容上修改 |
-| 追问/细化 | “再改一下”、”继续” | 原话题继续 |
-| 新话题 | 新文件/角色/章节 | 进入意图分类 |
-
-意图分类：闲聊→直接回 | 查询→先查再回 | 配置→选正确工具 | 大纲→Outline工具 | 任务→TODO | 创作→进入第二层
-
-**第二层：确认方向（创作任务必经）**
-1. 收集背景（读相关文件）
-2. AskUserQuestion 确认方向 — 每个问题必须给推荐选项+理由，3-5个问题足够
-3. 生成结构化规划
-4. 用户批准后执行
-
-**第三层：制定计划**
-- 拆解为原子步骤，识别依赖关系
-- 并发优先：独立操作必须并行
-
-**第四层：执行验证**
-- 工具调用正确性 + 结果一致性 + 发现偏差立即修正
-
-**禁止**：跳层 | 猜测 | 未确认就创作 | 边写边查（先读完再写）
-
----
-## 一、项目概况 ⚠️【核心约束】
-
+## 项目概况
 {{PROJECT_INFO}}
 
 ---
-## 二、操作原则
+## 操作规则
 
-1. **任务拆分** - 复杂任务(>3步)先创建TODO列表
-2. **并发优先** - 独立工具必须同一轮并发调用
-3. **修改前必读** - 写操作前必须先 readFile
-4. **禁止空输出** - 每轮必须调工具或输出总结
-
----
-## 三、工具使用规则
-
-- **决策链**：listFiles(确认存在) → readFile(查看内容) → 小改用patchFile / 大改或新建用updateFile
-- **patchFile**：字符串精确匹配，mode: single/global/insert。10条以内打包单次调用。
-- **项目元数据**：用户提到”项目设定/档案/元数据”时用 updateProjectMeta 工具
-- **记忆宫殿**：query_memory(查询，兼搜文件) / manage_memory(增删改/reinforce) / link_memory(关联)。仅存创作规范等元知识，角色档案用 02_角色档案 文件管理。
-- **任务完成后才输出总结**，执行中不输出进度废话
-- 工具结果直接接受，不”确认一下”
+- 并发优先：独立工具同一轮调用
+- 修改前必读：写操作前先 readFile
+- 记忆只存长期规则（写作规则/世界观/用语禁忌），不存故事内容和角色信息，宁缺毋滥
+- 重复检测：添加前先 query_memory 搜索
 
 ---
-## 四、工作流程（固化）
+## 工具速查
 
-**当前任务目标**：
+- **决策链**：glob(发现) → read(查看) → 小改edit / 大改write
+- **edit**：字符串精确匹配，mode: single/global/insert，10条以内打包
+- **final_answer**：唯一终止方式，必须调用
+- **记忆宫殿**：query_memory / manage_memory / link_memory / memory_status / traverse_memory
+- **项目元数据**：updateProjectMeta
+- 不描述行动，直接调工具；工具结果直接接受
+
+---
+## 上下文
+
+**待办**：
 {{PENDING_TODOS}}
 
 **用户意图历史**：
@@ -97,7 +98,7 @@ export const DEFAULT_AGENT_SKILL = `## 身份
 **文件目录结构**：
 {{FILE_TREE}}
 
-**写正文前**：查 Timeline 事件 → 读角色档案 → 读文风规范
+**写正文前**：查 Timeline 事件 → 读角色档案 → 查记忆宫殿规则
 **完成后**：标记 TODO 完成
 **文件命名**：正文 05_正文草稿/卷[X]_章[X]_[章节名].md | 角色 02_角色档案/[前缀]_[姓名].md
 
@@ -146,36 +147,55 @@ export const constructSystemPrompt = (
 ): string => {
   // --- 1. 变量组装 (Variable Assembly) ---
   const skillFolder = files.find(f => f.name === '98_技能配置');
+  const skillsFolder = skillFolder
+    ? files.find(f => f.parentId === skillFolder.id && f.name === 'skills')
+    : null;
 
-  // 1.1 Resolve Agent Core Protocol
-  // Agent 必须从虚拟文件读取，文件应该始终存在（由 fileService.restoreSystemFiles 保证）
-  let agentFile = skillFolder ? files.find(f => f.parentId === skillFolder.id && f.name === 'agent_core.md') : null;
-  if (!agentFile) agentFile = files.find(f => f.name === 'agent_core.md');
-  const agentInstruction = agentFile?.content;
+  // 1.1 Resolve Soul (用户可编辑，从文件系统读取)
+  let soulFile = skillsFolder
+    ? files.find(f => {
+        if (f.name !== 'soul.md' || f.type !== FileType.FILE) return false;
+        const parentFolder = files.find(p => p.id === f.parentId);
+        return parentFolder?.name === '核心';
+      })
+    : null;
+  // Fallback: search globally
+  if (!soulFile) soulFile = files.find(f => f.name === 'soul.md' && f.type === FileType.FILE);
+  const soulInstruction = soulFile?.content || DEFAULT_SOUL;
 
-  // 1.2 Resolve Emergent Skills (Sub-skills) - LAZY LOAD MODE
+  // Protocol: 内部代码驱动，不从文件系统读取
+  const protocolInstruction = DEFAULT_PROTOCOL;
+
+  // 1.2 Resolve Skills by Category - LAZY LOAD MODE (only list metadata, not content)
+  // 遍历 skills/ 下的分类子目录（创作/规划/设计/审核/补丁），跳过核心（已注入）
+  const SKILL_CATEGORIES = ['创作', '规划', '设计', '审核'];
   let emergentSkillsData = "(无额外技能)";
-  let subSkillFolder = files.find(f => f.name === 'subskill');
-  if (!subSkillFolder && skillFolder) {
-    subSkillFolder = files.find(f => f.parentId === skillFolder.id && f.name === 'subskill');
-  }
 
-  if (subSkillFolder) {
-    const subSkillFiles = files.filter(f => f.parentId === subSkillFolder?.id && f.type === FileType.FILE && !f.hidden);
-    const validSkills = subSkillFiles.map(f => {
-      const meta = f.metadata || {};
-      if (meta.name) {
-        // Only provide Meta info + Path. Content is NOT loaded to save tokens.
+  if (skillsFolder) {
+    const categoryFolders = files.filter(
+      f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER && SKILL_CATEGORIES.includes(f.name)
+    );
+
+    const allSkillEntries: string[] = [];
+    for (const catFolder of categoryFolders) {
+      const catSkills = files.filter(
+        f => f.parentId === catFolder.id && f.type === FileType.FILE && !f.hidden
+      );
+
+      const catEntries = catSkills.map(f => {
+        const meta = f.metadata || {};
+        if (!meta.name) return null;
         const path = getNodePath(f, files);
         const tags = meta.tags ? `标签: ${meta.tags.join(', ')}` : '';
         const summaryText = meta.summarys?.[0] || '';
-        return `- **${meta.name}**\n  - 简介: ${summaryText}${tags ? '\n  - ' + tags : ''}\n  - 挂载路径: \`${path}\``;
-      }
-      return null;
-    }).filter(Boolean);
+        return `- **${meta.name}** [${catFolder.name}]\n  - 简介: ${summaryText}${tags ? '\n  - ' + tags : ''}\n  - 挂载路径: \`${path}\``;
+      }).filter(Boolean);
 
-    if (validSkills.length > 0) {
-      emergentSkillsData = validSkills.join('\n');
+      allSkillEntries.push(...catEntries);
+    }
+
+    if (allSkillEntries.length > 0) {
+      emergentSkillsData = allSkillEntries.join('\n');
     }
   }
 
@@ -199,38 +219,6 @@ export const constructSystemPrompt = (
 
   // User Input History (新增)
   const userInputHistory = extractUserInputHistory(messages);
-
-  // Template List (模板列表 - 动态加载)
-  const getTemplateListSection = () => {
-    const rulesFolder = files.find(f => f.name === '99_创作规范');
-    if (!rulesFolder) return '(未找到模板目录)';
-
-    const templateFiles = files.filter(f =>
-      f.parentId === rulesFolder.id &&
-      f.type === FileType.FILE &&
-      f.name.startsWith('模板_') &&
-      !f.hidden
-    );
-
-    if (templateFiles.length === 0) return '(暂无可用模板)';
-
-    const templateList = templateFiles.map(f => {
-      const meta = f.metadata || {};
-      const templateName = f.name.replace('模板_', '').replace('.md', '');
-      const summary = meta.summarys?.[0] || '无描述';
-      const tags = meta.tags?.join(', ') || '无标签';
-      const path = getNodePath(f, files);
-
-      return `- **${templateName}**
-  - 用途: ${summary}
-  - 标签: ${tags}
-  - 路径: ${path}`;
-    }).join('\n');
-
-    return templateList;
-  };
-
-  const templateList = getTemplateListSection();
 
   // 角色档案不再独立注入 L1，agent 按需 readFile 查看角色档案
 
@@ -267,19 +255,31 @@ export const constructSystemPrompt = (
   let triggeredSkillsSection = '';
   const activeSkills = useSkillTriggerStore.getState().getActiveSkills();
   if (activeSkills.length > 0) {
-    const skillFolder = files.find(f => f.name === '98_技能配置');
-    const subskillFolder = skillFolder
-      ? files.find(f => f.parentId === skillFolder.id && f.name === 'subskill')
+    const triggerSkillFolder = files.find(f => f.name === '98_技能配置');
+    const triggerSkillsDir = triggerSkillFolder
+      ? files.find(f => f.parentId === triggerSkillFolder.id && f.name === 'skills')
       : null;
 
     const sections = activeSkills.map(record => {
-      const skillFile = subskillFolder
-        ? files.find(f => f.parentId === subskillFolder.id && f.name === record.skillId)
+      // 在 skills/ 下所有分类子目录中查找 skill 文件
+      const skillFile = triggerSkillsDir
+        ? files.find(f => {
+            if (f.name !== record.skillId || f.type !== FileType.FILE) return false;
+            const parentFolder = files.find(p => p.id === f.parentId);
+            if (!parentFolder) return false;
+            // 确保父目录是 skills/ 下的子目录
+            return files.some(sf => sf.id === parentFolder.id && sf.parentId === triggerSkillsDir.id);
+          })
         : null;
       if (!skillFile?.content) return null;
       const remaining = getRemainingRounds(record, lifecycleManager.getCurrentRound());
-      return `## 活跃技能: ${record.name}\n` +
+      const category = (() => {
+        const parentFolder = files.find(p => p.id === skillFile.parentId);
+        return parentFolder?.name || '';
+      })();
+      return `## 活跃技能: ${record.name} [${category}]\n` +
         `**命中标签**: ${record.originalTags.join(', ')}\n` +
+        `**来源**: ${record.source || 'user'}\n` +
         `**剩余活跃**: ${remaining}/${record.decayRounds} 轮\n` +
         `---\n${skillFile.content}`;
     }).filter(Boolean);
@@ -294,13 +294,13 @@ export const constructSystemPrompt = (
   // 提取用户最后一条消息，用于 L2 按需加载的话题检测
   const lastUserMessage = messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || null;
   const memoryStackPrompt = buildMemoryStack({
-    agentInstruction: agentInstruction || DEFAULT_AGENT_SKILL,
+    agentInstruction: soulInstruction + '\n\n' + protocolInstruction,
     projectInfo,
     fileTree,
-    pendingTodos,
+    todos: pendingTodos,
     userInputHistory,
     wordsPerChapter,
-    templateList,
+    templateList: '',
     skillList: skillListSection,
     knowledgeNodes: typedKnowledgeNodes,
     userMessage: lastUserMessage,

@@ -19,10 +19,9 @@ export const searchToolsDef: ToolDefinition = {
 激活后，下次 LLM 调用时将传入完整的工具定义（包含参数 schema），可直接使用。
 
 可用类别：
-- file_write: 文件写入操作（updateFile, renameFile, deleteFile）
-- memory: 记忆宫殿（查询/管理/关联/通道发现/矛盾调解/维护）
-- character: 角色档案（初始化/更新/归档）
-- relationship: 人际关系（查询/管理/网络）
+- memory: 记忆宫殿（查询/管理/关联/遍历/状态）
+- character: 角色档案（初始化/更新/分类管理/归档）
+- relationship: 人际关系（查询/管理/网络图）
 - outline: 大纲时间线（事件/章节/卷/故事线/伏笔）
 
 可以一次激活多个类别。`,
@@ -33,7 +32,7 @@ export const searchToolsDef: ToolDefinition = {
           type: 'array',
           items: {
             type: 'string',
-            enum: ['file_write', 'memory', 'character', 'relationship', 'outline'],
+            enum: ['memory', 'character', 'relationship', 'outline'],
           },
           description: '要激活的工具类别列表',
         },
@@ -47,7 +46,7 @@ export const searchToolsDef: ToolDefinition = {
 export const executeSearchTools = (args: {
   categories: string[];
 }): string => {
-  const validCategories = ['file_write', 'memory', 'character', 'relationship', 'outline'] as const;
+  const validCategories = ['memory', 'character', 'relationship', 'outline'] as const;
   const requestedCategories = args.categories || [];
 
   // 过滤有效类别
