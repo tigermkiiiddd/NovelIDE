@@ -83,6 +83,14 @@ export async function initEmbeddingModel(): Promise<void> {
   isLoading = true;
 
   try {
+    // 请求持久化存储，防止浏览器在存储压力下清除模型缓存
+    try {
+      if (navigator.storage?.persist) {
+        const granted = await navigator.storage.persist();
+        console.log('[EmbeddingService] 持久化存储:', granted ? '已授权' : '未授权（缓存可能被清除）');
+      }
+    } catch { /* ignore */ }
+
     // 清理坏缓存
     await cleanBadCache();
 
@@ -117,12 +125,12 @@ export async function initEmbeddingModel(): Promise<void> {
       },
     });
 
-    progressCallback?.({ progress: 100, status: 'ready', message: '模型已就绪' });
+    progressCallback?.({ progress: 100, status: 'ready', message: '模型已就绪', completedFiles: [], currentFile: '' });
     console.log('[EmbeddingService] 模型加载完成');
   } catch (error: any) {
     const msg = error?.message || error?.toString?.() || '未知错误';
     console.error('[EmbeddingService] 模型加载失败:', msg, error);
-    progressCallback?.({ progress: 0, status: 'error', message: `模型加载失败: ${msg}` });
+    progressCallback?.({ progress: 0, status: 'error', message: `模型加载失败: ${msg}`, completedFiles: [], currentFile: '' });
     throw error;
   } finally {
     isLoading = false;

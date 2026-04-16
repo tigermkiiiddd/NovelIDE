@@ -26,6 +26,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
 
   useEffect(() => {
     let cancelled = false;
+    const startTime = Date.now();
 
     function doLoad() {
       if (cancelled) return;
@@ -45,7 +46,13 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
 
       initEmbeddingModel()
         .then(() => {
-          if (!cancelled) setPhase('done');
+          if (!cancelled) {
+            setPhase('done');
+            // 缓存命中时加载很快（<3s），自动进入不等待用户点击
+            if (Date.now() - startTime < 3000) {
+              onReady();
+            }
+          }
         })
         .catch((error: any) => {
           const msg = error?.message || error?.toString?.() || '未知错误';
