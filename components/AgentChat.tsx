@@ -59,7 +59,7 @@ interface AgentChatProps {
   onOpenPlanViewer?: () => void;
 }
 
-// --- Thinking Pad File Tabs (chat 顶部文件入口) ---
+// --- Thinking Pad Panels (chat 顶部，多话题同时显示) ---
 const ThinkingPadTabs: React.FC = () => {
   const sessions = useAgentStore(state => state.sessions);
   const currentSessionId = useAgentStore(state => state.currentSessionId);
@@ -70,14 +70,35 @@ const ThinkingPadTabs: React.FC = () => {
 
   if (pads.length === 0) return null;
 
-  const pageLabels = [
-    { key: 'p1_constraint' as const, suffix: '01_约束.md' },
-    { key: 'p2_breadth' as const, suffix: '02_广度.md' },
-    { key: 'p3_depth' as const, suffix: '03_深度.md' },
-  ];
+  return (
+    <div className="border-b border-gray-800/50 bg-gray-900/50 max-h-60 overflow-y-auto shrink-0">
+      <div className="flex items-center gap-1 px-3 py-1 sticky top-0 bg-gray-900/90 backdrop-blur-sm z-10">
+        <Brain size={11} className="text-amber-400/70 shrink-0" />
+        <span className="text-[10px] text-amber-400/60 font-mono">深度思考（{pads.length}个话题）</span>
+      </div>
+      {pads.map(pad => (
+        <ThinkingPadPanel key={pad.id} pad={pad} setVirtualFile={setVirtualFile} />
+      ))}
+    </div>
+  );
+};
 
-  const handleOpen = (pad: any, pageKey: 'p1_constraint' | 'p2_breadth' | 'p3_depth', fileName: string) => {
-    const content = pad.pages[pageKey].content;
+const pageKeys = ['p1_constraint', 'p2_breadth', 'p3_depth'] as const;
+const pageNames = ['P1 约束', 'P2 广度', 'P3 深度'];
+
+const ThinkingPadPanel: React.FC<{
+  pad: any;
+  setVirtualFile: (f: FileNode | null) => void;
+}> = ({ pad, setVirtualFile }) => {
+  const [activePage, setActivePage] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const pageKey = pageKeys[activePage];
+  const content = pad.pages[pageKey]?.content || '';
+  const changelogLen = pad.pages[pageKey]?.changelog?.length || 0;
+
+  const handleOpenInEditor = () => {
+    const fileName = `${pad.title}/${['01_约束.md', '02_广度.md', '03_深度.md'][activePage]}`;
     const fileNode: FileNode = {
       id: `thinking-${pad.id}-${pageKey}`,
       parentId: null,
@@ -90,23 +111,51 @@ const ThinkingPadTabs: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center gap-1 px-3 py-1.5 bg-gray-900/50 border-b border-gray-800/50 overflow-x-auto shrink-0">
-      <Brain size={11} className="text-amber-400/70 shrink-0 mr-1" />
-      {pads.map(pad => (
-        <React.Fragment key={pad.id}>
-          {pageLabels.map(({ key, suffix }) => (
+    <div className="border-t border-amber-900/20">
+      {/* 标题栏 */}
+      <div
+        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-amber-900/10 transition-colors select-none"
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span className="text-[10px] text-amber-400/60">{collapsed ? '▸' : '▾'}</span>
+        <span className="text-xs text-amber-300 font-medium truncate flex-1">{pad.title}</span>
+        <span className="text-[9px] text-amber-500/50 font-mono shrink-0">{changelogLen}次编辑</span>
+      </div>
+
+      {/* 内容区 */}
+      {!collapsed && (
+        <>
+          {/* P1/P2/P3 切换 + 编辑器入口 */}
+          <div className="flex items-center gap-1 px-3 py-0.5">
+            {pageNames.map((name, i) => (
+              <button
+                key={name}
+                onClick={() => setActivePage(i)}
+                className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                  activePage === i
+                    ? 'bg-amber-900/40 text-amber-300'
+                    : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
             <button
-              key={`${pad.id}-${key}`}
-              onClick={() => handleOpen(pad, key, `${pad.title}/${suffix}`)}
-              className="px-2 py-0.5 text-[10px] font-mono rounded bg-gray-800/80 text-amber-300/80 hover:bg-amber-900/30 hover:text-amber-300 transition-colors whitespace-nowrap shrink-0"
-              title={`在编辑器中打开 ${pad.title}/${suffix}`}
+              onClick={handleOpenInEditor}
+              className="ml-auto text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
+              title="在编辑器中打开"
             >
-              {pad.title.slice(0, 8)}·{suffix.includes('约束') ? 'P1' : suffix.includes('广度') ? 'P2' : 'P3'}
+              编辑器 ↗
             </button>
-          ))}
-          <span className="w-px h-3 bg-gray-700 mx-0.5 shrink-0" />
-        </React.Fragment>
-      ))}
+          </div>
+          {/* 内容预览 */}
+          <div className="px-3 pb-2 max-h-40 overflow-y-auto">
+            <pre className="whitespace-pre-wrap text-[11px] text-gray-400 leading-relaxed font-sans">
+              {content.length > 2000 ? content.slice(0, 2000) + '\n...' : content || '（空白）'}
+            </pre>
+          </div>
+        </>
+      )}
     </div>
   );
 };
@@ -167,8 +216,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
           const node = findNodeByPath(files, change.fileName);
           if (node) {
               setActiveFileId(node.id);
-          } else if (change.toolName === 'createFile' && change.newContent !== null) {
-              // For createFile operations, create a virtual file for preview
+          } else if (change.newContent !== null) {
+              // For any write-type operation creating a new file, create virtual file for preview
+              // (covers 'write', 'createFile' and any future tools that can create new files)
               const fileName = change.fileName.split('/').pop() || 'New File';
               const virtualFile: FileNode = {
                   id: `virtual_${change.id}`,

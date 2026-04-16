@@ -38,14 +38,14 @@ export const skillsListTool: ToolDefinition = {
   },
 };
 
-/** Tier 2: 技能加载 — 注入完整内容到下一轮 system prompt */
+/** Tier 2: 技能加载 — 完整内容直接在 tool response 中返回 */
 export const activateSkillTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'activate_skill',
     description:
-      '加载技能的完整方法论到上下文中（渐进式加载 Tier 2）。' +
-      '先用 skills_list 查看可用技能，选合适的再激活。内容在下一轮对话生效。' +
+      '加载技能的完整方法论。完整内容直接在本条 tool response 中返回，立即生效。' +
+      '先用 skills_list 查看可用技能，选合适的再激活。' +
       '[READ TOOL — 不需要审批]',
     parameters: {
       type: 'object',
@@ -158,7 +158,7 @@ export function executeActivateSkill(
     };
   }
 
-  // 激活
+  // 注册到 triggerStore（供 AgentInput UI 标签使用）
   triggerStore.triggerSkill({
     skillId: matched.file.name,
     name: matched.meta.name || matched.file.name,
@@ -167,6 +167,13 @@ export function executeActivateSkill(
     category: matched.category,
     source: 'agent',
   });
+
+  // 构建返回内容：直接包含完整 skill 内容
+  const skillDisplayName = matched.meta.name || matched.file.name;
+  let message = `已激活 [${matched.category}] ${skillDisplayName}\n\n` +
+    `<skill_content name="${skillDisplayName}" category="${matched.category}">\n` +
+    `${matched.file.content}\n` +
+    `</skill_content>`;
 
   // 检查题材补丁
   const project = useProjectStore.getState().project;
@@ -199,13 +206,14 @@ export function executeActivateSkill(
           source: 'code',
           isPatch: true,
         });
+        message += `\n\n<skill_patch genre="${genre}">\n${patchFile.content}\n</skill_patch>`;
       }
     }
   }
 
   return {
     success: true,
-    message: `已激活 [${matched.category}] ${matched.meta.name || matched.file.name}。${hasPatch ? `检测到 ${genre} 题材补丁，已一并加载。` : ''}完整内容将在下一轮对话生效。`,
+    message,
     skillId: matched.file.name,
     category: matched.category,
     hasPatch,

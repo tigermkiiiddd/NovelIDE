@@ -11,8 +11,6 @@
 import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem, KnowledgeNode } from '../../../types';
 import { getFileTreeStructure, getNodePath, parseFileMeta } from '../../fileSystem';
 import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
-import { useSkillTriggerStore, getRemainingRounds } from '../../../stores/skillTriggerStore';
-import { lifecycleManager } from '../../../domains/agentContext/toolLifecycle';
 import { buildProjectOverviewPrompt } from '../../../utils/projectContext';
 import { buildMemoryStack } from '../../../domains/memory/memoryStackService';
 
@@ -273,43 +271,7 @@ export const constructSystemPrompt = (
     skillListSection = `\n<available_skills>\n${emergentSkillsData}\n</available_skills>\n`;
   }
 
-  // --- 技能触发注入：活跃的技能内容 ---
-  let triggeredSkillsSection = '';
-  const activeSkills = useSkillTriggerStore.getState().getActiveSkills();
-  if (activeSkills.length > 0) {
-    const triggerSkillFolder = files.find(f => f.name === '98_技能配置');
-    const triggerSkillsDir = triggerSkillFolder
-      ? files.find(f => f.parentId === triggerSkillFolder.id && f.name === 'skills')
-      : null;
-
-    const sections = activeSkills.map(record => {
-      // 在 skills/ 下所有分类子目录中查找 skill 文件
-      const skillFile = triggerSkillsDir
-        ? files.find(f => {
-          if (f.name !== record.skillId || f.type !== FileType.FILE) return false;
-          const parentFolder = files.find(p => p.id === f.parentId);
-          if (!parentFolder) return false;
-          // 确保父目录是 skills/ 下的子目录
-          return files.some(sf => sf.id === parentFolder.id && sf.parentId === triggerSkillsDir.id);
-        })
-        : null;
-      if (!skillFile?.content) return null;
-      const remaining = getRemainingRounds(record, lifecycleManager.getCurrentRound());
-      const category = (() => {
-        const parentFolder = files.find(p => p.id === skillFile.parentId);
-        return parentFolder?.name || '';
-      })();
-      return `## 活跃技能: ${record.name} [${category}]\n` +
-        `**命中标签**: ${record.originalTags.join(', ')}\n` +
-        `**来源**: ${record.source || 'user'}\n` +
-        `**剩余活跃**: ${remaining}/${record.decayRounds} 轮\n` +
-        `---\n${skillFile.content}`;
-    }).filter(Boolean);
-
-    if (sections.length > 0) {
-      triggeredSkillsSection = `\n\n---\n## 自动加载的技能\n` + sections.join('\n\n');
-    }
-  }
+  // --- 技能内容通过 activate_skill tool response 返回，不再注入 system prompt ---
 
   // --- 4层记忆栈构建 ---
   const typedKnowledgeNodes = (knowledgeNodes || []) as KnowledgeNode[];
@@ -333,7 +295,6 @@ export const constructSystemPrompt = (
 
   return `
 ${memoryStackPrompt}
-${triggeredSkillsSection}
 ${foreshadowingReminder}
 `;
 };
