@@ -151,11 +151,12 @@ function interceptFetch(): void {
     // 未命中 → 原版 fetch + 存入 IndexedDB
     const response = await originalFetch.call(this, input, init);
 
-    // 后台存储（不阻塞返回）
+    // 必须同步 clone，否则库消费 body 后 clone 会失败（小文件尤其明显）
     if (response.ok) {
-      idbPut(url, response).then(() => {
+      const clone = response.clone();
+      idbPut(url, clone).then(() => {
         console.log(`[EmbeddingService] 已缓存到 IndexedDB: ${url.split('/').pop()}`);
-      });
+      }).catch(() => {});
     }
 
     return response;
