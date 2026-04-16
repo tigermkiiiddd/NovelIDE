@@ -83,79 +83,41 @@ const ThinkingPadTabs: React.FC = () => {
   );
 };
 
-const pageKeys = ['p1_constraint', 'p2_breadth', 'p3_depth'] as const;
-const pageNames = ['P1 约束', 'P2 广度', 'P3 深度'];
+const pageLabels = [
+  { key: 'p1_constraint' as const, name: 'P1', file: '01_约束.md' },
+  { key: 'p2_breadth' as const, name: 'P2', file: '02_广度.md' },
+  { key: 'p3_depth' as const, name: 'P3', file: '03_深度.md' },
+];
 
 const ThinkingPadPanel: React.FC<{
   pad: any;
   setVirtualFile: (f: FileNode | null) => void;
 }> = ({ pad, setVirtualFile }) => {
-  const [activePage, setActivePage] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
-
-  const pageKey = pageKeys[activePage];
-  const content = pad.pages[pageKey]?.content || '';
-  const changelogLen = pad.pages[pageKey]?.changelog?.length || 0;
-
-  const handleOpenInEditor = () => {
-    const fileName = `${pad.title}/${['01_约束.md', '02_广度.md', '03_深度.md'][activePage]}`;
-    const fileNode: FileNode = {
-      id: `thinking-${pad.id}-${pageKey}`,
+  const openPage = (key: string, file: string) => {
+    const content = pad.pages[key]?.content || '';
+    setVirtualFile({
+      id: `thinking-${pad.id}-${key}`,
       parentId: null,
-      name: fileName,
+      name: `${pad.title}/${file}`,
       type: FileType.FILE,
       content,
       lastModified: pad.updatedAt,
-    };
-    setVirtualFile(fileNode);
+    });
   };
 
   return (
-    <div className="border-t border-amber-900/20">
-      {/* 标题栏 */}
-      <div
-        className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-amber-900/10 transition-colors select-none"
-        onClick={() => setCollapsed(!collapsed)}
-      >
-        <span className="text-[10px] text-amber-400/60">{collapsed ? '▸' : '▾'}</span>
-        <span className="text-xs text-amber-300 font-medium truncate flex-1">{pad.title}</span>
-        <span className="text-[9px] text-amber-500/50 font-mono shrink-0">{changelogLen}次编辑</span>
-      </div>
-
-      {/* 内容区 */}
-      {!collapsed && (
-        <>
-          {/* P1/P2/P3 切换 + 编辑器入口 */}
-          <div className="flex items-center gap-1 px-3 py-0.5">
-            {pageNames.map((name, i) => (
-              <button
-                key={name}
-                onClick={() => setActivePage(i)}
-                className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
-                  activePage === i
-                    ? 'bg-amber-900/40 text-amber-300'
-                    : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                {name}
-              </button>
-            ))}
-            <button
-              onClick={handleOpenInEditor}
-              className="ml-auto text-[10px] text-blue-400/60 hover:text-blue-400 transition-colors"
-              title="在编辑器中打开"
-            >
-              编辑器 ↗
-            </button>
-          </div>
-          {/* 内容预览 */}
-          <div className="px-3 pb-2 max-h-40 overflow-y-auto">
-            <pre className="whitespace-pre-wrap text-[11px] text-gray-400 leading-relaxed font-sans">
-              {content.length > 2000 ? content.slice(0, 2000) + '\n...' : content || '（空白）'}
-            </pre>
-          </div>
-        </>
-      )}
+    <div className="flex items-center gap-2 px-3 py-1.5 border-t border-amber-900/20">
+      <span className="text-xs text-amber-300/80 truncate flex-1">{pad.title}</span>
+      {pageLabels.map(({ key, name, file }) => (
+        <button
+          key={key}
+          onClick={() => openPage(key, file)}
+          className="px-1.5 py-0.5 text-[10px] font-mono rounded text-blue-400/50 hover:text-blue-400 hover:bg-blue-900/20 transition-colors shrink-0"
+          title={`在编辑器中打开 ${file}`}
+        >
+          {name} ↗
+        </button>
+      ))}
     </div>
   );
 };
