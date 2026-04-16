@@ -10,13 +10,12 @@ import {
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
   SKILL_EDITOR_REVIEW,
-  SKILL_CONSTRAINT_LAYERED_DESIGN,
+  SKILL_DEEP_THINKING,
   SKILL_EXPECTATION_MANAGER,
   SKILL_PLEASURE_RHYTHM_MANAGER,
   SKILL_OUTLINE_ARCHITECT,
   SKILL_TEXT_POLISH,
   SKILL_PROJECT_INIT,
-  SKILL_DEEP_THINKING
 } from './templates';
 import { GenrePreset } from './resources/presets';
 
@@ -160,7 +159,6 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
     '技能_世界观构建.md': SKILL_WORLD_BUILDER,
     '技能_项目初始化.md': SKILL_PROJECT_INIT,
-    '技能_深度思考.md': SKILL_DEEP_THINKING,
   };
 
   // 设计 skills (通用骨架)
@@ -168,7 +166,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
     '技能_角色设计.md': SKILL_CHARACTER_DESIGNER,
     '技能_期待感管理.md': SKILL_EXPECTATION_MANAGER,
     '技能_爽点节奏管理.md': SKILL_PLEASURE_RHYTHM_MANAGER,
-    '技能_分层约束设计.md': SKILL_CONSTRAINT_LAYERED_DESIGN,
+    '技能_深度思考方法论.md': SKILL_DEEP_THINKING,
   };
 
   // 审核 skills

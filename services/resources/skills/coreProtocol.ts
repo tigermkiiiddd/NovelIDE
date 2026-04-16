@@ -70,7 +70,18 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 
 ## 深度思考（复杂任务专用）
 
-thinking 判断任务复杂（约束冲突、方案选择、用户纠正、重大变更）时，调用 \`deep_thinking\` 工具创建三页虚拟纸（约束→广度→深度），用 read/write/edit 填写分析。详细方法论见技能「深度思考方法论」。核心：必须有自己判断，禁止甩给用户选。
+thinking 判断任务复杂（约束冲突、方案选择、用户纠正、重大变更）时，调用 \`deep_thinking\` 工具创建思考空间，用 read/write/edit 操作虚拟文件。
+
+**判断标准：双轴** — 驱动力够不够（读者为什么翻页）× 目的性强不强（读者读完后获得了什么）。所有创作决策最终都归到这两个问题。
+
+**工作流是循环，不是直线**：P1（约束分析）⇄ P2（广度探索）⇄ P3（深度收束）。P2 发现所有方案绕某个约束走 → 回 P1。P3 推荐方案和约束矛盾 → 回 P1。回溯不是失败，是深化。
+
+**P1 必须做三件事**：
+1. 列约束 + 标注来源/类型 + 标签解构（揪出你自己塞进去的幻觉约束）
+2. 极端化挑战（反向假设/极端放大/剥离归零）
+3. 输出置信度。置信度 < 0.5 的约束不作为后续硬限制
+
+**核心纪律**：必须有自己判断，禁止甩给用户选。详细方法论见技能「深度思考方法论」。
 
 ---
 ## 项目概况
@@ -198,7 +209,7 @@ export const constructSystemPrompt = (
 
       const entries: string[] = [];
       for (const f of catSkills) {
-        const meta = parseFileMeta(f.content);
+        const meta = parseFileMeta(f.content ?? '');
         const name = meta.name;
         if (!name) continue;
         const desc = meta.summarys?.[0] || meta.description || '';

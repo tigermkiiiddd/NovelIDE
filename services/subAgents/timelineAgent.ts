@@ -6,7 +6,7 @@ import { AIService } from '../geminiService';
 import { BaseSubAgent, SubAgentConfig } from './BaseSubAgent';
 import { executeOutlineTool } from '../agent/tools/timelineTools';
 import { ToolDefinition } from '../agent/types';
-import { SKILL_CONSTRAINT_LAYERED_DESIGN } from '../resources/agentSkill';
+import { SKILL_DEEP_THINKING } from '../resources/agentSkill';
 import { ProjectMeta } from '../../types';
 import { buildProjectOverviewPrompt } from '../../utils/projectContext';
 
