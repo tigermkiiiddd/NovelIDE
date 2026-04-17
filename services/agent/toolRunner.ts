@@ -28,7 +28,6 @@ import { AIService } from '../geminiService';
 import { executeDeepThinking, isVirtualThinkingPath, resolveVirtualFile, writeVirtualFile, syncPadToFileStore } from './tools/deepThinkingTools';
 import { executeSearchTools } from './tools/searchTools';
 import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
-import { executeQueryEvolution, executeManageEvolution } from './tools/evolutionTools';
 
 import { useVersionStore } from '../../stores/versionStore';
 
@@ -722,13 +721,6 @@ export const executeTool = async (
                 case 'activate_skill':
                     const skillResult = executeActivateSkill(args.skillName || '', args.reason || '');
                     result = JSON.stringify(skillResult);
-                    break;
-                // --- EVOLUTION (SELF-EVOLVING MEMORY) TOOLS ---
-                case 'query_evolution':
-                    result = executeQueryEvolution(args);
-                    break;
-                case 'manage_evolution':
-                    result = await executeManageEvolution(args);
                     break;
                 default:
                     result = `Error: Unknown tool ${name}`;
