@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NovelIDE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --pink: #FF4D6D;
+      --pink-bg: #FFF0F3;
+      --pink-border: #FFCCD5;
+      --coral: #FF8C69;
+      --mint: #00C9A7;
+      --mint-light: #E0FAF5;
+      --purple: #9B5DE5;
+      --purple-light: #F3E8FF;
+      --blue: #4EA8DE;
+      --blue-light: #E0F4FF;
+      --orange: #FF9F43;
+      --orange-light: #FFF4E6;
+      --gray-100: #F7F8FA;
+      --gray-200: #ECEFF4;
+      --gray-300: #DFE6EE;
+      --gray-400: #A0AEC0;
+      --gray-500: #718096;
+      --gray-600: #4A5568;
+      --gray-700: #2D3748;
+      --gray-800: #1A202C;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans SC', -apple-system, sans-serif;
+      background: #F0F2F5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── Header ── */
+    .header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,0.95);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--pink-border);
+      padding: 0 20px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .header-logo {
+      width: 32px; height: 32px;
+      background: linear-gradient(135deg, var(--pink), var(--coral));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; color: white; font-size: 16px; font-family: 'Noto Serif SC', serif;
+    }
+    .header-title { font-family: 'Noto Serif SC', serif; font-weight: 700; font-size: 18px; color: var(--gray-800); }
+    .header-title span { background: linear-gradient(135deg, var(--pink), var(--coral)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .header-tag { background: var(--pink-bg); color: var(--pink); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; border: 1px solid var(--pink-border); }
+
+    /* ── Phone ── */
+    .phone-frame {
+      width: 100%; max-width: 430px; min-height: 100vh;
+      background: white; margin-top: 56px; margin-bottom: 40px; position: relative;
+    }
+
+    .page {
+      width: 100%; min-height: calc(100vh - 56px - 80px);
+      padding: 48px 28px 32px;
+      display: flex; flex-direction: column; align-items: center;
+      position: absolute; top: 0; left: 0; width: 100%;
+      opacity: 0; pointer-events: none; transition: opacity 0.35s ease;
+    }
+    .page.active { opacity: 1; pointer-events: all; position: relative; }
+
+    /* ── Base ── */
+    .title { font-family: 'Noto Serif SC', serif; font-size: 38px; font-weight: 900; color: var(--gray-800); text-align: center; line-height: 1.25; margin-bottom: 6px; }
+    .title .hl { background: linear-gradient(135deg, var(--pink), var(--coral)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .subtitle { font-size: 18px; color: var(--gray-500); text-align: center; line-height: 1.7; margin-bottom: 0; }
+    .divider { width: 36px; height: 3px; background: linear-gradient(135deg, var(--pink), var(--coral)); border-radius: 2px; margin: 20px auto; }
+
+    /* ── Nav ── */
+    .nav-bar {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 430px;
+      background: rgba(255,255,255,0.97); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--gray-200);
+      display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 20px; z-index: 100;
+    }
+    .nav-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray-300); cursor: pointer; transition: all 0.3s ease; border: none; padding: 0; }
+    .nav-dot.active { width: 28px; border-radius: 10px; background: linear-gradient(135deg, var(--pink), var(--coral)); }
+
+    /* ── Pain line ── */
+    .pain { font-size: 18px; color: var(--gray-500); text-align: center; line-height: 1.75; margin-bottom: 0; }
+    .pain em { color: var(--gray-800); font-style: normal; font-weight: 600; }
+
+    /* ── Feature line ── */
+    .feat { font-size: 17px; color: var(--gray-600); text-align: center; line-height: 1.75; }
+    .feat strong { color: var(--gray-800); font-weight: 700; }
+
+    /* ── Tags ── */
+    .tag { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 20px; font-size: 14px; font-weight: 500; }
+    .tag-pink { background: var(--pink-bg); color: var(--pink); border: 1px solid var(--pink-border); }
+    .tag-mint { background: var(--mint-light); color: #00A88A; border: 1px solid #B2F0E0; }
+    .tag-purple { background: var(--purple-light); color: #8B3FD9; border: 1px solid #D9B8FF; }
+    .tag-blue { background: var(--blue-light); color: #2E8BC0; border: 1px solid #B8E4FF; }
+    .tag-orange { background: var(--orange-light); color: #E07830; border: 1px solid #FFD9B8; }
+    .tag-green { background: #E8F8F0; color: #27AE60; border: 1px solid #ABEBC6; }
+
+    /* ── Chat ── */
+    .chat-box { width: 100%; background: var(--gray-800); border-radius: 14px; overflow: hidden; }
+    .chat-msgs { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+    .chat-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 15px; line-height: 1.7; }
+    .chat-msg-u { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); border-bottom-left-radius: 4px; align-self: flex-start; }
+    .chat-msg-ai { background: var(--mint-light); color: #1A4A44; border-bottom-right-radius: 4px; align-self: flex-end; margin-left: auto; }
+    .chat-msg-ai strong { color: #00A88A; }
+
+    /* ── Polish ── */
+    .polish-block { width: 100%; border-radius: 14px; overflow: hidden; margin-bottom: 8px; border: 1px solid var(--gray-200); }
+    .polish-label { padding: 10px 16px; font-size: 14px; font-weight: 700; color: white; }
+    .polish-label.bad { background: #4A5568; }
+    .polish-label.good { background: #00A88A; }
+    .polish-body { padding: 14px 16px; background: white; }
+    .polish-text { font-size: 16px; color: var(--gray-700); line-height: 2; }
+    .polish-del { background: #FDECEC; color: #E74C3C; text-decoration: line-through; padding: 2px 5px; border-radius: 3px; }
+    .polish-add { background: #E8F8F0; color: #27AE60; padding: 2px 5px; border-radius: 3px; }
+    .polish-comment { font-size: 13px; color: var(--gray-400); margin-top: 6px; font-style: italic; }
+
+    /* ── Graph ── */
+    .graph-box { width: 100%; height: 150px; background: var(--gray-100); border-radius: 14px; position: relative; overflow: hidden; }
+
+    /* ── Cards ── */
+    .card { width: 100%; background: var(--gray-100); border-radius: 14px; padding: 14px 16px; border: 1px solid var(--gray-200); }
+
+    /* ── Layers ── */
+    .layers { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+    .layer { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; background: white; border: 1px solid var(--gray-200); }
+    .layer-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .layer h4 { font-size: 15px; font-weight: 700; color: var(--gray-800); }
+    .layer p { font-size: 13px; color: var(--gray-500); }
+
+    /* ── Outline ── */
+    .outline-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--gray-200); }
+    .outline-item:last-child { border-bottom: none; }
+    .outline-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+    .outline-content h4 { font-size: 16px; font-weight: 700; color: var(--gray-800); }
+    .outline-content p { font-size: 13px; color: var(--gray-500); margin-top: 2px; }
+
+    /* ── Fcard ── */
+    .fcard { width: 100%; border-radius: 12px; padding: 12px 16px; background: white; border: 1px solid var(--gray-200); margin-bottom: 8px; border-left: 4px solid; }
+    .fcard-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .fcard-title { font-size: 15px; font-weight: 700; color: var(--gray-800); flex: 1; }
+    .fcard-badge { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
+    .fcard-text { font-size: 14px; color: var(--gray-600); line-height: 1.6; }
+    .fcard-meta { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+    /* ── Knode ── */
+    .knode { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--gray-200); }
+    .knode:last-child { border-bottom: none; }
+    .knode-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .knode h4 { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+    .knode p { font-size: 12px; color: var(--gray-500); }
+
+    /* ── Quote ── */
+    .quote { font-size: 16px; color: var(--gray-600); text-align: center; line-height: 1.8; font-style: italic; margin-top: 0; }
+
+    /* ── CTA ── */
+    .cta { width: 100%; background: linear-gradient(135deg, var(--pink), var(--coral)); border-radius: 20px; padding: 28px 22px; text-align: center; }
+    .cta h2 { font-family: 'Noto Serif SC', serif; font-size: 28px; font-weight: 900; color: white; margin-bottom: 6px; }
+    .cta p { font-size: 15px; color: rgba(255,255,255,0.9); margin-bottom: 0; }
+    .cta-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.2); color: white; font-size: 14px; font-weight: 600; padding: 10px 22px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.3); margin-top: 14px; }
+
+    /* ── Footer ── */
+    .page-footer { margin-top: auto; width: 100%; }
+
+    /* ── Who ── */
+    .who-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--gray-200); font-size: 15px; color: var(--gray-700); }
+    .who-item:last-child { border-bottom: none; }
+    .who-check { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: white; flex-shrink: 0; }
+
+    /* ── Auto badge ── */
+    .auto-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; background: var(--mint-light); color: #00A88A; border: 1px solid #B2F0E0; }
+
+    /* ── Learn bar ── */
+    .learn { width: 100%; background: linear-gradient(135deg, var(--purple-light), var(--pink-bg)); border-radius: 16px; padding: 18px 20px; border: 1px solid var(--pink-border); text-align: center; }
+    .learn h3 { font-family: 'Noto Serif SC', serif; font-size: 18px; font-weight: 700; color: var(--gray-800); margin-bottom: 6px; }
+    .learn p { font-size: 15px; color: var(--gray-600); line-height: 1.75; }
+    .learn strong { color: var(--pink); font-weight: 700; }
+
+    @media (max-width: 480px) {
+      .phone-frame { max-width: 100%; }
+      .page { padding: 40px 20px 28px; }
+      .title { font-size: 32px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="header-logo">N</div>
+    <div class="header-title">Novel<span>IDE</span></div>
+  </div>
+  <div class="header-tag">AI 小说创作工具</div>
+</div>
+
+<div class="phone-frame">
+  <div style="position:relative;width:100%;min-height:calc(100vh - 56px - 80px);">
+
+    <!-- P1: 封面 -->
+    <div class="page active" id="page-1">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;">
+        <div style="width:72px;height:72px;background:linear-gradient(135deg,#FF4D6D,#FF8C69);border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:20px;box-shadow:0 8px 24px rgba(255,77,109,0.22);">✍️</div>
+        <div class="title">越用越懂你的<br><span class="hl">AI 小说创作工具</span></div>
+        <div class="subtitle">不用手动<br>绝大部分靠聊天就自动完成了</div>
+        <div class="divider"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
+          <span class="tag tag-pink">🤖 AI 助手</span>
+          <span class="tag tag-mint">🔗 关系图谱</span>
+          <span class="tag tag-purple">🎭 伏笔追踪</span>
+          <span class="tag tag-blue">📋 大纲管理</span>
+          <span class="tag tag-orange">✨ 去AI风润色</span>
+          <span class="tag tag-green">🧠 知识图谱</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- P2: 不用每次重新解释 -->
+    <div class="page" id="page-2">
+      <div class="title" style="margin-bottom:8px;">不用每次<br><span class="hl">重新解释背景</span></div>
+      <div class="subtitle">AI 主动查已有的设定<br>越聊越懂你</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">每次对话都要重新说一遍世界观、人物关系、当前进度？</div>
+
+      <div class="chat-box">
+        <div class="chat-msgs">
+          <div class="chat-msg chat-msg-u">帮我规划第8章的剧情走向</div>
+          <div class="chat-msg chat-msg-ai">根据你的大纲，第8章处于<strong>第二幕·复仇</strong>阶段，林晚刚发现陈墨和沈岩有关联……建议在这里制造一次三人对峙，推动真相揭露。</div>
+        </div>
+      </div>
+
+      <div class="learn page-footer">
+        <h3>🤖 AI 主动研究</h3>
+        <p>AI 会<strong>主动查已有的设定、大纲、角色档案</strong>。聊得越多，记得越多，不用重复说。</p>
+      </div>
+    </div>
+
+    <!-- P3: 卡住没方向 -->
+    <div class="page" id="page-3">
+      <div class="title" style="margin-bottom:8px;">写着写着<br><span class="hl">不知道下一步怎么写</span></div>
+      <div class="subtitle">AI 自动研究故事<br>SubSkill 自动激活</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">卡住了，问 AI 它也只是泛泛而谈，给不出真正有用的建议</div>
+
+      <div class="chat-box">
+        <div class="chat-msgs">
+          <div class="chat-msg chat-msg-u">卡住了，接下来怎么写？</div>
+          <div class="chat-msg chat-msg-ai">根据你的线束分布，<strong>感情线已经缺席8章</strong>了。建议第8章穿插一次林晚和沈岩的单独对话（冲突型），同时推进暗线——陈墨在监视他们。<br><br>可参考「线束编织」Skill 中的交织编织模式。</div>
+        </div>
+      </div>
+
+      <div class="quote page-footer">聊天中自动激活专业写作技巧，不用手动切换</div>
+    </div>
+
+    <!-- P4: 角色 OOC + 关系乱 -->
+    <div class="page" id="page-4">
+      <div class="title" style="margin-bottom:8px;">写着写着<br><span class="hl">人物 OOC，关系搞混</span></div>
+      <div class="subtitle">AI 自动更新角色状态<br>关系图谱自动同步</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">写到第15章，人物性格和前面完全不一样了，关系也前后矛盾</div>
+
+      <div class="graph-box" style="margin-bottom:16px;">
+        <svg width="100%" height="100%" viewBox="0 0 400 150" style="position:absolute;top:0;left:0;">
+          <line x1="200" y1="75" x2="110" y2="35" stroke="#FFCCD5" stroke-width="3"/>
+          <line x1="200" y1="75" x2="290" y2="40" stroke="#FFD9B8" stroke-width="2"/>
+          <line x1="200" y1="75" x2="330" y2="110" stroke="#D9B8FF" stroke-width="2"/>
+          <line x1="200" y1="75" x2="75" y2="115" stroke="#B8E4FF" stroke-width="2"/>
+          <line x1="110" y1="35" x2="290" y2="40" stroke="#FFD9B8" stroke-width="1.5" stroke-dasharray="4"/>
+          <line x1="290" y1="40" x2="330" y2="110" stroke="#D9B8FF" stroke-width="1.5" stroke-dasharray="4"/>
+        </svg>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--pink),var(--coral));display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;color:white;z-index:2;">主角</div>
+        <div style="position:absolute;top:18%;left:24%;width:32px;height:32px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;z-index:2;">女主</div>
+        <div style="position:absolute;top:22%;right:22%;width:32px;height:32px;border-radius:50%;background:#f472b6;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;z-index:2;">反派</div>
+        <div style="position:absolute;top:70%;right:18%;width:28px;height:28px;border-radius:50%;background:#fbbf24;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;z-index:2;">导师</div>
+        <div style="position:absolute;top:72%;left:13%;width:28px;height:28px;border-radius:50%;background:#a78bfa;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;z-index:2;">父亲</div>
+      </div>
+
+      <div class="quote page-footer">每写完一章，AI 自动分析角色变化，更新档案<br>关系图谱永远最新，不会 OOC</div>
+    </div>
+
+    <!-- P5: 伏笔 -->
+    <div class="page" id="page-5">
+      <div class="title" style="margin-bottom:8px;">AI 主动知道<br><span class="hl">有哪些伏笔、要埋什么</span></div>
+      <div class="subtitle">聊天中自动分析故事<br>知道伏笔缺什么、什么时候收</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">写的时候不知道该埋什么，写完了才发现少埋了关键钩子</div>
+
+      <div class="chat-box">
+        <div class="chat-msgs">
+          <div class="chat-msg chat-msg-u">这段感情戏太平了，要不要加个伏笔？</div>
+          <div class="chat-msg chat-msg-ai">建议在这里埋一个：<strong>沈岩口袋里一直带着一枚旧怀表</strong>（与林晚母亲的怀表呼应）。<br><br>当前已有伏笔 14 条，<strong>还缺一个强关联钩子</strong>，这枚怀表可以串联起两条线。</div>
+        </div>
+      </div>
+
+      <div class="quote page-footer">AI 主动分析故事逻辑<br>告诉你伏笔缺什么、哪些快过期了</div>
+    </div>
+
+    <!-- P6: 写后面忘前面 -->
+    <div class="page" id="page-6">
+      <div class="title" style="margin-bottom:8px;">长篇写后面<br><span class="hl">前面埋的线全忘了</span></div>
+      <div class="subtitle">聊天中自动维护大纲<br>自动对照不跑偏</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">写了30章，发现和前面的设定已经矛盾了</div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="outline-item">
+          <div class="outline-dot" style="background:var(--pink);"></div>
+          <div class="outline-content"><h4>第一幕 · 平静（Ch1-3）</h4><p>父亲被害，复仇种子埋下</p></div>
+        </div>
+        <div class="outline-item">
+          <div class="outline-dot" style="background:var(--orange);"></div>
+          <div class="outline-content"><h4>第二幕 · 复仇（Ch4-12）</h4><p>接近沈岩，高潮对决，真相揭露</p></div>
+        </div>
+        <div class="outline-item">
+          <div class="outline-dot" style="background:var(--mint);"></div>
+          <div class="outline-content"><h4>第三幕 · 接受（Ch13-18）</h4><p>放下执念，新生活开始</p></div>
+        </div>
+      </div>
+
+      <div class="quote page-footer">大纲在聊天中自动维护<br>写当前章节时，AI 主动对照，不跑偏</div>
+    </div>
+
+    <!-- P7: AI 腔调重 -->
+    <div class="page" id="page-7">
+      <div class="title" style="margin-bottom:8px;">AI 写出来的文字<br><span class="hl">一看就是 AI 腔调</span></div>
+      <div class="subtitle">7 层检测<br>自动扫描消除腔调</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">"感到无比沉重"、"不由得攥紧了拳头"——全是套路，读着出戏</div>
+
+      <div class="polish-block">
+        <div class="polish-label bad">❌ AI 腔调（原文）</div>
+        <div class="polish-body">
+          <div class="polish-text">林晚站在窗前，她<span class="polish-del">感到</span>无比沉重。<span class="polish-del">那封信的出现，让她深刻地意识到，</span>这个世界<span class="polish-del">远没有她想象的那么简单</span>……<span class="polish-del">不由得</span>攥紧了拳头。</div>
+          <div class="polish-comment">删除：感到、深意识地意识到、远没有...那么简单、不由得</div>
+        </div>
+      </div>
+
+      <div class="polish-block" style="margin-bottom:16px;">
+        <div class="polish-label good">✅ 去 AI 风（润色后）</div>
+        <div class="polish-body">
+          <div class="polish-text">林晚站在窗前，手里攥着那封信，指节发白。<span class="polish-add">信封上的陌生地址像一根刺，扎在心口。</span>她知道，这一切都回不去了。</div>
+          <div class="polish-comment">抽象情绪句 → 生理反应 + 当下事实</div>
+        </div>
+      </div>
+
+      <div class="quote page-footer">7 层检测自动扫描<br>不改剧情，不删伏笔，只消腔调</div>
+    </div>
+
+    <!-- P8: 技巧要反复说 -->
+    <div class="page" id="page-8">
+      <div class="title" style="margin-bottom:8px;">每次切换场景<br><span class="hl">都要重新说用什么技巧</span></div>
+      <div class="subtitle">SubSkill 自动识别场景<br>自动激活对应技巧</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">写高潮要说"用紧张节奏"，写对话要说"注意潜台词"，每次从零解释</div>
+
+      <div class="layers" style="margin-bottom:16px;">
+        <div class="layer">
+          <div class="layer-icon" style="background:var(--purple-light);">🎯</div>
+          <div><h4>高潮场景写作</h4><p>自动激活 · 紧张节奏 + 情绪爆发点</p></div>
+        </div>
+        <div class="layer">
+          <div class="layer-icon" style="background:var(--pink-bg);">💬</div>
+          <div><h4>对话写作</h4><p>自动激活 · 潜台词 + 角色语言特征</p></div>
+        </div>
+        <div class="layer">
+          <div class="layer-icon" style="background:var(--blue-light);">👁️</div>
+          <div><h4>视角切换</h4><p>自动激活 · 转场过渡技巧</p></div>
+        </div>
+      </div>
+
+      <div class="quote page-footer">配置一次，聊天中自动调用<br>不用每次手动说</div>
+    </div>
+
+    <!-- P9: 设定冲突 -->
+    <div class="page" id="page-9">
+      <div class="title" style="margin-bottom:8px;">设定越来越多<br><span class="hl">前后矛盾想不起来</span></div>
+      <div class="subtitle">知识图谱自动记录<br>AI 随时调取不冲突</div>
+      <div class="divider"></div>
+
+      <div class="pain" style="margin-bottom:16px;">写到后面新加的设定，和前面埋的矛盾了</div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="knode">
+          <div class="knode-icon" style="background:var(--pink-bg);">🏠</div>
+          <div><h4>林氏老宅</h4><p>父亲被害现场，已被陈墨控制</p></div>
+        </div>
+        <div class="knode">
+          <div class="knode-icon" style="background:var(--blue-light);">🔑</div>
+          <div><h4>旧式怀表</h4><p>神秘人赠送，刻有林晚母亲生日</p></div>
+        </div>
+        <div class="knode">
+          <div class="knode-icon" style="background:var(--orange-light);">💌</div>
+          <div><h4>未寄出的信</h4><p>父亲所写，收件地址陌生，内容未揭露</p></div>
+        </div>
+      </div>
+
+      <div class="quote page-footer">知识图谱是项目的长期记忆<br>聊天中 AI 自动提取，随时可查，发现矛盾主动提示</div>
+    </div>
+
+    <!-- P10: CTA -->
+    <div class="page" id="page-10">
+      <div class="title">NovelIDE</div>
+      <div class="subtitle">免费开源 · 浏览器直接使用</div>
+      <div class="divider"></div>
+
+      <div class="cta">
+        <h2>NovelIDE</h2>
+        <p>不用手动<br>绝大部分靠聊天就自动完成了</p>
+        <div class="cta-badge">🖥️ 浏览器打开即可使用</div>
+      </div>
+
+      <div class="learn" style="margin-top:16px;margin-bottom:16px;">
+        <h3>🤖 越用越懂你的 AI</h3>
+        <p>每次对话、每次写作、每次润色——<strong>AI 都在学习你的故事</strong>。用得越久，它越像你的创作搭档。</p>
+      </div>
+
+      <div class="card">
+        <div class="who-item"><div class="who-check" style="background:var(--pink);">✓</div>长篇创作，需要 AI 记住主线不跑偏</div>
+        <div class="who-item"><div class="who-check" style="background:var(--mint);">✓</div>人物关系复杂，需要自动追踪</div>
+        <div class="who-item"><div class="who-check" style="background:var(--purple);">✓</div>需要消除 AI 生成文本的腔调</div>
+        <div class="who-item"><div class="who-check" style="background:var(--blue);">✓</div>想让 AI 越来越懂自己的风格</div>
+      </div>
+
+      <div class="page-footer" style="margin-top:16px;">
+        <div class="quote">免费开源 · github.com 搜索 NovelIDE</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Nav -->
+<div class="nav-bar">
+  <button class="nav-dot active" onclick="goTo(1)"></button>
+  <button class="nav-dot" onclick="goTo(2)"></button>
+  <button class="nav-dot" onclick="goTo(3)"></button>
+  <button class="nav-dot" onclick="goTo(4)"></button>
+  <button class="nav-dot" onclick="goTo(5)"></button>
+  <button class="nav-dot" onclick="goTo(6)"></button>
+  <button class="nav-dot" onclick="goTo(7)"></button>
+  <button class="nav-dot" onclick="goTo(8)"></button>
+  <button class="nav-dot" onclick="goTo(9)"></button>
+  <button class="nav-dot" onclick="goTo(10)"></button>
+</div>
+
+<script>
+  const total = 10, cur = { v: 1 };
+  function goTo(n) {
+    if (n < 1 || n > total) return;
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-dot').forEach(d => d.classList.remove('active'));
+    document.getElementById('page-' + n).classList.add('active');
+    document.querySelectorAll('.nav-dot')[n - 1].classList.add('active');
+    cur.v = n;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  const frame = document.querySelector('.phone-frame');
+  frame.addEventListener('touchstart', e => { window._tx = e.changedTouches[0].screenX; }, { passive: true });
+  frame.addEventListener('touchend', e => {
+    const d = window._tx - e.changedTouches[0].screenX;
+    if (Math.abs(d) > 50) goTo(d > 0 ? cur.v + 1 : cur.v - 1);
+  }, { passive: true });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); goTo(cur.v + 1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); goTo(cur.v - 1); }
+  });
+</script>
+
+</body>
+</html>

@@ -7,6 +7,7 @@ import MainLayout from './components/MainLayout';
 import LoadingPage from './components/LoadingPage';
 import ToastContainer from './components/Toast';
 import { useProjectStore } from './stores/projectStore';
+import { useAgentMemoryStore } from './stores/agentMemoryStore';
 import { useAgentStore } from './stores/agentStore';
 
 // Initialize VConsole for mobile debugging
@@ -30,12 +31,14 @@ export default function App() {
   const selectProject = useProjectStore(state => state.selectProject);
   const loadProjects = useProjectStore(state => state.loadProjects);
   const loadAIConfig = useAgentStore(state => state.loadAIConfig);
+  const loadAgentMemory = useAgentMemoryStore(state => state.load);
 
   // Initial Load
   useEffect(() => {
     loadProjects();
     loadAIConfig();
-  }, [loadProjects, loadAIConfig]);
+    loadAgentMemory();
+  }, [loadProjects, loadAIConfig, loadAgentMemory]);
 
   const handleSelectProject = async (id: string | null) => {
     await selectProject(id);

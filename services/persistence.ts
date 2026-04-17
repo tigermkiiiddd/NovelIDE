@@ -102,10 +102,38 @@ interface NovelGenieDB extends DBSchema {
     key: string; // 'skill-trigger-{projectId}'
     value: { records: any[]; currentRound: number };
   };
+  // 自进化记忆（跨项目持久）
+  agentMemories: {
+    key: string;
+    value: {
+      id: string;
+      type: 'insight' | 'pattern' | 'correction' | 'workflow' | 'preference';
+      content: string;
+      context: string;
+      relatedSkills?: string[];
+      projectGenre?: string;
+      importance: 'critical' | 'high' | 'medium' | 'low';
+      createdAt: number;
+      accessedAt: number;
+      accessCount: number;
+    };
+    indexes: { 'by-type': string; 'by-importance': string };
+  };
+  agentSessionSummaries: {
+    key: string;
+    value: {
+      sessionId: string;
+      projectId: string;
+      summary: string;
+      keyDecisions: string[];
+      unresolvedTopics: string[];
+      timestamp: number;
+    };
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 14;
+const DB_VERSION = 15;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -195,6 +223,15 @@ export const initDB = () => {
         // Version 14: Add skillTrigger store
         if (!db.objectStoreNames.contains('skillTrigger')) {
           db.createObjectStore('skillTrigger');
+        }
+// Version 15: Add agentMemories + agentSessionSummaries for self-evolution
+        if (!db.objectStoreNames.contains('agentMemories')) {
+          const store = db.createObjectStore('agentMemories', { keyPath: 'id' });
+          store.createIndex('by-type', 'type');
+          store.createIndex('by-importance', 'importance');
+        }
+        if (!db.objectStoreNames.contains('agentSessionSummaries')) {
+          db.createObjectStore('agentSessionSummaries', { keyPath: 'sessionId' });
         }
       },
     });

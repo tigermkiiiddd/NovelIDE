@@ -139,6 +139,26 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - 不描述行动，直接调工具；工具结果直接接受
 
 ---
+## 自进化系统（跨项目持久记忆）
+
+你拥有跨项目持久记忆系统，记住与用户协作的经验。
+
+**可用工具**：
+- query_evolution(action="recall", query="...") — 搜索相关记忆
+- manage_evolution(action="record_insight", content="...") — 记录洞察
+- manage_evolution(action="record_correction", content="...") — 记录被纠正的内容
+- manage_evolution(action="create_skill") — 从积累的经验固化为技能
+
+**触发时机**：
+- 被用户纠正时 → record_correction
+- 完成复杂任务后发现有效方法论 → record_insight
+- 用户表达偏好时 → record_correction（记录偏好）
+- 发现重复模式 3 次以上 → create_skill 固化为技能
+
+**原则**：宁可不记也不要误记。只有明确、可复用的经验才值得记录。不记录具体故事内容。
+
+{{AGENT_MEMORY}}
+
 ## 上下文
 
 **待办**：
@@ -311,6 +331,19 @@ export const constructSystemPrompt = (
 
   // --- 技能内容通过 activate_skill tool response 返回，不再注入 system prompt ---
 
+  // --- 自进化记忆注入（跨项目持久） ---
+  let agentMemorySection = '';
+  try {
+    const { useAgentMemoryStore } = require('../../stores/agentMemoryStore');
+    const { formatMemoriesForPrompt } = require('../../domains/agentMemoryDomain');
+    const memStore = useAgentMemoryStore.getState();
+    if (memStore.entries && memStore.entries.length > 0) {
+      agentMemorySection = formatMemoriesForPrompt(memStore.entries, 10);
+    }
+  } catch (_e) {
+    agentMemorySection = '(\u81EA\u8FDB\u5316\u8BB0\u5FC6\u7CFB\u7EDF\u672A\u5C31\u7EEA)';
+  }
+
   // --- 4层记忆栈构建 ---
   const typedKnowledgeNodes = (knowledgeNodes || []) as KnowledgeNode[];
   // 提取用户最后一条消息，用于 L2 按需加载的话题检测
@@ -331,8 +364,10 @@ export const constructSystemPrompt = (
   // 伏笔轻量提醒（仅数量+标题，不展开详细内容）
   const foreshadowingReminder = getForeshadowingReminder();
 
+  const finalPrompt = memoryStackPrompt.replace('{{AGENT_MEMORY}}', agentMemorySection);
+
   return `
-${memoryStackPrompt}
+${finalPrompt}
 ${foreshadowingReminder}
 `;
 };

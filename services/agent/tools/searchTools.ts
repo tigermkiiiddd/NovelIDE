@@ -24,6 +24,7 @@ export const searchToolsDef: ToolDefinition = {
 - relationship: 人际关系（查询/管理/网络图）
 - outline: 大纲时间线（事件/章节/卷/故事线/伏笔）
 
+
 可以一次激活多个类别。`,
     parameters: {
       type: 'object',

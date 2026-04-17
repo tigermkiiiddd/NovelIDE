@@ -71,6 +71,9 @@ import {
   getForeshadowingDetailTool,
 } from '../toolDefinitions/timeline';
 
+// 自进化工具
+import { queryEvolutionTool, manageEvolutionTool } from './evolutionTools';
+
 // ==================== 一级工具（始终激活） ====================
 // 原则：简单、常用、Agent 几乎每轮都会用到
 
@@ -95,6 +98,9 @@ export const alwaysOnTools: ToolDefinition[] = [
   // 技能
   skillsListTool,
   activateSkillTool,
+  // 自进化记忆（始终可用，prompt 引用了这些工具）
+  queryEvolutionTool,
+  manageEvolutionTool,
 ];
 
 // ==================== 二级工具（按类别 lazy 加载） ====================

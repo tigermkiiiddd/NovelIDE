@@ -49,6 +49,8 @@ interface QuickEvalOutput {
   reason: string;
   category: KnowledgeCategory | 'none';
   keywords: string[];
+  evolutionAction: 'correction' | 'preference' | 'pattern' | 'insight' | 'session_summary' | 'none';
+  evolutionContent: string;
 }
 
 const quickEvalTool: ToolDefinition = {
@@ -77,8 +79,17 @@ const quickEvalTool: ToolDefinition = {
           items: { type: 'string' },
           description: '提取的关键字（如果值得处理）',
         },
+        evolutionAction: {
+          type: 'string',
+          enum: ['correction', 'preference', 'pattern', 'insight', 'session_summary', 'none'],
+          description: '自进化判断：是否值得记录为跨项目经验',
+        },
+        evolutionContent: {
+          type: 'string',
+          description: '自进化摘要（仅当 evolutionAction 不为 none 时填写，一句话概括要记住什么）',
+        },
       },
-      required: ['shouldProcess', 'reason', 'category'],
+      required: ['shouldProcess', 'reason', 'category', 'evolutionAction'],
     },
   },
 };
@@ -118,6 +129,7 @@ const quickEvalConfig: SubAgentConfig<KnowledgeExtractionInput, QuickEvalOutput>
 ## 评估原则
 - 宁缺毋滥：不确定时返回 false
 - 快速判断：不要过度分析
+- 自进化判断：同时判断这段对话是否包含值得跨项目记住的经验（用户纠正、偏好、有效方法论）
 - 只看是否有**长期稳定**的价值
 - 角色相关信息（设定、性格、背景、关系）由角色档案系统管理，不属于记忆宫殿
 
@@ -140,6 +152,8 @@ ${input.content.slice(0, 4000)}
     reason: args.reason || '',
     category: args.category as KnowledgeCategory | 'none',
     keywords: args.keywords || [],
+    evolutionAction: args.evolutionAction || 'none',
+    evolutionContent: args.evolutionContent || '',
   }),
 };
 
@@ -393,6 +407,45 @@ const decisionConfig: SubAgentConfig<DecisionInput, KnowledgeExtractionOutput> =
   handleTextResponse: () => '请使用工具查询已有记忆节点，然后调用 submit_decision 提交决策。',
 };
 
+// ==================== 自进化触发 ====================
+
+async function _triggerEvolution(
+  evalResult: { evolutionAction: string; evolutionContent: string },
+  _originalContent: string,
+  onLog?: (msg: string) => void,
+) {
+  if (!evalResult.evolutionAction || evalResult.evolutionAction === 'none') return;
+  try {
+    const { useAgentMemoryStore } = require('../../stores/agentMemoryStore');
+    const store = useAgentMemoryStore.getState();
+    const typeMap: Record<string, string> = {
+      correction: 'correction',
+      preference: 'preference',
+      pattern: 'pattern',
+      insight: 'insight',
+    };
+    const memType = typeMap[evalResult.evolutionAction];
+    if (memType && evalResult.evolutionContent) {
+      // correction/preference 设 high（确保 prompt 可见），其余 medium
+      const importanceMap: Record<string, string> = {
+        correction: 'high',
+        preference: 'high',
+        insight: 'medium',
+        pattern: 'medium',
+      };
+      await store.addEntry({
+        type: memType as any,
+        content: evalResult.evolutionContent,
+        context: _originalContent.slice(0, 200),
+        importance: (importanceMap[memType] || 'medium') as any,
+      });
+      onLog?.(`[自进化] 记录 ${memType}: ${evalResult.evolutionContent.slice(0, 50)}`);
+    }
+  } catch (e) {
+    onLog?.(`[自进化] 记录失败: ${e}`);
+  }
+}
+
 // ==================== 导出函数 ====================
 
 export async function runKnowledgeExtractionAgent(
@@ -406,6 +459,9 @@ export async function runKnowledgeExtractionAgent(
 
   const quickEvalAgent = new BaseSubAgent(quickEvalConfig);
   const evalResult = await quickEvalAgent.run(aiService, input, undefined, onLog, signal);
+
+  // 自进化触发
+  await _triggerEvolution(evalResult, input.content, onLog);
 
   // 如果不值得处理，直接返回
   if (!evalResult.shouldProcess) {
