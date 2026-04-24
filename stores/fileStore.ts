@@ -297,6 +297,8 @@ export const useFileStore = create<FileState>((set, get) => ({
 
   readFile: (path, startLine = 1, endLine) => {
       const { files } = get();
+      // 禁止 LLM 访问 .json 文件（业务数据隔离）
+      if (path.toLowerCase().endsWith('.json')) return `Error: .json 文件禁止访问（业务数据隔离）。`;
       const file = findNodeByPath(files, path);
       if (!file || file.hidden) return `Error: File at "${path}" not found.`;
 
@@ -322,7 +324,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   searchFiles: (query) => {
     const { files } = get();
     const lowerQuery = query.toLowerCase();
-    const results = files.filter(f => !f.hidden && (f.name.toLowerCase().includes(lowerQuery) || (f.content && f.content.toLowerCase().includes(lowerQuery))));
+    const results = files.filter(f => !f.hidden && !f.name.toLowerCase().endsWith('.json') && (f.name.toLowerCase().includes(lowerQuery) || (f.content && f.content.toLowerCase().includes(lowerQuery))));
     if (results.length === 0) return `No files found matching "${query}".`;
 
     // 分类：只统计文件数量（用于提示）
@@ -410,7 +412,11 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     return `Renamed "${oldPath}" to "${newName}"`;
   },
 
-  listFiles: () => getFileTreeStructure(get().files),
+  listFiles: () => {
+    // 过滤掉 .json 文件，LLM 不应看到业务数据文件
+    const visibleFiles = get().files.filter(f => !f.name.toLowerCase().endsWith('.json'));
+    return getFileTreeStructure(visibleFiles);
+  },
 
   globFiles: (pattern: string, basePath?: string, headLimit?: number) => {
     const { files } = get();
@@ -450,7 +456,7 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     }
 
     let matched = files
-      .filter(f => !f.hidden && f.type === FileType.FILE)
+      .filter(f => !f.hidden && f.type === FileType.FILE && !f.name.toLowerCase().endsWith('.json'))
       .map(f => ({ node: f, path: getNodePath(f, files) }))
       .filter(({ node, path }) => {
         if (scopeIds && !scopeIds.has(node.id)) return false;
@@ -528,7 +534,7 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     }
 
     const scopeFiles = files.filter(f => {
-      if (f.hidden || f.type !== FileType.FILE || !f.content) return false;
+      if (f.hidden || f.type !== FileType.FILE || !f.content || f.name.toLowerCase().endsWith('.json')) return false;
       if (scopeIds && !scopeIds.has(f.id)) return false;
       if (globRegex) {
         const path = getNodePath(f, files);
