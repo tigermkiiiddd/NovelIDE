@@ -347,8 +347,6 @@ export const memoryStatusTool: ToolDefinition = {
 \`\`\`
 非常适合先获取全部节点目录，再按需选 ID 调用 traverse_memory。
 
-### listMode='full' — 返回统计+完整节点目录（token 较大，节点多时慎用）
-
 ## 字段说明
 - **wings**: 按 翼→房间 分组的节点数量
 - **conflicts**: 冲突节点对数量
@@ -360,9 +358,9 @@ export const memoryStatusTool: ToolDefinition = {
       properties: {
         listMode: {
           type: 'string',
-          enum: ['summary', 'ids', 'full'],
+          enum: ['summary', 'ids'],
           default: 'summary',
-          description: 'summary=只返回统计（默认，最省token） | ids=返回全部节点id+name+wing+room（推荐） | full=统计+完整节点信息（token大）',
+          description: 'summary=只返回统计（默认，最省token） | ids=返回全部节点id+name+wing+room（推荐）',
         },
       },
     },
@@ -998,24 +996,16 @@ export const executeMemoryStatus = async (args: { listMode?: 'summary' | 'ids' |
     cooling,
   };
 
-  if (listMode === 'ids' || listMode === 'full') {
+  if (listMode === 'ids') {
     baseResult.nodes = nodes.map(n => ({
       id: n.id,
       name: n.name,
       wing: n.wing,
       room: n.room,
-      ...(listMode === 'full' ? {
-        summary: n.summary,
-        tags: n.tags,
-        importance: n.importance,
-        activation: n.metadata?.activation?.toFixed(2),
-      } : {}),
     }));
   }
 
-  if (listMode === 'summary' || listMode === 'full') {
-    baseResult.topTags = store.availableTags.slice(0, 20);
-  }
+  baseResult.topTags = store.availableTags.slice(0, 20);
 
   return JSON.stringify(baseResult);
 };
