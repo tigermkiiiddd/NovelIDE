@@ -102,6 +102,11 @@ export const queryKnowledgeTool: ToolDefinition = {
           default: 10,
           description: '返回结果数量上限',
         },
+        offset: {
+          type: 'number',
+          default: 0,
+          description: '分页偏移量。配合 limit 使用：offset=0 获取第1页，offset=10 获取第2页',
+        },
       },
     },
   },
@@ -312,48 +317,54 @@ export const memoryStatusTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'memory_status',
-    description: `【记忆全貌】查看记忆宫殿的整体状态。
+    description: `【记忆全貌】查看记忆宫殿的整体状态。可获取统计摘要或完整节点目录。
 
 ## 什么时候用
 - 开始写作任务前，了解当前有哪些可用的设定和规则
 - 不确定某个知识是否存在，先看全貌再决定是添加还是查询
 - 检查是否有冲突需要处理、是否有衰减节点需要强化
 
-## 返回内容
+## 返回内容（由 listMode 控制）
+
+### listMode='summary'（默认）— 只返回统计
 \`\`\`json
 {
-  "totalNodes": 15,
-  "totalEdges": 8,
-  "wings": {
-    "writing_rules": {
-      "叙事规则": 3,
-      "用语忌讳": 2,
-      "格式规范": 1
-    },
-    "world": {
-      "力量体系": 4,
-      "地理环境": 2,
-      "势力分布": 3
-    }
-  },
-  "conflicts": 1,
-  "conflictDetails": [{"edgeId":"kg-xxx", "from":"规则A", "to":"规则B"}],
-  "needsReview": 2,
-  "cooling": 3,
-  "topTags": ["魔法", "禁止", "战斗", ...]
+  "totalNodes": 15, "totalEdges": 8,
+  "wings": { "writing_rules": { "叙事规则": 3, ... }, "world": { ... } },
+  "conflicts": 1, "needsReview": 2, "cooling": 3, "topTags": ["魔法", ...]
 }
 \`\`\`
 
+### listMode='ids' — 返回所有节点的目录（省 token）
+\`\`\`json
+{
+  "totalNodes": 15,
+  "nodes": [
+    { "id": "kg-xxx", "name": "灵力规则", "wing": "world", "room": "力量体系" },
+    ...
+  ]
+}
+\`\`\`
+非常适合先获取全部节点目录，再按需选 ID 调用 traverse_memory。
+
+### listMode='full' — 返回统计+完整节点目录（token 较大，节点多时慎用）
+
 ## 字段说明
-- **wings**: 按 翼→房间 分组的节点数量。翼只有 writing_rules（创作规范）和 world（世界知识）
-- **conflicts**: 标记为"冲突"的节点对数量。冲突由系统自动检测，需用 manage_memory 的 resolve 操作处理
-- **needsReview**: 衰减严重的节点数（activation 很低），可用 manage_memory 的 reinforce 操作恢复
-- **cooling**: 正在衰减但尚未需要复习的节点数（仅 normal 重要度的）
-- **topTags**: 最常用的标签列表
+- **wings**: 按 翼→房间 分组的节点数量
+- **conflicts**: 冲突节点对数量
+- **needsReview**: 衰减严重需强化的节点数
+- **cooling**: 正在衰减的节点数
 `,
     parameters: {
       type: 'object',
-      properties: {},
+      properties: {
+        listMode: {
+          type: 'string',
+          enum: ['summary', 'ids', 'full'],
+          default: 'summary',
+          description: 'summary=只返回统计（默认，最省token） | ids=返回全部节点id+name+wing+room（推荐） | full=统计+完整节点信息（token大）',
+        },
+      },
     },
   },
 };
@@ -419,6 +430,11 @@ export const traverseMemoryTool: ToolDefinition = {
           default: 2,
           description: '遍历深度：1=直接关联，2=两层（默认），3=三层。建议用 2',
         },
+        limit: {
+          type: 'number',
+          default: 20,
+          description: '返回关联节点数量上限。默认 20，最大 100。',
+        },
         edgeTypes: {
           type: 'array',
           items: { type: 'string' },
@@ -441,11 +457,12 @@ export const executeQueryKnowledge = async (args: {
   tags?: string[];
   sortBy?: 'relevance' | 'activation';
   limit?: number;
+  offset?: number;
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { query, wing, room, tags, sortBy = 'relevance', limit = 10 } = args;
+  const { query, wing, room, tags, sortBy = 'relevance', limit = 10, offset = 0 } = args;
 
   let nodes = store.nodes;
 
@@ -569,7 +586,8 @@ export const executeQueryKnowledge = async (args: {
       break;
   }
 
-  const results = nodes.slice(0, limit);
+  const results = nodes.slice(offset, offset + limit);
+  const hasMore = nodes.length > offset + limit;
 
   // 如果记忆节点结果不足且有查询，补充搜索文件内容
   let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
@@ -594,17 +612,20 @@ export const executeQueryKnowledge = async (args: {
   return JSON.stringify({
     success: true,
     count: results.length,
-    nodes: results.map((n) => ({
+    total: nodes.length,
+    offset,
+    limit,
+    hasMore,
+    results: results.map((n) => ({
       id: n.id,
-      category: n.category,
-      subCategory: n.subCategory,
-      topic: n.topic,
       name: n.name,
       summary: n.summary,
       tags: n.tags,
       importance: n.importance,
+      wing: n.wing,
+      room: n.room,
     })),
-    ...(fileResults.length > 0 ? { fileResults, mode: 'memory+file' } : {}),
+    ...(fileResults.length > 0 ? { fileResults, mode: 'memory+file' } : { mode: 'memory' }),
   });
 };
 
@@ -666,11 +687,8 @@ export const executeManageKnowledge = async (args: {
       const addedNodes: Array<{ id: string; name: string; wing: string; room: string }> = [];
       const errors: string[] = [];
 
-      const validWings = ['writing_rules', 'world'];
-      const validRooms: Record<string, string[]> = {
-        writing_rules: ['叙事规则', '文风习惯', '用语忌讳', '格式规范', '系统保护', '写作技巧积累'],
-        world: ['力量体系', '地理环境', '势力分布', '物品道具'],
-      };
+      const validWings = Object.keys(WING_ROOMS);
+      const validRooms = WING_ROOMS;
 
       for (const n of nodes) {
         // 验证 wing
@@ -679,7 +697,7 @@ export const executeManageKnowledge = async (args: {
           continue;
         }
         // 验证 room
-        const allowedRooms = validRooms[n.wing] || [];
+        const allowedRooms = validRooms[n.wing as keyof typeof WING_ROOMS] || [];
         if (allowedRooms.length > 0 && !allowedRooms.includes(n.room)) {
           errors.push(`"${n.name}" room "${n.room}" 不合法。${n.wing} 翼可选: ${allowedRooms.join('/')}`);
           continue;
@@ -938,12 +956,13 @@ export const executeLinkKnowledge = async (args: {
 // memory_status 执行函数
 // ============================================
 
-export const executeMemoryStatus = async () => {
+export const executeMemoryStatus = async (args: { listMode?: 'summary' | 'ids' | 'full' } = {}) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
   const now = Date.now();
   const nodes = store.nodes.filter(n => n.category !== '用户偏好');
+  const listMode = args.listMode || 'summary';
 
   // 按 wing → room 聚合
   const wings: Record<string, Record<string, number>> = {};
@@ -966,10 +985,7 @@ export const executeMemoryStatus = async () => {
     else if (dynamic.state === 'cooling') cooling++;
   }
 
-  // 可用标签
-  const topTags = store.availableTags.slice(0, 20);
-
-  return JSON.stringify({
+  const baseResult: any = {
     success: true,
     totalNodes: nodes.length,
     totalEdges: store.edges.length,
@@ -980,8 +996,28 @@ export const executeMemoryStatus = async () => {
       : undefined,
     needsReview,
     cooling,
-    topTags,
-  });
+  };
+
+  if (listMode === 'ids' || listMode === 'full') {
+    baseResult.nodes = nodes.map(n => ({
+      id: n.id,
+      name: n.name,
+      wing: n.wing,
+      room: n.room,
+      ...(listMode === 'full' ? {
+        summary: n.summary,
+        tags: n.tags,
+        importance: n.importance,
+        activation: n.metadata?.activation?.toFixed(2),
+      } : {}),
+    }));
+  }
+
+  if (listMode === 'summary' || listMode === 'full') {
+    baseResult.topTags = store.availableTags.slice(0, 20);
+  }
+
+  return JSON.stringify(baseResult);
 };
 
 // ============================================
@@ -992,20 +1028,25 @@ export const executeTraverseMemory = async (args: {
   nodeId: string;
   depth?: number;
   edgeTypes?: KnowledgeEdgeType[];
+  limit?: number;
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { nodeId, depth: rawDepth = 2, edgeTypes } = args;
+  const { nodeId, depth: rawDepth = 2, edgeTypes, limit = 20 } = args;
   const maxDepth = Math.min(rawDepth, 3);
+  const maxResults = Math.min(limit, 100);
 
   const startNode = store.getNodeById(nodeId);
   if (!startNode) {
     return JSON.stringify({ success: false, error: `节点 ${nodeId} 不存在` });
   }
 
-  // BFS 遍历
+  // BFS 遍历（记录完整路径链）
   const visited = new Set<string>([nodeId]);
+  const parentPath = new Map<string, string>();
+  parentPath.set(nodeId, startNode.name);
+
   const reached: Array<{
     id: string;
     name: string;
@@ -1036,6 +1077,10 @@ export const executeTraverseMemory = async (args: {
         const neighbor = store.getNodeById(neighborId);
         if (!neighbor) continue;
 
+        const curPath = parentPath.get(curId) || startNode.name;
+        const neighborPath = `${curPath} →${edge.type}→ ${neighbor.name}`;
+        parentPath.set(neighborId, neighborPath);
+
         reached.push({
           id: neighbor.id,
           name: neighbor.name,
@@ -1044,7 +1089,7 @@ export const executeTraverseMemory = async (args: {
           summary: neighbor.summary,
           tags: neighbor.tags,
           distance: d,
-          path: `${startNode.name} →${edge.type}→ ${neighbor.name}`,
+          path: neighborPath,
         });
       }
     }
@@ -1062,7 +1107,8 @@ export const executeTraverseMemory = async (args: {
       summary: startNode.summary,
     },
     reachedCount: reached.length,
-    reached: reached.slice(0, 20),
+    reached: reached.slice(0, maxResults),
+    hasMore: reached.length > maxResults,
   });
 };
 

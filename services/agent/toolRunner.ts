@@ -761,6 +761,8 @@ export const executeTool = async (
                     result = await executeTraverseMemory(args);
                     break;
                 case 'manage_attachments':
+                    result = 'Error: manage_attachments 工具已废弃，请使用 manage_memory 处理附件。';
+                    break;
                 // --- CHARACTER PROFILE TOOLS ---
                 case 'init_character_profile':
                     result = await executeInitCharacterProfile(args);

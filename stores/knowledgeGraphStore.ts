@@ -377,7 +377,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
     return fuse.search(query).map(result => result.item);
   },
 
-  searchNodesWithScore: (query: string, limit = 10) => {
+  searchNodesWithScore: (query: string, limit = 100) => {
     const nodes = get().nodes;
     if (!query.trim()) {
       return nodes
@@ -561,7 +561,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
 
     const topTags = Object.entries(tagCounts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
+      .slice(0, 100)
       .map(([tag, count]) => ({ tag, count }));
 
     return {
