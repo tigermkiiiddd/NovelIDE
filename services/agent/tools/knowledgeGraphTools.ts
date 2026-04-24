@@ -428,11 +428,6 @@ export const traverseMemoryTool: ToolDefinition = {
           default: 2,
           description: '遍历深度：1=直接关联，2=两层（默认），3=三层。建议用 2',
         },
-        limit: {
-          type: 'number',
-          default: 20,
-          description: '返回关联节点数量上限。默认 20，最大 100。',
-        },
         edgeTypes: {
           type: 'array',
           items: { type: 'string' },
@@ -1018,14 +1013,13 @@ export const executeTraverseMemory = async (args: {
   nodeId: string;
   depth?: number;
   edgeTypes?: KnowledgeEdgeType[];
-  limit?: number;
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { nodeId, depth: rawDepth = 2, edgeTypes, limit = 20 } = args;
+  const { nodeId, depth: rawDepth = 2, edgeTypes } = args;
   const maxDepth = Math.min(rawDepth, 3);
-  const maxResults = Math.min(limit, 100);
+  const maxResults = 20; // 硬编码，不开放自定义
 
   const startNode = store.getNodeById(nodeId);
   if (!startNode) {
