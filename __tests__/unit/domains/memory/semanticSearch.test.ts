@@ -214,7 +214,6 @@ describe('scoreKnowledgeNodeRecall - 语义维度', () => {
     expect(score).toHaveProperty('importance');
     expect(score).toHaveProperty('activation');
     expect(score).toHaveProperty('strength');
-    expect(score).toHaveProperty('review');
     expect(score).toHaveProperty('total');
   });
 });

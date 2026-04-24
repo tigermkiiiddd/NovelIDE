@@ -12,6 +12,7 @@ import {
   KnowledgeCategory,
   KnowledgeNode,
   KnowledgeEdgeType,
+  WING_ROOMS,
 } from '../../../types';
 import {
   scoreKnowledgeNodeRecall,
@@ -156,8 +157,6 @@ export const manageKnowledgeTool: ToolDefinition = {
 - **add**: 添加节点（传入 nodes 数组）
 - **update**: 更新节点（传入 updates 数组，需含 nodeId）
 - **delete**: 删除节点（传入 nodeIds 数组）
-- **reinforce**: 强化记忆（传入 nodeIds 数组，恢复衰减的 activation）
-- **review**: 标记已复习（传入 nodeIds 数组）
 - **resolve**: 解决冲突边（先通过 memory_status 查看冲突列表获取 edgeId）
   - keep_old: 保留旧节点，删除新节点
   - keep_new: 保留新节点，删除旧节点
@@ -169,7 +168,7 @@ export const manageKnowledgeTool: ToolDefinition = {
       properties: {
         action: {
           type: 'string',
-          enum: ['add', 'update', 'delete', 'reinforce', 'review', 'resolve'],
+          enum: ['add', 'update', 'delete', 'resolve'],
           description: '操作类型',
         },
         nodes: {
@@ -211,17 +210,19 @@ export const manageKnowledgeTool: ToolDefinition = {
               name: { type: 'string' },
               summary: { type: 'string' },
               detail: { type: 'string' },
+              subCategory: { type: 'string' },
+              topic: { type: 'string' },
               tags: { type: 'array', items: { type: 'string' } },
               importance: { type: 'string', enum: ['critical', 'important', 'normal'] },
             },
             required: ['nodeId'],
           },
         },
-        // delete/reinforce/review 操作的节点ID数组
+        // delete 操作的节点ID数组
         nodeIds: {
           type: 'array',
           items: { type: 'string' },
-          description: '节点ID列表（delete/reinforce/review 时使用）',
+          description: '节点ID列表（delete 时使用）',
         },
         // resolve 操作参数
         resolveEdgeId: {
@@ -565,7 +566,7 @@ export const executeQueryKnowledge = async (args: {
           .map((r) => {
             const baseScore = scoreKnowledgeNodeRecall(r.item, '', now);
             const fuseLexical = (1 - (r.score || 0)) * 60; // 转化为 0~60 的分数
-            const combined = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength + baseScore.review;
+            const combined = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength;
             return { node: r.item, total: combined };
           })
           .sort((a, b) => b.total - a.total)
@@ -623,7 +624,7 @@ export const executeQueryKnowledge = async (args: {
 };
 
 export const executeManageKnowledge = async (args: {
-  action: 'add' | 'update' | 'delete' | 'reinforce' | 'review' | 'resolve';
+  action: 'add' | 'update' | 'delete' | 'resolve';
   nodes?: Array<{
     wing: 'writing_rules' | 'world';
     room: string;
@@ -643,6 +644,8 @@ export const executeManageKnowledge = async (args: {
     name?: string;
     summary?: string;
     detail?: string;
+    subCategory?: string;
+    topic?: string;
     tags?: string[];
     importance?: 'critical' | 'important' | 'normal';
   }>;
@@ -804,66 +807,6 @@ export const executeManageKnowledge = async (args: {
       });
     }
 
-    case 'reinforce': {
-      if (!nodeIds || nodeIds.length === 0) {
-        return JSON.stringify({ success: false, error: '缺少节点ID列表' });
-      }
-
-      const reinforcedNodes: Array<{ id: string; name: string; activation: number }> = [];
-      const errors: string[] = [];
-
-      for (const id of nodeIds) {
-        const updatedNode = store.reinforceNode(id);
-        if (!updatedNode) {
-          errors.push(`节点 ${id} 不存在`);
-          continue;
-        }
-        reinforcedNodes.push({
-          id: updatedNode.id,
-          name: updatedNode.name,
-          activation: updatedNode.metadata?.activation || 0,
-        });
-      }
-
-      return JSON.stringify({
-        success: true,
-        reinforced: reinforcedNodes.length,
-        failed: errors.length,
-        nodes: reinforcedNodes,
-        errors: errors.length > 0 ? errors : undefined,
-      });
-    }
-
-    case 'review': {
-      if (!nodeIds || nodeIds.length === 0) {
-        return JSON.stringify({ success: false, error: '缺少节点ID列表' });
-      }
-
-      const reviewedNodes: Array<{ id: string; name: string; reviewCount: number }> = [];
-      const errors: string[] = [];
-
-      for (const id of nodeIds) {
-        const updatedNode = store.recallNode(id);
-        if (!updatedNode) {
-          errors.push(`节点 ${id} 不存在`);
-          continue;
-        }
-        reviewedNodes.push({
-          id: updatedNode.id,
-          name: updatedNode.name,
-          reviewCount: updatedNode.metadata?.reviewCount || 0,
-        });
-      }
-
-      return JSON.stringify({
-        success: true,
-        reviewed: reviewedNodes.length,
-        failed: errors.length,
-        nodes: reviewedNodes,
-        errors: errors.length > 0 ? errors : undefined,
-      });
-    }
-
     case 'resolve': {
       const { resolveEdgeId, resolution } = args;
       if (!resolveEdgeId || !resolution) {
@@ -970,13 +913,10 @@ export const executeMemoryStatus = async (args: { listMode?: 'summary' | 'ids' |
   const conflicts = store.getConflicts();
 
   // 衰减统计
-  let needsReview = 0;
-  let cooling = 0;
-  for (const n of nodes) {
-    const dynamic = getKnowledgeNodeDynamicState(n, now);
-    if (dynamic.state === 'needs_review') needsReview++;
-    else if (dynamic.state === 'cooling') cooling++;
-  }
+  // 激活度统计（展示平均 activation）
+  const avgActivation = nodes.length > 0
+    ? nodes.reduce((sum, n) => sum + (n.metadata?.activation || 0), 0) / nodes.length
+    : 0;
 
   const baseResult: any = {
     success: true,
@@ -987,8 +927,7 @@ export const executeMemoryStatus = async (args: { listMode?: 'summary' | 'ids' |
     conflictDetails: conflicts.length > 0
       ? conflicts.map(c => ({ edgeId: c.edge.id, from: c.fromNode.name, to: c.toNode.name }))
       : undefined,
-    needsReview,
-    cooling,
+    avgActivation: avgActivation.toFixed(2),
   };
 
   if (listMode === 'ids') {

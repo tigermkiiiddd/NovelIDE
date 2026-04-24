@@ -63,23 +63,10 @@ const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, v
 // 公共函数
 // ============================================
 
-export const calculateReviewIntervalHours = (
-  importance: NodeImportance,
-  reviewCount: number,
-  reinforceCount: number
-): number => {
-  const base = BASE_REVIEW_INTERVAL_HOURS[importance];
-  const steps = Math.min(6, reviewCount + reinforceCount);
-  const interval = base * Math.pow(1.8, steps);
-  return Math.round(Math.min(MAX_REVIEW_INTERVAL_HOURS[importance], interval));
-};
-
 export const createKnowledgeNodeMetadata = (
   importance: NodeImportance,
   now = Date.now()
 ): KnowledgeNodeMetadata => {
-  const reviewIntervalHours = calculateReviewIntervalHours(importance, 0, 0);
-
   return {
     lastAccessedAt: now,
     lastRecalledAt: now,
@@ -89,8 +76,8 @@ export const createKnowledgeNodeMetadata = (
     reviewCount: 0,
     activation: BASE_ACTIVATION[importance],
     strength: BASE_STRENGTH[importance],
-    reviewIntervalHours,
-    nextReviewAt: now + reviewIntervalHours * HOUR_MS,
+    reviewIntervalHours: BASE_REVIEW_INTERVAL_HOURS[importance],
+    nextReviewAt: now + BASE_REVIEW_INTERVAL_HOURS[importance] * HOUR_MS,
   };
 };
 
@@ -112,96 +99,26 @@ export const getKnowledgeNodeDynamicState = (
   }
 
   const accessAnchor = Math.max(metadata.lastAccessedAt, node.createdAt);
-  const reinforceAnchor = Math.max(metadata.lastReinforcedAt, node.createdAt);
-
   const hoursSinceAccess = Math.max(0, (now - accessAnchor) / HOUR_MS);
-  const hoursSinceReinforced = Math.max(0, (now - reinforceAnchor) / HOUR_MS);
 
-  const activationHalfLife =
-    ACTIVATION_HALF_LIFE_HOURS[node.importance] *
-    (1 + metadata.reinforceCount * 0.25 + metadata.recallCount * 0.04);
+  // activation 自然衰减（无人工复习干预，不依赖 reviewCount/reinforceCount）
+  const activation = clamp(metadata.activation * Math.exp(-hoursSinceAccess / ACTIVATION_HALF_LIFE_HOURS[node.importance]));
+  const strength = clamp(metadata.strength * Math.exp(-hoursSinceAccess / STRENGTH_HALF_LIFE_HOURS[node.importance]));
 
-  const strengthHalfLife =
-    STRENGTH_HALF_LIFE_HOURS[node.importance] *
-    (1 + metadata.reinforceCount * 0.4 + metadata.reviewCount * 0.25);
-
-  const activation = clamp(metadata.activation * Math.exp(-hoursSinceAccess / activationHalfLife));
-  const strength = clamp(metadata.strength * Math.exp(-hoursSinceReinforced / strengthHalfLife));
-  const isDueForReview = now >= metadata.nextReviewAt;
-
-  let reviewUrgency = 0;
-  if (isDueForReview) {
-    const overdueHours = (now - metadata.nextReviewAt) / HOUR_MS;
-    reviewUrgency = clamp(0.45 + overdueHours / Math.max(24, metadata.reviewIntervalHours));
-  } else {
-    const untilReview = metadata.nextReviewAt - now;
-    const reviewWindow = Math.max(metadata.reviewIntervalHours * HOUR_MS, DAY_MS);
-    reviewUrgency = clamp(1 - untilReview / reviewWindow);
-  }
-
-  let state: KnowledgeNodeDynamicState['state'] = 'cooling';
-  if (isDueForReview && activation < 0.68) {
-    state = 'needs_review';
-  } else if (activation >= 0.78) {
-    state = 'active';
-  } else if (strength >= 0.72) {
-    state = 'stable';
-  }
+  const state = activation >= 0.78 ? 'active' : strength >= 0.72 ? 'stable' : 'cooling';
 
   return {
     activation,
     strength,
-    reviewUrgency,
-    isDueForReview,
+    reviewUrgency: 0,
+    isDueForReview: false,
     nextReviewAt: metadata.nextReviewAt,
     hoursSinceAccess,
     state,
   };
 };
 
-export const applyKnowledgeNodeEvent = (
-  node: KnowledgeNode,
-  event: 'recall' | 'reinforce',
-  now = Date.now()
-): KnowledgeNode => {
-  // 如果没有 metadata，先初始化
-  const currentMetadata = node.metadata ?? createKnowledgeNodeMetadata(node.importance, now);
-  const dynamic = getKnowledgeNodeDynamicState({ ...node, metadata: currentMetadata }, now);
-
-  const nextReviewCount =
-    event === 'reinforce' ? currentMetadata.reviewCount + 1 : currentMetadata.reviewCount;
-  const nextReinforceCount =
-    event === 'reinforce' ? currentMetadata.reinforceCount + 1 : currentMetadata.reinforceCount;
-
-  const reviewIntervalHours =
-    event === 'reinforce'
-      ? calculateReviewIntervalHours(node.importance, nextReviewCount, nextReinforceCount)
-      : currentMetadata.reviewIntervalHours;
-
-  const activationDelta = event === 'reinforce' ? 0.22 : 0.12;
-  const strengthDelta = event === 'reinforce' ? 0.15 : 0.05;
-
-  return {
-    ...node,
-    updatedAt: now,
-    metadata: {
-      ...currentMetadata,
-      lastAccessedAt: now,
-      lastRecalledAt: event === 'recall' ? now : currentMetadata.lastRecalledAt,
-      lastReinforcedAt: event === 'reinforce' ? now : currentMetadata.lastReinforcedAt,
-      recallCount: currentMetadata.recallCount + (event === 'recall' ? 1 : 0),
-      reinforceCount: nextReinforceCount,
-      reviewCount: nextReviewCount,
-      activation: clamp(Math.max(dynamic.activation, currentMetadata.activation) + activationDelta),
-      strength: clamp(Math.max(dynamic.strength, currentMetadata.strength) + strengthDelta),
-      reviewIntervalHours,
-      nextReviewAt:
-        event === 'reinforce'
-          ? now + reviewIntervalHours * HOUR_MS
-          : currentMetadata.nextReviewAt,
-    },
-  };
-};
+// 注：recall/reinforce 人工复习机制已移除。activation 自然衰减，由查询频率自然激活。
 
 // ============================================
 // 评分算法
@@ -273,11 +190,10 @@ export const scoreKnowledgeNodeRecall = (
   const dynamic = getKnowledgeNodeDynamicState(node, now);
   const activation = dynamic.activation * 15;
   const strength = dynamic.strength * 10;
-  const review = dynamic.isDueForReview ? 4 + dynamic.reviewUrgency * 6 : dynamic.reviewUrgency * 2;
 
-  const total = lexical + semantic + importance + activation + strength + review;
+  const total = lexical + semantic + importance + activation + strength;
 
-  return { lexical, semantic, importance, activation, strength, review, total };
+  return { lexical, semantic, importance, activation, strength, review: 0, total };
 };
 
 export const sortKnowledgeNodesForPrompt = (nodes: KnowledgeNode[], now = Date.now()): KnowledgeNode[] => {

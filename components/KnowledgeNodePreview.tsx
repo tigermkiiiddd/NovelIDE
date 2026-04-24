@@ -478,12 +478,12 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">复习次数</span>
-                  <span className="text-gray-400">{node.metadata.reviewCount || 0}</span>
+                  <span className="text-gray-500">强度</span>
+                  <span className="text-gray-400">{dynamicState ? (dynamicState.strength * 100).toFixed(0) + '%' : '100%'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">强化次数</span>
-                  <span className="text-gray-400">{node.metadata.reinforceCount || 0}</span>
+                  <span className="text-gray-500">访问次数</span>
+                  <span className="text-gray-400">{node.metadata.recallCount || 0}</span>
                 </div>
               </>
             )}

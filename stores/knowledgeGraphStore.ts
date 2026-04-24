@@ -23,7 +23,6 @@ import { dbAPI } from '../services/persistence';
 import {
   createKnowledgeNodeMetadata,
   getKnowledgeNodeDynamicState,
-  applyKnowledgeNodeEvent,
   scoreKnowledgeNodeRecall,
 } from '../utils/knowledgeIntelligence';
 import Fuse from 'fuse.js';
@@ -63,8 +62,6 @@ interface KnowledgeGraphState {
   getNodeById: (id: string) => KnowledgeNode | undefined;
 
   // 记忆智能操作
-  recallNode: (id: string) => KnowledgeNode | undefined;
-  reinforceNode: (id: string) => KnowledgeNode | undefined;
   getNodeDynamicState: (id: string) => KnowledgeNodeDynamicState | null;
 
   // 查询方法
@@ -260,33 +257,8 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
   },
 
   // ============================================
-  // 记忆智能操作
+  // 记忆智能操作（activation 自然衰减，无人工复习干预）
   // ============================================
-
-  recallNode: (id: string) => {
-    const node = get().nodes.find((n) => n.id === id);
-    if (!node) return undefined;
-
-    const updatedNode = applyKnowledgeNodeEvent(node, 'recall');
-    set((state) => ({
-      nodes: state.nodes.map((n) => (n.id === id ? updatedNode : n)),
-    }));
-    useAgentStore.getState().addRecalledKnowledgeNode(id);
-    setTimeout(() => saveToFile(get()), 1000);
-    return updatedNode;
-  },
-
-  reinforceNode: (id: string) => {
-    const node = get().nodes.find((n) => n.id === id);
-    if (!node) return undefined;
-
-    const updatedNode = applyKnowledgeNodeEvent(node, 'reinforce');
-    set((state) => ({
-      nodes: state.nodes.map((n) => (n.id === id ? updatedNode : n)),
-    }));
-    setTimeout(() => saveToFile(get()), 1000);
-    return updatedNode;
-  },
 
   getNodeDynamicState: (id: string) => {
     const node = get().nodes.find((n) => n.id === id);
@@ -403,7 +375,7 @@ export const useKnowledgeGraphStore = create<KnowledgeGraphState>((set, get) => 
       .map(result => {
         const baseScore = scoreKnowledgeNodeRecall(result.item, '', now);
         const fuseLexical = (1 - (result.score || 0)) * 60;
-        const total = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength + baseScore.review;
+        const total = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength;
         return { node: result.item, score: total };
       })
       .sort((a, b) => b.score - a.score)

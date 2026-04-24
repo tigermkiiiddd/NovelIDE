@@ -14,7 +14,7 @@ export const globTool: ToolDefinition = {
         pattern: {
           type: 'string',
           description: 'Glob pattern to match files. Examples: "02_角色档案/*.md", "05_正文草稿/**/*.md", "*大纲*". Use "*" for any filename, "**" for recursive。禁止匹配 .json。',
-        }
+        },
         path: {
           type: 'string',
           description: 'Optional directory to search in (e.g., "02_角色档案"). Defaults to root.',

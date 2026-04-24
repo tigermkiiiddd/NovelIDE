@@ -28,6 +28,7 @@ import { AIService } from '../geminiService';
 import { executeDeepThinking, isVirtualThinkingPath, resolveVirtualFile, writeVirtualFile, syncPadToFileStore } from './tools/deepThinkingTools';
 import { executeSearchTools } from './tools/searchTools';
 import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
+import { executeQueryEvolution, executeManageEvolution } from './tools/evolutionTools';
 
 import { useVersionStore } from '../../stores/versionStore';
 import { useAgentStore } from '../../stores/agentStore';
@@ -394,6 +395,14 @@ export const executeTool = async (
             
             // Normalize path arg
             const filePath = args.path || args.oldPath;
+
+            // 禁止通过通用文件工具修改 .json 文件（业务数据隔离，请使用专用工具）
+            if (filePath && filePath.toLowerCase().endsWith('.json')) {
+                return { type: 'ERROR', message: `Error: .json 文件禁止通过 ${name} 工具修改（业务数据隔离，请使用专用工具如 manage_memory、manage_relationships、update_character_profile 等）` };
+            }
+            if (args.newName && args.newName.toLowerCase().endsWith('.json')) {
+                return { type: 'ERROR', message: `Error: 不能重命名为 .json 文件（业务数据隔离）` };
+            }
 
             // --- Virtual .thinking/ path interception (no approval needed) ---
             if (filePath && isVirtualThinkingPath(filePath)) {
@@ -812,12 +821,19 @@ export const executeTool = async (
                 case 'ask_questions':
                     result = handleAskQuestions(args, context.sessionId);
                     break;
+                // --- EVOLUTION TOOLS ---
+                case 'query_evolution':
+                    result = executeQueryEvolution(args);
+                    break;
+                case 'manage_evolution':
+                    result = await executeManageEvolution(args);
+                    break;
                 // --- REFLECTION TOOL (internal, silent) ---
                 case 'reflection':
                     result = `[REFLECTION] focus=${args.focus}, confidence=${args.confidence ?? 'N/A'}\n观察: ${args.observation?.slice(0, 200)}\n分析: ${args.analysis?.slice(0, 300)}\n结论: ${args.conclusion?.slice(0, 200)}`;
                     break;
                 default:
-                    result = `Error: Unknown tool ${name}`;
+                    result = `Error: 工具 "${name}" 不存在。\n\n可能原因和纠正方法：\n1. 拼写错误 — 常见工具参考：read, write, query_memory, manage_memory, manageTodos, final_answer, skills_list 等\n2. 类别未激活 — 如果是 memory/character/relationship/outline 类工具，请先调用 search_tools(categories=["..."]) 激活对应类别\n3. 工具已废弃 — 该工具可能已被移除\n\n建议：调用 search_tools() 查看当前所有可用工具的完整列表。`;
             }
         }
         

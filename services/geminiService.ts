@@ -204,8 +204,9 @@ export class AIService {
           const textContent = msg.parts?.find((p: any) => p.text)?.text || '';
           const reasoningContent = msg.parts?.find((p: any) => p.reasoning)?.reasoning || '';
 
-          const assistantMsg: any = { role: 'assistant' };
-          if (textContent) assistantMsg.content = textContent;
+          // DeepSeek 等 reasoning 模型要求 assistant 消息必须包含 content 字段，
+          // 即使为空字符串，只要有 reasoning_content 就必须同时有 content
+          const assistantMsg: any = { role: 'assistant', content: textContent || '' };
           if (reasoningContent) assistantMsg.reasoning_content = reasoningContent;
           if (toolCalls && toolCalls.length > 0) assistantMsg.tool_calls = toolCalls;
 
