@@ -136,7 +136,8 @@ export class AIService {
     forceToolName?: string,  // 强制调用指定工具名称
     maxTokensOverride?: number,  // 覆盖默认的 max_tokens（用于限制纯文字回复长度）
     temperatureOverride?: number,  // 覆盖默认的 temperature（用于 SubAgent 低温度执行）
-    modelOverride?: string  // 覆盖默认模型（用于轻量任务）
+    modelOverride?: string,  // 覆盖默认模型（用于轻量任务）
+    thinkingEnabledOverride?: boolean  // 覆盖思考模式开关（会话级）
   ): Promise<any> {
     
     // 根据 baseUrl 特征判断协议
@@ -201,9 +202,11 @@ export class AIService {
           }));
 
           const textContent = msg.parts?.find((p: any) => p.text)?.text || '';
+          const reasoningContent = msg.parts?.find((p: any) => p.reasoning)?.reasoning || '';
 
           const assistantMsg: any = { role: 'assistant' };
           if (textContent) assistantMsg.content = textContent;
+          if (reasoningContent) assistantMsg.reasoning_content = reasoningContent;
           if (toolCalls && toolCalls.length > 0) assistantMsg.tool_calls = toolCalls;
 
           openAIMessages.push(assistantMsg);
@@ -239,6 +242,16 @@ export class AIService {
         const settings = getSafetySettings(threshold);
         // Inject as top-level property 'safetySettings' (Standard for Google REST & Proxies)
         requestPayload.safetySettings = settings;
+      }
+
+      // Thinking Mode (支持 Anthropic / DeepSeek / OpenAI-o 系列等思考模式)
+      const thinkingEnabled = thinkingEnabledOverride ?? this.config.thinkingEnabled ?? false;
+      const thinkingBudget = this.config.thinkingBudgetTokens;
+      if (thinkingEnabled) {
+        requestPayload.thinking = {
+          type: 'enabled',
+          ...(thinkingBudget && thinkingBudget > 0 ? { budget_tokens: thinkingBudget } : {}),
+        };
       }
 
       // Build request metadata for debug display
@@ -282,6 +295,7 @@ export class AIService {
 
       // 收集流式 chunk
       let content = '';
+      let reasoningContent = '';
       const toolCallsMap = new Map<number, { id: string; name: string; arguments: string }>();
       let finishReason: string | null = null;
       let model = '';
@@ -301,6 +315,10 @@ export class AIService {
           const delta = choice.delta;
           if (delta?.content) {
             content += delta.content;
+          }
+          // 收集思考/推理内容（DeepSeek 等思考模式模型需要）
+          if (delta?.reasoning_content) {
+            reasoningContent += delta.reasoning_content;
           }
           // 收集 tool calls
           if (delta?.tool_calls) {
@@ -333,6 +351,7 @@ export class AIService {
           message: {
             role: 'assistant',
             content: content || null,
+            reasoning_content: reasoningContent || undefined,
             tool_calls: toolCallsMap.size > 0
               ? Array.from(toolCallsMap.entries()).map(([idx, tc]) => ({
                   index: idx,
@@ -464,6 +483,11 @@ export class AIService {
 
       // 3. Convert OpenAI Response back to Internal Format (parts based)
       const parts: any[] = [];
+
+      // 保存推理内容（DeepSeek 等思考模式模型需要回传）
+      if (msg.reasoning_content) {
+        parts.push({ reasoning: msg.reasoning_content });
+      }
 
       if (msg.content) {
         parts.push({ text: msg.content });

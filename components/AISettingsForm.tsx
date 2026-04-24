@@ -30,6 +30,8 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
           finalConfig.apiKey = activeBackend.apiKey;
           finalConfig.modelName = activeBackend.modelName;
           finalConfig.maxOutputTokens = activeBackend.maxOutputTokens;
+          finalConfig.thinkingEnabled = activeBackend.thinkingEnabled;
+          finalConfig.thinkingBudgetTokens = activeBackend.thinkingBudgetTokens;
       }
 
       // Migration: lightweightModelName → extraction route
@@ -243,6 +245,48 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             <p className="text-xs text-gray-500 mt-2">
                                 控制单次回复的最大长度。推荐: 8192。
                             </p>
+                        </div>
+
+                        {/* Thinking Mode Toggle */}
+                        <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                                    <Brain size={16} className="text-amber-400" />
+                                    思考模式
+                                </label>
+                                <button
+                                    onClick={() => updateActiveBackend({ thinkingEnabled: !activeBackend.thinkingEnabled })}
+                                    className={`
+                                        w-10 h-5 rounded-full relative transition-colors duration-200
+                                        ${activeBackend.thinkingEnabled ? 'bg-amber-600' : 'bg-gray-600'}
+                                    `}
+                                >
+                                    <div className={`
+                                        absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform duration-200 shadow
+                                        ${activeBackend.thinkingEnabled ? 'translate-x-5' : 'translate-x-0.5'}
+                                    `} />
+                                </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mb-3">
+                                启用后模型会在回复前进行深度思考（产生 reasoning_content）。仅部分模型支持。
+                            </p>
+                            {activeBackend.thinkingEnabled && (
+                                <div className="animate-in fade-in slide-in-from-top-2">
+                                    <label className="block text-xs font-medium text-amber-400/80 mb-1.5">
+                                        Thinking Budget (tokens)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={activeBackend.thinkingBudgetTokens || ''}
+                                        onChange={e => updateActiveBackend({ thinkingBudgetTokens: parseInt(e.target.value) || undefined })}
+                                        placeholder="例如: 32000"
+                                        className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2.5 text-white focus:border-amber-500 focus:outline-none font-mono text-sm"
+                                    />
+                                    <p className="text-xs text-gray-600 mt-1.5">
+                                        限制模型在思考阶段消耗的最大 tokens。留空表示不限制。
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

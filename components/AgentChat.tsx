@@ -1,6 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers, Brain } from 'lucide-react';
+import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers, Brain, Lightbulb } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
 import AgentInput from './AgentInput';
@@ -57,6 +57,11 @@ interface AgentChatProps {
   onTogglePlanMode?: () => void;
   currentPlanNote?: PlanNote | null;
   onOpenPlanViewer?: () => void;
+  // Thinking Mode Props
+  thinkingMode?: boolean;
+  onToggleThinkingMode?: () => void;
+  // Questionnaire Props
+  resumeProcessTurn?: () => void;
 }
 
 // --- Thinking Pad Panels (chat 顶部，多话题同时显示) ---
@@ -146,7 +151,10 @@ const AgentChat: React.FC<AgentChatProps> = ({
   planMode = false,
   onTogglePlanMode,
   currentPlanNote,
-  onOpenPlanViewer
+  onOpenPlanViewer,
+  thinkingMode = false,
+  onToggleThinkingMode,
+  resumeProcessTurn,
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [showMemoryDebug, setShowMemoryDebug] = useState(false);
@@ -298,6 +306,20 @@ const AgentChat: React.FC<AgentChatProps> = ({
                   title={planMode ? "关闭 Plan 模式" : "开启 Plan 模式"}
               >
                   <ClipboardList size={18} />
+              </button>
+            )}
+            {/* Thinking Mode Toggle */}
+            {onToggleThinkingMode && (
+              <button
+                  onClick={onToggleThinkingMode}
+                  className={`p-2 rounded-lg transition-colors ${
+                      thinkingMode
+                          ? 'bg-amber-600/20 text-amber-400'
+                          : 'hover:bg-gray-800 text-gray-500 hover:text-white'
+                  }`}
+                  title={thinkingMode ? "关闭思考模式" : "开启思考模式"}
+              >
+                  <Lightbulb size={18} />
               </button>
             )}
             {/* View Current Plan */}
@@ -479,6 +501,19 @@ const AgentChat: React.FC<AgentChatProps> = ({
               </div>
             )}
 
+            {/* Thinking Mode Indicator */}
+            {thinkingMode && (
+              <div className="bg-amber-900/20 border-b border-amber-800/50 px-4 py-2 shrink-0">
+                <div className="flex items-center gap-2 text-amber-300 text-sm">
+                  <Lightbulb size={16} className="text-amber-400" />
+                  <span>思考模式已启用</span>
+                </div>
+                <p className="text-xs text-amber-500 mt-1">
+                  AI 将在回复前进行深度思考（可能增加响应时间和 token 消耗）
+                </p>
+              </div>
+            )}
+
             <AgentTodoList todos={todos} />
             <AgentMessageList
                 messages={messages}
@@ -486,12 +521,13 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 onRegenerate={onRegenerate}
                 onEditMessage={onEditMessage}
             />
-            <AgentInput 
-                onSendMessage={onSendMessage} 
+            <AgentInput
+                onSendMessage={onSendMessage}
                 onStop={onStop}
-                isLoading={isLoading} 
-                files={files} 
-                autoFocus={isOpen} 
+                isLoading={isLoading}
+                files={files}
+                autoFocus={isOpen}
+                resumeProcessTurn={resumeProcessTurn}
             />
         </>
       )}

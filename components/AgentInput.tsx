@@ -7,6 +7,7 @@ import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useMemoryStackStore } from '../stores/memoryStackStore';
 import { useAgentStore } from '../stores/agentStore';
+import QuestionnairePanel from './QuestionnairePanel';
 
 interface AgentInputProps {
   onSendMessage: (text: string) => void;
@@ -14,9 +15,38 @@ interface AgentInputProps {
   isLoading: boolean;
   files: FileNode[];
   autoFocus?: boolean;
+  resumeProcessTurn?: () => void;
 }
 
-const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoading, files, autoFocus }) => {
+const QuestionnaireSection: React.FC<{ resumeProcessTurn?: () => void }> = ({ resumeProcessTurn }) => {
+  const activeQuestionnaire = useAgentStore(state => {
+    const session = state.sessions.find(s => s.id === state.currentSessionId);
+    return session?.activeQuestionnaire;
+  });
+
+  if (!activeQuestionnaire || activeQuestionnaire.status !== 'active') return null;
+
+  return (
+    <QuestionnairePanel
+      questionnaire={activeQuestionnaire}
+      onAnswer={(questionId, optionIds) => {
+        useAgentStore.getState().updateQuestionnaireAnswer(questionId, optionIds);
+      }}
+      onTextAnswer={(questionId, text) => {
+        useAgentStore.getState().updateQuestionnaireTextAnswer(questionId, text);
+      }}
+      onNavigate={(index) => {
+        useAgentStore.getState().setQuestionnaireIndex(index);
+      }}
+      onComplete={() => {
+        useAgentStore.getState().completeQuestionnaire();
+        resumeProcessTurn?.();
+      }}
+    />
+  );
+};
+
+const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoading, files, autoFocus, resumeProcessTurn }) => {
   const [input, setInput] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -401,6 +431,9 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                 )}
             </div>
         )}
+
+        {/* Questionnaire Panel */}
+        <QuestionnaireSection resumeProcessTurn={resumeProcessTurn} />
 
         <form onSubmit={handleSubmit} className="flex items-end space-x-2">
         <textarea

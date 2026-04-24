@@ -108,6 +108,33 @@ export interface ProjectMeta {
   createdAt: number;
 }
 
+// --- Questionnaire Types ---
+
+export interface QuestionOption {
+  id: string;
+  label: string;
+  description: string;
+  isRecommended?: boolean;
+}
+
+export interface ClarificationQuestion {
+  id: string;
+  text: string;
+  type: 'single' | 'multiple';
+  options: QuestionOption[];
+  userSelectedOptionIds?: string[];
+  userTextAnswer?: string;
+}
+
+export interface Questionnaire {
+  id: string;
+  toolCallId?: string;
+  questions: ClarificationQuestion[];
+  currentIndex: number;
+  status: 'active' | 'completed';
+  completedAt?: number;
+}
+
 export interface ChatSession {
   id: string;
   projectId: string; // 关联的项目ID
@@ -116,6 +143,8 @@ export interface ChatSession {
   todos: TodoItem[]; // 每个会话有独立的任务状态
   lastModified: number;
   planModeEnabled?: boolean; // 会话级 Plan 模式开关
+  thinkingEnabled?: boolean; // 会话级思考模式开关（覆盖全局配置）
+  activeQuestionnaire?: Questionnaire | null; // 进行中的澄清问卷
   // 知识节点状态（按会话持久化）
   recalledKnowledgeNodeIds: string[];   // 本次对话召回的节点ID
   hiddenKnowledgeNodeIds: string[];     // 本次对话隐藏的常驻节点ID
@@ -275,6 +304,9 @@ export interface OpenAIBackend {
   modelName: string;
   lightweightModelName?: string; // 轻量模型 (legacy, use modelRoutes instead)
   maxOutputTokens?: number;      // 最长输出
+  // 思考模式配置
+  thinkingEnabled?: boolean;     // 是否启用思考模式
+  thinkingBudgetTokens?: number; // 思考预算 (tokens)
 }
 
 // --- Model Routing Types ---
@@ -311,6 +343,10 @@ export interface AIConfig {
     document: boolean;        // 文档保存时自动提取
     chapterAnalysis: boolean; // 章节分析
   };
+
+  // 思考模式配置（全局默认值，可被会话级覆盖）
+  thinkingEnabled?: boolean;
+  thinkingBudgetTokens?: number;
 }
 
 export const DEFAULT_AI_CONFIG: AIConfig = {

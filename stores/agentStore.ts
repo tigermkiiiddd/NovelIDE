@@ -62,7 +62,15 @@ interface AgentState {
   addHiddenKnowledgeNode: (nodeId: string) => void;
   removeHiddenKnowledgeNode: (nodeId: string) => void;
   getCurrentSessionKnowledgeState: () => { recalledIds: string[]; hiddenIds: string[] };
-  
+  toggleSessionThinking: () => void;
+
+  // Questionnaire Helpers
+  setActiveQuestionnaire: (q: import('../types').Questionnaire | null) => void;
+  updateQuestionnaireAnswer: (questionId: string, optionIds: string[]) => void;
+  updateQuestionnaireTextAnswer: (questionId: string, text: string) => void;
+  setQuestionnaireIndex: (index: number) => void;
+  completeQuestionnaire: () => void;
+
   // Message Helpers
   addMessage: (message: ChatMessage) => void;
   editMessageContent: (messageId: string, newText: string) => void;
@@ -328,6 +336,125 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           recalledIds: session?.recalledKnowledgeNodeIds || [],
           hiddenIds: session?.hiddenKnowledgeNodeIds || [],
         };
+      },
+
+      toggleSessionThinking: () => {
+        const { currentSessionId, sessions } = get();
+        if (!currentSessionId) return;
+        const session = sessions.find(s => s.id === currentSessionId);
+        if (!session) return;
+
+        const newEnabled = !session.thinkingEnabled;
+        get().updateCurrentSession(s => ({
+          ...s,
+          thinkingEnabled: newEnabled,
+        }));
+      },
+
+      setActiveQuestionnaire: (q) => {
+        get().updateCurrentSession(session => ({
+          ...session,
+          activeQuestionnaire: q,
+        }));
+      },
+
+      updateQuestionnaireAnswer: (questionId, optionIds) => {
+        get().updateCurrentSession(session => {
+          if (!session.activeQuestionnaire) return session;
+          return {
+            ...session,
+            activeQuestionnaire: {
+              ...session.activeQuestionnaire,
+              questions: session.activeQuestionnaire.questions.map(q =>
+                q.id === questionId ? { ...q, userSelectedOptionIds: optionIds } : q
+              ),
+            },
+          };
+        });
+      },
+
+      updateQuestionnaireTextAnswer: (questionId, text) => {
+        get().updateCurrentSession(session => {
+          if (!session.activeQuestionnaire) return session;
+          return {
+            ...session,
+            activeQuestionnaire: {
+              ...session.activeQuestionnaire,
+              questions: session.activeQuestionnaire.questions.map(q =>
+                q.id === questionId ? { ...q, userTextAnswer: text } : q
+              ),
+            },
+          };
+        });
+      },
+
+      setQuestionnaireIndex: (index) => {
+        get().updateCurrentSession(session => {
+          if (!session.activeQuestionnaire) return session;
+          return {
+            ...session,
+            activeQuestionnaire: {
+              ...session.activeQuestionnaire,
+              currentIndex: index,
+            },
+          };
+        });
+      },
+
+      completeQuestionnaire: () => {
+        const { currentSessionId, sessions } = get();
+        if (!currentSessionId) return;
+        const session = sessions.find(s => s.id === currentSessionId);
+        if (!session?.activeQuestionnaire) return;
+
+        const q = session.activeQuestionnaire;
+
+        // 汇总答案为 user 消息文本
+        const lines: string[] = ['[澄清回答]'];
+        q.questions.forEach((question, idx) => {
+          const selected = question.userSelectedOptionIds || [];
+          const textAnswer = question.userTextAnswer?.trim();
+
+          lines.push(`\nQ${idx + 1}: ${question.text}`);
+
+          // 过滤掉 __other__，用自由输入替代
+          const selectedLabels = selected
+            .filter(sid => sid !== '__other__')
+            .map(sid => {
+              const opt = question.options.find(o => o.id === sid);
+              return opt ? opt.label : sid;
+            });
+          const hasOther = selected.includes('__other__');
+
+          if (selectedLabels.length > 0 && hasOther && textAnswer) {
+            lines.push(`A: ${selectedLabels.join(', ')} + 其他: ${textAnswer}`);
+          } else if (selectedLabels.length > 0 && hasOther) {
+            lines.push(`A: ${selectedLabels.join(', ')} + 其他（未填写）`);
+          } else if (selectedLabels.length > 0) {
+            lines.push(`A: ${selectedLabels.join(', ')}`);
+          } else if (hasOther && textAnswer) {
+            lines.push(`A: ${textAnswer}`);
+          } else if (hasOther) {
+            lines.push('A: 其他（未填写）');
+          } else {
+            lines.push('A: （未作答）');
+          }
+        });
+        const answerText = lines.join('\n');
+
+        const answerMessage = {
+          id: generateId(),
+          role: 'user' as const,
+          text: answerText,
+          timestamp: Date.now(),
+        };
+
+        get().updateCurrentSession(s => ({
+          ...s,
+          messages: [...s.messages, answerMessage],
+          activeQuestionnaire: null,
+          lastModified: Date.now(),
+        }));
       },
 
       addMessage: (message) => {

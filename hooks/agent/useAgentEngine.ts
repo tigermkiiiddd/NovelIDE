@@ -114,6 +114,13 @@ export const useAgentEngine = ({
         if (signal.aborted) break;
         loopCount++;
 
+        // --- 检测进行中的 questionnaire，有则暂停循环等待用户 ---
+        const session = useAgentStore.getState().sessions.find(s => s.id === currentSessionId);
+        if (session?.activeQuestionnaire?.status === 'active') {
+          keepGoing = false;
+          break;
+        }
+
         // 4.1 准备历史消息 (LLM Input Part 2: History)
         const currentGlobalSessions = useAgentStore.getState().sessions;
         const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
@@ -286,6 +293,10 @@ export const useAgentEngine = ({
         const maxTokensForTextReply = 800;
         const shouldLimitTokens = toolsForMode.length === 0;
 
+        // 读取当前会话的思考模式设置（会话级覆盖全局配置）
+        const currentSessionForThinking = useAgentStore.getState().sessions.find(s => s.id === currentSessionId);
+        const thinkingEnabled = currentSessionForThinking?.thinkingEnabled;
+
         const response = await aiServiceInstance.sendMessage(
           apiHistory,
           '', // 当前消息已在 apiHistory 中
@@ -293,7 +304,10 @@ export const useAgentEngine = ({
           toolsForMode,  // 使用根据模式选择的工具
           signal,
           undefined,  // forceToolName
-          shouldLimitTokens ? maxTokensForTextReply : undefined  // maxTokensOverride
+          shouldLimitTokens ? maxTokensForTextReply : undefined,  // maxTokensOverride
+          undefined,  // temperatureOverride
+          undefined,  // modelOverride
+          thinkingEnabled  // thinkingEnabledOverride（会话级覆盖）
         );
 
         // Extract API metadata for debug display
@@ -466,39 +480,44 @@ export const useAgentEngine = ({
             continue;
           }
 
-          // --- thinking 工具：静默记录（deep_thinking 走正常工具执行路径） ---
-          const thinkingParts = toolParts.filter((p: any) =>
-            p.functionCall.name === 'thinking'
+          // --- 内部工具：thinking + reflection 静默记录（deep_thinking 走正常工具执行路径） ---
+          const internalToolNames = ['reflection'];
+          const internalParts = toolParts.filter((p: any) =>
+            internalToolNames.includes(p.functionCall.name)
           );
           const actionParts = toolParts.filter((p: any) =>
-            p.functionCall.name !== 'thinking'
+            !internalToolNames.includes(p.functionCall.name)
           );
 
-          // 为 thinking 工具生成 function response（保留在历史中，UI 通过 ToolCallBlock 显示）
-          if (thinkingParts.length > 0) {
-            thinkingParts.forEach((tp: any) => {
+          // 为内部工具生成 function response（保留在历史中，UI 通过 ToolCallBlock 显示）
+          if (internalParts.length > 0) {
+            internalParts.forEach((tp: any) => {
               const args = tp.functionCall.args || {};
+              const toolName = tp.functionCall.name;
 
-              console.log(
-                `[AgentEngine] thinking:\n` +
-                `  表面: ${(args.surface || '').slice(0, 100)}\n` +
-                `  意图: ${(args.intent || '').slice(0, 200)}\n` +
-                `  计划: ${(args.plan || '').slice(0, 150)}\n` +
-                `  反思: ${(args.reflection || '').slice(0, 150) || '(无)'}`
-              );
+              if (toolName === 'reflection') {
+                console.log(
+                  `[AgentEngine] reflection:\n` +
+                  `  焦点: ${args.focus}\n` +
+                  `  置信度: ${args.confidence ?? 'N/A'}\n` +
+                  `  观察: ${(args.observation || '').slice(0, 150)}\n` +
+                  `  分析: ${(args.analysis || '').slice(0, 200)}\n` +
+                  `  结论: ${(args.conclusion || '').slice(0, 150)}`
+                );
+              }
 
               addMessage({
                 id: generateId(),
                 role: 'system',
                 text: '',
-                rawParts: [{ functionResponse: { name: 'thinking', id: tp.functionCall.id, response: { result: 'ok' } } }],
+                rawParts: [{ functionResponse: { name: toolName, id: tp.functionCall.id, response: { result: 'ok' } } }],
                 isToolOutput: true,
                 timestamp: Date.now(),
               });
             });
           }
 
-          // 如果只有 thinking 没有其他工具，继续循环
+          // 如果只有内部工具没有其他工具，继续循环
           if (actionParts.length === 0) {
             continue;
           }

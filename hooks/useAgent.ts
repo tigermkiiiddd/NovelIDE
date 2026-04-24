@@ -245,6 +245,15 @@ export const useAgent = (
 
   const sendMessage = useCallback(async (text: string) => {
     if (!currentSessionId) return;
+
+    // 如果用户发送消息时 questionnaire 正在进行中，取消它
+    const activeQuestionnaire = useAgentStore.getState().sessions.find(
+      s => s.id === currentSessionId
+    )?.activeQuestionnaire;
+    if (activeQuestionnaire?.status === 'active') {
+      useAgentStore.getState().setActiveQuestionnaire(null);
+    }
+
     const userMessage = { id: generateId(), role: 'user' as const, text, timestamp: Date.now() };
     const recentMessages = [...(currentSession?.messages || []), userMessage];
 
@@ -317,6 +326,9 @@ export const useAgent = (
       setTimeout(() => engine.processTurn(), 0);
   }, [editMessageContent, deleteMessagesFrom, engine, files, triggerSkill]);
 
+  // Thinking Mode State - 基于当前会话状态
+  const thinkingMode = currentSession?.thinkingEnabled ?? false;
+
   return {
     messages: currentSession?.messages || [],
     isLoading,
@@ -345,6 +357,11 @@ export const useAgent = (
     currentPlanNote,
     submitPlanForReview: usePlanStore.getState().submitForReview,
     approvePlanNote: usePlanStore.getState().approvePlan,
-    rejectPlanNote: usePlanStore.getState().rejectPlan
+    rejectPlanNote: usePlanStore.getState().rejectPlan,
+    // Thinking Mode
+    thinkingMode,
+    toggleThinkingMode: useAgentStore.getState().toggleSessionThinking,
+    // Questionnaire
+    resumeProcessTurn: engine.processTurn,
   };
 };

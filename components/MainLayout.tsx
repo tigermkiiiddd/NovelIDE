@@ -213,7 +213,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
     togglePlanMode,
     currentPlanNote,
     approvePlanNote,
-    rejectPlanNote
+    rejectPlanNote,
+    // Thinking Mode
+    thinkingMode,
+    toggleThinkingMode,
+    // Questionnaire
+    resumeProcessTurn,
   } = useAgent(files, currentProject, activeFile, {
       createFile, updateFile, patchFile, readFile, searchFiles, listFiles, renameFile,
       deleteFile,
@@ -401,6 +406,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
         setIsPlanViewerOpen(true);
         if (isMobile) setChatOpen(false);
       }}
+        thinkingMode={thinkingMode}
+        onToggleThinkingMode={toggleThinkingMode}
+        resumeProcessTurn={resumeProcessTurn}
       />
       </Suspense>
       </ErrorBoundary>

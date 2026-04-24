@@ -21,7 +21,9 @@ import {
 } from './fileWriteTools';
 
 // Agent 控制
-import { thinkingTool, finalAnswerTool } from './agentControlTools';
+import { finalAnswerTool } from './agentControlTools';
+import { askQuestionsTool } from './askQuestionsTool';
+import { reflectionTool } from './reflectionTool';
 import { deepThinkingTool } from './deepThinkingTools';
 
 // 项目 & 任务
@@ -79,9 +81,10 @@ import { queryEvolutionTool, manageEvolutionTool } from './evolutionTools';
 
 export const alwaysOnTools: ToolDefinition[] = [
   // Agent 控制（始终在最前面）
-  thinkingTool,
+  reflectionTool,
   deepThinkingTool,
   finalAnswerTool,
+  askQuestionsTool,
   // 文件读写
   listFilesTool,
   readFileTool,

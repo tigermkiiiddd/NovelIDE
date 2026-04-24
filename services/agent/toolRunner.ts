@@ -30,6 +30,7 @@ import { executeSearchTools } from './tools/searchTools';
 import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
 
 import { useVersionStore } from '../../stores/versionStore';
+import { useAgentStore } from '../../stores/agentStore';
 
 /**
  * Extract character names from 02_角色档案 folder.
@@ -247,6 +248,79 @@ export type ToolExecutionResult =
   | { type: 'EXECUTED'; result: string }
   | { type: 'APPROVAL_REQUIRED'; change: PendingChange; uiLog: string }
   | { type: 'ERROR'; message: string };
+
+/**
+ * Handle ask_questions tool: validate params, create Questionnaire, save to session.
+ */
+function handleAskQuestions(args: any, sessionId?: string): string {
+  const questions = args.questions;
+
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return 'Error: questions 必须是至少包含1个问题的数组';
+  }
+  if (questions.length > 5) {
+    return 'Error: 一次最多提交 5 个问题';
+  }
+
+  const validatedQuestions = questions.map((q: any, qIdx: number) => {
+    if (!q.text || typeof q.text !== 'string') {
+      throw new Error(`questions[${qIdx}].text 必填且为字符串`);
+    }
+    if (!q.type || !['single', 'multiple'].includes(q.type)) {
+      throw new Error(`questions[${qIdx}].type 必须是 'single' 或 'multiple'`);
+    }
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      throw new Error(`questions[${qIdx}].options 必须至少包含 2 个选项`);
+    }
+    if (q.options.length > 8) {
+      throw new Error(`questions[${qIdx}].options 最多 8 个选项`);
+    }
+
+    const options = q.options.map((o: any, oIdx: number) => {
+      if (!o.label || typeof o.label !== 'string') {
+        throw new Error(`questions[${qIdx}].options[${oIdx}].label 必填`);
+      }
+      if (!o.description || typeof o.description !== 'string') {
+        throw new Error(`questions[${qIdx}].options[${oIdx}].description 必填`);
+      }
+      if (o.description.length > 200) {
+        throw new Error(`questions[${qIdx}].options[${oIdx}].description 超过 200 字限制`);
+      }
+      return {
+        id: `opt_${qIdx}_${oIdx}`,
+        label: o.label,
+        description: o.description,
+        isRecommended: !!o.isRecommended,
+      };
+    });
+
+    return {
+      id: `q_${qIdx}`,
+      text: q.text,
+      type: q.type,
+      options,
+    };
+  });
+
+  const questionnaire = {
+    id: generateId(),
+    toolCallId: '', // 由调用方填充
+    questions: validatedQuestions,
+    currentIndex: 0,
+    status: 'active' as const,
+  };
+
+  // 保存到 session
+  if (sessionId) {
+    const store = useAgentStore.getState();
+    const session = store.sessions.find(s => s.id === sessionId);
+    if (session) {
+      store.setActiveQuestionnaire(questionnaire);
+    }
+  }
+
+  return `已向用户提交 ${validatedQuestions.length} 个澄清问题，等待用户作答。`;
+}
 
 /**
  * Executes a single tool call or prepares it for approval.
@@ -721,6 +795,14 @@ export const executeTool = async (
                 case 'activate_skill':
                     const skillResult = executeActivateSkill(args.skillName || '', args.reason || '');
                     result = JSON.stringify(skillResult);
+                    break;
+                // --- QUESTIONNAIRE TOOL ---
+                case 'ask_questions':
+                    result = handleAskQuestions(args, context.sessionId);
+                    break;
+                // --- REFLECTION TOOL (internal, silent) ---
+                case 'reflection':
+                    result = `[REFLECTION] focus=${args.focus}, confidence=${args.confidence ?? 'N/A'}\n观察: ${args.observation?.slice(0, 200)}\n分析: ${args.analysis?.slice(0, 300)}\n结论: ${args.conclusion?.slice(0, 200)}`;
                     break;
                 default:
                     result = `Error: Unknown tool ${name}`;
