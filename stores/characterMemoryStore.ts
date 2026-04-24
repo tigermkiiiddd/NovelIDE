@@ -138,25 +138,13 @@ const saveProfilesToFiles = async (profiles: CharacterProfileV2[]) => {
   const projectId = useProjectStore.getState().currentProjectId;
 
   // 1. 保存到 IndexedDB 专用表（主要存储）
+  // ⚠️ 禁止在 saver 中自动删除数据——删除操作只能由显式的 deleteProfile/deleteProject 触发
   if (projectId) {
     try {
-      // 获取现有档案 ID 列表
-      const existingIds = new Set(profiles.map(p => p.characterId));
-
-      // 保存所有档案
       for (const profile of profiles) {
         const normalized = normalizeProfile(profile);
         await dbAPI.saveCharacterProfile(normalized, projectId);
       }
-
-      // 删除不在列表中的档案
-      const allProfiles = await dbAPI.getCharacterProfiles(projectId);
-      for (const oldProfile of allProfiles) {
-        if (!existingIds.has(oldProfile.characterId)) {
-          await dbAPI.deleteCharacterProfile(oldProfile.characterId);
-        }
-      }
-
       console.log('[CharacterMemoryStore] 已保存到 IndexedDB 表');
     } catch (error) {
       console.error('[CharacterMemoryStore] 保存到 IndexedDB 表失败:', error);
@@ -297,6 +285,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
               profiles: profiles.map(p => normalizeProfile(p)),
               isInitialized: true
             });
+            (useCharacterMemoryStore as any)._markLoaded?.();
             console.log(`[CharacterMemoryStore] 从表加载了 ${profiles.length} 个档案`);
             return;
           }
@@ -311,6 +300,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
 
       if (!folder) {
         useCharacterMemoryStore.setState({ profiles: [], isInitialized: true });
+        (useCharacterMemoryStore as any)._markLoaded?.();
         return;
       }
 
@@ -342,6 +332,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
       }
 
       useCharacterMemoryStore.setState({ profiles, isInitialized: true });
+      (useCharacterMemoryStore as any)._markLoaded?.();
     },
 
     loadProjectProfiles: async (_projectId) => {

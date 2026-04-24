@@ -139,101 +139,121 @@ let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
 export const initDB = () => {
   if (!dbPromise) {
-    dbPromise = openDB<NovelGenieDB>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion, newVersion, transaction) {
-        // Version 1 stores
-        if (!db.objectStoreNames.contains('projects')) {
-          db.createObjectStore('projects', { keyPath: 'id' });
-        }
-        if (!db.objectStoreNames.contains('files')) {
-          db.createObjectStore('files');
-        }
-        if (!db.objectStoreNames.contains('sessions')) {
-          db.createObjectStore('sessions');
-        }
-        if (!db.objectStoreNames.contains('settings')) {
-          db.createObjectStore('settings');
-        }
+    dbPromise = new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('IndexedDB 初始化超时（5秒）。可能是另一个标签页锁定了数据库，请关闭其他 NovelIDE 标签页后刷新。'));
+      }, 5000);
 
-        // Version 4: Add diffSessions and uiSettings stores
-        if (!db.objectStoreNames.contains('diffSessions')) {
-          db.createObjectStore('diffSessions');
-        }
-        if (!db.objectStoreNames.contains('uiSettings')) {
-          db.createObjectStore('uiSettings');
-        }
+      openDB<NovelGenieDB>(DB_NAME, DB_VERSION, {
+        upgrade(db, oldVersion, newVersion, transaction) {
+          // Version 1 stores
+          if (!db.objectStoreNames.contains('projects')) {
+            db.createObjectStore('projects', { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains('files')) {
+            db.createObjectStore('files');
+          }
+          if (!db.objectStoreNames.contains('sessions')) {
+            db.createObjectStore('sessions');
+          }
+          if (!db.objectStoreNames.contains('settings')) {
+            db.createObjectStore('settings');
+          }
 
-        // Version 5: Add planNotes store
-        if (!db.objectStoreNames.contains('planNotes')) {
-          db.createObjectStore('planNotes');
-        }
+          // Version 4: Add diffSessions and uiSettings stores
+          if (!db.objectStoreNames.contains('diffSessions')) {
+            db.createObjectStore('diffSessions');
+          }
+          if (!db.objectStoreNames.contains('uiSettings')) {
+            db.createObjectStore('uiSettings');
+          }
 
-        // Version 6: Add pendingChanges store
-        if (!db.objectStoreNames.contains('pendingChanges')) {
-          db.createObjectStore('pendingChanges');
-        }
+          // Version 5: Add planNotes store
+          if (!db.objectStoreNames.contains('planNotes')) {
+            db.createObjectStore('planNotes');
+          }
 
-        // Version 9: Add chapterAnalyses store
-        if (!db.objectStoreNames.contains('chapterAnalyses')) {
-          db.createObjectStore('chapterAnalyses');
-        }
+          // Version 6: Add pendingChanges store
+          if (!db.objectStoreNames.contains('pendingChanges')) {
+            db.createObjectStore('pendingChanges');
+          }
 
-        // Version 10: Add versions store for document version management
-        if (!db.objectStoreNames.contains('versions')) {
-          db.createObjectStore('versions');
-        }
+          // Version 9: Add chapterAnalyses store
+          if (!db.objectStoreNames.contains('chapterAnalyses')) {
+            db.createObjectStore('chapterAnalyses');
+          }
 
-        // Version 11: Add backups store for data safety
-        if (!db.objectStoreNames.contains('backups')) {
-          db.createObjectStore('backups');
-        }
+          // Version 10: Add versions store for document version management
+          if (!db.objectStoreNames.contains('versions')) {
+            db.createObjectStore('versions');
+          }
 
-        // Version 12: Add dedicated tables for memories and profiles
-        if (!db.objectStoreNames.contains('longTermMemories')) {
-          const store = db.createObjectStore('longTermMemories', { keyPath: 'id' });
-          store.createIndex('by-project', 'projectId');
-        }
-        if (!db.objectStoreNames.contains('memoryEdges')) {
-          const store = db.createObjectStore('memoryEdges', { keyPath: 'id' });
-          store.createIndex('by-project', 'projectId');
-        }
-        if (!db.objectStoreNames.contains('characterProfiles')) {
-          const store = db.createObjectStore('characterProfiles', { keyPath: 'characterId' });
-          store.createIndex('by-project', 'projectId');
-        }
-        if (!db.objectStoreNames.contains('projectMeta')) {
-          db.createObjectStore('projectMeta');
-        }
+          // Version 11: Add backups store for data safety
+          if (!db.objectStoreNames.contains('backups')) {
+            db.createObjectStore('backups');
+          }
 
-        // Version 13: Add entity version history tables
-        if (!db.objectStoreNames.contains('characterProfileVersions')) {
-          const store = db.createObjectStore('characterProfileVersions', { keyPath: 'id' });
-          store.createIndex('by-project', 'projectId');
-          store.createIndex('by-entity', 'entityId');
-        }
-        if (!db.objectStoreNames.contains('chapterAnalysisVersions')) {
-          const store = db.createObjectStore('chapterAnalysisVersions', { keyPath: 'id' });
-          store.createIndex('by-project', 'projectId');
-          store.createIndex('by-entity', 'entityId');
-        }
+          // Version 12: Add dedicated tables for memories and profiles
+          if (!db.objectStoreNames.contains('longTermMemories')) {
+            const store = db.createObjectStore('longTermMemories', { keyPath: 'id' });
+            store.createIndex('by-project', 'projectId');
+          }
+          if (!db.objectStoreNames.contains('memoryEdges')) {
+            const store = db.createObjectStore('memoryEdges', { keyPath: 'id' });
+            store.createIndex('by-project', 'projectId');
+          }
+          if (!db.objectStoreNames.contains('characterProfiles')) {
+            const store = db.createObjectStore('characterProfiles', { keyPath: 'characterId' });
+            store.createIndex('by-project', 'projectId');
+          }
+          if (!db.objectStoreNames.contains('projectMeta')) {
+            db.createObjectStore('projectMeta');
+          }
 
-        // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
-        // No new object stores required for these versions.
+          // Version 13: Add entity version history tables
+          if (!db.objectStoreNames.contains('characterProfileVersions')) {
+            const store = db.createObjectStore('characterProfileVersions', { keyPath: 'id' });
+            store.createIndex('by-project', 'projectId');
+            store.createIndex('by-entity', 'entityId');
+          }
+          if (!db.objectStoreNames.contains('chapterAnalysisVersions')) {
+            const store = db.createObjectStore('chapterAnalysisVersions', { keyPath: 'id' });
+            store.createIndex('by-project', 'projectId');
+            store.createIndex('by-entity', 'entityId');
+          }
 
-        // Version 14: Add skillTrigger store
-        if (!db.objectStoreNames.contains('skillTrigger')) {
-          db.createObjectStore('skillTrigger');
-        }
-// Version 15: Add agentMemories + agentSessionSummaries for self-evolution
-        if (!db.objectStoreNames.contains('agentMemories')) {
-          const store = db.createObjectStore('agentMemories', { keyPath: 'id' });
-          store.createIndex('by-type', 'type');
-          store.createIndex('by-importance', 'importance');
-        }
-        if (!db.objectStoreNames.contains('agentSessionSummaries')) {
-          db.createObjectStore('agentSessionSummaries', { keyPath: 'sessionId' });
-        }
-      },
+          // Version 7 & 8: Schema changes applied externally (version bump to match browser DB).
+          // No new object stores required for these versions.
+
+          // Version 14: Add skillTrigger store
+          if (!db.objectStoreNames.contains('skillTrigger')) {
+            db.createObjectStore('skillTrigger');
+          }
+
+          // Version 15: Add agentMemories + agentSessionSummaries for self-evolution
+          if (!db.objectStoreNames.contains('agentMemories')) {
+            const store = db.createObjectStore('agentMemories', { keyPath: 'id' });
+            store.createIndex('by-type', 'type');
+            store.createIndex('by-importance', 'importance');
+          }
+          if (!db.objectStoreNames.contains('agentSessionSummaries')) {
+            db.createObjectStore('agentSessionSummaries', { keyPath: 'sessionId' });
+          }
+        },
+        blocked() {
+          console.warn('[initDB] IndexedDB 被其他标签页阻塞，请关闭其他 NovelIDE 标签页后刷新。');
+        },
+        blocking() {
+          console.warn('[initDB] 当前连接阻塞了其他标签页的数据库升级，主动关闭当前连接...');
+        },
+      }).then(db => {
+        clearTimeout(timeout);
+        resolve(db);
+      }).catch(err => {
+        clearTimeout(timeout);
+        dbPromise = undefined as any; // 重置，允许下次重试
+        reject(err);
+      });
     });
   }
   return dbPromise;

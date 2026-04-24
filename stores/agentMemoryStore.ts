@@ -56,18 +56,34 @@ const AGENT_MEMORY_STORE = 'agentMemories';
 const SESSION_SUMMARY_STORE = 'agentSessionSummaries';
 const GLOBAL_SETTINGS_STORE = 'settings'; // 复用已有 settings store
 
-/** 保存所有记忆条目到 IndexedDB */
+/** 保存所有记忆条目到 IndexedDB（diff 更新：不 clear，只删旧增新） */
 const persistEntries = async (entries: AgentMemoryEntry[]) => {
   try {
     const db = await initDB();
     const tx = db.transaction(AGENT_MEMORY_STORE as any, 'readwrite');
     const store = tx.objectStore(AGENT_MEMORY_STORE);
 
-    // 清空旧数据后写入
-    await store.clear();
+    // 1. 读取现有 key 集合
+    const existingKeys = new Set<string>();
+    let cursor = await store.openCursor();
+    while (cursor) {
+      existingKeys.add(cursor.key as string);
+      cursor = await cursor.continue();
+    }
+
+    // 2. 写入新数据
+    const newKeys = new Set(entries.map(e => e.id));
     for (const entry of entries) {
       await store.put(entry as any);
     }
+
+    // 3. 删除已不存在的数据
+    for (const oldKey of existingKeys) {
+      if (!newKeys.has(oldKey)) {
+        await store.delete(oldKey);
+      }
+    }
+
     await tx.done;
   } catch (error) {
     // 如果 store 不存在（DB 版本未升级），降级到 settings store
@@ -105,17 +121,35 @@ const loadEntries = async (): Promise<AgentMemoryEntry[]> => {
   return [];
 };
 
-/** 保存会话摘要列表到 IndexedDB */
+/** 保存会话摘要列表到 IndexedDB（diff 更新：不 clear） */
 const persistSessionSummaries = async (summaries: SessionSummary[]) => {
   try {
     const db = await initDB();
     if (db.objectStoreNames?.contains(SESSION_SUMMARY_STORE)) {
       const tx = db.transaction(SESSION_SUMMARY_STORE as any, 'readwrite');
       const store = tx.objectStore(SESSION_SUMMARY_STORE);
-      await store.clear();
+
+      // 1. 读取现有 key 集合
+      const existingKeys = new Set<string>();
+      let cursor = await store.openCursor();
+      while (cursor) {
+        existingKeys.add(cursor.key as string);
+        cursor = await cursor.continue();
+      }
+
+      // 2. 写入新数据
+      const newKeys = new Set(summaries.map(s => s.sessionId));
       for (const s of summaries) {
         await store.put(s);
       }
+
+      // 3. 删除已不存在的数据
+      for (const oldKey of existingKeys) {
+        if (!newKeys.has(oldKey)) {
+          await store.delete(oldKey);
+        }
+      }
+
       await tx.done;
       return;
     }

@@ -53,10 +53,12 @@ export function createPersistingStoreFromConfig<T extends object>(
 ) {
   const { name, initialState, saver, debounceMs = 1000 } = config;
 
+  let isLoaded = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingState: T | null = null;
 
   const saveNow = (state: T) => {
+    if (!isLoaded) return;
     if (typeof saver !== 'function') return;
 
     Promise.resolve(saver(state)).catch((error) => {
@@ -91,6 +93,10 @@ export function createPersistingStoreFromConfig<T extends object>(
   const store = create<T>(() => ({
     ...initialState,
   } as T));
+
+  // 加载控制：防止 HMR/初始化阶段保存空状态
+  (store as any)._markLoaded = () => { isLoaded = true; };
+  (store as any)._markUnloaded = () => { isLoaded = false; };
 
   // 包装 Zustand 的 setState：每次更新后触发防抖持久化
   const rawSetState = store.setState;

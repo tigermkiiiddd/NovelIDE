@@ -231,10 +231,11 @@ export const useChapterAnalysisStore: UseBoundStore<StoreApi<ChapterAnalysisStat
         }
 
         console.log('[ChapterAnalysisStore] 没有找到章节分析数据');
+        // 不覆盖现有数据——只在内存中保持空状态，不触发持久化
         useChapterAnalysisStore.setState({ data: initialState });
       } catch (error) {
         console.error('[ChapterAnalysisStore] 加载章节分析失败:', error);
-        useChapterAnalysisStore.setState({ data: initialState });
+        // 加载失败时保持现有状态，不覆盖为空数据
       }
     },
 

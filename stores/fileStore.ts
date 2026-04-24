@@ -75,6 +75,13 @@ export const useFileStore = create<FileState>((set, get) => ({
 
     // 2. Fallback if empty or failed
     if (!loadedFiles || loadedFiles.length === 0) {
+      // 区分"DB 读失败"和"确实无数据"：只有确实无数据时才创建默认结构
+      const dbReadFailed = loadedFiles === undefined;
+      if (dbReadFailed) {
+        console.error("[fileStore] IndexedDB 读取失败，不自动覆盖数据。请检查数据库状态。");
+        set({ files: [], currentProjectId: projectId, isFilesLoaded: true });
+        return;
+      }
       console.warn("No files found for project, initializing default structure.");
       loadedFiles = createInitialFileSystem(); // Use Factory Function
       // Force save to persist this recovery

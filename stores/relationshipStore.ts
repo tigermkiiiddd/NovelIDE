@@ -109,12 +109,7 @@ export const useRelationshipStore: UseBoundStore<StoreApi<RelationshipState>> = 
     isLoaded: false,
 
     loadRelations: async () => {
-      // Always clear old data first to prevent stale data from previous project
-      useRelationshipStore.setState({
-        relations: [],
-        customRelationTypes: [],
-        isLoaded: false,
-      });
+      // 先加载，再原子替换——避免中间状态的空数据被 saver 写入
       const data = await loadFromFiles();
       if (data) {
         useRelationshipStore.setState({
@@ -125,6 +120,7 @@ export const useRelationshipStore: UseBoundStore<StoreApi<RelationshipState>> = 
       } else {
         useRelationshipStore.setState({ isLoaded: true });
       }
+      (useRelationshipStore as any)._markLoaded?.();
     },
 
     addRelation: (r) => {
