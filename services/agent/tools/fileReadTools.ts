@@ -7,14 +7,14 @@ export const globTool: ToolDefinition = {
   type: 'function',
   function: {
     name: 'glob',
-    description: 'Find files by name/path pattern. Supports * and ** wildcards. Returns matching file paths with metadata.',
+    description: 'Find files by name/path pattern. Supports * and ** wildcards. Returns matching file paths with metadata.\n\n⚠️ 禁止匹配 .json 文件（业务数据隔离，json 文件由专用工具管理）。',
     parameters: {
       type: 'object',
       properties: {
         pattern: {
           type: 'string',
-          description: 'Glob pattern to match files. Examples: "02_角色档案/*.md", "05_正文草稿/**/*.md", "*大纲*", "**/*.json". Use "*" for any filename, "**" for recursive.',
-        },
+          description: 'Glob pattern to match files. Examples: "02_角色档案/*.md", "05_正文草稿/**/*.md", "*大纲*". Use "*" for any filename, "**" for recursive。禁止匹配 .json。',
+        }
         path: {
           type: 'string',
           description: 'Optional directory to search in (e.g., "02_角色档案"). Defaults to root.',
@@ -34,11 +34,13 @@ export const readFileTool: ToolDefinition = {
   function: {
     name: 'read',
     description: `Read file content with line numbers. Default: first 300 lines. Use startLine/endLine to paginate.
-Files under 02_角色档案/ auto-append character dynamic status.`,
+Files under 02_角色档案/ auto-append character dynamic status.
+
+⚠️ 禁止访问 .json 文件（业务数据隔离，json 文件由专用工具管理）。`,
     parameters: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Full file path (e.g., "05_正文草稿/chapter1.md")' },
+        path: { type: 'string', description: 'Full file path (e.g., "05_正文草稿/chapter1.md")。禁止访问 .json 文件。' },
         startLine: { type: 'integer', description: 'Start line (1-based). Default: 1.' },
         endLine: { type: 'integer', description: 'End line. Default: startLine + 299.' },
       },

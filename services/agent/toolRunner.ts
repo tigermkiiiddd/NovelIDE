@@ -656,6 +656,11 @@ export const executeTool = async (
             switch (name) {
                 case 'read':
                 case 'readFile':
+                    // 禁止访问 .json 文件（业务数据隔离）
+                    if (args.path && args.path.toLowerCase().endsWith('.json')) {
+                        result = 'Error: .json 文件禁止通过 read 工具访问（业务数据隔离，请使用专用工具）';
+                        break;
+                    }
                     // Virtual .thinking/ path interception for reads
                     if (args.path && isVirtualThinkingPath(args.path)) {
                         const session = context.getSession?.();
@@ -722,6 +727,11 @@ export const executeTool = async (
                     }
                     break;
                 case 'glob':
+                    // 禁止匹配 .json 文件（业务数据隔离）
+                    if (args.pattern && args.pattern.toLowerCase().includes('.json')) {
+                        result = 'Error: .json 文件禁止通过 glob 工具匹配（业务数据隔离，请使用专用工具）';
+                        break;
+                    }
                     result = actions.globFiles(args.pattern, args.path, args.head_limit);
                     break;
                 case 'listFiles':
