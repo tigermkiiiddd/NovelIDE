@@ -445,6 +445,26 @@ export const dbAPI = {
     }
   },
 
+  // Activated Categories (Lazy Tool Loading)
+  getActivatedCategories: async (): Promise<string[] | undefined> => {
+    try {
+      const db = await initDB();
+      return await db.get('settings', 'activatedCategories');
+    } catch (error) {
+      console.error('读取激活工具类别失败:', error);
+      return undefined;
+    }
+  },
+
+  saveActivatedCategories: async (categories: string[]) => {
+    try {
+      const db = await initDB();
+      await db.put('settings', categories, 'activatedCategories');
+    } catch (error) {
+      console.error('保存激活工具类别失败:', error);
+    }
+  },
+
   saveCurrentProjectId: async (projectId: string | null) => {
     try {
       const db = await initDB();

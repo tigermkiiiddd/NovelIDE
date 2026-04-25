@@ -458,6 +458,9 @@ export const executeQueryKnowledge = async (args: {
 
   const { query, wing, room, tags, sortBy = 'relevance', limit = 10, offset = 0 } = args;
 
+  // 收集诊断信息
+  const diagnostics: string[] = [];
+
   let nodes = store.nodes;
 
   // 按翼过滤
@@ -484,18 +487,27 @@ export const executeQueryKnowledge = async (args: {
       try {
         const semanticResults = await semanticSearch(query, nodes, limit);
         if (semanticResults.length > 0) {
-          // 如果记忆节点不足，补充搜索文件
+          // 补充搜索文件（子串+语义）
           let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
-          if (semanticResults.length < limit) {
-            try {
-              const files = useFileStore.getState().files;
-              const remaining = limit - semanticResults.length;
-              const { semantic: fResults } = await semanticFileSearch(query, files, remaining);
-              fileResults = fResults.map(r => {
-                const file = files.find(f => f.id === r.fileId);
-                return { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType };
-              });
-            } catch { /* ignore */ }
+          let fileSearchError: string | undefined;
+          try {
+            const files = useFileStore.getState().files;
+            const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(query, files, limit);
+            const fileMap = new Map<string, { fileName: string; score: number; matchType: string }>();
+            for (const r of subFiles) {
+              const file = files.find(f => f.id === r.fileId);
+              fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+            }
+            for (const r of semFiles) {
+              const file = files.find(f => f.id === r.fileId);
+              if (!fileMap.has(r.fileId)) {
+                fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+              }
+            }
+            fileResults = Array.from(fileMap.values()).slice(0, limit);
+          } catch (e: any) {
+            fileSearchError = e?.message || String(e);
+            diagnostics.push(`文件搜索失败: ${fileSearchError}`);
           }
 
           return JSON.stringify({
@@ -517,12 +529,16 @@ export const executeQueryKnowledge = async (args: {
               activation: r.node.metadata?.activation?.toFixed(2),
             })),
             ...(fileResults.length > 0 ? { fileResults, mode: 'semantic+file' } : { mode: 'semantic' }),
+            ...(diagnostics.length > 0 ? { diagnostics } : {}),
           });
         }
-      } catch (e) {
+      } catch (e: any) {
         // embedding 模型未就绪，fallback 到 Fuse.js
+        diagnostics.push(`语义搜索失败: ${e?.message || String(e)}`);
         console.warn('[KnowledgeTools] 语义搜索失败，使用 Fuse.js:', e);
       }
+    } else {
+      diagnostics.push('知识节点尚无 embedding，已降级为 Fuse.js 模糊搜索');
     }
 
     // Fuse.js 模糊搜索 fallback
@@ -583,23 +599,26 @@ export const executeQueryKnowledge = async (args: {
   const results = nodes.slice(offset, offset + limit);
   const hasMore = nodes.length > offset + limit;
 
-  // 如果记忆节点结果不足且有查询，补充搜索文件内容
+  // 补充搜索文件内容（子串+语义）
   let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
-  if (query && results.length < limit) {
+  if (query) {
     try {
       const files = useFileStore.getState().files;
-      const remaining = limit - results.length;
-      const { semantic: fileSearchResults } = await semanticFileSearch(query, files, remaining);
-      fileResults = fileSearchResults.map(r => {
+      const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(query, files, limit);
+      const fileMap = new Map<string, { fileName: string; score: number; matchType: string }>();
+      for (const r of subFiles) {
         const file = files.find(f => f.id === r.fileId);
-        return {
-          fileName: file ? file.name : r.fileId,
-          score: Math.round(r.score * 100),
-          matchType: r.matchType,
-        };
-      });
-    } catch {
-      // fileSearchService 不可用时静默失败
+        fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+      }
+      for (const r of semFiles) {
+        const file = files.find(f => f.id === r.fileId);
+        if (!fileMap.has(r.fileId)) {
+          fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+        }
+      }
+      fileResults = Array.from(fileMap.values()).slice(0, limit);
+    } catch (e: any) {
+      diagnostics.push(`文件搜索失败: ${e?.message || String(e)}`);
     }
   }
 
@@ -620,6 +639,7 @@ export const executeQueryKnowledge = async (args: {
       room: n.room,
     })),
     ...(fileResults.length > 0 ? { fileResults, mode: 'memory+file' } : { mode: 'memory' }),
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
   });
 };
 
@@ -682,6 +702,7 @@ export const executeManageKnowledge = async (args: {
 
       const addedNodes: Array<{ id: string; name: string; wing: string; room: string }> = [];
       const errors: string[] = [];
+      const warnings: string[] = [];
 
       const validWings = Object.keys(WING_ROOMS);
       const validRooms = WING_ROOMS;
@@ -715,32 +736,40 @@ export const executeManageKnowledge = async (args: {
         }));
 
         const { category, subCategory } = wingRoomToCategory(n.wing, n.room);
-        const newNode = await store.addNodeWithEmbedding({
-          category,
-          subCategory,
-          name: n.name,
-          summary: n.summary,
-          detail: n.detail,
-          tags: n.tags || [],
-          importance: n.importance || 'normal',
-          wing: n.wing,
-          room: n.room,
-          attachments,
-        });
-        addedNodes.push({
-          id: newNode.id,
-          name: newNode.name,
-          wing: newNode.wing || n.wing,
-          room: newNode.room || n.room,
-        });
+        try {
+          const newNode = await store.addNodeWithEmbedding({
+            category,
+            subCategory,
+            name: n.name,
+            summary: n.summary,
+            detail: n.detail,
+            tags: n.tags || [],
+            importance: n.importance || 'normal',
+            wing: n.wing,
+            room: n.room,
+            attachments,
+          });
+          addedNodes.push({
+            id: newNode.id,
+            name: newNode.name,
+            wing: newNode.wing || n.wing,
+            room: newNode.room || n.room,
+          });
+          if (!newNode.embedding) {
+            warnings.push(`"${n.name}" 节点已创建，但 embedding 生成失败（可能无法被语义搜索召回）`);
+          }
+        } catch (e: any) {
+          errors.push(`"${n.name}" 创建失败: ${e?.message || String(e)}`);
+        }
       }
 
       return JSON.stringify({
-        success: true,
+        success: errors.length === 0,
         added: addedNodes.length,
         failed: errors.length,
         nodes: addedNodes,
-        errors: errors.length > 0 ? errors : undefined,
+        ...(errors.length > 0 ? { errors } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
       });
     }
 
@@ -751,6 +780,7 @@ export const executeManageKnowledge = async (args: {
 
       const updatedNodes: Array<{ id: string; name: string }> = [];
       const errors: string[] = [];
+      const warnings: string[] = [];
 
       for (const update of updates) {
         const existing = store.getNodeById(update.nodeId);
@@ -759,24 +789,29 @@ export const executeManageKnowledge = async (args: {
           continue;
         }
 
-        await store.updateNodeWithEmbedding(update.nodeId, {
-          subCategory: update.subCategory,
-          topic: update.topic,
-          name: update.name,
-          summary: update.summary,
-          detail: update.detail,
-          tags: update.tags,
-          importance: update.importance,
-        });
-        updatedNodes.push({ id: update.nodeId, name: update.name || existing.name });
+        try {
+          await store.updateNodeWithEmbedding(update.nodeId, {
+            subCategory: update.subCategory,
+            topic: update.topic,
+            name: update.name,
+            summary: update.summary,
+            detail: update.detail,
+            tags: update.tags,
+            importance: update.importance,
+          });
+          updatedNodes.push({ id: update.nodeId, name: update.name || existing.name });
+        } catch (e: any) {
+          errors.push(`节点 ${update.nodeId} 更新失败: ${e?.message || String(e)}`);
+        }
       }
 
       return JSON.stringify({
-        success: true,
+        success: errors.length === 0,
         updated: updatedNodes.length,
         failed: errors.length,
         nodes: updatedNodes,
-        errors: errors.length > 0 ? errors : undefined,
+        ...(errors.length > 0 ? { errors } : {}),
+        ...(warnings.length > 0 ? { warnings } : {}),
       });
     }
 
@@ -855,14 +890,28 @@ export const executeLinkKnowledge = async (args: {
 
   const { action, from, to, type, note } = args;
 
+  if (!action) {
+    return JSON.stringify({ success: false, error: '缺少 action 参数（必须为 add 或 remove）' });
+  }
+  if (!from) {
+    return JSON.stringify({ success: false, error: '缺少 from 参数（源节点ID）' });
+  }
+  if (!to) {
+    return JSON.stringify({ success: false, error: '缺少 to 参数（目标节点ID）' });
+  }
+  if (!type) {
+    return JSON.stringify({ success: false, error: '缺少 type 参数（关系类型：属于/细化/依赖/冲突）' });
+  }
+
   // 验证节点存在
   const fromNode = store.getNodeById(from);
   const toNode = store.getNodeById(to);
 
   if (!fromNode || !toNode) {
+    const missing = [!fromNode ? `from=${from}` : null, !toNode ? `to=${to}` : null].filter(Boolean);
     return JSON.stringify({
       success: false,
-      error: `节点不存在: ${!fromNode ? from : to}`,
+      error: `节点不存在: ${missing.join(', ')}`,
     });
   }
 
@@ -871,7 +920,7 @@ export const executeLinkKnowledge = async (args: {
       store.addEdge(from, to, type, note);
       return JSON.stringify({
         success: true,
-        edge: { from, to, type },
+        edge: { from: fromNode.name, to: toNode.name, type },
       });
 
     case 'remove': {
@@ -879,12 +928,17 @@ export const executeLinkKnowledge = async (args: {
       const edge = edges.find((e) => e.to === to && e.type === type);
       if (edge) {
         store.removeEdge(edge.id);
+        return JSON.stringify({ success: true, removed: { from: fromNode.name, to: toNode.name, type } });
       }
-      return JSON.stringify({ success: true });
+      return JSON.stringify({
+        success: false,
+        error: `未找到关系: ${fromNode.name} →${type}→ ${toNode.name}`,
+        availableEdges: edges.map(e => ({ to: store.getNodeById(e.to)?.name || e.to, type: e.type })),
+      });
     }
 
     default:
-      return JSON.stringify({ success: false, error: '未知操作类型' });
+      return JSON.stringify({ success: false, error: `未知操作类型: ${action}（必须为 add 或 remove）` });
   }
 };
 
@@ -957,12 +1011,23 @@ export const executeTraverseMemory = async (args: {
   await store.ensureInitialized();
 
   const { nodeId, depth: rawDepth = 2, edgeTypes } = args;
+
+  if (!nodeId) {
+    return JSON.stringify({
+      success: false,
+      error: '缺少 nodeId 参数。请先通过 query_memory 或 memory_status 获取节点ID，再调用 traverse_memory。',
+    });
+  }
+
   const maxDepth = Math.min(rawDepth, 3);
   const maxResults = 20; // 硬编码，不开放自定义
 
   const startNode = store.getNodeById(nodeId);
   if (!startNode) {
-    return JSON.stringify({ success: false, error: `节点 ${nodeId} 不存在` });
+    return JSON.stringify({
+      success: false,
+      error: `节点 ${nodeId} 不存在。可用节点: ${store.nodes.slice(0, 10).map(n => `${n.id}=${n.name}`).join(', ')}`,
+    });
   }
 
   // BFS 遍历（记录完整路径链）

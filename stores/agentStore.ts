@@ -150,7 +150,10 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       setReviewingChangeId: (id) => set({ reviewingChangeId: id }),
 
       // Lazy Tool Loading
-      setActivatedCategories: (categories) => set({ activatedCategories: categories }),
+      setActivatedCategories: (categories) => {
+        set({ activatedCategories: categories });
+        dbAPI.saveActivatedCategories(categories);
+      },
 
       loadProjectSessions: async (projectId: string) => {
           // 设置全局加载标记
@@ -575,6 +578,18 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         }
       }
 }));
+
+// 恢复持久化的 activatedCategories
+const VALID_CATEGORIES: ToolCategory[] = ['memory', 'character', 'relationship', 'outline'];
+dbAPI.getActivatedCategories().then(categories => {
+  if (categories && categories.length > 0) {
+    const valid = categories.filter((c): c is ToolCategory => VALID_CATEGORIES.includes(c as ToolCategory));
+    if (valid.length > 0) {
+      useAgentStore.setState({ activatedCategories: valid });
+      console.log('[AgentStore] 恢复已激活工具类别:', valid);
+    }
+  }
+});
 
 // 导出 ToolCategory 类型供其他模块使用
 export type { ToolCategory };
