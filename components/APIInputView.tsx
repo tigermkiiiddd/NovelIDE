@@ -19,6 +19,8 @@ interface APIMetadata {
             prompt_tokens?: number;
             completion_tokens?: number;
             total_tokens?: number;
+            cache_hit_tokens?: number;
+            cache_miss_tokens?: number;
         };
         finishReason?: string;
         safetyRatings?: any;
@@ -70,7 +72,11 @@ const APIInputView: React.FC<APIInputViewProps> = ({ apiMetadata, messageCount =
         const prompt = usage.prompt_tokens || 0;
         const completion = usage.completion_tokens || 0;
         const total = usage.total_tokens || 0;
-        return `${total} (prompt: ${prompt}, completion: ${completion})`;
+        const cacheHit = usage.cache_hit_tokens || 0;
+        const cacheMiss = usage.cache_miss_tokens || 0;
+        const cacheTotal = cacheHit + cacheMiss;
+        const cacheRate = cacheTotal > 0 ? `${(cacheHit / cacheTotal * 100).toFixed(1)}%` : null;
+        return `${total} (prompt: ${prompt}, completion: ${completion}${cacheRate ? `, cache: ${cacheRate}` : ''})`;
     };
 
     return (
@@ -163,6 +169,22 @@ const APIInputView: React.FC<APIInputViewProps> = ({ apiMetadata, messageCount =
                                     value={formatUsage(apiMetadata.response.usage)}
                                     color="text-green-300"
                                 />
+                                {(() => {
+                                    const usage = apiMetadata.response.usage;
+                                    const cacheHit = usage?.cache_hit_tokens || 0;
+                                    const cacheMiss = usage?.cache_miss_tokens || 0;
+                                    const cacheTotal = cacheHit + cacheMiss;
+                                    if (cacheTotal === 0) return null;
+                                    const rate = (cacheHit / cacheTotal * 100).toFixed(1);
+                                    return (
+                                        <MetadataRow
+                                            icon={<Database size={10} />}
+                                            label="Cache Hit"
+                                            value={`${rate}% (${cacheHit} / ${cacheTotal})`}
+                                            color={rate === '100.0' ? 'text-green-400' : rate >= '80.0' ? 'text-yellow-300' : 'text-orange-300'}
+                                        />
+                                    );
+                                })()}
                                 <MetadataRow
                                     icon={<Clock size={10} />}
                                     label="Duration"

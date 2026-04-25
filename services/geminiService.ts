@@ -380,6 +380,17 @@ export class AIService {
           prompt_tokens: completion.usage?.prompt_tokens,
           completion_tokens: completion.usage?.completion_tokens,
           total_tokens: completion.usage?.total_tokens,
+          // DeepSeek: prompt_cache_hit_tokens / prompt_cache_miss_tokens
+          // OpenAI:  prompt_tokens_details.cached_tokens
+          cache_hit_tokens:
+            completion.usage?.prompt_cache_hit_tokens
+            ?? completion.usage?.prompt_tokens_details?.cached_tokens
+            ?? completion.usage?.cache_read_input_tokens,
+          cache_miss_tokens:
+            completion.usage?.prompt_cache_miss_tokens
+            ?? (completion.usage?.prompt_tokens != null && completion.usage?.cache_hit_tokens != null
+                ? completion.usage.prompt_tokens - completion.usage.cache_hit_tokens
+                : undefined),
         },
         finishReason: finishReason,
         duration,

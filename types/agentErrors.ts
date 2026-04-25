@@ -51,6 +51,9 @@ export interface AIResponseMetadata {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
+    // 缓存相关（不同 provider 字段名不同，统一提取）
+    cache_hit_tokens?: number;
+    cache_miss_tokens?: number;
   };
   model?: string;
   requestId?: string;
