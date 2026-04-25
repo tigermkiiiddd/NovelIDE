@@ -366,13 +366,18 @@ export const useAgentEngine = ({
             if (truncatedTools.length > 0) {
               console.warn(`[AgentEngine] 截断检测：${truncatedTools.join(', ')} 参数不完整，跳过执行`);
               // 为截断的工具生成错误响应（不执行）
+              // CRITICAL: 必须保留 reasoning part，DeepSeek 要求后续请求回传 reasoning_content
+              const reasoningParts = parts.filter((p: any) => p.reasoning);
               addMessage({
                 id: generateId(),
                 role: 'model',
                 text: '',
-                rawParts: rawToolParts.map((tp: any) => ({
-                  functionCall: tp.functionCall
-                })),
+                rawParts: [
+                  ...reasoningParts,
+                  ...rawToolParts.map((tp: any) => ({
+                    functionCall: tp.functionCall
+                  }))
+                ],
                 timestamp: Date.now(),
                 metadata: { loopCount, responseWarnings: [`⚠️ 参数被截断，工具未执行: ${truncatedTools.join(', ')}`] },
               });
@@ -395,9 +400,10 @@ export const useAgentEngine = ({
         // 4.3 处理文本响应
         const textPart = parts.find((p: any) => p.text);
         const toolParts = parts.filter((p: any) => p.functionCall);
+        const reasoningParts = parts.filter((p: any) => p.reasoning);
 
-        // 二次防御：parts 存在但既无文本也无工具（例如 provider 返回空字符串/空工具数组）
-        if (!textPart && toolParts.length === 0) {
+        // 二次防御：parts 存在但既无文本也无工具也无推理（例如 provider 返回空字符串/空工具数组）
+        if (!textPart && toolParts.length === 0 && reasoningParts.length === 0) {
           throw contentError('empty', aiMetadata, response);
         }
 
