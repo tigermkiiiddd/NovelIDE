@@ -4,6 +4,7 @@
  */
 
 import { useFileStore } from '../stores/fileStore';
+import { FileType } from '../types';
 
 /**
  * 获取项目中的正式角色列表
@@ -31,7 +32,7 @@ export function getOfficialCharacterList(): string[] {
   // 筛选符合 "前缀_姓名.md" 格式的角色文件
   const characterFiles = fileStore.files.filter(
     f => f.parentId === characterFolder.id &&
-         f.type === 'file' &&
+         f.type === FileType.FILE &&
          f.name.endsWith('.md') &&
          f.name.includes('_')
   );

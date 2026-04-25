@@ -116,7 +116,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     }
 
     // 对于虚拟文件，使用 metadata.virtualFilePath 匹配
-    const filePath = activeFile.metadata?.virtualFilePath || getNodePath(activeFile, files);
+    const filePath: string = (activeFile.metadata?.virtualFilePath as string | undefined) || getNodePath(activeFile, files);
     const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
 
     if (fileChanges.length === 0) return null;
@@ -130,17 +130,18 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
         newContentLength: change.newContent?.length
       });
 
-      return {
+      const merged: PendingChange = {
         id: 'merged',
         fileName: filePath,
-        originalContent: change.originalContent ?? '',
-        newContent: change.newContent ?? '',
+        originalContent: change.originalContent,
+        newContent: change.newContent,
         toolName: change.toolName,
         args: change.args,
         timestamp: change.timestamp,
         description: change.description,
         metadata: { sourceChanges: fileChanges }
       };
+      return merged;
     }
 
     // 多个 changes 时才需要 merge
@@ -157,17 +158,18 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       }))
     );
 
-    return {
+    const merged: PendingChange = {
       id: 'merged',
       fileName: filePath,
-      originalContent: originalContent,
-      newContent: finalContent,
-      toolName: 'merged' as const,
+      originalContent: originalContent || null,
+      newContent: finalContent || null,
+      toolName: 'merged',
       args: {},
       timestamp: Date.now(),
       description: `${fileChanges.length}个待审变更`,
       metadata: { sourceChanges: fileChanges }
     };
+    return merged;
   }, [activeFile?.id, activeFile?.content, activeFile?.metadata?.virtualFilePath, pendingChanges]);
 
   const activeEditDiffs = useMemo(() => {
@@ -757,8 +759,8 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       metadata: { logType: 'success' }
     });
 
-    triggerChapterAnalysis(filePath, targetChange.toolName);
-    triggerDocumentMemoryExtraction(filePath, finalContent);
+    triggerChapterAnalysis(filePath as string, targetChange.toolName);
+    triggerDocumentMemoryExtraction(filePath as string, finalContent);
 
     setTimeout(() => {
       setDiffSession(null);
@@ -907,7 +909,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       });
 
       triggerChapterAnalysis(filePath, changesToRemove[0]?.toolName || '');
-      triggerDocumentMemoryExtraction(filePath, newContent);
+      triggerDocumentMemoryExtraction(filePath, content);
     }
   }, [activeEditDiffs, processedEditIds, activeFile, content, editIncrements, saveFileContent, setContent, removePendingChange, addMessage, files, pendingChanges, triggerChapterAnalysis, triggerDocumentMemoryExtraction]);
 

@@ -101,7 +101,7 @@ export function createPersistingStoreFromConfig<T extends object>(
   // 包装 Zustand 的 setState：每次更新后触发防抖持久化
   const rawSetState = store.setState;
   (store as any).setState = (partial: any, replace?: boolean) => {
-    rawSetState(partial, replace);
+    rawSetState(partial, replace as any);
     debouncedSave(store.getState());
   };
 

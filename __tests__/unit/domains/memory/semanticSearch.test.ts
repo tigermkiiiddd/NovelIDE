@@ -25,6 +25,13 @@ jest.mock('../../../../domains/memory/embeddingService', () => {
     return vec.map((v: number) => v / norm);
   };
 
+  const isValidEmbedding = (emb: number[] | undefined | null): boolean => {
+    if (!emb || !Array.isArray(emb)) return false;
+    if (emb.length !== 512) return false;
+    if (emb.some(v => typeof v !== 'number' || Number.isNaN(v) || v === Infinity || v === -Infinity)) return false;
+    return true;
+  };
+
   return {
     __esModule: true,
     generateEmbedding: jest.fn((text: string) => Promise.resolve(mockEmbedding(text))),
@@ -42,6 +49,8 @@ jest.mock('../../../../domains/memory/embeddingService', () => {
     initEmbeddingModel: jest.fn(() => Promise.resolve()),
     getEmbeddingStatus: jest.fn(() => ({ progress: 100, status: 'ready', message: 'mock' })),
     getEmbeddingDimensions: jest.fn(() => 512),
+    isValidEmbedding: jest.fn((emb: number[] | undefined | null) => isValidEmbedding(emb)),
+    generateEmbeddingSafe: jest.fn((text: string) => Promise.resolve(mockEmbedding(text))),
   };
 });
 
@@ -58,6 +67,8 @@ jest.mock('../../../../services/persistence', () => ({
   __esModule: true,
   dbAPI: {
     getGlobalUserPreferences: jest.fn(() => Promise.resolve([])),
+    getFileEmbeddings: jest.fn(() => Promise.resolve(undefined)),
+    saveFileEmbeddings: jest.fn(() => Promise.resolve(undefined)),
   },
 }));
 
@@ -313,24 +324,26 @@ describe('detectSkillTriggersSemantic', () => {
       lastModified: Date.now(),
     },
     {
-      id: 'subskill-folder',
+      id: 'skills-folder',
       parentId: 'skill-root',
-      name: 'subskill',
+      name: 'skills',
+      type: FileType.FOLDER,
+      lastModified: Date.now(),
+    },
+    {
+      id: 'creation-folder',
+      parentId: 'skills-folder',
+      name: '创作',
       type: FileType.FOLDER,
       lastModified: Date.now(),
     },
     {
       id: 'skill-file-1',
-      parentId: 'subskill-folder',
+      parentId: 'creation-folder',
       name: 'dialogue_writing.md',
       type: FileType.FILE,
-      content: '对话写作技巧...',
+      content: '---\nname: 对话写作技能\ntags: ["对话","口吻","语气","角色互动"]\nsummarys: ["帮助优化角色之间的对话表达"]\n---\n对话写作技巧...',
       lastModified: Date.now(),
-      metadata: {
-        name: '对话写作技能',
-        tags: ['对话', '口吻', '语气', '角色互动'],
-        summarys: ['帮助优化角色之间的对话表达'],
-      },
     },
   ];
 

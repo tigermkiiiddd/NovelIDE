@@ -266,3 +266,29 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 export function getEmbeddingDimensions(): number {
   return EMBEDDING_DIMENSIONS;
 }
+
+// ==================== 有效性校验与 Safe 生成 ====================
+
+/**
+ * 验证 embedding 是否有效（非空、非 undefined、长度正确、无 NaN）
+ */
+export function isValidEmbedding(emb: number[] | undefined | null): boolean {
+  if (!emb || !Array.isArray(emb)) return false;
+  if (emb.length !== EMBEDDING_DIMENSIONS) return false;
+  if (emb.some(v => typeof v !== 'number' || Number.isNaN(v))) return false;
+  return true;
+}
+
+/**
+ * 安全生成 embedding：失败或无效时返回 null
+ * 用于批量操作，避免单点失败阻断整个流程
+ */
+export async function generateEmbeddingSafe(text: string): Promise<number[] | null> {
+  try {
+    const emb = await generateEmbedding(text);
+    return isValidEmbedding(emb) ? emb : null;
+  } catch (error) {
+    console.warn('[EmbeddingService] safe 生成失败:', (error as Error).message);
+    return null;
+  }
+}

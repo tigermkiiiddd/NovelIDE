@@ -15,6 +15,8 @@ import {
   generateEmbedding,
   cosineSimilarity,
   initEmbeddingModel,
+  generateEmbeddingSafe,
+  isValidEmbedding,
 } from './embeddingService';
 import Fuse from 'fuse.js';
 
@@ -176,8 +178,10 @@ export async function batchGenerateEmbeddings(
     const node = nodes[i];
     // 用 name + summary 作为 embedding 输入
     const text = `${node.name}。${node.summary}${node.detail ? `。${node.detail}` : ''}`;
-    const embedding = await generateEmbedding(text);
-    results.set(node.id, embedding);
+    const embedding = await generateEmbeddingSafe(text);
+    if (embedding) {
+      results.set(node.id, embedding);
+    }
 
     onProgress?.(i + 1, total);
   }

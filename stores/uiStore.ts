@@ -2,6 +2,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { dbAPI } from '../services/persistence';
+import i18n from '../i18n';
 
 interface UiState {
   isSidebarOpen: boolean;
@@ -20,6 +21,10 @@ interface UiState {
   // Tutorial
   hasSeenTutorial: boolean;
   setHasSeenTutorial: (v: boolean) => void;
+
+  // Language
+  language: 'zh' | 'en';
+  setLanguage: (lang: 'zh' | 'en') => void;
 
   setSidebarOpen: (open: boolean) => void;
   setChatOpen: (open: boolean) => void;
@@ -46,6 +51,7 @@ interface UiSettings {
   wordWrap: boolean;
   isDebugMode: boolean;
   hasSeenTutorial: boolean;
+  language: 'zh' | 'en';
 }
 
 // 正确的异步 storage adapter for Zustand persist
@@ -108,10 +114,16 @@ export const useUiStore = create<UiState>()(
 
       isDebugMode: false,     // 默认关闭调试模式
       hasSeenTutorial: false, // 默认未看过教程
+      language: 'zh',         // 默认中文
 
       setHasSeenTutorial: (v) => {
         console.log('[UiStore] setHasSeenTutorial called with:', v);
         set({ hasSeenTutorial: v });
+      },
+
+      setLanguage: (lang) => {
+        set({ language: lang });
+        i18n.changeLanguage(lang);
       },
 
       setSidebarOpen: (open) => set({ isSidebarOpen: open }),

@@ -11,7 +11,8 @@
     ],
     "skipLibCheck": true,
     "types": [
-      "node"
+      "node",
+      "jest"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
@@ -27,5 +28,12 @@
     "noEmit": true,
     "noImplicitAny": true,
     "strictNullChecks": true
-  }
+  },
+  "exclude": [
+    "__tests__",
+    "src/test",
+    "node_modules",
+    "dist",
+    "coverage"
+  ]
 }

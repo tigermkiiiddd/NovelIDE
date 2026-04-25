@@ -178,9 +178,9 @@ export function detectSkillTriggers(
   const skillEntries = collectSkillFiles(context.files, categories.length > 0 ? categories : undefined);
 
   for (const { file: skillFile, category } of skillEntries) {
-    const meta = parseFileMeta(skillFile.content);
-    const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
-    const summarys: string[] = meta.summarys || [];
+    const meta = parseFileMeta(skillFile.content || '');
+    const tags: string[] = ((meta.tags || []) as string[]).filter((t: string) => t !== '技能');
+    const summarys: string[] = (meta.summarys || []) as string[];
     const matchText = buildMatchText(tags, summarys);
     const allKeywords = [...tags, ...summarys];
 
@@ -188,7 +188,7 @@ export function detectSkillTriggers(
       const matched = findMatchedKeyword(text, allKeywords);
       const existingRecord = context.triggerStore.triggerSkill({
         skillId: skillFile.name,
-        name: meta.name || skillFile.name,
+        name: (meta.name as string | undefined) || skillFile.name,
         originalTags: tags,
         matchText,
         category,
@@ -255,9 +255,9 @@ export async function detectSkillTriggersSemantic(
     const queryEmb = await generateEmbedding(text);
 
     for (const { file: skillFile, category } of remaining) {
-      const meta = parseFileMeta(skillFile.content);
-      const tags: string[] = (meta.tags || []).filter(t => t !== '技能');
-      const summarys: string[] = meta.summarys || [];
+      const meta = parseFileMeta(skillFile.content || '');
+      const tags: string[] = ((meta.tags || []) as string[]).filter((t: string) => t !== '技能');
+      const summarys: string[] = (meta.summarys || []) as string[];
 
       let skillEmb = skillEmbeddingCache.get(skillFile.name);
       if (!skillEmb) {

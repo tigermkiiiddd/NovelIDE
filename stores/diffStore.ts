@@ -38,7 +38,7 @@ export const useDiffStore = create<DiffState>((set, get) => ({
     // 先从内存状态获取
     const { diffSessions } = get();
     if (diffSessions[fileId] !== undefined) {
-      const cachedSession = diffSessions[fileId];
+      const cachedSession = diffSessions[fileId] ?? null;
 
       // FIX: Bug #6 - Validate cached session matches expected file
       if (cachedSession && expectedFileName && cachedSession.sourceFileName) {
@@ -73,10 +73,10 @@ export const useDiffStore = create<DiffState>((set, get) => ({
       set((state) => ({
         diffSessions: {
           ...state.diffSessions,
-          [fileId]: session
+          [fileId]: session ?? null
         }
       }));
-      return session;
+      return session ?? null;
     } catch (error) {
       console.error(`[diffStore] Failed to load diff session for ${fileId}:`, error);
       return null;

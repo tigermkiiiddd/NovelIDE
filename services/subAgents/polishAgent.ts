@@ -261,7 +261,7 @@ ${context?.styleMemories || '（无相关记忆）'}
       let matchedCount = 0;
 
       // 过滤掉 oldContent === newContent 的无效修改
-      const validEdits = (args.edits || []).filter(edit => {
+      const validEdits = (args.edits || []).filter((edit: { mode: string; oldContent?: string; newContent?: string }) => {
         if (edit.mode === 'insert') return true;
         return edit.oldContent !== edit.newContent;
       });
@@ -364,8 +364,8 @@ export async function runPolishSubAgent(
   // 获取文风记忆
   const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
   const styleMemories = knowledgeNodes
-    .filter(n => n.category === 'style' || n.tags?.some((t: string) => t.includes('文风')))
-    .map(n => `- [${n.category || '记忆'}] ${n.content || n.name}`)
+    .filter(n => n.category === '风格' || n.tags?.some((t: string) => t.includes('文风')))
+    .map(n => `- [${n.category || '记忆'}] ${n.detail || n.summary || n.name}`)
     .join('\n');
 
   const finalContext: PolishContext = {

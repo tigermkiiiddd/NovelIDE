@@ -41,7 +41,7 @@ export interface EditorSearchState {
 export interface UseEditorSearchOptions {
   content: string;
   cursorStats: { line: number; col: number };
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   onCursorChange?: (line: number, col: number) => void;
 }
 

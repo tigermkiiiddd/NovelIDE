@@ -77,14 +77,14 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
              {/* Clue Rate - Desktop: text, Mobile: icon color only */}
              <div className="flex items-center gap-1 hover:text-white">
-                <CheckCircle
-                  size={12}
-                  className={`shrink-0 ${
-                    stats.clueRate === 100 ? 'text-green-500' :
-                    stats.clueRate >= 50 ? 'text-yellow-500' : 'text-gray-500'
-                  }`}
-                  title={`伏笔率: ${stats.clueRate}%`}
-                />
+                <span title={`伏笔率: ${stats.clueRate}%`}>
+                  <CheckCircle
+                    className={`shrink-0 w-3 h-3 ${
+                      stats.clueRate === 100 ? 'text-green-500' :
+                      stats.clueRate >= 50 ? 'text-yellow-500' : 'text-gray-500'
+                    }`}
+                  />
+                </span>
                 <span className="hidden sm:inline">伏笔 {stats.clueRate}%</span>
              </div>
 
@@ -98,12 +98,12 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
              <Settings size={12} className="text-gray-500 hover:text-white ml-1 sm:ml-2 shrink-0 cursor-pointer" onClick={onOpenSettings} />
              {onOpenTutorial && (
-               <HelpCircle
-                 size={12}
-                 className="hidden sm:block text-gray-500 hover:text-white shrink-0 cursor-pointer"
-                 onClick={onOpenTutorial}
-                 title="新手指南"
-               />
+               <span title="新手指南">
+                 <HelpCircle
+                   className="hidden sm:block text-gray-500 hover:text-white shrink-0 cursor-pointer w-3 h-3"
+                   onClick={onOpenTutorial}
+                 />
+               </span>
              )}
          </div>
 

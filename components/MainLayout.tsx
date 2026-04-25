@@ -122,10 +122,16 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           loadRelations();
           // 后台重建文件 embedding 索引（非阻塞，慢慢执行）
           import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
-            const files = useFileStore.getState().files;
-            indexFilesForSearch(files, projectId).then(count => {
-              if (count > 0) console.log(`[Embedding] 项目加载后后台索引完成: ${count} 个文件`);
-            }).catch(err => console.error('[Embedding] 后台索引失败:', err));
+            import('../stores/toastStore').then(({ toast }) => {
+              toast.info('正在构建搜索索引…', undefined, 10000);
+              const files = useFileStore.getState().files;
+              indexFilesForSearch(files, projectId).then(count => {
+                toast.success(`搜索索引就绪（${count} 个文件）`);
+              }).catch(err => {
+                console.error('[Embedding] 后台索引失败:', err);
+                toast.warning('搜索索引构建失败，搜索功能可能降级');
+              });
+            });
           });
         });
     }

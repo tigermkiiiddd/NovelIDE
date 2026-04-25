@@ -9,6 +9,7 @@ import ToastContainer from './components/Toast';
 import { useProjectStore } from './stores/projectStore';
 import { useAgentMemoryStore } from './stores/agentMemoryStore';
 import { useAgentStore } from './stores/agentStore';
+import { useUiStore } from './stores/uiStore';
 
 // Initialize VConsole for mobile debugging
 let vconsole: VConsole | null = null;
@@ -39,6 +40,12 @@ export default function App() {
     loadAIConfig();
     loadAgentMemory();
   }, [loadProjects, loadAIConfig, loadAgentMemory]);
+
+  // Sync html lang attribute with language preference
+  const language = useUiStore(state => state.language);
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  }, [language]);
 
   const handleSelectProject = async (id: string | null) => {
     await selectProject(id);

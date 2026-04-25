@@ -102,7 +102,7 @@ export const processManageTodos = (
                 const update = updates.find(u => u.index === i);
                 if (update) {
                     updateCount++;
-                    return { ...t, ...(update.task && { task: update.task }), ...(update.status && { status: update.status }) };
+                    return { ...t, ...(update.task && { task: update.task }), ...(update.status && { status: update.status as 'pending' | 'done' }) };
                 }
                 return t;
             });

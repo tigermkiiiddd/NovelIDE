@@ -410,7 +410,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
 
     // --- Room 锚点（星团） ---
     if (node.nodeType === 'room') {
-      const wing = node.roomWing || 'world';
+      const wing = (node.roomWing || 'world') as KnowledgeWing;
       const colors = WING_COLORS[wing] || WING_COLORS.world;
       const count = node.roomCount || 1;
       const radius = 35 + count * 5;
@@ -443,7 +443,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
     }
 
     // --- 知识节点（星辰） ---
-    const wing = node.wing || 'world';
+    const wing = (node.wing || 'world') as KnowledgeWing;
     const colors = WING_COLORS[wing] || WING_COLORS.world;
     const importance = node.importance || 'normal';
     const radius = IMPORTANCE_RADIUS[importance] || 12;

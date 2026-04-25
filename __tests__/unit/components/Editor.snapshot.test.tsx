@@ -154,7 +154,7 @@ jest.mock('../../../services/fileSystem', () => ({
 let Editor: any;
 
 beforeAll(async () => {
-  ({ default: Editor } = await import('../../../components/Editor'));
+  ({ default: Editor } = await import('../../../components/editor'));
 });
 
 describe('Editor - 快照测试', () => {

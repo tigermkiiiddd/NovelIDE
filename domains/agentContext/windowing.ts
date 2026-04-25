@@ -13,7 +13,7 @@ export const fixWindowStart = (messages: ChatMessage[]): ChatMessage[] => {
   }
 
   if (
-    (firstMessage.role === 'model' || firstMessage.role === 'assistant') &&
+    (firstMessage.role === 'model') &&
     firstMessage.rawParts?.some((part: any) => part.functionCall)
   ) {
     return fixWindowStart(rest);
@@ -48,7 +48,7 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
     }
 
     const hasToolCalls =
-      (message.role === 'model' || message.role === 'assistant') &&
+      message.role === 'model' &&
       message.rawParts?.some((part: any) => part.functionCall);
 
     if (hasToolCalls) {
@@ -67,7 +67,6 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
 
         const isSubstantial =
           next?.role === 'model' ||
-          next?.role === 'assistant' ||
           (next?.role === 'user' && !next?.rawParts?.some((part: any) => part.functionResponse));
 
         if (isSubstantial) break;

@@ -95,9 +95,9 @@ export interface EditorHookResult {
   previewBody: string;
 
   // ==================== Refs ====================
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
-  gutterRef: React.RefObject<HTMLDivElement>;
-  highlightRef: React.RefObject<HTMLDivElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  gutterRef: React.RefObject<HTMLDivElement | null>;
+  highlightRef: React.RefObject<HTMLDivElement | null>;
   overlayScrollTop: number;
   setOverlayScrollTop: (top: number) => void;
 

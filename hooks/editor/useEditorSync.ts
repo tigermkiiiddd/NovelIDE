@@ -95,7 +95,7 @@ export const useEditorSync = (options: UseEditorSyncOptions): EditorSyncActions 
         computedContentFileIdRef.current = activeFileId;
 
         // 加载 diff session
-        loadDiffSession(activeFileId);
+        if (activeFileId) loadDiffSession(activeFileId);
 
         // 回调
         onFileLoaded?.({

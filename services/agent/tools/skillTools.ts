@@ -96,7 +96,7 @@ function collectSkills(category?: string): SkillEntry[] {
     );
 
     for (const sf of skillFiles) {
-      const meta = parseFileMeta(sf.content);
+      const meta = parseFileMeta(sf.content || '');
       results.push({ file: sf, category: catFolder.name, meta });
     }
   }
@@ -202,7 +202,8 @@ export function executeActivateSkill(
     `</skill_content>`;
 
   // 检查题材补丁
-  const project = useProjectStore.getState().project;
+  const { projects, currentProjectId } = useProjectStore.getState();
+  const project = projects.find(p => p.id === currentProjectId);
   const genre = project?.genre;
   let hasPatch = false;
 

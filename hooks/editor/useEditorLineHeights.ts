@@ -9,7 +9,7 @@ import { useState, useCallback, useEffect } from 'react';
 export const useEditorLineHeights = (
   content: string,
   wordWrap: boolean,
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
 ): number[] => {
   const [lineHeights, setLineHeights] = useState<number[]>([]);
 

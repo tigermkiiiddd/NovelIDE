@@ -988,7 +988,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         <div className="text-[10px] text-gray-500 mb-1 px-1 font-mono flex items-center gap-2">
                             <span>轮次 {String(msg.metadata.loopCount)}</span>
                             {(() => {
-                                const usage = msg.metadata?.apiMetadata?.response?.usage;
+                                const usage = (msg.metadata?.apiMetadata as any)?.response?.usage;
                                 const cacheHit = usage?.cache_hit_tokens || 0;
                                 const cacheMiss = usage?.cache_miss_tokens || 0;
                                 const cacheTotal = cacheHit + cacheMiss;

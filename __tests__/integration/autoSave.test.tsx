@@ -9,7 +9,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MockIndexedDB, waitForEffects } from '../../src/test/utils/testHelpers';
 import { mockDiffSession, mockPatch } from '../../src/test/utils/testHelpers';
-import { DiffSessionState } from '../../src/types';
+import { DiffSessionState } from '../../types';
 
 describe('Bug #3: Auto-save in Diff Mode', () => {
   let mockDB: MockIndexedDB;

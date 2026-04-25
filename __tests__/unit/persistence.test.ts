@@ -6,7 +6,7 @@
  */
 
 import { mockDiffSession, mockPatch } from '../../src/test/utils/testHelpers';
-import { DiffSessionState } from '../../src/types';
+import { DiffSessionState } from '../../types';
 
 describe('Bug #6: IndexedDB Delete Logic', () => {
   beforeEach(() => {

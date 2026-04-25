@@ -33,7 +33,10 @@ export const useProjectStats = (project: ProjectMeta, files: FileNode[]) => {
       wordCount,
       chapterCount,
       charCount,
-      progressRate
+      progressRate,
+      clueRate: 0,
+      solvedClues: 0,
+      totalClues: 0,
     };
   }, [files, project]);
 };

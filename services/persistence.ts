@@ -13,6 +13,7 @@ interface UiSettings {
   wordWrap: boolean;
   isDebugMode: boolean;
   hasSeenTutorial: boolean;
+  language: 'zh' | 'en';
 }
 
 interface NovelGenieDB extends DBSchema {
@@ -145,10 +146,34 @@ interface NovelGenieDB extends DBSchema {
       timestamp: number;
     };
   };
+  // LLM 调用流量统计（全局）
+  usageStats: {
+    key: string; // 'usage-stats-global'
+    value: {
+      records: Array<{
+        id: string;
+        timestamp: number;
+        projectId?: string;
+        sessionId?: string;
+        callType: string;
+        model: string;
+        provider: string;
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+        cacheHitTokens?: number;
+        cacheMissTokens?: number;
+        durationMs: number;
+        status: string;
+        errorCategory?: string;
+      }>;
+      lastUpdated: number;
+    };
+  };
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 16;
+const DB_VERSION = 18;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -253,6 +278,16 @@ export const initDB = () => {
           }
           if (!db.objectStoreNames.contains('agentSessionSummaries')) {
             db.createObjectStore('agentSessionSummaries', { keyPath: 'sessionId' });
+          }
+
+          // Version 17: Add fileEmbeddings store for semantic search
+          if (!db.objectStoreNames.contains('fileEmbeddings')) {
+            db.createObjectStore('fileEmbeddings');
+          }
+
+          // Version 18: Add usageStats store for LLM token tracking
+          if (!db.objectStoreNames.contains('usageStats')) {
+            db.createObjectStore('usageStats');
           }
         },
         blocked() {
@@ -1159,6 +1194,45 @@ export const dbAPI = {
       await db.put('fileEmbeddings', data, `embeddings-${projectId}`);
     } catch (error) {
       console.error('[dbAPI.saveFileEmbeddings] 保存失败:', projectId, error);
+    }
+  },
+
+  // --- Usage Stats ---
+  getUsageStats: async () => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('usageStats')) {
+        return undefined;
+      }
+      return await db.get('usageStats', 'usage-stats-global');
+    } catch (error) {
+      console.error('[dbAPI.getUsageStats] 读取失败:', error);
+      return undefined;
+    }
+  },
+
+  saveUsageStats: async (data: { records: any[]; lastUpdated: number }) => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('usageStats')) {
+        console.warn('[dbAPI.saveUsageStats] usageStats 表不存在，跳过保存');
+        return;
+      }
+      await db.put('usageStats', data, 'usage-stats-global');
+    } catch (error) {
+      console.error('[dbAPI.saveUsageStats] 保存失败:', error);
+    }
+  },
+
+  clearUsageStats: async () => {
+    try {
+      const db = await initDB();
+      if (!db.objectStoreNames.contains('usageStats')) {
+        return;
+      }
+      await db.delete('usageStats', 'usage-stats-global');
+    } catch (error) {
+      console.error('[dbAPI.clearUsageStats] 清空失败:', error);
     }
   },
 };

@@ -14,7 +14,7 @@ const PLAN_MODE_DESC = `管理 Plan 笔记本。支持 create/append/update/repl
 
 // 工具参数定义（共用）
 const PLAN_NOTE_PARAMETERS = {
-  type: 'object',
+  type: 'object' as const,
   properties: {
     thinking: {
       type: 'string',

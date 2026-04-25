@@ -1,6 +1,6 @@
 
 import { create } from 'zustand';
-import { FileNode, FileType, BatchEdit } from '../types';
+import { FileNode, FileType, BatchEdit, FileMetadata } from '../types';
 import { dbAPI } from '../services/persistence';
 import { createInitialFileSystem, generateId, findNodeByPath, getFileTreeStructure, getNodePath } from '../services/fileSystem';
 import { parseFrontmatter } from '../utils/frontmatter';
@@ -50,6 +50,7 @@ interface FileState {
   // Internal Helper
   _saveToDB: () => void;
   _restoreSystemFiles: () => void;
+  _triggerEmbeddingIndex: () => void;
 
   // Preset Switching
   switchPreset: (newPresetId?: string) => void;
@@ -159,7 +160,12 @@ export const useFileStore = create<FileState>((set, get) => ({
       if (timeout) clearTimeout(timeout);
       timeout = setTimeout(() => {
         import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
-          indexFilesForSearch(files, currentProjectId).catch(() => {});
+          import('./toastStore').then(({ toast }) => {
+            toast.info('正在更新搜索索引…');
+            indexFilesForSearch(files, currentProjectId)
+              .then(() => toast.success('搜索索引已更新'))
+              .catch(() => toast.warning('搜索索引更新失败'));
+          });
         });
       }, 2000); // 2秒防抖：等用户停止输入后再重建
     };
@@ -493,10 +499,10 @@ ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
     const truncated = headLimit && total >= headLimit;
 
     const lines = matched.map(({ node, path }) => {
-      const meta = node.metadata || {};
+      const meta = (node.metadata || {}) as FileMetadata;
       const tags = meta.tags?.length ? ` [Tags: ${meta.tags.join(',')}]` : '';
       const summary = meta.summarys?.length ? ` [Sum: ${meta.summarys[0]}]` : '';
-      const characters = meta.characters?.length ? ` [Chars: ${meta.characters.join(',')}]` : '';
+      const characters = (meta as any).characters?.length ? ` [Chars: ${(meta as any).characters.join(',')}]` : '';
       return `[FILE] ${path}${tags}${characters}${summary}`;
     });
 

@@ -7,7 +7,7 @@
 
 import { renderHook } from '@testing-library/react';
 import { mockDiffSession, mockPatch } from '../../src/test/utils/testHelpers';
-import { DiffSessionState } from '../../src/types';
+import { DiffSessionState } from '../../types';
 
 describe('Bug #7: computedContent Dependencies', () => {
   beforeEach(() => {

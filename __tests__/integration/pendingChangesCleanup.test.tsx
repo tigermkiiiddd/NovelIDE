@@ -3,7 +3,7 @@
  */
 
 import { mockPendingChange } from '../../src/test/utils/testHelpers';
-import { PendingChange, FileNode } from '../../src/types';
+import { PendingChange, FileNode } from '../../types';
 
 describe('Bug #5: Pending Changes Cleanup on File Switch', () => {
   beforeEach(() => {

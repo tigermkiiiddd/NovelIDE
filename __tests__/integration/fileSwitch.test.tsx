@@ -8,7 +8,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MockIndexedDB, waitForEffects } from '../../src/test/utils/testHelpers';
 import { mockDiffSession, mockFileSystem, mockPatch } from '../../src/test/utils/testHelpers';
-import { DiffSessionState } from '../../src/types';
+import { DiffSessionState } from '../../types';
 
 describe('Bug #1: File Switch IndexedDB Cleanup', () => {
   let mockDB: MockIndexedDB;

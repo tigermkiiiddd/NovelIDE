@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { AIConfig, AIProvider, OpenAIBackend, ModelRouteId, ModelRoute, ModelRoutes } from '../types';
-import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Brain } from 'lucide-react';
+import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Brain, Languages } from 'lucide-react';
 import { generateId } from '../services/fileSystem';
+import { useUiStore } from '../stores/uiStore';
 
 interface AISettingsFormProps {
   config: AIConfig;
@@ -10,6 +11,8 @@ interface AISettingsFormProps {
 }
 
 const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
+  const language = useUiStore(state => state.language);
+  const setLanguage = useUiStore(state => state.setLanguage);
   const [tempConfig, setTempConfig] = useState<AIConfig>(JSON.parse(JSON.stringify(config)));
   const [showKey, setShowKey] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -318,6 +321,39 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             ? "控制 Gemini 模型对敏感内容的过滤阈值。"
                             : "仅当使用 Gemini 模型时生效。其他模型（如 GPT-4、DeepSeek）会自动忽略此参数。"}
                     </p>
+                </div>
+            </div>
+
+            {/* Language Setting */}
+            <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
+                <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
+                    <Languages size={16} className="text-cyan-400" />
+                    {language === 'zh' ? '界面语言 / Language' : 'Language / 界面语言'}
+                </h4>
+                <p className="text-xs text-gray-500 mb-4">
+                    {language === 'zh' ? '选择界面显示语言。切换后立即生效。' : 'Select the display language. Changes take effect immediately.'}
+                </p>
+                <div className="flex gap-3">
+                    <button
+                        onClick={() => setLanguage('zh')}
+                        className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                            language === 'zh'
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+                        }`}
+                    >
+                        中文
+                    </button>
+                    <button
+                        onClick={() => setLanguage('en')}
+                        className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                            language === 'en'
+                                ? 'bg-blue-600 border-blue-500 text-white'
+                                : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
+                        }`}
+                    >
+                        English
+                    </button>
                 </div>
             </div>
 

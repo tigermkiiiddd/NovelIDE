@@ -33,7 +33,7 @@ export interface EditorState {
   canRedo: boolean;
   undo: () => void;
   redo: () => void;
-  resetHistory: () => void;
+  resetHistory: (newPresent: string) => void;
 
   // 光标
   cursorStats: { line: number; col: number };
@@ -50,9 +50,9 @@ export interface EditorState {
   setOverlayScrollTop: (top: number) => void;
 
   // refs
-  textareaRef: React.RefObject<HTMLTextAreaElement>;
-  gutterRef: React.RefObject<HTMLDivElement>;
-  highlightRef: React.RefObject<HTMLDivElement>;
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>;
+  gutterRef: React.RefObject<HTMLDivElement | null>;
+  highlightRef: React.RefObject<HTMLDivElement | null>;
 
   // 批量操作标记
   isApplyingBatchRef: React.MutableRefObject<boolean>;

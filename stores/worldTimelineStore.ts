@@ -25,6 +25,8 @@ import {
   EmotionScore,
   NodeEmotionCurvePoint,
   HookEmotionCurvePoint,
+  ChapterEmotionPoint,
+  DayEmotionPoint,
   ForeshadowingStats,
   HookEmotionReward,
   STRENGTH_SCORES,
@@ -88,9 +90,11 @@ export interface WorldTimelineState {
   getOverdueForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number) => ForeshadowingItem[];
   getExpiringForeshadowings: (foreshadowings: ForeshadowingItem[], currentChapter: number, withinChapters: number) => ForeshadowingItem[];
 
-  // 情绪曲线（两条独立曲线）
+  // 情绪曲线
   getNodeEmotionCurve: () => NodeEmotionCurvePoint[];
   getHookEmotionCurve: () => HookEmotionCurvePoint[];
+  getChapterEmotionCurve: () => ChapterEmotionPoint[];
+  getDayEmotionCurve: () => DayEmotionPoint[];
 }
 
 const generateId = () => `timeline-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -471,11 +475,12 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
           // 在最后一个事件之后 1 小时
           timestamp = {
             day: lastEvent.timestamp.day,
-            hour: lastEvent.timestamp.hour + 1
+            hour: lastEvent.timestamp.hour + 1,
+            minute: 0
           };
         } else {
           // 默认第1天 8点
-          timestamp = { day: 1, hour: 8 };
+          timestamp = { day: 1, hour: 8, minute: 0 };
         }
       }
 

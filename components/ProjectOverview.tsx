@@ -1,11 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { ProjectMeta, FileNode, AIConfig } from '../types';
-import { X, Save, TrendingUp, Settings } from 'lucide-react';
+import { X, Save, TrendingUp, Settings, BarChart3, Database } from 'lucide-react';
 import { updateProject } from '../services/projectService';
 import ProjectStatistics from './ProjectStatistics';
 import AISettingsForm from './AISettingsForm';
 import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
+import { UsageStatsPanel } from './UsageStatsPanel';
+import { EmbeddingAdminPanel } from './EmbeddingAdminPanel';
 
 interface ProjectOverviewProps {
   project: ProjectMeta;
@@ -22,7 +24,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     project, files, isOpen, onClose, onUpdate,
     aiConfig, onUpdateAIConfig
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'usage' | 'embedding'>('overview');
 
   // Overview State
   const [name, setName] = useState(project.name);
@@ -119,6 +121,26 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
               >
                    <span className="flex items-center gap-2"><Settings size={16}/> AI 设置</span>
               </button>
+              <button
+                onClick={() => setActiveTab('usage')}
+                className={`pb-3 text-sm font-medium transition-colors border-b-2 ${
+                    activeTab === 'usage'
+                    ? 'text-blue-400 border-blue-400'
+                    : 'text-gray-400 border-transparent hover:text-gray-200'
+                }`}
+              >
+                   <span className="flex items-center gap-2"><BarChart3 size={16}/> 流量统计</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('embedding')}
+                className={`pb-3 text-sm font-medium transition-colors border-b-2 ${
+                    activeTab === 'embedding'
+                    ? 'text-blue-400 border-blue-400'
+                    : 'text-gray-400 border-transparent hover:text-gray-200'
+                }`}
+              >
+                   <span className="flex items-center gap-2"><Database size={16}/> Embedding</span>
+              </button>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors mb-2">
             <X size={24} />
@@ -175,6 +197,18 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
 
           {activeTab === 'settings' && (
              <AISettingsForm config={aiConfig} onSave={handleSaveConfig} />
+          )}
+
+          {activeTab === 'usage' && (
+            <div className="animate-in slide-in-from-left-4 duration-200">
+              <UsageStatsPanel />
+            </div>
+          )}
+
+          {activeTab === 'embedding' && (
+            <div className="animate-in slide-in-from-left-4 duration-200">
+              <EmbeddingAdminPanel />
+            </div>
           )}
 
         </div>

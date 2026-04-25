@@ -49,6 +49,7 @@ export interface EditorToolbarProps {
   onSearchPrev?: () => void;
   onToggleCaseSensitive?: () => void;
   onOpenVersionHistory?: () => void;
+  wordWrap?: boolean;
 }
 
 export const EditorToolbar: React.FC<EditorToolbarProps> = ({
@@ -65,6 +66,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   searchCaseSensitive = false,
   currentMatchIndex = 0,
   totalMatches = 0,
+  wordWrap = false,
   onToggleWordWrap,
   onToggleLineNumbers,
   onSetMode,

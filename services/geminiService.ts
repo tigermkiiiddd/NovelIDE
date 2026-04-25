@@ -392,7 +392,7 @@ export class AIService {
                 ? completion.usage.prompt_tokens - completion.usage.cache_hit_tokens
                 : undefined),
         },
-        finishReason: finishReason,
+        finishReason: finishReason ?? undefined,
         duration,
         warnings,
       };

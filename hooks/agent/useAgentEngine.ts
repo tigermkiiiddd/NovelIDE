@@ -1,6 +1,6 @@
 
 import { useRef, useCallback, useMemo } from 'react';
-import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote } from '../../types';
+import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote, ContentPart } from '../../types';
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
 import { getAllToolsForLLM, handleSearchToolsCall } from '../../services/agent/tools/indexLazy';
@@ -19,6 +19,8 @@ import {
   formatErrorForDisplay,
 } from '../../services/agent/errorFactory';
 import { AgentErrorInfo, AgentErrorCategory } from '../../types/agentErrors';
+import { useUsageStatsStore } from '../../stores/usageStatsStore';
+import { UsageCallType } from '../../types/usageStats';
 import {
   createApiHistoryPreview,
   getWindowedMessages,
@@ -62,8 +64,11 @@ function filterMessagesForExtraction(
       // 排除非工具输出的 system 消息（如系统提示、停止通知）
       if (!m.isToolOutput) return false;
 
-      // 获取工具名
-      const toolName = m.rawParts?.[0]?.functionResponse?.name;
+      // 获取工具名（rawParts[0] 是 FunctionResponsePart）
+      const firstPart = m.rawParts?.[0];
+      const toolName = firstPart && 'functionResponse' in firstPart
+        ? (firstPart as Extract<ContentPart, { functionResponse: unknown }>).functionResponse?.name
+        : undefined;
       if (!toolName) return true; // 无法判断时保留
 
       // 判断是否为 read 类工具
@@ -132,6 +137,8 @@ export const useAgentEngine = ({
 
     // 轮次递增（每条用户消息只递增一次）
     lifecycleManager.advanceRound();
+
+    const llmCallStartTime = Date.now();
 
     try {
       // 2. 获取最新上下文
@@ -369,6 +376,35 @@ export const useAgentEngine = ({
         // Extract API metadata for debug display
         const apiMetadata = response._metadata;
         const aiMetadata = response._aiMetadata;
+
+        // 记录成功调用统计
+        if (aiMetadata?.usage) {
+          const callType: UsageCallType = planMode ? 'outline'
+            : toolsForMode.some(t => t.function?.name?.includes('extract') || t.function?.name?.includes('analyze')) ? 'extraction'
+            : 'main';
+          const provider = (() => {
+            const baseUrl = useAgentStore.getState().aiConfig.baseUrl || '';
+            if (baseUrl.toLowerCase().includes('anthropic')) return 'anthropic';
+            if (baseUrl.includes('/paas/')) return 'glm';
+            return 'openai-compatible';
+          })();
+          useUsageStatsStore.getState().addRecord({
+            id: generateId(),
+            timestamp: Date.now(),
+            projectId: project?.id,
+            sessionId: currentSessionId,
+            callType,
+            model: aiMetadata.model || useAgentStore.getState().aiConfig.modelName || 'unknown',
+            provider,
+            promptTokens: aiMetadata.usage.prompt_tokens || 0,
+            completionTokens: aiMetadata.usage.completion_tokens || 0,
+            totalTokens: aiMetadata.usage.total_tokens || 0,
+            cacheHitTokens: aiMetadata.usage.cache_hit_tokens,
+            cacheMissTokens: aiMetadata.usage.cache_miss_tokens,
+            durationMs: aiMetadata.duration || (Date.now() - llmCallStartTime),
+            status: 'success',
+          });
+        }
 
         if (signal.aborted) break;
 
@@ -738,6 +774,21 @@ export const useAgentEngine = ({
 
       if (isUserAbort) {
         addMessage({ id: generateId(), role: 'system', text: '⛔ 用户已停止生成。', timestamp: Date.now(), skipInHistory: true });
+        // 记录中断统计
+        useUsageStatsStore.getState().addRecord({
+          id: generateId(),
+          timestamp: Date.now(),
+          projectId: project?.id,
+          sessionId: currentSessionId,
+          callType: planMode ? 'outline' : 'main',
+          model: useAgentStore.getState().aiConfig.modelName || 'unknown',
+          provider: 'openai-compatible',
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          durationMs: Date.now() - llmCallStartTime,
+          status: 'aborted',
+        });
       } else {
         // 使用错误工厂创建详细的错误信息
         let errorInfo: AgentErrorInfo;

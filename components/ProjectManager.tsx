@@ -7,9 +7,10 @@ import { createRoutedAIService } from '../services/modelRouter';
 import { exportProject, importProject } from '../services/projectService';
 import { getDisplayVersion } from '../utils/version';
 import { getPresetById } from '../services/resources/presets';
-import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info } from 'lucide-react';
+import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info, Languages } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
 import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
+import { useUiStore } from '../stores/uiStore';
 
 interface ProjectManagerProps {
   onSelectProject: (id: string) => void | Promise<void>;
@@ -26,6 +27,8 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   // AI Config for Polishing
   const aiConfig = useAgentStore(state => state.aiConfig);
   const setAiConfig = useAgentStore(state => state.setAiConfig);
+  const language = useUiStore(state => state.language);
+  const setLanguage = useUiStore(state => state.setLanguage);
 
   const [isCreating, setIsCreating] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -408,6 +411,14 @@ ${polishInstruction || '(无额外指令)'}
             <p className="text-gray-500 mt-2">选择一个项目开始创作，或创建一个新的世界。</p>
           </div>
           <div className="flex w-full gap-2 md:w-auto md:gap-3">
+             <button
+                onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
+                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-3 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
+                title={language === 'zh' ? 'Switch to English' : '切换到中文'}
+             >
+                <Languages size={20} />
+                <span className="text-xs font-medium">{language === 'zh' ? 'EN' : '中'}</span>
+             </button>
              <button
                 onClick={() => setIsSettingsOpen(true)}
                 className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-3 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"

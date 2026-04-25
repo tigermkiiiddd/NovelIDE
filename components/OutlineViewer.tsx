@@ -2207,6 +2207,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     setNewEvent({
       day: 1,
       hour: 8,
+      minute: 0,
       durationValue: 1,
       durationUnit: 'hour',
       title: '',
@@ -2226,6 +2227,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
     setNewEvent({
       day: 1,
       hour: 8,
+      minute: 0,
       durationValue: 1,
       durationUnit: 'hour',
       title: '',

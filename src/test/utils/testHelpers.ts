@@ -1,4 +1,4 @@
-import { DiffSessionState, FilePatch, PendingChange, FileNode } from '../../types';
+import { DiffSessionState, FilePatch, PendingChange, FileNode } from '../../../types';
 
 /**
  * 创建mock文件系统

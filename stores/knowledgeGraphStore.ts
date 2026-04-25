@@ -31,7 +31,8 @@ import { AIService } from '../services/geminiService';
 import { createRoutedAIService } from '../services/modelRouter';
 import { useAgentStore } from './agentStore';
 import { findSemanticDuplicate } from '../domains/memory/vectorSearchService';
-import { generateEmbedding } from '../domains/memory/embeddingService';
+import { generateEmbedding, generateEmbeddingSafe, isValidEmbedding } from '../domains/memory/embeddingService';
+import { checkKnowledgeNodeEmbeddings } from '../domains/memory/embeddingRepairService';
 
 // ============================================
 // 类型定义
@@ -1188,10 +1189,10 @@ async function loadFromProjectInternal(projectId: string) {
  * 不阻塞主流程，逐个生成并更新
  */
 async function backfillEmbeddings(nodes: KnowledgeNode[]) {
-  const missing = nodes.filter(n => !n.embedding || n.embedding.length === 0);
-  if (missing.length === 0) return;
+  const check = checkKnowledgeNodeEmbeddings(nodes);
+  if (check.invalid === 0) return;
 
-  console.log(`[KnowledgeGraph] 开始回填 ${missing.length} 个节点的 embedding...`);
+  console.log(`[KnowledgeGraph] 开始回填 ${check.invalid} 个节点的 embedding...`);
 
   try {
     // 尝试初始化 embedding 模型（首次会下载）
@@ -1199,13 +1200,16 @@ async function backfillEmbeddings(nodes: KnowledgeNode[]) {
     await initEmbeddingModel();
 
     let filled = 0;
-    for (const node of missing) {
+    for (const node of check.details) {
       try {
-        const text = `${node.name}。${node.summary}${node.detail ? `。${node.detail}` : ''}`;
-        const embedding = await generateEmbedding(text);
-        // 直接更新 store 中的节点
-        useKnowledgeGraphStore.getState().updateNode(node.id, { embedding } as any);
-        filled++;
+        const targetNode = useKnowledgeGraphStore.getState().getNodeById(node.id);
+        if (!targetNode) continue;
+        const text = `${targetNode.name}。${targetNode.summary}${targetNode.detail ? `。${targetNode.detail}` : ''}`;
+        const embedding = await generateEmbeddingSafe(text);
+        if (embedding) {
+          useKnowledgeGraphStore.getState().updateNode(node.id, { embedding } as any);
+          filled++;
+        }
       } catch (e) {
         // 单个节点失败不影响整体
         console.warn(`[KnowledgeGraph] 节点 ${node.name} embedding 生成失败:`, e);
@@ -1213,7 +1217,7 @@ async function backfillEmbeddings(nodes: KnowledgeNode[]) {
     }
 
     if (filled > 0) {
-      console.log(`[KnowledgeGraph] embedding 回填完成: ${filled}/${missing.length}`);
+      console.log(`[KnowledgeGraph] embedding 回填完成: ${filled}/${check.invalid}`);
       setTimeout(() => saveToFile(useKnowledgeGraphStore.getState()), 1000);
     }
   } catch (e) {
