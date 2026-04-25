@@ -313,7 +313,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
-              {tag}
+              {t('projectMeta.tags.coreGameplay.' + tag, { defaultValue: tag })}
             </button>
           ))}
         </div>
@@ -349,7 +349,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 key={tag}
                 className="inline-flex items-center gap-1 px-2 py-1 bg-blue-900/30 border border-blue-700 rounded text-xs text-blue-300"
               >
-                {tag}
+                {t('projectMeta.tags.coreGameplay.' + tag, { defaultValue: tag })}
                 <button
                   type="button"
                   onClick={() => removeTag(tag, coreGameplay, setCoreGameplay)}
@@ -378,7 +378,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
-              {tag}
+              {t('projectMeta.tags.narrativeElements.' + tag, { defaultValue: tag })}
             </button>
           ))}
         </div>
@@ -412,7 +412,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 key={tag}
                 className="inline-flex items-center gap-1 px-2 py-1 bg-purple-900/30 border border-purple-700 rounded text-xs text-purple-300"
               >
-                {tag}
+                {t('projectMeta.tags.narrativeElements.' + tag, { defaultValue: tag })}
                 <button
                   type="button"
                   onClick={() => removeTag(tag, narrativeElements, setNarrativeElements)}
@@ -441,7 +441,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
-              {tag}
+              {t('projectMeta.tags.styleTone.' + tag, { defaultValue: tag })}
             </button>
           ))}
         </div>
@@ -475,7 +475,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 key={tag}
                 className="inline-flex items-center gap-1 px-2 py-1 bg-green-900/30 border border-green-700 rounded text-xs text-green-300"
               >
-                {tag}
+                {t('projectMeta.tags.styleTone.' + tag, { defaultValue: tag })}
                 <button
                   type="button"
                   onClick={() => removeTag(tag, styleTone, setStyleTone)}
@@ -504,7 +504,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
-              {tag}
+              {t('projectMeta.tags.romanceLine.' + tag, { defaultValue: tag })}
             </button>
           ))}
         </div>
@@ -538,7 +538,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 key={tag}
                 className="inline-flex items-center gap-1 px-2 py-1 bg-pink-900/30 border border-pink-700 rounded text-xs text-pink-300"
               >
-                {tag}
+                {t('projectMeta.tags.romanceLine.' + tag, { defaultValue: tag })}
                 <button
                   type="button"
                   onClick={() => removeTag(tag, romanceLine, setRomanceLine)}
