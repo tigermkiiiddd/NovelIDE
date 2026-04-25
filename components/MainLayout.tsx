@@ -120,6 +120,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           ensureKnowledgeGraphInitialized(projectId);
           loadTimeline(projectId);
           loadRelations();
+          // 后台重建文件 embedding 索引（非阻塞，慢慢执行）
+          import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
+            const files = useFileStore.getState().files;
+            indexFilesForSearch(files, projectId).then(count => {
+              if (count > 0) console.log(`[Embedding] 项目加载后后台索引完成: ${count} 个文件`);
+            }).catch(err => console.error('[Embedding] 后台索引失败:', err));
+          });
         });
     }
   }, [projectId, loadFiles, loadProjectAnalyses, loadProjectCharacterProfiles, ensureKnowledgeGraphInitialized, loadTimeline, loadRelations]);

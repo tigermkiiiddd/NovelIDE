@@ -151,6 +151,20 @@ export const useFileStore = create<FileState>((set, get) => ({
       }
   },
 
+  _triggerEmbeddingIndex: (() => {
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    return () => {
+      const { files, currentProjectId } = get();
+      if (!currentProjectId) return;
+      if (timeout) clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
+          indexFilesForSearch(files, currentProjectId).catch(() => {});
+        });
+      }, 2000); // 2秒防抖：等用户停止输入后再重建
+    };
+  })(),
+
   createFile: (path, content) => {
     const { files, _saveToDB } = get();
     if (findNodeByPath(files, path)) return `Error: File at "${path}" already exists.`;
@@ -170,6 +184,7 @@ export const useFileStore = create<FileState>((set, get) => ({
     const newFile: FileNode = { id: generateId(), parentId, name: fileName, type: FileType.FILE, content, metadata, lastModified: Date.now() };
     set(state => ({ files: [...state.files, newFile], activeFileId: newFile.id }));
     _saveToDB();
+    get()._triggerEmbeddingIndex();
     const wordInfo = formatWordCount(content);
     return `Created file at: "${path}" (${wordInfo})`;
   },
@@ -219,6 +234,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
+    get()._triggerEmbeddingIndex();
     const wordInfo = formatWordCount(content);
     return `Updated content of "${path}" (${wordInfo})`;
   },
@@ -251,6 +267,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         files: state.files.map(f => f.id === id ? { ...f, content, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
+    get()._triggerEmbeddingIndex();
   },
 
   patchFile: (path, edits) => {
@@ -291,6 +308,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         files: state.files.map(f => f.id === file.id ? { ...f, content, metadata, lastModified: Date.now() } : f)
     }));
     _saveToDB();
+    get()._triggerEmbeddingIndex();
     const wordInfo = formatWordCount(content);
     return `✅ Successfully applied ${edits.length} patches to "${path}" (${wordInfo})\n${result.results?.join('\n') || ''}`;
   },

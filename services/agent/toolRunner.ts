@@ -714,32 +714,23 @@ export const executeTool = async (
                       resultParts.push(`【关键词匹配】\n${substringResult}`);
                     }
 
-                    // 2. 语义搜索（并行执行，不再是兜底）
+                    // 2. 语义搜索（只读缓存，不触发索引——索引由项目加载和文件保存触发）
                     try {
-                      const { semanticFileSearch, indexFilesForSearch } = require('../../domains/memory/fileSearchService');
+                      const { semanticFileSearch } = require('../../domains/memory/fileSearchService');
                       const { useFileStore } = require('../../stores/fileStore');
-                      const { useProjectStore } = require('../../stores/projectStore');
                       const files = useFileStore.getState().files;
-                      const projectId = useProjectStore.getState().currentProjectId;
-                      if (projectId) {
-                        await indexFilesForSearch(files, projectId);
-                        const { substring, semantic } = await semanticFileSearch(searchQuery, files);
+                      const { substring, semantic } = await semanticFileSearch(searchQuery, files);
 
-                        const { getNodePath } = require('../../services/fileSystem');
+                      const { getNodePath } = require('../../services/fileSystem');
 
-                        if (substring.length > 0 && resultParts.length === 0) {
-                          // 子串结果已在 actions.searchFiles 中返回，这里不再重复
-                        }
-
-                        if (semantic.length > 0) {
-                          const semanticList = semantic.map((r: any) => {
-                            const file = files.find((f: FileNode) => f.id === r.fileId);
-                            if (!file) return '';
-                            const path = getNodePath(file, files);
-                            return `[FILE] ${path} (语义相关度: ${(r.score * 100).toFixed(0)}%)`;
-                          }).filter(Boolean).join('\n');
-                          resultParts.push(`【语义匹配】\n${semanticList}`);
-                        }
+                      if (semantic.length > 0) {
+                        const semanticList = semantic.map((r: any) => {
+                          const file = files.find((f: FileNode) => f.id === r.fileId);
+                          if (!file) return '';
+                          const path = getNodePath(file, files);
+                          return `[FILE] ${path} (语义相关度: ${(r.score * 100).toFixed(0)}%)`;
+                        }).filter(Boolean).join('\n');
+                        resultParts.push(`【语义匹配】\n${semanticList}`);
                       }
                     } catch (e) {
                       console.error('[searchFiles] 语义搜索失败:', e);

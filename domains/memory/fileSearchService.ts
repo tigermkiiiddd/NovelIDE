@@ -140,7 +140,7 @@ export async function indexFilesForSearch(files: FileNode[], projectId: string):
 
   let indexed = 0;
   for (const file of fileNodes) {
-    const version = file.updatedAt || 0;
+    const version = file.lastModified || 0;
     if (indexedVersions.get(file.id) === version && chunkCache.has(file.id)) {
       continue;
     }
