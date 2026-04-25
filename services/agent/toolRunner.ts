@@ -705,36 +705,51 @@ export const executeTool = async (
                       args.multiline
                     );
                     break;
-                case 'searchFiles':
-                    // Legacy: original substring search + semantic fallback
-                    result = actions.searchFiles(args.pattern || args.query);
-                    // 如果子串匹配无结果，尝试语义搜索
+                case 'searchFiles': {
                     const searchQuery = args.pattern || args.query;
-                    if (result.startsWith('No files found')) {
-                      try {
-                        const { semanticFileSearch, indexFilesForSearch } = require('../../domains/memory/fileSearchService');
-                        const { useFileStore } = require('../../stores/fileStore');
-                        const files = useFileStore.getState().files;
-                        // 增量索引（首次会较慢）
-                        await indexFilesForSearch(files);
-                        const semanticResults = await semanticFileSearch(searchQuery, files);
-                        if (semanticResults.length > 0) {
-                          const { getNodePath } = require('../../services/fileSystem');
-                          const resultList = semanticResults.map((r: any) => {
+                    // 1. 子串搜索（始终执行）
+                    const substringResult = actions.searchFiles(searchQuery);
+                    let resultParts: string[] = [];
+                    if (!substringResult.startsWith('No files found')) {
+                      resultParts.push(`【关键词匹配】\n${substringResult}`);
+                    }
+
+                    // 2. 语义搜索（并行执行，不再是兜底）
+                    try {
+                      const { semanticFileSearch, indexFilesForSearch } = require('../../domains/memory/fileSearchService');
+                      const { useFileStore } = require('../../stores/fileStore');
+                      const { useProjectStore } = require('../../stores/projectStore');
+                      const files = useFileStore.getState().files;
+                      const projectId = useProjectStore.getState().currentProjectId;
+                      if (projectId) {
+                        await indexFilesForSearch(files, projectId);
+                        const { substring, semantic } = await semanticFileSearch(searchQuery, files);
+
+                        const { getNodePath } = require('../../services/fileSystem');
+
+                        if (substring.length > 0 && resultParts.length === 0) {
+                          // 子串结果已在 actions.searchFiles 中返回，这里不再重复
+                        }
+
+                        if (semantic.length > 0) {
+                          const semanticList = semantic.map((r: any) => {
                             const file = files.find((f: FileNode) => f.id === r.fileId);
                             if (!file) return '';
                             const path = getNodePath(file, files);
-                            return `[FILE] ${path} (相关度: ${(r.score * 100).toFixed(0)}%)`;
+                            return `[FILE] ${path} (语义相关度: ${(r.score * 100).toFixed(0)}%)`;
                           }).filter(Boolean).join('\n');
-                          if (resultList) {
-                            result = `语义搜索结果（"${searchQuery}"）：\n${resultList}`;
-                          }
+                          resultParts.push(`【语义匹配】\n${semanticList}`);
                         }
-                      } catch {
-                        // 语义搜索失败，保持子串搜索结果
                       }
+                    } catch (e) {
+                      console.error('[searchFiles] 语义搜索失败:', e);
                     }
+
+                    result = resultParts.length > 0
+                      ? resultParts.join('\n\n')
+                      : `未找到与 "${searchQuery}" 相关的文件`;
                     break;
+                }
                 case 'glob':
                     // 禁止匹配 .json 文件（业务数据隔离）
                     if (args.pattern && args.pattern.toLowerCase().includes('.json')) {

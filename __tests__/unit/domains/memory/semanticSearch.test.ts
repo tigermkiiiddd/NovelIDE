@@ -443,18 +443,18 @@ describe('fileSearchService', () => {
 
   describe('indexFilesForSearch', () => {
     it('应该成功索引非隐藏文件', async () => {
-      const count = await indexFilesForSearch(mockFiles);
+      const count = await indexFilesForSearch(mockFiles, 'test-project');
       expect(count).toBeGreaterThan(0);
     });
 
     it('空文件列表应返回 0', async () => {
-      const count = await indexFilesForSearch([]);
+      const count = await indexFilesForSearch([], 'test-project');
       expect(count).toBe(0);
     });
 
     it('重复索引应跳过未变化的文件', async () => {
-      await indexFilesForSearch(mockFiles);
-      const count = await indexFilesForSearch(mockFiles);
+      await indexFilesForSearch(mockFiles, 'test-project');
+      const count = await indexFilesForSearch(mockFiles, 'test-project');
       expect(count).toBe(0); // 第二次应该全部跳过
     });
   });
@@ -462,39 +462,42 @@ describe('fileSearchService', () => {
   describe('semanticFileSearch', () => {
     beforeEach(async () => {
       // 确保索引已建立
-      await indexFilesForSearch(mockFiles);
+      await indexFilesForSearch(mockFiles, 'test-project');
     });
 
     it('子串匹配应返回对应文件', async () => {
-      const results = await semanticFileSearch('林风', mockFiles);
-      expect(results.length).toBeGreaterThan(0);
-      expect(results.some(r => r.fileId === 'file-1')).toBe(true);
+      const { substring, semantic } = await semanticFileSearch('林风', mockFiles);
+      const all = [...substring, ...semantic];
+      expect(all.length).toBeGreaterThan(0);
+      expect(all.some(r => r.fileId === 'file-1')).toBe(true);
     });
 
-    it('无匹配时应返回空数组', async () => {
-      const results = await semanticFileSearch('完全不存在的关键词xyz', mockFiles);
-      // 如果子串匹配无结果，语义匹配可能有也可能没有结果
-      expect(Array.isArray(results)).toBe(true);
+    it('无匹配时应返回空结果', async () => {
+      const { substring, semantic } = await semanticFileSearch('完全不存在的关键词xyz', mockFiles);
+      expect(Array.isArray(substring)).toBe(true);
+      expect(Array.isArray(semantic)).toBe(true);
     });
 
     it('应排除隐藏文件', async () => {
-      const results = await semanticFileSearch('hidden', mockFiles);
-      expect(results.some(r => r.fileId === 'file-3')).toBe(false);
+      const { substring, semantic } = await semanticFileSearch('hidden', mockFiles);
+      const all = [...substring, ...semantic];
+      expect(all.some(r => r.fileId === 'file-3')).toBe(false);
     });
 
     it('结果应包含 score 和 matchType', async () => {
-      const results = await semanticFileSearch('林风', mockFiles);
-      if (results.length > 0) {
-        expect(results[0]).toHaveProperty('fileId');
-        expect(results[0]).toHaveProperty('score');
-        expect(results[0]).toHaveProperty('matchType');
-        expect(['substring', 'semantic', 'both']).toContain(results[0].matchType);
+      const { substring, semantic } = await semanticFileSearch('林风', mockFiles);
+      const all = [...substring, ...semantic];
+      if (all.length > 0) {
+        expect(all[0]).toHaveProperty('fileId');
+        expect(all[0]).toHaveProperty('score');
+        expect(all[0]).toHaveProperty('matchType');
+        expect(['substring', 'semantic', 'both']).toContain(all[0].matchType);
       }
     });
 
-    it('topK 应限制结果数量', async () => {
-      const results = await semanticFileSearch('林风', mockFiles, 1);
-      expect(results.length).toBeLessThanOrEqual(1);
+    it('topK 应限制语义结果数量', async () => {
+      const { semantic } = await semanticFileSearch('林风', mockFiles, 1);
+      expect(semantic.length).toBeLessThanOrEqual(1);
     });
   });
 });
@@ -549,10 +552,10 @@ describe('集成场景：embedding → 搜索 → 评分', () => {
         lastModified: Date.now(),
         updatedAt: 2000,
       },
-    ]);
+    ], 'test-project');
 
     // "主角的过去经历" 不在文件中，但语义相关
-    const results = await semanticFileSearch('主角的过去经历', [
+    const { substring, semantic } = await semanticFileSearch('主角的过去经历', [
       {
         id: 'f1',
         parentId: 'root',
@@ -564,6 +567,7 @@ describe('集成场景：embedding → 搜索 → 评分', () => {
     ]);
 
     // 结果可能是子串或语义匹配
-    expect(Array.isArray(results)).toBe(true);
+    expect(Array.isArray(substring)).toBe(true);
+    expect(Array.isArray(semantic)).toBe(true);
   });
 });

@@ -102,6 +102,21 @@ interface NovelGenieDB extends DBSchema {
     key: string; // 'skill-trigger-{projectId}'
     value: { records: any[]; currentRound: number };
   };
+  // 文件 chunk embedding 缓存（按项目隔离）
+  fileEmbeddings: {
+    key: string; // 'embeddings-{projectId}'
+    value: {
+      version: number; // schema version
+      chunks: Array<{
+        fileId: string;
+        fileName: string;
+        chunkIndex: number;
+        text: string;
+        embedding: number[];
+      }>;
+      indexedVersions: Record<string, number>; // fileId -> updatedAt
+    };
+  };
   // 自进化记忆（跨项目持久）
   agentMemories: {
     key: string;
@@ -133,7 +148,7 @@ interface NovelGenieDB extends DBSchema {
 }
 
 const DB_NAME = 'novel-genie-db';
-const DB_VERSION = 15;
+const DB_VERSION = 16;
 
 let dbPromise: Promise<IDBPDatabase<NovelGenieDB>>;
 
@@ -1125,6 +1140,26 @@ export const dbAPI = {
     console.log('[dbAPI.saveSkillTriggerState] 保存, projectId:', projectId, '记录数:', state.records.length);
     const db = await initDB();
     await db.put('skillTrigger', state, `skill-trigger-${projectId}`);
+  },
+
+  // --- File Embeddings ---
+  getFileEmbeddings: async (projectId: string) => {
+    try {
+      const db = await initDB();
+      return await db.get('fileEmbeddings', `embeddings-${projectId}`);
+    } catch (error) {
+      console.error('[dbAPI.getFileEmbeddings] 读取失败:', projectId, error);
+      return undefined;
+    }
+  },
+
+  saveFileEmbeddings: async (projectId: string, data: { version: number; chunks: any[]; indexedVersions: Record<string, number> }) => {
+    try {
+      const db = await initDB();
+      await db.put('fileEmbeddings', data, `embeddings-${projectId}`);
+    } catch (error) {
+      console.error('[dbAPI.saveFileEmbeddings] 保存失败:', projectId, error);
+    }
   },
 };
 

@@ -490,7 +490,7 @@ export const executeQueryKnowledge = async (args: {
             try {
               const files = useFileStore.getState().files;
               const remaining = limit - semanticResults.length;
-              const fResults = await semanticFileSearch(query, files, remaining);
+              const { semantic: fResults } = await semanticFileSearch(query, files, remaining);
               fileResults = fResults.map(r => {
                 const file = files.find(f => f.id === r.fileId);
                 return { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType };
@@ -589,7 +589,7 @@ export const executeQueryKnowledge = async (args: {
     try {
       const files = useFileStore.getState().files;
       const remaining = limit - results.length;
-      const fileSearchResults = await semanticFileSearch(query, files, remaining);
+      const { semantic: fileSearchResults } = await semanticFileSearch(query, files, remaining);
       fileResults = fileSearchResults.map(r => {
         const file = files.find(f => f.id === r.fileId);
         return {

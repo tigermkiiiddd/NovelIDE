@@ -118,7 +118,12 @@ export const useRelationshipStore: UseBoundStore<StoreApi<RelationshipState>> = 
           isLoaded: true,
         });
       } else {
-        useRelationshipStore.setState({ isLoaded: true });
+        // 当前项目无人际关系数据时，必须清空旧项目数据，防止跨项目污染
+        useRelationshipStore.setState({
+          relations: [],
+          customRelationTypes: [],
+          isLoaded: true,
+        });
       }
       (useRelationshipStore as any)._markLoaded?.();
     },
