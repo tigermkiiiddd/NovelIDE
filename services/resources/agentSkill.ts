@@ -18,3 +18,4 @@ export * from './skills/textPolish';
 export * from './skills/strandWeave';
 export * from './skills/projectInit';
 export * from './skills/deepThinking';
+export * from './skills/draftWriting';

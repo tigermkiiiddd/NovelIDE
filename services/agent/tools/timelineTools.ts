@@ -27,6 +27,7 @@ export {
   processOutlineInputTool,
   getUnresolvedForeshadowingTool,
   getForeshadowingDetailTool,
+  manageForeshadowingTool,
   allOutlineTools
 } from '../toolDefinitions/timeline';
 
@@ -458,6 +459,86 @@ export const executeOutlineTool = async (toolName: string, args: any): Promise<s
           }))
         }
       });
+    }
+
+    case 'outline_manageForeshadowing': {
+      const chapterAnalysisStore = useChapterAnalysisStore.getState();
+
+      switch (args.action) {
+        case 'update': {
+          if (!args.foreshadowingId) {
+            return JSON.stringify({ success: false, error: 'update 操作需要提供 foreshadowingId' });
+          }
+          const existing = chapterAnalysisStore.getForeshadowingById(args.foreshadowingId);
+          if (!existing) {
+            return JSON.stringify({ success: false, error: `伏笔 ${args.foreshadowingId} 不存在` });
+          }
+          chapterAnalysisStore.updateForeshadowing(args.foreshadowingId, args.updates || {});
+          return JSON.stringify({
+            success: true,
+            message: `伏笔已更新: ${args.foreshadowingId}`,
+            updatedFields: Object.keys(args.updates || {})
+          });
+        }
+
+        case 'delete': {
+          if (!args.foreshadowingId) {
+            return JSON.stringify({ success: false, error: 'delete 操作需要提供 foreshadowingId' });
+          }
+          const existing = chapterAnalysisStore.getForeshadowingById(args.foreshadowingId);
+          if (!existing) {
+            return JSON.stringify({ success: false, error: `伏笔 ${args.foreshadowingId} 不存在` });
+          }
+          chapterAnalysisStore.deleteForeshadowing(args.foreshadowingId);
+          return JSON.stringify({
+            success: true,
+            message: `伏笔已删除: ${args.foreshadowingId}`,
+            deletedContent: existing.content
+          });
+        }
+
+        case 'list': {
+          const all = chapterAnalysisStore.getAllForeshadowing();
+          const unresolved = chapterAnalysisStore.getUnresolvedForeshadowing();
+          return JSON.stringify({
+            success: true,
+            total: all.length,
+            unresolvedCount: unresolved.length,
+            foreshadowings: all.map((f: ForeshadowingItem) => ({
+              id: f.id,
+              content: f.content,
+              type: f.type,
+              plantedChapter: f.plantedChapter,
+              plannedChapter: f.plannedChapter,
+              tags: f.tags,
+              hookType: f.hookType,
+              strength: f.strength,
+              parentId: f.parentId
+            }))
+          });
+        }
+
+        case 'update_planned': {
+          const batch = args.batchUpdates || [];
+          if (!Array.isArray(batch) || batch.length === 0) {
+            return JSON.stringify({ success: false, error: 'update_planned 需要提供 batchUpdates 数组' });
+          }
+          const results: any[] = [];
+          for (const item of batch) {
+            const existing = chapterAnalysisStore.getForeshadowingById(item.foreshadowingId);
+            if (existing) {
+              chapterAnalysisStore.updateForeshadowing(item.foreshadowingId, { plannedChapter: item.plannedChapter });
+              results.push({ foreshadowingId: item.foreshadowingId, success: true, newPlannedChapter: item.plannedChapter });
+            } else {
+              results.push({ foreshadowingId: item.foreshadowingId, success: false, error: '伏笔不存在' });
+            }
+          }
+          return JSON.stringify({ success: true, updated: results });
+        }
+
+        default:
+          return JSON.stringify({ success: false, error: `未知 action: ${args.action}` });
+      }
     }
 
     // === 管理 ===

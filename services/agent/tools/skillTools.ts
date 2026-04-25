@@ -11,6 +11,7 @@ import type { ToolDefinition } from '../types';
 import { useFileStore } from '../../../stores/fileStore';
 import { useSkillTriggerStore } from '../../../stores/skillTriggerStore';
 import { useProjectStore } from '../../../stores/projectStore';
+import { useAgentStore, type ToolCategory } from '../../../stores/agentStore';
 import { FileType } from '../../../types';
 import { parseFileMeta } from '../../fileSystem';
 
@@ -44,15 +45,16 @@ export const activateSkillTool: ToolDefinition = {
   function: {
     name: 'activate_skill',
     description:
-      '加载技能的完整方法论。完整内容直接在本条 tool response 中返回，立即生效。' +
-      '先用 skills_list 查看可用技能，选合适的再激活。' +
+      '加载技能的完整方法论，并自动解锁该技能依赖的工具类别。' +
+      '完整内容直接在本条 tool response 中返回，立即生效。' +
+      '先用 skills_list 查看可用技能及其配套工具，选合适的再激活。' +
       '[READ TOOL — 不需要审批]',
     parameters: {
       type: 'object',
       properties: {
         skillName: {
           type: 'string',
-          description: '技能名称（从 skills_list 结果中选择，如"深度思考方法论"、"角色设计"）',
+          description: '技能名称（从 skills_list 结果中选择，如"深度思考方法论"、"正文写作流程"）',
         },
         reason: {
           type: 'string',
@@ -103,6 +105,14 @@ function collectSkills(category?: string): SkillEntry[] {
 
 // ==================== skills_list 执行 ====================
 
+const VALID_TOOL_CATEGORIES: ToolCategory[] = ['memory', 'character', 'relationship', 'outline'];
+
+function parseSkillTools(meta: Record<string, any>): ToolCategory[] {
+  const raw = meta.tools || meta.requiredTools || [];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((t: string): t is ToolCategory => VALID_TOOL_CATEGORIES.includes(t as ToolCategory));
+}
+
 export function executeSkillsList(category?: string): string {
   const skills = collectSkills(category);
 
@@ -113,10 +123,12 @@ export function executeSkillsList(category?: string): string {
   const lines = skills.map(({ meta, category: cat }) => {
     const name = meta.name || '(未命名)';
     const desc = meta.description || meta.summarys?.[0] || '';
-    return `- **${name}** [${cat}]：${desc}`;
+    const tools = parseSkillTools(meta);
+    const toolsHint = tools.length > 0 ? ` [配套工具: ${tools.join(', ')}]` : '';
+    return `- **${name}** [${cat}]${toolsHint}：${desc}`;
   });
 
-  return `可用技能（${skills.length}个）：\n${lines.join('\n')}\n\n用 activate_skill(name) 加载完整内容。`;
+  return `可用技能（${skills.length}个）：\n${lines.join('\n')}\n\n用 activate_skill(name) 加载完整内容。加载时会自动解锁该技能配套的工具类别，无需再调用 search_tools。`;
 }
 
 // ==================== activate_skill 执行 ====================
@@ -168,9 +180,23 @@ export function executeActivateSkill(
     source: 'agent',
   });
 
+  // 自动解锁该 skill 依赖的工具类别
+  const requiredTools = parseSkillTools(matched.meta);
+  let unlockedToolsMsg = '';
+  if (requiredTools.length > 0) {
+    const currentActivated = useAgentStore.getState().activatedCategories;
+    const newTools = requiredTools.filter(t => !currentActivated.includes(t));
+    if (newTools.length > 0) {
+      useAgentStore.getState().setActivatedCategories([...currentActivated, ...newTools]);
+      unlockedToolsMsg = `\n\n【工具已自动解锁】${newTools.join(', ')} — 现在可以直接使用这些类别的工具，无需调用 search_tools。`;
+    } else {
+      unlockedToolsMsg = `\n\n【工具状态】${requiredTools.join(', ')} 已处于解锁状态。`;
+    }
+  }
+
   // 构建返回内容：直接包含完整 skill 内容
   const skillDisplayName = matched.meta.name || matched.file.name;
-  let message = `已激活 [${matched.category}] ${skillDisplayName}\n\n` +
+  let message = `已激活 [${matched.category}] ${skillDisplayName}${unlockedToolsMsg}\n\n` +
     `<skill_content name="${skillDisplayName}" category="${matched.category}">\n` +
     `${matched.file.content}\n` +
     `</skill_content>`;

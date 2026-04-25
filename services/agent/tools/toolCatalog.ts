@@ -135,6 +135,11 @@ export const toolCatalogEntries: ToolCatalogEntry[] = [
     description: '获取单个伏笔的详细信息',
     category: 'outline',
   },
+  {
+    name: 'outline_manageForeshadowing',
+    description: '独立管理伏笔：修改属性、删除、列出全部、批量调整计划回收章节',
+    category: 'outline',
+  },
 ];
 
 // 获取指定类别的目录条目

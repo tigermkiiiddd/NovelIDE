@@ -16,6 +16,7 @@ import {
   SKILL_OUTLINE_ARCHITECT,
   SKILL_TEXT_POLISH,
   SKILL_PROJECT_INIT,
+  SKILL_DRAFT_WRITING,
 } from './templates';
 import { GenrePreset } from './resources/presets';
 
@@ -152,6 +153,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   const CREATE_SKILLS: Record<string, string> = {
     '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
     '技能_去AI化润色.md': SKILL_TEXT_POLISH,
+    '技能_正文写作流程.md': SKILL_DRAFT_WRITING,
   };
 
   // 规划 skills

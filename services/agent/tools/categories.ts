@@ -71,6 +71,7 @@ import {
   processOutlineInputTool,
   getUnresolvedForeshadowingTool,
   getForeshadowingDetailTool,
+  manageForeshadowingTool,
 } from '../toolDefinitions/timeline';
 
 // 自进化工具
@@ -140,6 +141,7 @@ export const categoryTools: Record<ToolCategory, ToolDefinition[]> = {
     processOutlineInputTool,
     getUnresolvedForeshadowingTool,
     getForeshadowingDetailTool,
+    manageForeshadowingTool,
   ],
 };
 

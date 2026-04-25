@@ -25,6 +25,62 @@ import {
   MAX_CONTEXT_MESSAGES,
 } from '../../domains/agentContext/windowing';
 
+// read 类工具前缀列表 — 用于对话提取时过滤掉纯查询结果
+const READ_TOOL_PREFIXES = [
+  'read', 'listFiles', 'glob', 'grep', 'search_',
+  'query_', 'get', 'skills_list', 'activate_skill'
+];
+
+/**
+ * 过滤对话消息，用于知识提取：
+ * 1. 范围：从最近一条 user 消息开始到当前（本轮对话）
+ * 2. 排除 read/list/search/query/get 类工具结果
+ * 3. 保留 write/edit/create/patch/update/manage 类工具结果
+ * 4. 始终保留 user 和 model 的文本消息
+ */
+function filterMessagesForExtraction(
+  messages: ChatMessage[]
+): Array<{ role: string; text: string }> {
+  if (!messages || messages.length === 0) return [];
+
+  // 找到最近一条 user 消息的位置（作为本轮对话起点）
+  let startIndex = 0;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      startIndex = i;
+      break;
+    }
+  }
+
+  const roundMessages = messages.slice(startIndex);
+
+  return roundMessages
+    .filter((m) => {
+      // 始终保留 user 和 model 的文本消息
+      if (m.role === 'user' || m.role === 'model') return true;
+
+      // 排除非工具输出的 system 消息（如系统提示、停止通知）
+      if (!m.isToolOutput) return false;
+
+      // 获取工具名
+      const toolName = m.rawParts?.[0]?.functionResponse?.name;
+      if (!toolName) return true; // 无法判断时保留
+
+      // 判断是否为 read 类工具
+      const isReadTool = READ_TOOL_PREFIXES.some(
+        (prefix) => toolName === prefix || toolName.startsWith(prefix)
+      );
+
+      if (isReadTool) {
+        console.log(`[ConversationMemory] 过滤 read 工具结果: ${toolName}`);
+        return false;
+      }
+
+      return true;
+    })
+    .map((m) => ({ role: m.role, text: m.text }));
+}
+
 interface UseAgentEngineProps {
   context: ReturnType<typeof useAgentContext>;
   toolsHook: ReturnType<typeof useAgentTools>;
@@ -482,6 +538,38 @@ export const useAgentEngine = ({
             });
 
             console.log(`[AgentEngine-EXIT] final_answer 调用，状态: ${args.status}`);
+
+            // 对话结束，触发知识提取（过滤 read 类工具，保留 write 类产出）
+            const { autoExtraction } = useAgentStore.getState().aiConfig;
+            if (autoExtraction?.conversation !== false) {
+              const session = useAgentStore.getState().sessions.find(s => s.id === currentSessionId);
+              if (session?.messages && session.messages.length > 0) {
+                const recentMessages = session.messages.slice(-20);
+                useKnowledgeGraphStore
+                  .getState()
+                  .triggerConversationExtraction(
+                    textPart?.text || '',
+                    filterMessagesForExtraction(recentMessages)
+                  )
+                  .then((result) => {
+                    if (!result) return;
+                    const hasExtracted = result.added + result.updated + result.linked > 0;
+                    if (hasExtracted) {
+                      addMessage({
+                        id: generateId(),
+                        role: 'system',
+                        text: `🧠 已自动沉淀知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
+                        timestamp: Date.now(),
+                        metadata: { logType: 'success', extractionSummary: result.summary },
+                      });
+                    }
+                  })
+                  .catch((error: Error) => {
+                    console.error('[ConversationMemory] final_answer extraction failed', error);
+                  });
+              }
+            }
+
             keepGoing = false;
             continue;
           }
@@ -720,7 +808,38 @@ export const useAgentEngine = ({
     }
     isProcessingRef.current = false;  // P1: 防止状态锁死
     setLoading(false);
-  }, [setLoading]);
+
+    // 用户主动中断，触发知识提取（总结已产生的对话内容）
+    const { autoExtraction } = useAgentStore.getState().aiConfig;
+    if (autoExtraction?.conversation !== false) {
+      const session = useAgentStore.getState().sessions.find(s => s.id === currentSessionId);
+      if (session?.messages && session.messages.length > 0) {
+        const recentMessages = session.messages.slice(-20);
+        useKnowledgeGraphStore
+          .getState()
+          .triggerConversationExtraction(
+            '[用户中断]',
+            filterMessagesForExtraction(recentMessages)
+          )
+          .then((result) => {
+            if (!result) return;
+            const hasExtracted = result.added + result.updated + result.linked > 0;
+            if (hasExtracted) {
+              addMessage({
+                id: generateId(),
+                role: 'system',
+                text: `🧠 已自动沉淀知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
+                timestamp: Date.now(),
+                metadata: { logType: 'success', extractionSummary: result.summary },
+              });
+            }
+          })
+          .catch((error: Error) => {
+            console.error('[ConversationMemory] stopGeneration extraction failed', error);
+          });
+      }
+    }
+  }, [setLoading, currentSessionId, addMessage]);
 
   return {
     processTurn,

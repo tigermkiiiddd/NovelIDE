@@ -259,44 +259,6 @@ export const useAgent = (
 
     addMessage(userMessage);
 
-    // 对话自动提取
-    const { autoExtraction } = useAgentStore.getState().aiConfig;
-    if (autoExtraction?.conversation !== false) {
-      setTimeout(() => {
-        useKnowledgeGraphStore
-          .getState()
-          .triggerConversationExtraction(userMessage.text, recentMessages.map(m => ({ role: m.role, text: m.text })))
-          .then((result) => {
-            if (!result) return;
-
-            const hasExtracted = result.added + result.updated + result.linked > 0;
-            const summary = result.summary;
-
-            if (hasExtracted) {
-              addMessage({
-                id: generateId(),
-                role: 'system',
-                text: `🧠 已自动沉淀知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
-                timestamp: Date.now(),
-                metadata: { logType: 'success', extractionSummary: summary },
-              });
-            } else if (summary) {
-              // 跳过提取时也显示原因
-              addMessage({
-                id: generateId(),
-                role: 'system',
-                text: `⏭️ ${summary}`,
-                timestamp: Date.now(),
-                metadata: { logType: 'info', extractionSummary: summary },
-              });
-            }
-          })
-          .catch((error: Error) => {
-            console.error('[ConversationMemory] trigger failed', error);
-          });
-      }, 0);
-    }
-
     // --- 技能触发检测：用户消息立即触发一次（不推进轮次） ---
     console.log('[sendMessage] triggerSkill 调用:', userMessage.text);
     triggerSkill(userMessage.text);

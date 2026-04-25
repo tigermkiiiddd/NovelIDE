@@ -30,7 +30,8 @@ import {
   SKILL_SCENE_DESCRIPTION,
   SKILL_TEXT_POLISH,
   SKILL_STRAND_WEAVE,
-  SKILL_PROJECT_INIT
+  SKILL_PROJECT_INIT,
+  SKILL_DRAFT_WRITING,
 } from '../../services/templates';
 import { getPresetById } from '../../services/resources/presets';
 import {
@@ -189,6 +190,7 @@ export class FileService {
     const CREATE_SKILLS: Record<string, string> = {
       '技能_正文扩写.md': SKILL_DRAFT_EXPANDER,
       '技能_去AI化润色.md': SKILL_TEXT_POLISH,
+      '技能_正文写作流程.md': SKILL_DRAFT_WRITING,
       '技能_对话写作.md': SKILL_DIALOGUE_WRITING,
       '技能_战斗场景.md': SKILL_COMBAT_SCENES,
       '技能_情绪渲染.md': SKILL_EMOTION_RENDERING,

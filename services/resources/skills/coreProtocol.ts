@@ -8,9 +8,8 @@
  * 3. 简洁高效：每条规则一句话，避免冗余
  */
 
-import { FileNode, ProjectMeta, FileType, TodoItem, ForeshadowingItem, KnowledgeNode } from '../../../types';
+import { FileNode, ProjectMeta, FileType, TodoItem, KnowledgeNode } from '../../../types';
 import { getFileTreeStructure, getNodePath, parseFileMeta } from '../../fileSystem';
-import { useChapterAnalysisStore } from '../../../stores/chapterAnalysisStore';
 import { buildProjectOverviewPrompt } from '../../../utils/projectContext';
 import { buildMemoryStack } from '../../../domains/memory/memoryStackService';
 
@@ -84,31 +83,21 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 
 ## 深度思考
 
-### 必须使用的场景（不是"复杂才用"，是以下场景默认用）
+### 判断（每轮需要）
 
-遇到以下任务，**不要直接给方案**，先用 \`deep_thinking\` 工具创建思考空间走 P1→P2→P3：
-
+遇到以下任务，**不要直接给方案**，先调 \`deep_thinking\`：
 - **设计类**：设计角色、设计场景、设计冲突、设计情节线、设计世界观规则
 - **方案类**：多个可行方向需要选择、约束之间有张力或矛盾
 - **修改类**：用户对已有内容表达不满或纠正、推翻之前的设定
 - **规划类**：规划章节结构、规划角色弧光、规划节奏分布
 
-### 可以不用的场景
+**不用调**：明确指令执行、简单信息查询、纯文本润色
 
-- 明确的指令执行（"把这句话改成X"、"加一个角色叫Y"）
-- 简单的信息查询（"这个角色在第几章出场"）
-- 纯文本润色（"把这段写得更紧凑"）
+**宁可多调一次，也不要跳过。**
 
-### 误判代价不对称
+### 执行（加载 Skill）
 
-- **该用没用** → 方案浅薄、标签化思维、被约束锁死 → 后果严重，用户不满
-- **不该用但用了** → 多花几秒 → 后果轻微
-
-**宁可多调一次 deep_thinking，也不要跳过它直接给方案。**
-
-### 工作流要点
-
-调用 \`deep_thinking\` 后，用 read/write/edit 操作虚拟文件。判断标准：双轴（驱动力够不够 × 目的性强不强）。工作流是循环不是直线，回溯不是失败是深化。详细方法论见技能「深度思考方法论」。
+deep_thinking 创建虚拟文件后，具体怎么填 P1/P2/P3 → activate_skill("深度思考方法论") 加载完整工作流。
 
 ---
 ## 项目概况
@@ -123,6 +112,7 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - 重复检测：添加前先 query_memory 搜索
 - write 用于用户要求创建内容（写章节、建角色档案等）。系统内部改动（元数据、记忆宫殿）不需要创建文件来记录
 - 工具执行失败时，向用户报告错误原因，让用户决定下一步。不要自行换工具替代
+- **工具失败熔断**：同一工具连续失败 2 次后，停止重试，向用户报告已失败的操作、错误信息摘要、已尝试过的方式，请用户指示。不要在错误原因不明时盲目换参数重试
 - 同类操作被用户连续否定2次以上时，放弃该方向，报告当前状态，请用户指定新方向
 - 技能提供了框架但不改变任务规模。用户要求改一个值就改一个值，不因技能被激活就扩大操作
 - 涉及替换/修改指令时，先确认修改的对象范围（是改称呼方式、改内容、还是改角色本身），不确定时问一句
@@ -135,7 +125,7 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - **final_answer**：唯一终止方式，必须调用
 - **记忆宫殿**：query_memory / manage_memory / link_memory / memory_status / traverse_memory
 - **项目元数据**：updateProjectMeta
-- **技能系统**（必须遵守）：回复前先用 skills_list 扫描可用技能。如果任务与某个技能相关，必须用 activate_skill 加载再操作。宁可多加载一个不需要的技能，也不要错过关键方法论。技能包含专业知识和已验证的工作流。
+- **技能系统**（必须遵守）：回复前先用 skills_list 扫描可用技能。如果任务与某个技能相关，必须用 activate_skill 加载再操作。激活 skill 时会**自动解锁该技能配套的工具类别**（如大纲构建 skill 自动解锁 outline 工具），无需再调用 search_tools。宁可多加载一个不需要的技能，也不要错过关键方法论。技能包含专业知识和已验证的工作流。
 - 不描述行动，直接调工具；工具结果直接接受
 
 ---
@@ -150,7 +140,7 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 **文件目录结构**：
 {{FILE_TREE}}
 
-**写正文前**：查 Timeline 事件 → 读角色档案 → 查记忆宫殿规则
+**写正文前**：activate_skill("正文写作流程")，按 Skill 指引完成准备
 **完成后**：标记 TODO 完成
 **文件命名**：正文 05_正文草稿/卷[X]_章[X]_[章节名].md | 角色 02_角色档案/[前缀]_[姓名].md
 
@@ -279,27 +269,6 @@ export const constructSystemPrompt = (
 
   // Knowledge Graph (记忆宫殿) — handled by memory stack (L1/L2)
 
-  // Foreshadowing (伏笔轻量提醒 — 仅数量+标题列表)
-  const getForeshadowingReminder = () => {
-    try {
-      const analysisStore = useChapterAnalysisStore.getState();
-      const unresolved = analysisStore.data.foreshadowing.filter(
-        (f: ForeshadowingItem) => f.type === 'planted' || f.type === 'developed'
-      );
-
-      if (unresolved.length === 0) return '';
-
-      const lines = unresolved.slice(0, 15).map((f: ForeshadowingItem) => {
-        const status = f.type === 'planted' ? '🌱' : '🌿';
-        return `- ${status} ${f.content}${f.plannedChapter ? ` (计划第${f.plannedChapter}章回收)` : ''}`;
-      });
-
-      return `\n## 🎭 未收尾伏笔（${unresolved.length}条）\n${lines.join('\n')}${unresolved.length > 15 ? '\n... (更多请用工具查询)' : ''}\n`;
-    } catch {
-      return '';
-    }
-  };
-
   // --- 3. 最终组装 (Final Assembly) ---
   // 替换占位符
   const wordsPerChapter = String(project?.wordsPerChapter || '未定');
@@ -328,11 +297,7 @@ export const constructSystemPrompt = (
     userMessage: lastUserMessage,
   });
 
-  // 伏笔轻量提醒（仅数量+标题，不展开详细内容）
-  const foreshadowingReminder = getForeshadowingReminder();
-
   return `
 ${memoryStackPrompt}
-${foreshadowingReminder}
 `;
 };

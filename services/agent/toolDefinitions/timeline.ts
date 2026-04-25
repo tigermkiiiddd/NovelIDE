@@ -747,9 +747,67 @@ export const getForeshadowingDetailTool: ToolDefinition = {
 };
 
 // ============================================
+// 管理伏笔工具（快捷修改/删除/列出，不依赖事件）
+// ============================================
+
+export const manageForeshadowingTool: ToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'outline_manageForeshadowing',
+    description: `独立管理伏笔（快捷修改/删除/列出全部）。不依赖事件，直接操作伏笔本身。
+
+支持操作：
+- update: 修改伏笔属性（content/plannedChapter/hookType/strength/tags/notes）
+- delete: 删除单个伏笔
+- list: 列出所有伏笔（含已完结和未完结）
+- update_planned: 批量调整多个伏笔的计划回收章节`,
+    parameters: {
+      type: 'object',
+      properties: {
+        thinking: { type: 'string', description: '思考过程' },
+        action: {
+          type: 'string',
+          enum: ['update', 'delete', 'list', 'update_planned'],
+          description: '操作类型'
+        },
+        foreshadowingId: {
+          type: 'string',
+          description: '伏笔 ID（update/delete 时必填）'
+        },
+        updates: {
+          type: 'object',
+          description: 'update 时的修改字段（只传要改的字段）',
+          properties: {
+            content: { type: 'string', description: '伏笔内容' },
+            plannedChapter: { type: 'number', description: '计划回收章节' },
+            hookType: { type: 'string', enum: ['crisis', 'mystery', 'emotion', 'choice', 'desire'] },
+            strength: { type: 'string', enum: ['strong', 'medium', 'weak'] },
+            tags: { type: 'array', items: { type: 'string' } },
+            notes: { type: 'string' }
+          }
+        },
+        batchUpdates: {
+          type: 'array',
+          description: 'update_planned 时的批量更新： [{ foreshadowingId, plannedChapter }]',
+          items: {
+            type: 'object',
+            properties: {
+              foreshadowingId: { type: 'string' },
+              plannedChapter: { type: 'number' }
+            },
+            required: ['foreshadowingId', 'plannedChapter']
+          }
+        }
+      },
+      required: ['thinking', 'action']
+    }
+  }
+};
+
+// ============================================
 // 导出
 // ============================================
 
 export const readTools = [getEventsTool, getChaptersTool, getVolumesTool, getStoryLinesTool, getUnresolvedForeshadowingTool, getForeshadowingDetailTool];
-export const writeTools = [manageVolumesTool, manageChaptersTool, manageEventsTool, manageStoryLinesTool];
+export const writeTools = [manageVolumesTool, manageChaptersTool, manageEventsTool, manageStoryLinesTool, manageForeshadowingTool];
 export const allOutlineTools = [...readTools, ...writeTools, processOutlineInputTool];

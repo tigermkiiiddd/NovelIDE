@@ -10,6 +10,7 @@ name: 分层约束设计 (Constraint-Layered Design) [已合并]
 summarys: ['已合并入「深度思考方法论」技能。体验目标树现在是 P1 约束分析的一部分。']
 tags: ["技能", "设计", "[已合并]"]
 category: 设计
+tools: []
 ---
 
 # 分层约束设计 → 已合并入「深度思考方法论」
