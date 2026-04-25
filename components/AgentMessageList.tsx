@@ -983,10 +983,27 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     key={msg.id}
                     className={`group flex flex-col ${isUser ? 'items-end' : 'items-start'} relative`}
                 >
-                    {/* Loop Count Display for Model Messages */}
+                    {/* Loop Count + Cache Hit Rate for Model Messages */}
                     {isModel && !!msg.metadata?.loopCount && (
-                        <div className="text-[10px] text-gray-500 mb-1 px-1 font-mono">
-                            轮次 {String(msg.metadata.loopCount)}
+                        <div className="text-[10px] text-gray-500 mb-1 px-1 font-mono flex items-center gap-2">
+                            <span>轮次 {String(msg.metadata.loopCount)}</span>
+                            {(() => {
+                                const usage = msg.metadata?.apiMetadata?.response?.usage;
+                                const cacheHit = usage?.cache_hit_tokens || 0;
+                                const cacheMiss = usage?.cache_miss_tokens || 0;
+                                const cacheTotal = cacheHit + cacheMiss;
+                                if (cacheTotal === 0) return null;
+                                const rate = cacheHit / cacheTotal;
+                                const rateText = `${(rate * 100).toFixed(1)}%`;
+                                const colorClass = rate === 1 ? 'text-green-400' :
+                                                   rate >= 0.8 ? 'text-yellow-300' :
+                                                   'text-orange-300';
+                                return (
+                                    <span className={`${colorClass}`} title={`Cache: ${cacheHit} hit / ${cacheTotal} total`}>
+                                        · {rateText}
+                                    </span>
+                                );
+                            })()}
                         </div>
                     )}
 
@@ -1003,25 +1020,6 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         : 'bg-gray-700 text-gray-100 rounded-tl-none'
                     }`}
                     >
-                        {/* Cache Hit Rate Badge - 普通模式也显示在卡片角落 */}
-                        {(() => {
-                            const usage = msg.metadata?.apiMetadata?.response?.usage;
-                            const cacheHit = usage?.cache_hit_tokens || 0;
-                            const cacheMiss = usage?.cache_miss_tokens || 0;
-                            const cacheTotal = cacheHit + cacheMiss;
-                            if (cacheTotal === 0) return null;
-                            const rate = cacheHit / cacheTotal;
-                            const rateText = `${(rate * 100).toFixed(1)}%`;
-                            const colorClass = rate === 1 ? 'text-green-400 bg-green-900/40 border-green-700/50' :
-                                               rate >= 0.8 ? 'text-yellow-300 bg-yellow-900/30 border-yellow-700/40' :
-                                               'text-orange-300 bg-orange-900/30 border-orange-700/40';
-                            return (
-                                <div className={`absolute top-2 right-2 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${colorClass} z-10`} title={`Cache: ${cacheHit} hit / ${cacheTotal} total`}>
-                                    {rateText}
-                                </div>
-                            );
-                        })()}
-
                         {/* Message Label for System Messages */}
                         {isSystem && !msg.isToolOutput && (
                              <div className={`flex items-center gap-2 mb-1 font-bold text-xs uppercase tracking-wide ${
