@@ -12,6 +12,7 @@ import React, { useMemo, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import { useTranslation } from 'react-i18next';
 import { useEditor } from '../hooks/editor/useEditor';
 import { useCharacterProfileActions } from '../hooks/useCharacterProfileActions';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
@@ -66,6 +67,7 @@ const CHARACTER_CARD_FOLDER = '\u0030\u0032_\u89d2\u8272\u6863\u6848';
 const DRAFT_FOLDER = '\u0030\u0035_\u6b63\u6587\u8349\u7a3f';
 
 const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
+  const { t } = useTranslation();
   const editor = useEditor({ className });
   const profileActions = useCharacterProfileActions();
   const currentProjectId = useProjectStore(state => state.currentProjectId);
@@ -358,7 +360,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
         onSelect={handleSelect}
         onClick={handleSelect}
         onKeyUp={handleSelect}
-        placeholder="在此处开始您的创作..."
+        placeholder={t('editor.startCreating')}
         spellCheck={false}
       />
     </div>
@@ -446,7 +448,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
     return (
       <div className={`flex flex-col items-center justify-center h-full text-gray-500 bg-[#0d1117] ${className}`}>
         <FileText size={48} className="mb-4 opacity-20" />
-        <p className="text-sm">选择一个文件开始写作</p>
+        <p className="text-sm">{t('editor.selectFile')}</p>
       </div>
     );
   }
@@ -466,7 +468,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
           </span>
           {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 shrink-0" title="Unsaved changes" />}
           <span className="text-[10px] text-gray-500 font-mono hidden sm:inline">
-            {wordCount} 字
+            {t('editor.wordCount', { count: wordCount })}
           </span>
           <span className="text-[10px] text-gray-600 font-mono hidden md:inline">
             Ln {cursorStats.line}, Col {cursorStats.col}
@@ -477,19 +479,19 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
         {internalMode === 'edit' && pendingEditCount > 0 && (
           <div className="flex items-center gap-1 mx-2 px-2 py-1 bg-yellow-900/20 border border-yellow-900/40 rounded-lg">
             <span className="text-[10px] text-yellow-400 font-medium whitespace-nowrap">
-              {pendingEditCount} 个待审变更
+              {t('editor.pendingChanges', { count: pendingEditCount })}
             </span>
             <button
               onClick={handleRejectAllEdits}
               className="flex items-center justify-center w-6 h-5 text-[10px] text-red-400 hover:bg-red-900/30 rounded transition-colors"
-              title="拒绝全部"
+              title={t('diff.rejectAll')}
             >
               <X size={12} />
             </button>
             <button
               onClick={handleAcceptAllEdits}
               className="flex items-center justify-center w-6 h-5 text-[10px] text-green-400 hover:bg-green-900/30 rounded transition-colors"
-              title="批准全部"
+              title={t('diff.approveAll')}
             >
               <Check size={12} />
             </button>
@@ -504,7 +506,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
             className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-r border-gray-700 mr-0.5 sm:mr-1 ${
               search.searchOpen ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
-            title="搜索 (Ctrl+F)"
+            title={t('editor.searchShortcut')}
           >
             <Search size={14} />
           </button>
@@ -513,14 +515,14 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
           <button
             onClick={toggleWordWrap}
             className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all ${wordWrap ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-            title={wordWrap ? "自动换行: 开启" : "自动换行: 关闭"}
+            title={wordWrap ? t('editor.wordWrapOn') : t('editor.wordWrapOff')}
           >
             {wordWrap ? <WrapText size={14} /> : <AlignJustify size={14} />}
           </button>
           <button
             onClick={toggleLineNumbers}
             className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${showLineNumbers ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-            title="显示行号"
+            title={t('editor.showLineNumbers')}
           >
             <ListOrdered size={14} />
           </button>
@@ -540,7 +542,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
           </button>
 
           {/* Split View */}
-          <button onClick={handleToggleSplit} className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? "关闭分屏" : "开启分屏对比"}>
+          <button onClick={handleToggleSplit} className={`hidden sm:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'}`} title={isSplitView ? t('editor.closeSplit') : t('editor.openSplit')}>
             <Columns size={14} />
           </button>
 
@@ -550,7 +552,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               onClick={handleInitializeProfile}
               disabled={profileActions.isInitializing}
               className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-emerald-400 hover:text-white hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="初始化角色档案"
+              title={t('editor.initProfile')}
             >
               {profileActions.isInitializing ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -566,7 +568,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               onClick={handleUpdateCharacters}
               disabled={profileActions.isUpdating}
               className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-amber-400 hover:text-white hover:bg-amber-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="更新相关角色档案"
+              title={t('editor.updateProfile')}
             >
               {profileActions.isUpdating ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -582,7 +584,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               onClick={handleAnalyzeChapter}
               disabled={isAnalyzingChapter}
               className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-cyan-400 hover:text-white hover:bg-cyan-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="分析章节"
+              title={t('editor.analyzeChapter')}
             >
               {isAnalyzingChapter ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -598,7 +600,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               onClick={handlePolish}
               disabled={isPolishing}
               className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-emerald-400 hover:text-white hover:bg-emerald-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="去AI文风"
+              title={t('editor.deAI')}
             >
               {isPolishing ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -613,7 +615,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
             onClick={() => setShowVersionHistory(true)}
             disabled={!activeFileId}
             className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-7 rounded transition-all border-l border-gray-700 ml-1 text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="版本历史"
+            title={t('editor.versionHistory')}
           >
             <History size={14} />
           </button>
@@ -628,7 +630,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               type="text"
               value={search.searchTerm}
               onChange={(e) => search.setSearchTerm(e.target.value)}
-              placeholder="搜索..."
+              placeholder={t('editor.searchPlaceholder')}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               autoFocus
               onKeyDown={(e) => {
@@ -654,7 +656,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               onClick={search.searchPrev}
               disabled={!search.searchTerm || search.searchResults.length === 0}
               className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="上一个 (Shift+Enter)"
+              title={t('editor.searchPrev')}
             >
               <ChevronUp size={16} />
             </button>
@@ -662,7 +664,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
               onClick={search.searchNext}
               disabled={!search.searchTerm || search.searchResults.length === 0}
               className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="下一个 (Enter)"
+              title={t('editor.searchNext')}
             >
               <ChevronDown size={16} />
             </button>
@@ -681,7 +683,7 @@ const EditorRefactored: React.FC<EditorProps> = ({ className }) => {
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
             }`}
-            title="区分大小写"
+            title={t('editor.caseSensitive')}
           >
             Aa
           </button>

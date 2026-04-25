@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useEmbeddingAdminStore } from '../stores/embeddingAdminStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -20,6 +21,7 @@ import {
 type TabId = 'recall' | 'cache' | 'diagnostics';
 
 export function EmbeddingAdminPanel() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>('recall');
   const projectId = useProjectStore((s) => s.currentProjectId);
   const nodes = useKnowledgeGraphStore((s) => s.nodes);
@@ -37,9 +39,9 @@ export function EmbeddingAdminPanel() {
   }, [projectId, nodes.length]);
 
   const tabs: { id: TabId; label: string; icon: React.ReactNode }[] = [
-    { id: 'recall', label: '语义召回测试', icon: <Search size={16} /> },
-    { id: 'cache', label: '缓存状态', icon: <Database size={16} /> },
-    { id: 'diagnostics', label: '诊断工具', icon: <Activity size={16} /> },
+    { id: 'recall', label: t('embeddingAdmin.semanticTest'), icon: <Search size={16} /> },
+    { id: 'cache', label: t('embeddingAdmin.cacheStatus'), icon: <Database size={16} /> },
+    { id: 'diagnostics', label: t('embeddingAdmin.diagnostics'), icon: <Activity size={16} /> },
   ];
 
   return (
@@ -48,7 +50,7 @@ export function EmbeddingAdminPanel() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Database size={22} className="text-purple-400" />
-          Embedding 管理
+          {t('embeddingAdmin.title')}
         </h2>
       </div>
 
@@ -81,6 +83,7 @@ export function EmbeddingAdminPanel() {
 // ==================== Tab 1: 语义召回测试 ====================
 
 function RecallTestTab() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [topK, setTopK] = useState(10);
   const [minSim, setMinSim] = useState(0.3);
@@ -102,7 +105,7 @@ function RecallTestTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleTest()}
-            placeholder="输入查询文本测试语义召回..."
+            placeholder={t('embeddingAdmin.queryPlaceholder')}
             className="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none"
           />
           <button
@@ -111,7 +114,7 @@ function RecallTestTab() {
             className="bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors"
           >
             {isTesting ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-            测试
+            {t('embeddingAdmin.testBtn')}
           </button>
         </div>
 
@@ -127,7 +130,7 @@ function RecallTestTab() {
             <span className="text-xs text-gray-300 w-6">{topK}</span>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-400">最小相似度</label>
+            <label className="text-xs text-gray-400">{t('embeddingAdmin.minSimilarity')}</label>
             <input
               type="range" min={0} max={100} value={Math.round(minSim * 100)}
               onChange={(e) => setMinSim(Number(e.target.value) / 100)}
@@ -151,25 +154,25 @@ function RecallTestTab() {
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
             <div className="text-sm font-bold text-gray-300">
-              查询: <span className="text-white">{lastResult.query}</span>
+              {t('embeddingAdmin.query')}: <span className="text-white">{lastResult.query}</span>
             </div>
             <div className="text-xs text-gray-500">
-              耗时 {lastResult.durationMs}ms · 返回 {lastResult.results.length} 条
+              {t('embeddingAdmin.elapsed')} {lastResult.durationMs}ms · {t('embeddingAdmin.returned')} {t('embeddingAdmin.resultCount', { count: lastResult.results.length })}
             </div>
           </div>
 
           {lastResult.results.length === 0 ? (
-            <div className="px-4 py-6 text-center text-gray-500 text-sm">无匹配结果</div>
+            <div className="px-4 py-6 text-center text-gray-500 text-sm">{t('embeddingAdmin.noMatch')}</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-gray-500 border-b border-gray-700">
-                    <th className="px-4 py-2 text-left">节点</th>
-                    <th className="px-4 py-2 text-right">语义分</th>
-                    <th className="px-4 py-2 text-right">模糊分</th>
-                    <th className="px-4 py-2 text-right">重要性</th>
-                    <th className="px-4 py-2 text-right">综合分</th>
+                    <th className="px-4 py-2 text-left">{t('embeddingAdmin.node')}</th>
+                    <th className="px-4 py-2 text-right">{t('embeddingAdmin.semanticScore')}</th>
+                    <th className="px-4 py-2 text-right">{t('embeddingAdmin.fuzzyScore')}</th>
+                    <th className="px-4 py-2 text-right">{t('embeddingAdmin.importanceScore')}</th>
+                    <th className="px-4 py-2 text-right">{t('embeddingAdmin.compositeScore')}</th>
                     <th className="px-4 py-2 text-center">Embedding</th>
                   </tr>
                 </thead>
@@ -206,6 +209,7 @@ function RecallTestTab() {
 // ==================== Tab 2: 缓存状态 ====================
 
 function CacheStatusTab() {
+  const { t } = useTranslation();
   const { cacheStats, isLoadingStats, refreshStats, clearModelCacheAction } = useEmbeddingAdminStore();
   const projectId = useProjectStore((s) => s.currentProjectId);
   const nodes = useKnowledgeGraphStore((s) => s.nodes);
@@ -214,7 +218,7 @@ function CacheStatusTab() {
     return (
       <div className="flex items-center justify-center py-12 text-gray-500">
         <Loader2 size={18} className="animate-spin mr-2" />
-        加载中...
+        {t('common.loading')}
       </div>
     );
   }
@@ -222,7 +226,7 @@ function CacheStatusTab() {
   if (!cacheStats) {
     return (
       <div className="text-center py-12 text-gray-500">
-        暂无缓存数据
+        {t('embeddingAdmin.noCacheData')}
       </div>
     );
   }
@@ -234,31 +238,31 @@ function CacheStatusTab() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2">
             <Database size={14} className="text-blue-400" />
-            模型文件缓存
+            {t('embeddingAdmin.modelCache')}
           </h3>
           <button
             onClick={() => clearModelCacheAction()}
             className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-2 py-1 rounded border border-red-800/50 hover:bg-red-900/20 transition-colors"
           >
             <Trash2 size={10} />
-            清除缓存
+            {t('embeddingAdmin.clearCache')}
           </button>
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-500">状态:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.status')}:</span>{' '}
             <CacheStatusBadge status={cacheStats.modelCache.status} />
           </div>
           <div>
-            <span className="text-gray-500">缓存条目:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.cacheEntries')}:</span>{' '}
             <span className="text-white">{cacheStats.modelCache.estimatedEntries}</span>
           </div>
           <div>
-            <span className="text-gray-500">数据库:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.database')}:</span>{' '}
             <span className="text-gray-300">{cacheStats.modelCache.dbName}</span>
           </div>
           <div>
-            <span className="text-gray-500">存储:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.storage')}:</span>{' '}
             <span className="text-gray-300">{cacheStats.modelCache.storeName}</span>
           </div>
         </div>
@@ -268,23 +272,23 @@ function CacheStatusTab() {
       <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
         <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-3">
           <BarChart3 size={14} className="text-green-400" />
-          文件 Chunk Embeddings
+          {t('embeddingAdmin.fileChunkEmbeddings')}
         </h3>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <span className="text-gray-500">Chunk 数量:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.chunkCount')}:</span>{' '}
             <span className="text-white font-bold">{cacheStats.fileEmbeddings.chunkCount}</span>
           </div>
           <div>
-            <span className="text-gray-500">覆盖文件:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.coveredFiles')}:</span>{' '}
             <span className="text-white">{cacheStats.fileEmbeddings.fileCount}</span>
           </div>
           <div>
-            <span className="text-gray-500">项目:</span>{' '}
-            <span className="text-gray-300">{cacheStats.fileEmbeddings.projectId || '未加载'}</span>
+            <span className="text-gray-500">{t('embeddingAdmin.project')}:</span>{' '}
+            <span className="text-gray-300">{cacheStats.fileEmbeddings.projectId || t('embeddingAdmin.statusNotLoaded')}</span>
           </div>
           <div>
-            <span className="text-gray-500">Schema 版本:</span>{' '}
+            <span className="text-gray-500">{t('embeddingAdmin.schemaVersion')}:</span>{' '}
             <span className="text-gray-300">v{cacheStats.fileEmbeddings.schemaVersion}</span>
           </div>
         </div>
@@ -294,18 +298,18 @@ function CacheStatusTab() {
       <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
         <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-3">
           <CheckCircle size={14} className="text-purple-400" />
-          知识节点 Embeddings
+          {t('embeddingAdmin.nodeEmbeddings')}
         </h3>
         <div className="grid grid-cols-3 gap-3 mb-4">
-          <StatBox label="总数" value={cacheStats.knowledgeNodes.total} />
-          <StatBox label="有效" value={cacheStats.knowledgeNodes.withEmbedding} color="text-green-400" />
-          <StatBox label="缺失" value={cacheStats.knowledgeNodes.withoutEmbedding} color="text-red-400" />
+          <StatBox label={t('embeddingAdmin.total')} value={cacheStats.knowledgeNodes.total} />
+          <StatBox label={t('embeddingAdmin.valid')} value={cacheStats.knowledgeNodes.withEmbedding} color="text-green-400" />
+          <StatBox label={t('embeddingAdmin.missing')} value={cacheStats.knowledgeNodes.withoutEmbedding} color="text-red-400" />
         </div>
 
         {/* 按 Wing 分布 */}
         {Object.keys(cacheStats.knowledgeNodes.byWing).length > 0 && (
           <div className="space-y-1">
-            <div className="text-xs text-gray-500 mb-1">按 Wing 分布</div>
+            <div className="text-xs text-gray-500 mb-1">{t('embeddingAdmin.byWing')}</div>
             {Object.entries(cacheStats.knowledgeNodes.byWing).map(([wing, counts]) => (
               <div key={wing} className="flex items-center gap-2 text-sm">
                 <span className="w-20 text-gray-400 truncate">{wing}</span>
@@ -331,7 +335,7 @@ function CacheStatusTab() {
         className="w-full py-2 text-sm text-gray-400 hover:text-white border border-gray-700 hover:bg-gray-700/30 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
       >
         <RefreshCw size={14} />
-        刷新统计
+        {t('embeddingAdmin.refreshStats')}
       </button>
     </div>
   );
@@ -340,6 +344,7 @@ function CacheStatusTab() {
 // ==================== Tab 3: 诊断工具 ====================
 
 function DiagnosticsTab() {
+  const { t } = useTranslation();
   const projectId = useProjectStore((s) => s.currentProjectId);
   const nodes = useKnowledgeGraphStore((s) => s.nodes);
   const [healthReport, setHealthReport] = useState<Awaited<ReturnType<typeof runEmbeddingHealthCheck>> | null>(null);
@@ -384,7 +389,7 @@ function DiagnosticsTab() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2">
             <Activity size={14} className="text-blue-400" />
-            健康检查
+            {t('embeddingAdmin.healthCheck')}
           </h3>
           <button
             onClick={runHealthCheck}
@@ -392,24 +397,24 @@ function DiagnosticsTab() {
             className="text-xs bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors"
           >
             {isChecking ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-            运行检查
+            {t('embeddingAdmin.runCheck')}
           </button>
         </div>
 
         {healthReport && (
           <div className="space-y-2 text-sm">
             <HealthRow
-              label="文件 Embeddings"
+              label={t('embeddingAdmin.fileEmbeddings')}
               status={healthReport.fileEmbeddings.status}
-              detail={`${healthReport.fileEmbeddings.totalChunks} chunks · ${healthReport.fileEmbeddings.invalidChunks} 无效`}
+              detail={t("embeddingAdmin.invalidCount", { count: healthReport.fileEmbeddings.invalidChunks })}
             />
             <HealthRow
-              label="知识节点"
+              label={t('embeddingAdmin.knowledgeNodes')}
               status={healthReport.knowledgeNodes.status}
-              detail={`${healthReport.knowledgeNodes.withEmbedding}/${healthReport.knowledgeNodes.total} 有效`}
+              detail={t("embeddingAdmin.validCount", { valid: healthReport.knowledgeNodes.withEmbedding, total: healthReport.knowledgeNodes.total })}
             />
             <HealthRow
-              label="模型缓存"
+              label={t('embeddingAdmin.modelCacheLabel')}
               status={healthReport.modelCache.status === 'ready' ? 'healthy' : 'degraded'}
               detail={healthReport.modelCache.status}
             />
@@ -421,10 +426,10 @@ function DiagnosticsTab() {
       <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
         <h3 className="text-sm font-bold text-gray-300 flex items-center gap-2 mb-3">
           <RefreshCw size={14} className="text-amber-400" />
-          修复缺失 Embedding
+          {t('embeddingAdmin.fixMissing')}
         </h3>
         <p className="text-xs text-gray-500 mb-3">
-          为所有没有有效 embedding 的知识节点重新生成。这会消耗一定计算资源。
+          {t('embeddingAdmin.repairDesc')}
         </p>
         <button
           onClick={runRepair}
@@ -432,14 +437,14 @@ function DiagnosticsTab() {
           className="text-xs bg-amber-600 hover:bg-amber-500 disabled:bg-gray-700 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors"
         >
           {isRepairing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          {isRepairing ? '修复中...' : '开始修复'}
+          {isRepairing ? t('embeddingAdmin.fixing') : t('embeddingAdmin.startFix')}
         </button>
 
         {repairResult && (
           <div className="mt-3 text-sm space-y-1">
-            <div className="text-green-400">修复成功: {repairResult.repaired}</div>
-            <div className="text-red-400">修复失败: {repairResult.failed}</div>
-            <div className="text-gray-400">原本有效: {repairResult.alreadyValid}</div>
+            <div className="text-green-400">{t('embeddingAdmin.fixSuccess')}: {repairResult.repaired}</div>
+            <div className="text-red-400">{t('embeddingAdmin.fixFailed')}: {repairResult.failed}</div>
+            <div className="text-gray-400">{t('embeddingAdmin.originallyValid')}: {repairResult.alreadyValid}</div>
           </div>
         )}
       </div>
@@ -450,12 +455,13 @@ function DiagnosticsTab() {
 // ==================== 辅助组件 ====================
 
 function CacheStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   const map: Record<string, { text: string; color: string }> = {
-    ready: { text: '就绪', color: 'text-green-400' },
-    loading: { text: '加载中', color: 'text-blue-400' },
-    error: { text: '错误', color: 'text-red-400' },
-    not_loaded: { text: '未加载', color: 'text-gray-400' },
-    unknown: { text: '未知', color: 'text-gray-400' },
+    ready: { text: t('embeddingAdmin.statusReady'), color: 'text-green-400' },
+    loading: { text: t('embeddingAdmin.statusLoading'), color: 'text-blue-400' },
+    error: { text: t('embeddingAdmin.statusError'), color: 'text-red-400' },
+    not_loaded: { text: t('embeddingAdmin.statusNotLoaded'), color: 'text-gray-400' },
+    unknown: { text: t('embeddingAdmin.statusUnknown'), color: 'text-gray-400' },
   };
   const s = map[status] || map.unknown;
   return <span className={s.color}>{s.text}</span>;

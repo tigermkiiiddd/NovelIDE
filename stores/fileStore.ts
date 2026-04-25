@@ -10,6 +10,7 @@ import { useVersionStore, VersionSource } from './versionStore';
 import { applyEdits } from '../utils/patchUtils';
 import { dataService } from '../services/dataService';
 import { useProjectStore } from './projectStore';
+import i18n from '../i18n';
 
 // Lazy-init FileService to avoid circular dependency issues
 let _fileService: FileService | null = null;
@@ -161,10 +162,10 @@ export const useFileStore = create<FileState>((set, get) => ({
       timeout = setTimeout(() => {
         import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
           import('./toastStore').then(({ toast }) => {
-            toast.info('正在更新搜索索引…');
+            toast.info(i18n.t('storeMessages.updatingSearchIndex'));
             indexFilesForSearch(files, currentProjectId)
-              .then(() => toast.success('搜索索引已更新'))
-              .catch(() => toast.warning('搜索索引更新失败'));
+              .then(() => toast.success(i18n.t('storeMessages.searchIndexUpdated')))
+              .catch(() => toast.warning(i18n.t('storeMessages.searchIndexFailed')));
           });
         });
       }, 2000); // 2秒防抖：等用户停止输入后再重建
@@ -231,7 +232,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         path,
         file.content || '',
         'user',
-        '修改前自动备份'
+        i18n.t('storeMessages.autoBackup')
       );
     }
 
@@ -263,7 +264,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         filePath,
         file.content || '',
         'user',
-        '保存前自动备份'
+        i18n.t('storeMessages.autoBackupBeforeSave')
       );
     }
 
@@ -297,7 +298,7 @@ export const useFileStore = create<FileState>((set, get) => ({
         path,
         file.content,
         'agent',
-        'Patch 修改前自动备份'
+        i18n.t('storeMessages.autoBackupPatch')
       );
     }
 
@@ -322,7 +323,7 @@ export const useFileStore = create<FileState>((set, get) => ({
   readFile: (path, startLine = 1, endLine) => {
       const { files } = get();
       // 禁止 LLM 访问 .json 文件（业务数据隔离）
-      if (path.toLowerCase().endsWith('.json')) return `Error: .json 文件禁止访问（业务数据隔离）。`;
+      if (path.toLowerCase().endsWith('.json')) return i18n.t('storeMessages.jsonAccessDenied');
       const file = findNodeByPath(files, path);
       if (!file || file.hidden) return `Error: File at "${path}" not found.`;
 
@@ -363,17 +364,17 @@ export const useFileStore = create<FileState>((set, get) => ({
     // 添加尽职调查提示
     const diligenceWarning = fileResults.length > 1
       ? `\n\n==================================================
-⚠️ 【尽职调查提醒】
-搜索返回了 **${fileResults.length} 个相关文件**。根据「尽职调查原则」：
-- 你**必须逐一阅读所有 ${fileResults.length} 个文件**，不能只读1个就下结论
-- 阅读时如果发现引用了其他文件，需要继续追查
-- 只有阅读完所有相关文件后，才能形成结论
+⚠️ ${i18n.t('searchDiligence.warningTitle')}
+${i18n.t('searchDiligence.warningBody', { count: fileResults.length })}
+- ${i18n.t('searchDiligence.warningRule1', { count: fileResults.length })}
+- ${i18n.t('searchDiligence.warningRule2')}
+- ${i18n.t('searchDiligence.warningRule3')}
 
-待阅读文件列表：
+${i18n.t('searchDiligence.fileListHeader')}
 ${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
 ==================================================`
       : fileResults.length === 1
-        ? `\n\n> 提示：只有1个相关文件，请阅读后形成结论。`
+        ? `\n\n> ${i18n.t('searchDiligence.singleFileHint')}`
         : '';
 
     return resultList + diligenceWarning;

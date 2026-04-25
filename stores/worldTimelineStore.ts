@@ -38,6 +38,7 @@ import { dbAPI } from '../services/persistence';
 import { useFileStore } from './fileStore';
 import { useProjectStore } from './projectStore';
 import { useChapterAnalysisStore } from './chapterAnalysisStore';
+import i18n from '../i18n';
 
 export interface WorldTimelineState {
   timeline: WorldTimeline | null;
@@ -143,20 +144,20 @@ export function formatTimestampDisplay(ts: StoryTimeStamp | undefined): string {
 
   // 根据小时判断时间段
   let timeOfDay = '';
-  if (hour >= 0 && hour < 6) timeOfDay = '凌晨';
-  else if (hour >= 6 && hour < 9) timeOfDay = '早晨';
-  else if (hour >= 9 && hour < 12) timeOfDay = '上午';
-  else if (hour >= 12 && hour < 14) timeOfDay = '中午';
-  else if (hour >= 14 && hour < 18) timeOfDay = '下午';
-  else if (hour >= 18 && hour < 20) timeOfDay = '傍晚';
-  else if (hour >= 20 && hour < 24) timeOfDay = '晚上';
+  if (hour >= 0 && hour < 6) timeOfDay = i18n.t('timeline.dawn');
+  else if (hour >= 6 && hour < 9) timeOfDay = i18n.t('timeline.morning');
+  else if (hour >= 9 && hour < 12) timeOfDay = i18n.t('timeline.forenoon');
+  else if (hour >= 12 && hour < 14) timeOfDay = i18n.t('timeline.noon');
+  else if (hour >= 14 && hour < 18) timeOfDay = i18n.t('timeline.afternoon');
+  else if (hour >= 18 && hour < 20) timeOfDay = i18n.t('timeline.dusk');
+  else if (hour >= 20 && hour < 24) timeOfDay = i18n.t('timeline.night');
 
   // 格式化时间
   const timeStr = minutes > 0
     ? `${hour.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
     : `${hour.toString().padStart(2, '0')}:00`;
 
-  return `第${ts.day}天 ${timeStr} ${timeOfDay}`;
+  return i18n.t('timeline.dayTime', { day: ts.day, time: timeStr, period: timeOfDay });
 }
 
 /**
@@ -175,20 +176,20 @@ export function formatDurationDisplay(duration: QuantizedTime | undefined): stri
   const { value, unit } = duration;
 
   if (unit === 'day') {
-    if (value === 1) return '1天';
-    return `${value}天`;
+    if (value === 1) return i18n.t('timeline.oneDay');
+    return i18n.t('timeline.days', { count: value });
   } else {
     // hour
-    if (value === 0.5) return '半小时';
-    if (value === 1) return '1小时';
-    if (value < 1) return `${value * 60}分钟`;
-    if (value === Math.floor(value)) return `${value}小时`;
+    if (value === 0.5) return i18n.t('timeline.halfHour');
+    if (value === 1) return i18n.t('timeline.oneHour');
+    if (value < 1) return i18n.t('timeline.minutes', { count: value * 60 });
+    if (value === Math.floor(value)) return i18n.t('timeline.hours', { count: value });
     // 带小数的小时
     const hours = Math.floor(value);
     const minutes = Math.round((value - hours) * 60);
-    if (minutes === 0) return `${hours}小时`;
-    if (minutes === 30) return `${hours}半小时`;
-    return `${hours}小时${minutes}分钟`;
+    if (minutes === 0) return i18n.t('timeline.hours', { count: hours });
+    if (minutes === 30) return i18n.t('timeline.hoursHalf', { hours });
+    return i18n.t('timeline.hoursMinutes', { hours, minutes });
   }
 }
 
@@ -224,7 +225,7 @@ export function formatTimeRangeDisplay(startTs: StoryTimeStamp | undefined, dura
 
   // 如果没有持续时间或持续时间为0，只显示开始时间
   if (!duration || duration.value === 0) {
-    return `第${startTs.day}天 ${startTimeStr}`;
+    return i18n.t('timeline.dayTime', { day: startTs.day, time: startTimeStr, period: '' });
   }
 
   // 计算结束时间
@@ -237,10 +238,10 @@ export function formatTimeRangeDisplay(startTs: StoryTimeStamp | undefined, dura
 
   // 如果跨天
   if (endTs.day !== startTs.day) {
-    return `第${startTs.day}天 ${startTimeStr} ~ 第${endTs.day}天 ${endTimeStr}`;
+    return i18n.t('timeline.timeRange', { startDay: startTs.day, startTime: startTimeStr, endDay: endTs.day, endTime: endTimeStr });
   }
 
-  return `第${startTs.day}天 ${startTimeStr} ~ ${endTimeStr}`;
+  return i18n.t('timeline.timeRangeSameDay', { day: startTs.day, startTime: startTimeStr, endTime: endTimeStr });
 }
 
 /**
@@ -262,9 +263,9 @@ export function calculateTimeRangeDisplay(events: TimelineEvent[]): string {
   const maxDay = Math.floor(maxHours / 24);
 
   if (minDay === maxDay) {
-    return `第${minDay}天`;
+    return i18n.t('timeline.dayOnly', { day: minDay });
   }
-  return `第${minDay}天 ~ 第${maxDay}天`;
+  return i18n.t('timeline.dayRange', { start: minDay, end: maxDay });
 }
 
 /**
@@ -344,7 +345,7 @@ function calculateVolumeTimeRange(
 // === Default Main StoryLine ===
 const DEFAULT_STORYLINE: StoryLine = {
   id: 'main-storyline',
-  name: '主线',
+  name: i18n.t('timeline.mainStoryLine'),
   color: '#4A90D9',
   isMain: true
 };
@@ -419,7 +420,7 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
         const emptyTimeline: WorldTimeline = {
           id: generateId(),
           projectId,
-          timeStart: '第0天',
+          timeStart: i18n.t('timeline.dayZero'),
           events: [],
           chapters: [],
           volumes: [],
@@ -465,7 +466,7 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
     // === Event Operations ===
     addEvent: (eventData) => {
       const state = useWorldTimelineStore.getState();
-      if (!state.timeline) return JSON.stringify({ id: '', error: '时间线未初始化' });
+      if (!state.timeline) return JSON.stringify({ id: '', error: i18n.t('timeline.notInitialized') });
 
       // 如果没有时间戳，计算一个默认的（最后一个事件之后）
       let timestamp = eventData.timestamp;
@@ -655,7 +656,7 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
     // === Chapter Operations ===
     addChapter: (chapterData) => {
       const state = useWorldTimelineStore.getState();
-      if (!state.timeline) return JSON.stringify({ id: '', chapterIndex: 0, error: '时间线未初始化' });
+      if (!state.timeline) return JSON.stringify({ id: '', chapterIndex: 0, error: i18n.t('timeline.notInitialized') });
 
       // 自动分配 chapterIndex：当前最大值 + 1
       const maxIndex = state.timeline.chapters.length > 0
@@ -798,7 +799,7 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
     // === Volume Operations ===
     addVolume: (volumeData) => {
       const state = useWorldTimelineStore.getState();
-      if (!state.timeline) return JSON.stringify({ id: '', error: '时间线未初始化' });
+      if (!state.timeline) return JSON.stringify({ id: '', error: i18n.t('timeline.notInitialized') });
 
       // 自动分配 volumeIndex：当前最大值 + 1
       const maxIndex = state.timeline.volumes.length > 0
@@ -898,7 +899,7 @@ export const useWorldTimelineStore: UseBoundStore<StoreApi<WorldTimelineState>> 
     // === StoryLine Operations ===
     addStoryLine: (storyLineData) => {
       const state = useWorldTimelineStore.getState();
-      if (!state.timeline) return JSON.stringify({ id: '', error: '时间线未初始化' });
+      if (!state.timeline) return JSON.stringify({ id: '', error: i18n.t('timeline.notInitialized') });
 
       const newStoryLine: StoryLine = {
         id: generateId(),

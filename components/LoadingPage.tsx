@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { initEmbeddingModel, setEmbeddingProgressCallback, EmbeddingProgress } from '../domains/memory/embeddingService';
 
 interface LoadingPageProps {
@@ -15,8 +16,9 @@ const fileItemStyle: React.CSSProperties = {
 };
 
 export default function LoadingPage({ onReady }: LoadingPageProps) {
+  const { t } = useTranslation();
   const [progress, setProgress] = useState<EmbeddingProgress>({
-    progress: 0, status: 'idle', message: '正在初始化...',
+    progress: 0, status: 'idle', message: t('loadingPage.initializing'),
     completedFiles: [], currentFile: '',
   });
   const [phase, setPhase] = useState<'loading' | 'done' | 'error'>('loading');
@@ -32,7 +34,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
       if (cancelled) return;
       setPhase('loading');
       setErrorMsg('');
-      setProgress({ progress: 0, status: 'loading', message: '正在准备...', completedFiles: [], currentFile: '' });
+      setProgress({ progress: 0, status: 'loading', message: t('loadingPage.preparing'), completedFiles: [], currentFile: '' });
 
       const useMirror = (() => {
         try { return localStorage.getItem('EMBEDDING_USE_MIRROR') === 'true'; } catch { return false; }
@@ -55,7 +57,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
           }
         })
         .catch((error: any) => {
-          const msg = error?.message || error?.toString?.() || '未知错误';
+          const msg = error?.message || error?.toString?.() || t('loadingPage.unknownError');
           if (!cancelled) {
             setErrorMsg(msg);
             setPhase('error');
@@ -85,7 +87,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
         NovelIDE
       </div>
       <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.35)', marginBottom: '2rem' }}>
-        AI 驱动的小说创作 IDE
+        {t('loadingPage.subtitle')}
       </div>
 
       {/* Progress bar */}
@@ -103,7 +105,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
 
       {/* Current status */}
       <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
-        {phase === 'done' ? '全部下载完成' : progress.message}
+        {phase === 'done' ? t('loadingPage.downloadComplete') : progress.message}
       </div>
 
       {/* Percentage */}
@@ -140,7 +142,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
           fontSize: '0.7rem', color: 'rgba(255,255,255,0.25)', marginTop: '0.8rem',
           maxWidth: '320px', wordBreak: 'break-all', textAlign: 'center',
         }}>
-          下载源: {downloadUrl}
+          {t('loadingPage.downloadSource', { url: downloadUrl })}
         </div>
       )}
 
@@ -152,7 +154,7 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
           background: 'linear-gradient(90deg, #4a9eff, #7b5eff)',
           color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 500,
         }}>
-          进入 NovelIDE
+          {t('loadingPage.enter')}
         </button>
       )}
 
@@ -170,13 +172,13 @@ export default function LoadingPage({ onReady }: LoadingPageProps) {
               padding: '6px 20px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: '4px',
               background: 'transparent', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', fontSize: '0.8rem',
             }}>
-              重试
+              {t('common.retry')}
             </button>
             <button onClick={onReady} style={{
               padding: '6px 20px', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '4px',
               background: 'transparent', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '0.8rem',
             }}>
-              跳过（降级运行）
+              {t('loadingPage.skipDegrade')}
             </button>
           </div>
         </div>

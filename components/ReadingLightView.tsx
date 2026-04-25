@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useFileStore } from '../stores/fileStore';
@@ -119,6 +120,7 @@ const actionButtonStyle: React.CSSProperties = {
 };
 
 export const ReadingLightView: React.FC = () => {
+  const { t } = useTranslation();
   const getCurrentProject = useProjectStore(state => state.getCurrentProject);
   const project = getCurrentProject();
   const fileStore = useFileStore();
@@ -331,7 +333,7 @@ export const ReadingLightView: React.FC = () => {
               }}
             >
               <Plus size={16} />
-              添加{viewMode === 'foreshadowing' ? '伏笔' : viewMode === 'character' ? '角色状态' : '剧情点'}
+              {t('common.add')}{viewMode === 'foreshadowing' ? t('readingLight.foreshadow') : viewMode === 'character' ? t('readingLight.characterState') : t('readingLight.plotKeyPoint')}
             </button>
           </div>
 
@@ -342,10 +344,10 @@ export const ReadingLightView: React.FC = () => {
             gap: 12,
             marginTop: 16,
           }}>
-            <MetricCard label="章节" value={stats.chapters} color="#38bdf8" />
-            <MetricCard label="伏笔" value={stats.foreshadowing} color="#f59e0b" />
-            <MetricCard label="角色状态" value={stats.characters} color="#a78bfa" />
-            <MetricCard label="剧情点" value={stats.plots} color="#4ade80" />
+            <MetricCard label={t('readingLight.chapter')} value={stats.chapters} color="#38bdf8" />
+            <MetricCard label={t('readingLight.foreshadow')} value={stats.foreshadowing} color="#f59e0b" />
+            <MetricCard label={t('readingLight.characterState')} value={stats.characters} color="#a78bfa" />
+            <MetricCard label={t('readingLight.plotKeyPoint')} value={stats.plots} color="#4ade80" />
           </div>
 
           {/* Tab 行 */}
@@ -354,7 +356,7 @@ export const ReadingLightView: React.FC = () => {
               active={viewMode === 'foreshadowing'}
               onClick={() => setViewMode('foreshadowing')}
               icon={<Zap size={14} />}
-              label="伏笔跟踪"
+              label={t('readingLight.foreshadowTracking')}
               count={stats.foreshadowing}
               color={VIEW_COLORS.foreshadowing}
             />
@@ -362,7 +364,7 @@ export const ReadingLightView: React.FC = () => {
               active={viewMode === 'character'}
               onClick={() => setViewMode('character')}
               icon={<User size={14} />}
-              label="角色状态"
+              label={t('readingLight.characterState')}
               count={stats.characters}
               color={VIEW_COLORS.character}
             />
@@ -370,7 +372,7 @@ export const ReadingLightView: React.FC = () => {
               active={viewMode === 'plot'}
               onClick={() => setViewMode('plot')}
               icon={<Sparkles size={14} />}
-              label="剧情关键点"
+              label={t('readingLight.plotKeyPoint')}
               count={stats.plots}
               color={VIEW_COLORS.plot}
             />
@@ -414,9 +416,9 @@ export const ReadingLightView: React.FC = () => {
             color: '#64748b',
           }}>
             <Zap size={40} style={{ marginBottom: 16, opacity: 0.4 }} />
-            <div style={{ fontSize: 15, marginBottom: 8, color: '#94a3b8' }}>暂无章节分析数据</div>
+            <div style={{ fontSize: 15, marginBottom: 8, color: '#94a3b8' }}>{t('readingLight.noChapterAnalysis')}</div>
             <div style={{ fontSize: 13, lineHeight: 1.6 }}>
-              在章节编辑器中选中章节，点击"AI 分析"按钮触发分析
+              {t('readingLight.analysisHint')}
             </div>
           </div>
         ) : (
@@ -530,8 +532,11 @@ const ForeshadowingView: React.FC<{
   onEdit: (item: ForeshadowingItem) => void;
   onDelete: (id: string) => void;
 }> = ({ data, getChapterTitle, onEdit, onDelete }) => {
+  const { t } = useTranslation();
   const typeColors = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
-  const typeLabels = { planted: '埋下', developed: '推进', resolved: '收回' };
+  const statusKeys: Record<string, string> = { planted: 'outline.plantedLabel', developed: 'outline.developLabel', resolved: 'outline.resolveLabel' };
+  const hookTypeKeys: Record<HookType, string> = { crisis: 'outline.hookTypeCrisis', mystery: 'outline.hookTypeMystery', emotion: 'outline.hookTypeEmotion', choice: 'outline.hookTypeChoice', desire: 'outline.hookTypeDesire' };
+  const strengthKeys: Record<HookStrength, string> = { strong: 'outline.strengthStrong', medium: 'outline.strengthMedium', weak: 'outline.strengthWeak' };
 
   // 获取未完结伏笔（包含子伏笔树）
   const unresolvedWithChildren: Array<ForeshadowingItem & { children: ForeshadowingItem[] }> = useChapterAnalysisStore.getState().getUnresolvedForeshadowing();
@@ -545,7 +550,7 @@ const ForeshadowingView: React.FC<{
   }, [unresolvedWithChildren, data.foreshadowing]); // 依赖 data.foreshadowing 以响应数据变化
 
   if (sortedItems.length === 0) {
-    return <EmptyState message="暂无伏笔数据" />;
+    return <EmptyState message={t('readingLight.emptyForeshadowing')} />;
   }
 
   return (
@@ -578,7 +583,7 @@ const ForeshadowingView: React.FC<{
                   fontSize: 12,
                   fontWeight: 500,
                 }}>
-                  {typeLabels[item.type]}
+                  {t(statusKeys[item.type])}
                 </span>
                 {span !== null && (
                   <span style={{
@@ -593,7 +598,7 @@ const ForeshadowingView: React.FC<{
                     fontSize: 11,
                   }}>
                     <Clock size={12} />
-                    第{item.plantedChapter}章埋 → 第{item.plannedChapter}章收（跨{span}章）
+                    {t('outline.chapPlanted', { n: item.plantedChapter })} → {t('outline.chapResolve', { n: item.plannedChapter })} ({t('outline.chapterSpan', { span })})
                   </span>
                 )}
                 {/* 钩子类型 */}
@@ -609,8 +614,8 @@ const ForeshadowingView: React.FC<{
                     color: hookConfig.color,
                     fontSize: 11,
                   }}>
-                    {hookConfig.emoji} {hookConfig.label}
-                    {strengthConfig && <span style={{ opacity: 0.8 }}>({strengthConfig.label})</span>}
+                    {hookConfig.emoji} {t(hookTypeKeys[item.hookType!])}
+                    {strengthConfig && <span style={{ opacity: 0.8 }}>({t(strengthKeys[item.strength!])})</span>}
                   </span>
                 )}
                 {/* 奖励分 */}
@@ -629,13 +634,13 @@ const ForeshadowingView: React.FC<{
                 )}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => onEdit(item)} style={actionButtonStyle} title="编辑">
+                <button onClick={() => onEdit(item)} style={actionButtonStyle} title={t('common.edit')}>
                   <Edit2 size={14} />
                 </button>
                 <button
                   onClick={() => onDelete(item.id)}
                   style={{ ...actionButtonStyle, color: '#f87171' }}
-                  title="删除"
+                  title={t('common.delete')}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -703,7 +708,7 @@ const ForeshadowingView: React.FC<{
                       fontSize: 10,
                       flexShrink: 0,
                     }}>
-                      {typeLabels[child.type]}
+                      {t(statusKeys[child.type])}
                     </span>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 13, color: '#cbd5e1' }}>{child.content}</div>
@@ -714,7 +719,7 @@ const ForeshadowingView: React.FC<{
                     <button
                       onClick={() => onDelete(child.id)}
                       style={{ ...actionButtonStyle, padding: 4, color: '#f87171' }}
-                      title="删除"
+                      title={t('common.delete')}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -739,6 +744,7 @@ const CharacterView: React.FC<{
   onEdit: (state: ChapterCharacterState) => void;
   onDelete: (id: string) => void;
 }> = ({ data, getChapterTitle, onEdit, onDelete }) => {
+  const { t } = useTranslation();
   // 按章节分组
   const groupedByChapter = useMemo(() => {
     const groups: Record<string, ChapterCharacterState[]> = {};
@@ -754,7 +760,7 @@ const CharacterView: React.FC<{
   const chapters = Object.keys(groupedByChapter);
 
   if (chapters.length === 0) {
-    return <EmptyState message="暂无角色状态数据" />;
+    return <EmptyState message={t('readingLight.emptyCharacterState')} />;
   }
 
   return (
@@ -827,13 +833,13 @@ const CharacterView: React.FC<{
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => onEdit(state)} style={actionButtonStyle} title="编辑">
+                    <button onClick={() => onEdit(state)} style={actionButtonStyle} title={t('common.edit')}>
                       <Edit2 size={14} />
                     </button>
                     <button
                       onClick={() => onDelete(state.id)}
                       style={{ ...actionButtonStyle, color: '#f87171' }}
-                      title="删除"
+                      title={t('common.delete')}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -858,8 +864,9 @@ const PlotView: React.FC<{
   onEdit: (point: ChapterPlotKeyPoint) => void;
   onDelete: (id: string) => void;
 }> = ({ data, getChapterTitle, onEdit, onDelete }) => {
+  const { t } = useTranslation();
   const importanceColors = { high: '#f48771', medium: '#dcdcaa', low: '#9cdcfe' };
-  const importanceLabels = { high: '重要', medium: '一般', low: '次要' };
+  const importanceLabels: Record<string, string> = { high: t('readingLight.importanceHigh'), medium: t('readingLight.importanceMedium'), low: t('readingLight.importanceLow') };
 
   // 按章节分组
   const groupedByChapter = useMemo(() => {
@@ -876,7 +883,7 @@ const PlotView: React.FC<{
   const chapters = Object.keys(groupedByChapter);
 
   if (chapters.length === 0) {
-    return <EmptyState message="暂无剧情关键点数据" />;
+    return <EmptyState message={t('readingLight.emptyPlotKeyPoint')} />;
   }
 
   return (
@@ -939,13 +946,13 @@ const PlotView: React.FC<{
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={() => onEdit(point)} style={actionButtonStyle} title="编辑">
+                    <button onClick={() => onEdit(point)} style={actionButtonStyle} title={t('common.edit')}>
                       <Edit2 size={14} />
                     </button>
                     <button
                       onClick={() => onDelete(point.id)}
                       style={{ ...actionButtonStyle, color: '#f87171' }}
-                      title="删除"
+                      title={t('common.delete')}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -971,6 +978,7 @@ const ForeshadowingForm: React.FC<{
   onSave: (item: Omit<ForeshadowingItem, 'id'> & { id?: string; plantedChapter?: number }) => void;
   onCancel: () => void;
 }> = ({ item, availableChapters, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [content, setContent] = useState(item?.content || '');
   const [type, setType] = useState<'planted' | 'developed' | 'resolved'>(item?.type || 'planted');
   const [hookType, setHookType] = useState<HookType | undefined>(item?.hookType);
@@ -1013,14 +1021,14 @@ const ForeshadowingForm: React.FC<{
   return (
     <div style={{ ...cardStyle, padding: 18 }}>
       <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
-        {item ? '编辑伏笔' : '添加伏笔'}
+        {item ? t('readingLight.editForeshadow') : t('readingLight.addForeshadow')}
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {/* 伏笔内容 */}
         <div>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-            伏笔内容 <span style={{ color: '#f87171' }}>*</span>
+            {t('readingLight.foreshadowContent')} <span style={{ color: '#f87171' }}>*</span>
           </label>
           <textarea
             value={content}
@@ -1033,15 +1041,15 @@ const ForeshadowingForm: React.FC<{
         {/* 类型 + 计划回收章节 */}
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>状态</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.status')}</label>
             <select value={type} onChange={(e) => setType(e.target.value as any)} style={{ ...inputStyle, cursor: 'pointer' }}>
-              <option value="planted">新埋下</option>
-              <option value="developed">推进中</option>
-              <option value="resolved">已收回</option>
+              <option value="planted">{t('readingLight.statusPlanted')}</option>
+              <option value="developed">{t('readingLight.statusDeveloped')}</option>
+              <option value="resolved">{t('readingLight.statusResolved')}</option>
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>计划回收章节</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.plannedChapter')}</label>
             <input
               type="number"
               value={plannedChapter ?? ''}
@@ -1056,7 +1064,7 @@ const ForeshadowingForm: React.FC<{
         {/* 钩子类型 + 强度 */}
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>钩子类型</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.hookType')}</label>
             <select
               value={hookType || ''}
               onChange={(e) => setHookType(e.target.value as HookType || undefined)}
@@ -1072,7 +1080,7 @@ const ForeshadowingForm: React.FC<{
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-              钩子强度
+              {t('readingLight.hookStrength')}
               {strength && (
                 <span style={{ marginLeft: 8, color: STRENGTH_CONFIG[strength]?.color }}>
                   → +{strength === 'strong' ? '30' : strength === 'medium' ? '20' : '10'}分
@@ -1095,7 +1103,7 @@ const ForeshadowingForm: React.FC<{
         {/* 来源章节 */}
         <div>
           <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-            来源章节 <span style={{ color: '#f87171' }}>*</span>
+            {t('readingLight.sourceChapter')} <span style={{ color: '#f87171' }}>*</span>
           </label>
           <select
             value={sourceRef}
@@ -1123,12 +1131,12 @@ const ForeshadowingForm: React.FC<{
 
         {/* 备注 */}
         <div>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>备注</label>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.notesLabel')}</label>
           <input
             type="text"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="额外说明..."
+            placeholder={t('readingLight.notesPlaceholder')}
             style={inputStyle}
           />
         </div>
@@ -1148,7 +1156,7 @@ const ForeshadowingForm: React.FC<{
             fontSize: 13,
           }}
         >
-          取消
+          {t('common.cancel')}
         </button>
         <button
           onClick={handleSave}
@@ -1166,7 +1174,7 @@ const ForeshadowingForm: React.FC<{
           }}
         >
           <Check size={14} />
-          保存
+          {t('common.save')}
         </button>
       </div>
     </div>
@@ -1180,6 +1188,7 @@ const CharacterForm: React.FC<{
   onSave: (state: Omit<ChapterCharacterState, 'id'> & { id?: string }) => void;
   onCancel: () => void;
 }> = ({ state, availableChapters, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [characterName, setCharacterName] = useState(state?.characterName || '');
   const [chapterRef, setChapterRef] = useState(state?.chapterRef || '');
   const [stateDescription, setStateDescription] = useState(state?.stateDescription || '');
@@ -1208,7 +1217,7 @@ const CharacterForm: React.FC<{
   return (
     <div style={{ ...cardStyle, padding: 18 }}>
       <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
-        {state ? '编辑角色状态' : '添加角色状态'}
+        {state ? t('readingLight.editCharacterState') : t('common.add') + ' ' + t('readingLight.characterState')}
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1216,7 +1225,7 @@ const CharacterForm: React.FC<{
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-              角色名 <span style={{ color: '#f87171' }}>*</span>
+              {t('readingLight.characterName')} <span style={{ color: '#f87171' }}>*</span>
             </label>
             <input
               type="text"
@@ -1228,7 +1237,7 @@ const CharacterForm: React.FC<{
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-              章节 <span style={{ color: '#f87171' }}>*</span>
+              {t('readingLight.chapter')} <span style={{ color: '#f87171' }}>*</span>
             </label>
             <select
               value={chapterRef}
@@ -1245,11 +1254,11 @@ const CharacterForm: React.FC<{
 
         {/* 状态描述 */}
         <div>
-          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>状态描述</label>
+          <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.stateDescriptionLabel')}</label>
           <textarea
             value={stateDescription}
             onChange={(e) => setStateDescription(e.target.value)}
-            placeholder="描述角色当前状态..."
+            placeholder={t('readingLight.stateDescriptionPlaceholder')}
             style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
           />
         </div>
@@ -1257,7 +1266,7 @@ const CharacterForm: React.FC<{
         {/* 情绪 + 位置 */}
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>情绪状态</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.emotionalState')}</label>
             <input
               type="text"
               value={emotionalState}
@@ -1267,7 +1276,7 @@ const CharacterForm: React.FC<{
             />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>位置</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.location')}</label>
             <input
               type="text"
               value={location}
@@ -1305,7 +1314,7 @@ const CharacterForm: React.FC<{
             fontSize: 13,
           }}
         >
-          取消
+          {t('common.cancel')}
         </button>
         <button
           onClick={handleSave}
@@ -1323,7 +1332,7 @@ const CharacterForm: React.FC<{
           }}
         >
           <Check size={14} />
-          保存
+          {t('common.save')}
         </button>
       </div>
     </div>
@@ -1337,6 +1346,7 @@ const PlotForm: React.FC<{
   onSave: (point: Omit<ChapterPlotKeyPoint, 'id'> & { id?: string }) => void;
   onCancel: () => void;
 }> = ({ point, availableChapters, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const [chapterRef, setChapterRef] = useState(point?.chapterRef || '');
   const [description, setDescription] = useState(point?.description || '');
   const [importance, setImportance] = useState<'high' | 'medium' | 'low'>(point?.importance || 'medium');
@@ -1362,7 +1372,7 @@ const PlotForm: React.FC<{
   return (
     <div style={{ ...cardStyle, padding: 18 }}>
       <h3 style={{ margin: '0 0 18px 0', fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>
-        {point ? '编辑剧情关键点' : '添加剧情关键点'}
+        {point ? t('common.edit') + ' ' + t('readingLight.plotKeyPoint') : t('common.add') + ' ' + t('readingLight.plotKeyPoint')}
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -1370,7 +1380,7 @@ const PlotForm: React.FC<{
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>
-              章节 <span style={{ color: '#f87171' }}>*</span>
+              {t('readingLight.chapter')} <span style={{ color: '#f87171' }}>*</span>
             </label>
             <select
               value={chapterRef}
@@ -1384,15 +1394,15 @@ const PlotForm: React.FC<{
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>重要程度</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('readingLight.importanceLabel')}</label>
             <select
               value={importance}
               onChange={(e) => setImportance(e.target.value as any)}
               style={{ ...inputStyle, cursor: 'pointer' }}
             >
-              <option value="high">重要</option>
-              <option value="medium">一般</option>
-              <option value="low">次要</option>
+              <option value="high">{t('readingLight.importanceHigh')}</option>
+              <option value="medium">{t('readingLight.importanceMedium')}</option>
+              <option value="low">{t('readingLight.importanceLow')}</option>
             </select>
           </div>
         </div>
@@ -1413,7 +1423,7 @@ const PlotForm: React.FC<{
         {/* 标签 + 相关角色 */}
         <div style={{ display: 'flex', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>标签（逗号分隔）</label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 13, color: '#94a3b8' }}>{t('outline.tags')}（逗号分隔）</label>
             <input
               type="text"
               value={tags}
@@ -1449,7 +1459,7 @@ const PlotForm: React.FC<{
             fontSize: 13,
           }}
         >
-          取消
+          {t('common.cancel')}
         </button>
         <button
           onClick={handleSave}
@@ -1467,7 +1477,7 @@ const PlotForm: React.FC<{
           }}
         >
           <Check size={14} />
-          保存
+          {t('common.save')}
         </button>
       </div>
     </div>

@@ -20,6 +20,7 @@ import { useProjectStore } from './projectStore';
 import { dbAPI } from '../services/persistence';
 import { toast } from './toastStore';
 import { useEntityVersionStore } from './entityVersionStore';
+import i18n from '../i18n';
 
 export interface CharacterMemoryState {
   profiles: CharacterProfileV2[];
@@ -328,7 +329,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
 
       // 如果有解析失败的文件，显示警告
       if (failedFiles.length > 0) {
-        toast.error('角色档案加载失败', `${failedFiles.length} 个档案解析失败: ${failedFiles.join(', ')}`, 0);
+        toast.error(i18n.t('storeMessages.characterProfileLoadFailed'), i18n.t('storeMessages.characterProfileParseFailed', { count: failedFiles.length, files: failedFiles.join(', ') }), 0);
       }
 
       useCharacterMemoryStore.setState({ profiles, isInitialized: true });
@@ -465,7 +466,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
       versionStore.createProfileVersion(
         normalizedProfile,
         'agent',
-        'AI 初始化角色档案',
+        i18n.t('storeMessages.versionAIInit'),
         Object.keys(request.initialSubCategories || {}) as CharacterCategoryName[]
       );
 
@@ -540,7 +541,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
         versionStore.createProfileVersion(
           updatedProfile,
           'agent',
-          `AI 更新: ${request.chapterRef}`,
+          i18n.t('storeMessages.versionAIUpdate', { chapterRef: request.chapterRef }),
           changedCategories
         );
       }
@@ -734,7 +735,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
           versionStore.createProfileVersion(
             profile,
             'auto',
-            `章节分析同步: ${chapterRef}`
+            i18n.t('storeMessages.versionChapterSync', { chapterRef })
           );
         }
       }
@@ -801,7 +802,7 @@ export const useCharacterMemoryStore: UseBoundStore<StoreApi<CharacterMemoryStat
         versionStore.createProfileVersion(
           currentProfile,
           'manual',
-          `恢复前备份 (恢复到 ${new Date(snapshot.updatedAt).toLocaleString()})`
+          i18n.t('storeMessages.versionRestoreBackup', { date: new Date(snapshot.updatedAt).toLocaleString() })
         );
       }
 

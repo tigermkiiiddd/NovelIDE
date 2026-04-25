@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { X, Clock, RotateCcw, Trash2, Camera, User, Bot, RefreshCw, FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   CharacterProfileVersion,
   ChapterAnalysisVersion,
@@ -23,11 +24,11 @@ interface EntityVersionHistoryProps {
   onRestore: (versionId: string) => void;
 }
 
-const SOURCE_CONFIG: Record<EntityVersionSource, { icon: React.ReactNode; label: string; color: string }> = {
-  user: { icon: <User size={14} />, label: '用户修改', color: '#38bdf8' },
-  agent: { icon: <Bot size={14} />, label: 'AI 更新', color: '#a78bfa' },
-  auto: { icon: <RefreshCw size={14} />, label: '自动备份', color: '#94a3b8' },
-  manual: { icon: <Camera size={14} />, label: '手动快照', color: '#34d399' },
+const SOURCE_CONFIG: Record<EntityVersionSource, { icon: React.ReactNode; labelKey: string; color: string }> = {
+  user: { icon: <User size={14} />, labelKey: 'version.sourceUser', color: '#38bdf8' },
+  agent: { icon: <Bot size={14} />, labelKey: 'version.sourceAgent', color: '#a78bfa' },
+  auto: { icon: <RefreshCw size={14} />, labelKey: 'version.sourceAutoBackup', color: '#94a3b8' },
+  manual: { icon: <Camera size={14} />, labelKey: 'version.sourceManual', color: '#34d399' },
 };
 
 const formatTime = (timestamp: number) => {
@@ -50,6 +51,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
   onRestore,
 }) => {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const {
     getProfileVersions,
@@ -75,14 +77,14 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
 
   const handleRestore = () => {
     if (!selectedVersionId) return;
-    if (confirm('确定要恢复到此版本吗？当前状态将被备份为新版本。')) {
+    if (confirm(t('version.confirmRestore'))) {
       onRestore(selectedVersionId);
       onClose();
     }
   };
 
   const handleDelete = (versionId: string) => {
-    if (confirm('确定要删除此版本吗？此操作不可撤销。')) {
+    if (confirm(t('version.confirmDelete'))) {
       if (entityType === 'character_profile') {
         deleteProfileVersion(versionId);
       } else {
@@ -99,7 +101,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
       // 创建手动快照需要从 store 获取当前数据
       const { createProfileVersion } = useEntityVersionStore.getState();
       // 这里简化处理，实际应该从外部传入当前数据
-      alert('请先保存当前修改，然后再创建快照');
+      alert(t('version.saveBeforeSnapshot'));
     }
   };
 
@@ -149,9 +151,9 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Clock size={20} style={{ color: '#38bdf8' }} />
             <div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>版本历史</div>
+              <div style={{ fontSize: 16, fontWeight: 600, color: '#f8fafc' }}>{t('version.title')}</div>
               <div style={{ fontSize: 12, color: '#94a3b8' }}>
-                {entityType === 'character_profile' ? '角色档案' : '章节分析'}: {entityName}
+                {entityType === 'character_profile' ? t('version.entityProfile') : t('version.entityAnalysis')}: {entityName}
               </div>
             </div>
           </div>
@@ -184,7 +186,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
             {versions.length === 0 ? (
               <div style={{ padding: 40, textAlign: 'center', color: '#64748b' }}>
                 <Clock size={32} style={{ marginBottom: 12, opacity: 0.5 }} />
-                <div>暂无历史版本</div>
+                <div>{t('version.noHistory')}</div>
               </div>
             ) : (
               versions.map((version) => {
@@ -206,7 +208,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                       <span style={{ color: config.color }}>{config.icon}</span>
                       <span style={{ fontSize: 13, fontWeight: 500, color: '#e2e8f0' }}>
-                        {config.label}
+                        {t(config.labelKey)}
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4 }}>
@@ -236,7 +238,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
                   }}
                 >
                   <div style={{ fontSize: 13, color: '#94a3b8' }}>
-                    版本快照 · {formatTime(selectedVersion.timestamp)}
+                    {t('version.versionSnapshot')} · {formatTime(selectedVersion.timestamp)}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -255,7 +257,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
                       }}
                     >
                       <RotateCcw size={14} />
-                      恢复此版本
+                      {t('version.restoreVersion')}
                     </button>
                     <button
                       onClick={() => handleDelete(selectedVersion.id)}
@@ -273,7 +275,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
                       }}
                     >
                       <Trash2 size={14} />
-                      删除
+                      {t('common.delete')}
                     </button>
                   </div>
                 </div>
@@ -311,7 +313,7 @@ export const EntityVersionHistory: React.FC<EntityVersionHistoryProps> = ({
               >
                 <div style={{ textAlign: 'center' }}>
                   <FileText size={40} style={{ marginBottom: 12, opacity: 0.5 }} />
-                  <div>选择一个版本查看详情</div>
+                  <div>{t('version.selectVersion')}</div>
                 </div>
               </div>
             )}

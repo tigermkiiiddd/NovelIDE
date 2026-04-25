@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAllPresets, GenrePreset } from '../services/resources/presets';
 import { CORE_GAMEPLAY_TAGS, NARRATIVE_ELEMENT_TAGS, STYLE_TONE_TAGS, ROMANCE_LINE_TAGS } from '../constants/projectTags';
+import { useTranslation } from 'react-i18next';
 
 export interface PleasureRhythm {
   small: number;
@@ -55,6 +56,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
   romanceLine, setRomanceLine,
   mode,
 }) => {
+  const { t } = useTranslation();
   const [selectedPreset, setSelectedPreset] = useState<GenrePreset | null>(null);
 
   // 自定义标签输入状态
@@ -139,13 +141,13 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
       {/* 书名 */}
       <div className="md:col-span-2">
         <label className={labelClass}>
-          书名 {isCreate && <span className="text-red-500">*</span>}
+          {t('projectMeta.bookName')} {isCreate && <span className="text-red-500">*</span>}
         </label>
         <textarea
           value={name}
           onChange={e => setName(e.target.value)}
           className={inputClass}
-          placeholder="例如：赛博修仙传"
+          placeholder={t('projectMeta.bookNamePlaceholder')}
           rows={1}
           required={isCreate}
           autoComplete="off"
@@ -154,13 +156,13 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 题材预设 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>题材预设</label>
+        <label className={labelClass}>{t('projectMeta.genrePreset')}</label>
         <select
           value={selectedPresetId}
           onChange={e => handlePresetChange(e.target.value)}
           className={selectClass}
         >
-          <option value="">不使用预设{isCreate ? '（通用配置）' : ''}</option>
+          <option value="">{t('projectMeta.noPreset')}</option>
           {getAllPresets().map(preset => (
             <option key={preset.id} value={preset.id}>
               {preset.name} - {preset.description}
@@ -176,7 +178,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 每卷章节数 */}
       <div>
-        <label className={labelClass}>每卷章节数</label>
+        <label className={labelClass}>{t('projectMeta.chaptersPerVolume')}</label>
         <textarea
           value={chaptersPerVolume}
           onChange={e => setChaptersPerVolume(parseInt(e.target.value) || 0)}
@@ -191,7 +193,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
       {/* 单章字数 & 目标章节 */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className={labelClass}>单章字数</label>
+          <label className={labelClass}>{t('projectMeta.wordsPerChapter')}</label>
           <textarea
             value={wordsPerChapter}
             onChange={e => setWordsPerChapter(parseInt(e.target.value) || 0)}
@@ -202,7 +204,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
           />
         </div>
         <div>
-          <label className={labelClass}>目标章节</label>
+          <label className={labelClass}>{t('projectMeta.targetChapters')}</label>
           <textarea
             value={targetChapters}
             onChange={e => setTargetChapters(parseInt(e.target.value) || 0)}
@@ -217,7 +219,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
       {/* 爽点节奏配置 */}
       <div className="md:col-span-2">
         <div className="flex items-center justify-between mb-2">
-          <label className={labelClass + ' mb-0'}>爽点节奏配置</label>
+          <label className={labelClass + ' mb-0'}>{t('projectMeta.pleasureRhythm')}</label>
           <button
             type="button"
             onClick={() => setPleasureRhythmEnabled(!pleasureRhythmEnabled)}
@@ -234,7 +236,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
         </div>
         <div className={`grid grid-cols-3 gap-3 transition-opacity ${pleasureRhythmEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">小爽间隔（章）</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('projectMeta.smallPleasure')}</label>
             <textarea
               value={pleasureRhythm.small}
               onChange={e => setPleasureRhythm({ ...pleasureRhythm, small: parseInt(e.target.value) || 1 })}
@@ -246,7 +248,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">中爽间隔（章）</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('projectMeta.mediumPleasure')}</label>
             <textarea
               value={pleasureRhythm.medium}
               onChange={e => setPleasureRhythm({ ...pleasureRhythm, medium: parseInt(e.target.value) || 1 })}
@@ -258,7 +260,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             />
           </div>
           <div>
-            <label className="block text-xs text-gray-500 mb-1">大爽间隔（章）</label>
+            <label className="block text-xs text-gray-500 mb-1">{t('projectMeta.largePleasure')}</label>
             <textarea
               value={pleasureRhythm.large}
               onChange={e => setPleasureRhythm({ ...pleasureRhythm, large: parseInt(e.target.value) || 1 })}
@@ -271,18 +273,18 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
           </div>
         </div>
         {!pleasureRhythmEnabled && (
-          <p className="text-xs text-gray-600 mt-1">当前题材未启用爽点节奏</p>
+          <p className="text-xs text-gray-600 mt-1">{t('projectMeta.rhythmDisabled')}</p>
         )}
         {pleasureRhythmEnabled && (
           <p className="text-xs text-gray-500 mt-1">
-            小爽：小收获、小胜利 | 中爽：阶段胜利、重要突破 | 大爽：重大转折、终极高潮
+            {t('projectMeta.rhythmDesc')}
           </p>
         )}
       </div>
 
       {/* 简介 / 核心梗 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>简介 / 核心梗 {isCreate && '(可选)'}</label>
+        <label className={labelClass}>{isCreate ? t('projectMeta.descriptionOptional') : t('projectMeta.description')}</label>
         <textarea
           value={description}
           onChange={e => setDescription(e.target.value)}
@@ -290,7 +292,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             ? 'w-full bg-gray-800 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none placeholder-gray-600 transition-colors'
             : 'w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:outline-none focus:border-blue-500'
           } resize-none h-24`}
-          placeholder={isCreate ? '写下一句话核心梗，点击 AI 润色，自动为您扩写...' : '请输入简介...'}
+          placeholder={isCreate ? t('projectMeta.descriptionPlaceholderCreate') : t('projectMeta.descriptionPlaceholderEdit')}
           rows={4}
           autoComplete="off"
         />
@@ -298,7 +300,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 核心玩法标签 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>核心玩法 (可多选)</label>
+        <label className={labelClass}>{t('projectMeta.coreGameplay')}</label>
         <div className="flex flex-wrap gap-2 mb-2">
           {CORE_GAMEPLAY_TAGS.map(tag => (
             <button
@@ -327,7 +329,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 addCustomTag(customGameplayInput, coreGameplay, setCoreGameplay, () => setCustomGameplayInput(''));
               }
             }}
-            placeholder="输入自定义标签后按回车"
+            placeholder={t('projectMeta.customTagPlaceholder')}
             className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
           />
           <button
@@ -335,13 +337,13 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             onClick={() => addCustomTag(customGameplayInput, coreGameplay, setCoreGameplay, () => setCustomGameplayInput(''))}
             className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
           >
-            添加
+            {t('common.add')}
           </button>
         </div>
         {/* 已选标签显示 */}
         {coreGameplay.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <span className="text-xs text-gray-500">已选:</span>
+            <span className="text-xs text-gray-500">{t('projectMeta.selected')}</span>
             {coreGameplay.map(tag => (
               <span
                 key={tag}
@@ -363,7 +365,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 叙事元素标签 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>叙事元素 (可多选)</label>
+        <label className={labelClass}>{t('projectMeta.narrativeElements')}</label>
         <div className="flex flex-wrap gap-2 mb-2">
           {NARRATIVE_ELEMENT_TAGS.map(tag => (
             <button
@@ -391,7 +393,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 addCustomTag(customNarrativeInput, narrativeElements, setNarrativeElements, () => setCustomNarrativeInput(''));
               }
             }}
-            placeholder="输入自定义标签后按回车"
+            placeholder={t('projectMeta.customTagPlaceholder')}
             className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
           />
           <button
@@ -399,12 +401,12 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             onClick={() => addCustomTag(customNarrativeInput, narrativeElements, setNarrativeElements, () => setCustomNarrativeInput(''))}
             className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
           >
-            添加
+            {t('common.add')}
           </button>
         </div>
         {narrativeElements.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <span className="text-xs text-gray-500">已选:</span>
+            <span className="text-xs text-gray-500">{t('projectMeta.selected')}</span>
             {narrativeElements.map(tag => (
               <span
                 key={tag}
@@ -426,7 +428,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 风格基调标签 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>风格基调 (可多选)</label>
+        <label className={labelClass}>{t('projectMeta.styleTone')}</label>
         <div className="flex flex-wrap gap-2 mb-2">
           {STYLE_TONE_TAGS.map(tag => (
             <button
@@ -454,7 +456,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 addCustomTag(customStyleInput, styleTone, setStyleTone, () => setCustomStyleInput(''));
               }
             }}
-            placeholder="输入自定义标签后按回车"
+            placeholder={t('projectMeta.customTagPlaceholder')}
             className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
           />
           <button
@@ -462,12 +464,12 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             onClick={() => addCustomTag(customStyleInput, styleTone, setStyleTone, () => setCustomStyleInput(''))}
             className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
           >
-            添加
+            {t('common.add')}
           </button>
         </div>
         {styleTone.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <span className="text-xs text-gray-500">已选:</span>
+            <span className="text-xs text-gray-500">{t('projectMeta.selected')}</span>
             {styleTone.map(tag => (
               <span
                 key={tag}
@@ -489,7 +491,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
 
       {/* 感情线标签 */}
       <div className="md:col-span-2">
-        <label className={labelClass}>感情线 (可多选)</label>
+        <label className={labelClass}>{t('projectMeta.romanceLine')}</label>
         <div className="flex flex-wrap gap-2 mb-2">
           {ROMANCE_LINE_TAGS.map(tag => (
             <button
@@ -517,7 +519,7 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
                 addCustomTag(customRomanceInput, romanceLine, setRomanceLine, () => setCustomRomanceInput(''));
               }
             }}
-            placeholder="输入自定义标签后按回车"
+            placeholder={t('projectMeta.customTagPlaceholder')}
             className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
           />
           <button
@@ -525,12 +527,12 @@ const ProjectMetaForm: React.FC<ProjectMetaFormProps> = ({
             onClick={() => addCustomTag(customRomanceInput, romanceLine, setRomanceLine, () => setCustomRomanceInput(''))}
             className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition-colors"
           >
-            添加
+            {t('common.add')}
           </button>
         </div>
         {romanceLine.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <span className="text-xs text-gray-500">已选:</span>
+            <span className="text-xs text-gray-500">{t('projectMeta.selected')}</span>
             {romanceLine.map(tag => (
               <span
                 key={tag}

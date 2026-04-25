@@ -14,6 +14,7 @@ import { History, RotateCcw, Eye, Plus, Trash2, X, Clock, User, Bot, FileText } 
 import { useVersionStore, FileVersion, VersionSource } from '../stores/versionStore';
 import { useFileStore } from '../stores/fileStore';
 import { formatWordCount } from '../utils/wordCount';
+import { useTranslation } from 'react-i18next';
 
 interface VersionHistoryProps {
   isOpen: boolean;
@@ -36,16 +37,17 @@ const SourceIcon = ({ source }: { source: VersionSource }) => {
 };
 
 // 版本来源文本
-const sourceText: Record<VersionSource, string> = {
-  user: '用户编辑',
-  agent: 'Agent 修改',
-  auto: '自动备份',
-  manual: '手动快照'
+const sourceTextKeys: Record<VersionSource, string> = {
+  user: 'version.sourceUser',
+  agent: 'version.sourceAgent',
+  auto: 'version.sourceAutoBackup',
+  manual: 'version.sourceManual'
 };
 
 const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId }) => {
   const [selectedVersion, setSelectedVersion] = useState<FileVersion | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const { t } = useTranslation();
 
   const versionStore = useVersionStore();
   const restoreVersion = versionStore.restoreVersion;
@@ -71,10 +73,10 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return '刚刚';
-    if (diffMins < 60) return `${diffMins} 分钟前`;
-    if (diffHours < 24) return `${diffHours} 小时前`;
-    if (diffDays < 7) return `${diffDays} 天前`;
+    if (diffMins < 1) return t('version.justNow');
+    if (diffMins < 60) return t('version.minutesAgo', { count: diffMins });
+    if (diffHours < 24) return t('version.hoursAgo', { count: diffHours });
+    if (diffDays < 7) return t('version.daysAgo', { count: diffDays });
 
     return date.toLocaleDateString('zh-CN', {
       month: 'short',
@@ -96,7 +98,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
         version.filePath,
         currentFile.content,
         'manual',
-        `恢复前备份 (恢复到 ${formatTime(version.timestamp)})`
+        `${t('version.backupBeforeRestore')} (${formatTime(version.timestamp)})`
       );
     }
 
@@ -118,7 +120,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
       '', // path will be filled
       currentFile.content || '',
       'manual',
-      '手动创建快照'
+      t('version.sourceManual')
     );
   };
 
@@ -131,7 +133,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-2">
             <History size={20} className="text-blue-400" />
-            <span className="font-semibold text-lg text-gray-200">版本历史</span>
+            <span className="font-semibold text-lg text-gray-200">{t('version.title')}</span>
             {currentFile && (
               <span className="text-sm text-gray-400">- {currentFile.name}</span>
             )}
@@ -141,10 +143,10 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
               onClick={handleCreateSnapshot}
               disabled={!fileId || !currentFile}
               className="flex items-center gap-1 px-3 py-1 text-sm bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:text-gray-400 text-white rounded"
-              title="创建当前版本快照"
+              title={t('version.createSnapshot')}
             >
               <Plus size={14} />
-              创建快照
+              {t('version.snapshot')}
             </button>
             <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
               <X size={20} className="text-gray-400" />
@@ -159,8 +161,8 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
             {versions.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-500">
                 <History size={48} className="mb-4 opacity-30" />
-                <p>暂无版本历史</p>
-                <p className="text-sm mt-2">修改文件时会自动创建版本</p>
+                <p>{t('version.empty')}</p>
+                <p className="text-sm mt-2">{t('version.emptyHint')}</p>
               </div>
             ) : (
               <div className="p-2 space-y-2">
@@ -180,7 +182,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
                         <SourceIcon source={version.source} />
-                        <span className="text-sm text-gray-300">{sourceText[version.source]}</span>
+                        <span className="text-sm text-gray-300">{t(sourceTextKeys[version.source])}</span>
                       </div>
                       <span className="text-xs text-gray-500">{formatTime(version.timestamp)}</span>
                     </div>
@@ -192,7 +194,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
                         <FileText size={12} />
                         {formatWordCount(version.content)}
                       </span>
-                      <span>{version.lineCount} 行</span>
+                      <span>{t('version.lineCount', { count: version.lineCount })}</span>
                     </div>
                   </div>
                 ))}
@@ -206,19 +208,19 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
               <>
                 {/* Preview Header */}
                 <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-gray-800/30">
-                  <span className="text-sm text-gray-400">预览版本内容</span>
+                  <span className="text-sm text-gray-400">{t('version.previewVersion')}</span>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleRestore(selectedVersion)}
                       className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded"
                     >
                       <RotateCcw size={14} />
-                      恢复此版本
+                      {t('version.restoreVersion')}
                     </button>
                     <button
                       onClick={() => deleteVersion(selectedVersion.id)}
                       className="flex items-center gap-1 px-3 py-1 text-sm bg-red-600/50 hover:bg-red-600 text-white rounded"
-                      title="删除此版本"
+                      title={t('version.deleteVersion')}
                     >
                       <Trash2 size={14} />
                     </button>
@@ -228,14 +230,14 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ isOpen, onClose, fileId
                 {/* Preview Content */}
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-900/50">
                   <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                    {selectedVersion.content || '(空文件)'}
+                    {selectedVersion.content || t('version.emptyFile')}
                   </pre>
                 </div>
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
                 <Eye size={48} className="mb-4 opacity-30" />
-                <p>选择一个版本查看内容</p>
+                <p>{t('version.selectVersion')}</p>
               </div>
             )}
           </div>

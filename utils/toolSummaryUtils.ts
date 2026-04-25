@@ -3,6 +3,8 @@
  * 为 AI 工具调用生成简洁的人类可读摘要
  */
 
+import i18n from '../i18n';
+
 export interface ToolSummary {
   action: string;    // 操作类型
   summary: string;   // 摘要文本
@@ -34,29 +36,29 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
           restArgs.intent ? `🎯 ${truncate(restArgs.intent, 60)}` : '',
           restArgs.plan ? `📝 ${truncate(restArgs.plan, 60)}` : '',
           restArgs.reflection ? `🔄 ${truncate(restArgs.reflection, 40)}` : '',
-        ].filter(Boolean).join(' | ') || '内部推理'
+        ].filter(Boolean).join(' | ') || i18n.t('toolSummary.thinking')
       };
 
     case 'final_answer':
       return {
         action: 'answer',
         summary: restArgs.answer
-          ? `回复: ${truncate(restArgs.answer, 80)}`
-          : '最终回复'
+          ? i18n.t('toolSummary.reply', { text: truncate(restArgs.answer, 80) })
+          : i18n.t('toolSummary.finalReply')
       };
 
     case 'deep_thinking': {
       const dtLabels: Record<string, string> = {
-        'create': '创建深度分析空间',
-        'list': '查看活跃分析空间',
-        'archive': '归档分析空间',
-        'view_log': '查看变更日志',
+        'create': i18n.t('toolSummary.deepThinkingCreate'),
+        'list': i18n.t('toolSummary.deepThinkingList'),
+        'archive': i18n.t('toolSummary.deepThinkingArchive'),
+        'view_log': i18n.t('toolSummary.deepThinkingViewLog'),
       };
       return {
         action: 'deep_think',
         summary: restArgs.action
           ? `${dtLabels[restArgs.action] || restArgs.action}${restArgs.title ? `: ${truncate(restArgs.title, 30)}` : restArgs.padId ? ` (${restArgs.padId.slice(0, 8)})` : ''}`
-          : '深度分析'
+          : i18n.t('toolSummary.deepThinkingDefault')
       };
     }
 
@@ -66,7 +68,7 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
     case 'updateFile':
       return {
         action: 'write',
-        summary: restArgs.path ? `写入文件: ${restArgs.path}` : '写入文件'
+        summary: restArgs.path ? i18n.t('toolSummary.writeFile', { path: restArgs.path }) : i18n.t('toolSummary.writeFileShort')
       };
 
     case 'patchFile':
@@ -74,46 +76,46 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'patch',
         summary: restArgs.path
-          ? `编辑 ${editCount} 处: ${restArgs.path}`
-          : `编辑 ${editCount} 处`
+          ? i18n.t('toolSummary.editFile', { count: editCount, path: restArgs.path })
+          : i18n.t('toolSummary.editFileShort', { count: editCount })
       };
 
     case 'deleteFile':
       return {
         action: 'delete',
-        summary: restArgs.path ? `删除文件: ${restArgs.path}` : '删除文件'
+        summary: restArgs.path ? i18n.t('toolSummary.deleteFile', { path: restArgs.path }) : i18n.t('toolSummary.deleteFileShort')
       };
 
     case 'renameFile':
       return {
         action: 'rename',
         summary: restArgs.oldPath && restArgs.newName
-          ? `重命名: ${restArgs.oldPath} → ${restArgs.newName}`
-          : '重命名文件'
+          ? i18n.t('toolSummary.renameFile', { oldPath: restArgs.oldPath, newName: restArgs.newName })
+          : i18n.t('toolSummary.renameFileShort')
       };
 
     case 'readFile':
       return {
         action: 'read',
-        summary: restArgs.path ? `读取文件: ${restArgs.path}` : '读取文件'
+        summary: restArgs.path ? i18n.t('toolSummary.readFile', { path: restArgs.path }) : i18n.t('toolSummary.readFileShort')
       };
 
     case 'listFiles':
       return {
         action: 'list',
-        summary: restArgs.path ? `列出目录: ${restArgs.path}` : '列出文件'
+        summary: restArgs.path ? i18n.t('toolSummary.listDir', { path: restArgs.path }) : i18n.t('toolSummary.listDirShort')
       };
 
     case 'searchFiles':
       return {
         action: 'search',
-        summary: restArgs.query ? `搜索文件: "${truncate(restArgs.query, 40)}"` : '搜索文件'
+        summary: restArgs.query ? i18n.t('toolSummary.searchFiles', { query: truncate(restArgs.query, 40) }) : i18n.t('toolSummary.searchFilesShort')
       };
 
     case 'globFiles':
       return {
         action: 'glob',
-        summary: restArgs.pattern ? `匹配文件: ${restArgs.pattern}` : '匹配文件'
+        summary: restArgs.pattern ? i18n.t('toolSummary.globFiles', { pattern: restArgs.pattern }) : i18n.t('toolSummary.globFilesShort')
       };
 
     // 记忆宫殿
@@ -121,38 +123,40 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'query',
         summary: restArgs.query
-          ? `查询记忆: "${truncate(restArgs.query, 40)}"`
-          : '查询记忆'
+          ? i18n.t('toolSummary.queryMemory', { query: truncate(restArgs.query, 40) })
+          : i18n.t('toolSummary.queryMemoryShort')
       };
 
     case 'manage_memory':
       return {
         action: 'memory',
         summary: restArgs.action
-          ? `记忆管理: ${restArgs.action}${restArgs.content ? ` — ${truncate(restArgs.content, 30)}` : ''}`
-          : '记忆管理'
+          ? (restArgs.content
+            ? i18n.t('toolSummary.manageMemoryDetail', { action: restArgs.action, content: truncate(restArgs.content, 30) })
+            : i18n.t('toolSummary.manageMemory', { action: restArgs.action }))
+          : i18n.t('toolSummary.manageMemoryShort')
       };
 
     case 'link_memory':
       return {
         action: 'link',
         summary: restArgs.sourceId && restArgs.targetId
-          ? `关联记忆: ${restArgs.sourceId} → ${restArgs.targetId}`
-          : '关联记忆'
+          ? i18n.t('toolSummary.linkMemory', { source: restArgs.sourceId, target: restArgs.targetId })
+          : i18n.t('toolSummary.linkMemoryShort')
       };
 
     case 'memory_status':
       return {
         action: 'status',
-        summary: '记忆宫殿状态'
+        summary: i18n.t('toolSummary.memoryStatus')
       };
 
     case 'traverse_memory':
       return {
         action: 'traverse',
         summary: restArgs.wingName
-          ? `遍历记忆: ${restArgs.wingName}`
-          : '遍历记忆宫殿'
+          ? i18n.t('toolSummary.traverseMemory', { wing: restArgs.wingName })
+          : i18n.t('toolSummary.traverseMemoryShort')
       };
 
     // 任务管理
@@ -160,30 +164,30 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'todo',
         summary: restArgs.action
-          ? `任务管理: ${getTodoActionLabel(restArgs.action)}`
-          : '任务管理'
+          ? i18n.t('toolSummary.todoManage', { action: getTodoActionLabel(restArgs.action) })
+          : i18n.t('toolSummary.todoManageShort')
       };
 
     // 项目管理
     case 'updateProjectMeta':
       return {
         action: 'config',
-        summary: '更新项目设置'
+        summary: i18n.t('toolSummary.updateProject')
       };
 
     // 技能
     case 'skills_list':
       return {
         action: 'skill',
-        summary: '浏览可用技能列表',
+        summary: i18n.t('toolSummary.skillsList'),
         icon: '📚',
       };
     case 'activate_skill':
       return {
         action: 'skill',
         summary: restArgs.skillName
-          ? `激活技能: ${restArgs.skillName}`
-          : '激活技能'
+          ? i18n.t('toolSummary.activateSkill', { name: restArgs.skillName })
+          : i18n.t('toolSummary.activateSkillShort')
       };
 
     // 子代理
@@ -191,8 +195,8 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'agent',
         summary: restArgs.agentType
-          ? `调用子代理: ${restArgs.agentType}`
-          : '调用子代理'
+          ? i18n.t('toolSummary.callSubAgent', { type: restArgs.agentType })
+          : i18n.t('toolSummary.callSubAgentShort')
       };
 
     // 计划
@@ -200,8 +204,8 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'plan',
         summary: restArgs.action
-          ? `计划笔记: ${restArgs.action}`
-          : '计划笔记'
+          ? i18n.t('toolSummary.planNote', { action: restArgs.action })
+          : i18n.t('toolSummary.planNoteShort')
       };
 
     // 角色档案
@@ -209,16 +213,16 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'character',
         summary: restArgs.characterName
-          ? `初始化角色: ${restArgs.characterName}`
-          : '初始化角色'
+          ? i18n.t('toolSummary.initCharacter', { name: restArgs.characterName })
+          : i18n.t('toolSummary.initCharacterShort')
       };
 
     case 'updateCharacterProfile':
       return {
         action: 'character',
         summary: restArgs.characterName
-          ? `更新角色: ${restArgs.characterName}`
-          : '更新角色'
+          ? i18n.t('toolSummary.updateCharacter', { name: restArgs.characterName })
+          : i18n.t('toolSummary.updateCharacterShort')
       };
 
     // 人际关系
@@ -226,33 +230,33 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       return {
         action: 'relationship',
         summary: restArgs.characterName
-          ? `查询关系: ${restArgs.characterName}`
-          : '查询人际关系'
+          ? i18n.t('toolSummary.queryRelationship', { name: restArgs.characterName })
+          : i18n.t('toolSummary.queryRelationshipShort')
       };
 
     // 大纲时间线
     case 'getEvents':
-      return { action: 'outline', summary: '获取事件列表' };
+      return { action: 'outline', summary: i18n.t('toolSummary.getEvents') };
     case 'getChapters':
-      return { action: 'outline', summary: '获取章节列表' };
+      return { action: 'outline', summary: i18n.t('toolSummary.getChapters') };
     case 'getVolumes':
-      return { action: 'outline', summary: '获取卷列表' };
+      return { action: 'outline', summary: i18n.t('toolSummary.getVolumes') };
     case 'getStoryLines':
-      return { action: 'outline', summary: '获取故事线' };
+      return { action: 'outline', summary: i18n.t('toolSummary.getStoryLines') };
     case 'manageEvents':
-      return { action: 'outline', summary: `管理事件: ${restArgs.action || ''}` };
+      return { action: 'outline', summary: i18n.t('toolSummary.manageEvents', { action: restArgs.action || '' }) };
     case 'manageChapters':
-      return { action: 'outline', summary: `管理章节: ${restArgs.action || ''}` };
+      return { action: 'outline', summary: i18n.t('toolSummary.manageChapters', { action: restArgs.action || '' }) };
     case 'manageVolumes':
-      return { action: 'outline', summary: `管理卷: ${restArgs.action || ''}` };
+      return { action: 'outline', summary: i18n.t('toolSummary.manageVolumes', { action: restArgs.action || '' }) };
     case 'manageStoryLines':
-      return { action: 'outline', summary: `管理故事线: ${restArgs.action || ''}` };
+      return { action: 'outline', summary: i18n.t('toolSummary.manageStoryLines', { action: restArgs.action || '' }) };
     case 'processOutlineInput':
-      return { action: 'outline', summary: `处理大纲输入: ${truncate(restArgs.input || '', 40)}` };
+      return { action: 'outline', summary: i18n.t('toolSummary.processOutlineInput', { input: truncate(restArgs.input || '', 40) }) };
     case 'getUnresolvedForeshadowing':
-      return { action: 'outline', summary: '获取未收尾伏笔' };
+      return { action: 'outline', summary: i18n.t('toolSummary.getUnresolved') };
     case 'getForeshadowingDetail':
-      return { action: 'outline', summary: `伏笔详情: ${restArgs.foreshadowingId || ''}` };
+      return { action: 'outline', summary: i18n.t('toolSummary.foreshadowingDetail', { id: restArgs.foreshadowingId || '' }) };
 
     // 默认 — 显示名称 + 首个参数值
     default: {
@@ -261,7 +265,7 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
       const paramHint = firstVal ? ` — ${truncate(String(firstVal), 40)}` : '';
       return {
         action: 'tool',
-        summary: `执行: ${name}${paramHint}`
+        summary: i18n.t('toolSummary.executeDefault', { name })
       };
     }
   }
@@ -272,12 +276,12 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
  */
 function getTodoActionLabel(action: string): string {
   const labels: Record<string, string> = {
-    'add': '添加任务',
-    'update': '更新任务',
-    'remove': '移除任务',
-    'complete': '完成任务',
-    'reorder': '重排任务',
-    'list': '列出任务'
+    'add': i18n.t('toolSummary.todoAdd'),
+    'update': i18n.t('toolSummary.todoUpdate'),
+    'remove': i18n.t('toolSummary.todoRemove'),
+    'complete': i18n.t('toolSummary.todoComplete'),
+    'reorder': i18n.t('toolSummary.todoReorder'),
+    'list': i18n.t('toolSummary.todoList')
   };
   return labels[action] || action;
 }

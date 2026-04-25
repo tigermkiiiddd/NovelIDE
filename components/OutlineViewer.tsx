@@ -10,6 +10,7 @@ import {
   X, Clock, Plus, Pencil, ChevronDown, ChevronRight, GripVertical
 } from 'lucide-react';
 import { useWorldTimelineStore, formatTimeDisplay, formatTimeRangeDisplay, WorldTimelineState } from '../stores/worldTimelineStore';
+import { useTranslation } from 'react-i18next';
 import { useProjectStore, ProjectState } from '../stores/projectStore';
 import { useChapterAnalysisStore, ChapterAnalysisState } from '../stores/chapterAnalysisStore';
 import { TimelineEvent, ChapterGroup, VolumeGroup, StoryLine, ForeshadowingItem } from '../types';
@@ -65,20 +66,20 @@ const EMOTION_SCORES = [
   { label: '+5', value: 5 },
 ];
 
-// 钩子类型
+// 钩子类型 - labels are translated via t() at usage site
 const HOOK_TYPES = [
-  { value: 'crisis', label: '危机', icon: '⚡', color: '#f14c4c' },
-  { value: 'mystery', label: '悬疑', icon: '❓', color: '#9cdcfe' },
-  { value: 'emotion', label: '情感', icon: '💗', color: '#c586c0' },
-  { value: 'choice', label: '选择', icon: '⚖', color: '#dcdcaa' },
-  { value: 'desire', label: '欲望', icon: '🔥', color: '#ce9178' },
+  { value: 'crisis', i18nKey: 'outline.hookTypeCrisis', icon: '⚡', color: '#f14c4c' },
+  { value: 'mystery', i18nKey: 'outline.hookTypeMystery', icon: '❓', color: '#9cdcfe' },
+  { value: 'emotion', i18nKey: 'outline.hookTypeEmotion', icon: '💗', color: '#c586c0' },
+  { value: 'choice', i18nKey: 'outline.hookTypeChoice', icon: '⚖', color: '#dcdcaa' },
+  { value: 'desire', i18nKey: 'outline.hookTypeDesire', icon: '🔥', color: '#ce9178' },
 ];
 
-// 钩子强度
+// 钩子强度 - labels are translated via t() at usage site
 const HOOK_STRENGTHS = [
-  { value: 'weak', label: '弱', color: '#6a8759', bg: '#6a875922' },
-  { value: 'medium', label: '中', color: '#d7ba7d', bg: '#d7ba7d22' },
-  { value: 'strong', label: '强', color: '#f14c4c', bg: '#f14c4c22' },
+  { value: 'weak', i18nKey: 'outline.strengthWeak', color: '#6a8759', bg: '#6a875922' },
+  { value: 'medium', i18nKey: 'outline.strengthMedium', color: '#d7ba7d', bg: '#d7ba7d22' },
+  { value: 'strong', i18nKey: 'outline.strengthStrong', color: '#f14c4c', bg: '#f14c4c22' },
 ];
 
 // === 统一曲线图面板组件 ===
@@ -90,16 +91,17 @@ interface ChartSeries {
 }
 
 const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) => {
+  const { t } = useTranslation();
   const [activeSeries, setActiveSeries] = useState<Set<string>>(new Set(series.map(s => s.id)));
   const [hoverX, setHoverX] = useState<number | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
-  
+
   const visibleSeries = series.filter(s => activeSeries.has(s.id));
-  
+
   if (series.length === 0 || series.every(s => s.data.length === 0)) {
     return (
       <div className="flex flex-col items-center justify-center h-48 bg-gray-800/50 rounded-lg border border-gray-700/50">
-        <span className="text-gray-500 text-sm">暂无数据</span>
+        <span className="text-gray-500 text-sm">{t('outline.noData')}</span>
       </div>
     );
   }
@@ -117,7 +119,7 @@ const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) 
   if (minX === Infinity || visibleSeries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-48 bg-gray-800/50 rounded-lg border border-gray-700/50">
-        <span className="text-gray-500 text-sm">按需点击下方图例显示曲线</span>
+        <span className="text-gray-500 text-sm">{t('outline.clickLegendToShow')}</span>
         <div className="flex gap-2 mt-2">
           {series.map(s => (
             <button
@@ -125,7 +127,7 @@ const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) 
               onClick={() => setActiveSeries(new Set([s.id]))}
               className="px-2 py-1 bg-gray-700 rounded text-xs text-gray-300 hover:bg-gray-600 transition-colors"
             >
-              显示 {s.name}
+              {t('outline.showSeries', { name: s.name })}
             </button>
           ))}
         </div>
@@ -342,7 +344,7 @@ const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) 
             }}
           >
             <div className="font-bold text-gray-200 text-xs mb-1.5 border-b border-gray-700 pb-1">
-              第 {hoverX} 章
+              {t('outline.chapterN', { n: hoverX })}
             </div>
             <div className="space-y-1 text-xs">
               {pointsBySeries.map(s => {
@@ -368,6 +370,7 @@ const CombinedTimelineChart: React.FC<{ series: ChartSeries[] }> = ({ series }) 
 
 // === 曲线图面板组件（内嵌到 OutlineViewer） ===
 const TimelineCurvesPanel: React.FC = () => {
+  const { t } = useTranslation();
   const timeline = useWorldTimelineStore((s) => s.timeline);
   const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
   const getChapterEmotionCurve = useWorldTimelineStore((s) => s.getChapterEmotionCurve);
@@ -429,9 +432,9 @@ const TimelineCurvesPanel: React.FC = () => {
     }, []);
     const rewardData = rewardCurveData.map((d: any) => ({ x: d.chapter * 100, y: d.score }));
     return [
-      { id: 'node', name: '读者情绪曲线', color: '#4ec9b0', data: nodeData },
-      { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
-      { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
+      { id: 'node', name: t('outline.emotionCurve'), color: '#4ec9b0', data: nodeData },
+      { id: 'hook', name: t('outline.hookEmotionReward'), color: '#ce9178', data: hookData },
+      { id: 'reward', name: t('outline.rewardCumulative'), color: '#d7ba7d', data: rewardData },
     ];
   }, [curveLevel, nodeEmotionCurve, chapterEmotionCurve, dayEmotionCurve, hookEmotionCurve, rewardCurveData]);
 
@@ -442,19 +445,19 @@ const TimelineCurvesPanel: React.FC = () => {
       {/* 统计卡片 */}
       <div className="grid grid-cols-4 gap-2 mb-3">
         <div className="bg-gray-800 rounded p-2 text-center">
-          <div className="text-xs text-gray-400">总伏笔</div>
+          <div className="text-xs text-gray-400">{t('outline.totalForeshadow')}</div>
           <div className="text-lg font-bold text-yellow-400">{stats.total}</div>
         </div>
         <div className="bg-gray-800 rounded p-2 text-center">
-          <div className="text-xs text-gray-400">待回收</div>
+          <div className="text-xs text-gray-400">{t('outline.pending')}</div>
           <div className="text-lg font-bold text-blue-400">{stats.pending}</div>
         </div>
         <div className="bg-gray-800 rounded p-2 text-center">
-          <div className="text-xs text-gray-400">已回收</div>
+          <div className="text-xs text-gray-400">{t('outline.statsFulfilled')}</div>
           <div className="text-lg font-bold text-green-400">{stats.fulfilled}</div>
         </div>
         <div className="bg-gray-800 rounded p-2 text-center">
-          <div className="text-xs text-gray-400">逾期</div>
+          <div className="text-xs text-gray-400">{t('outline.overdue')}</div>
           <div className="text-lg font-bold text-red-400">{stats.overdue}</div>
         </div>
       </div>
@@ -467,7 +470,7 @@ const TimelineCurvesPanel: React.FC = () => {
             onClick={() => setCurveLevel(level)}
             className={`px-2 py-0.5 text-xs rounded ${curveLevel === level ? 'bg-teal-700 text-white' : 'bg-gray-700 text-gray-400'}`}
           >
-            {level === 'event' ? '事件' : level === 'chapter' ? '章节' : '天'}
+            {level === 'event' ? t('outline.levelEvent') : level === 'chapter' ? t('outline.levelChapter') : t('outline.levelDay')}
           </button>
         ))}
       </div>
@@ -480,6 +483,7 @@ const TimelineCurvesPanel: React.FC = () => {
 
 // === 伏笔追踪完整页面视图 ===
 const ForeshadowingTrackerView: React.FC = () => {
+  const { t } = useTranslation();
   const timeline = useWorldTimelineStore((s) => s.timeline);
   const getNodeEmotionCurve = useWorldTimelineStore((s) => s.getNodeEmotionCurve);
   const getChapterEmotionCurve = useWorldTimelineStore((s) => s.getChapterEmotionCurve);
@@ -545,9 +549,9 @@ const ForeshadowingTrackerView: React.FC = () => {
       .map((f: any, i: number) => ({ x: i * 100, y: f.rewardScore || 0 }));
 
     return [
-      { id: 'node', name: '读者情绪', color: '#4ec9b0', data: nodeData },
-      { id: 'hook', name: '钩子情绪奖励', color: '#ce9178', data: hookData },
-      { id: 'reward', name: '奖励分累计', color: '#d7ba7d', data: rewardData },
+      { id: 'node', name: t('outline.emotionCurve'), color: '#4ec9b0', data: nodeData },
+      { id: 'hook', name: t('outline.hookEmotionReward'), color: '#ce9178', data: hookData },
+      { id: 'reward', name: t('outline.rewardCumulative'), color: '#d7ba7d', data: rewardData },
     ];
   }, [curveLevel, nodeEmotionCurve, chapterEmotionCurve, dayEmotionCurve, hookEmotionCurve, foreshadowings]);
 
@@ -567,19 +571,19 @@ const ForeshadowingTrackerView: React.FC = () => {
       {/* 统计卡片 */}
       <div className="grid grid-cols-4 gap-3">
         <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xs text-gray-400 mb-1">总伏笔</div>
+          <div className="text-xs text-gray-400 mb-1">{t('outline.totalForeshadow')}</div>
           <div className="text-2xl font-bold text-yellow-400">{stats.total}</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xs text-gray-400 mb-1">待回收</div>
+          <div className="text-xs text-gray-400 mb-1">{t('outline.pending')}</div>
           <div className="text-2xl font-bold text-blue-400">{stats.pending}</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xs text-gray-400 mb-1">已回收</div>
+          <div className="text-xs text-gray-400 mb-1">{t('outline.statsFulfilled')}</div>
           <div className="text-2xl font-bold text-green-400">{stats.fulfilled}</div>
         </div>
         <div className="bg-gray-800 rounded-lg p-3 text-center">
-          <div className="text-xs text-gray-400 mb-1">逾期</div>
+          <div className="text-xs text-gray-400 mb-1">{t('outline.overdue')}</div>
           <div className="text-2xl font-bold text-red-400">{stats.overdue}</div>
         </div>
       </div>
@@ -587,13 +591,13 @@ const ForeshadowingTrackerView: React.FC = () => {
       {/* 即将到期预警 */}
       {expiring.length > 0 && (
         <div className="bg-yellow-900/20 border border-yellow-700/30 rounded-lg p-3">
-          <div className="text-xs text-yellow-400 mb-2">⚠️ 即将到期（5章内）</div>
+          <div className="text-xs text-yellow-400 mb-2">⚠️ {t('outline.expiringWarning')}</div>
           <div className="space-y-1">
             {expiring.slice(0, 3).map((f: any) => (
               <div key={f.id} className="flex items-center gap-2 text-xs">
                 <span style={{ color: getHookColor(f.hookType) }}>{getHookIcon(f.hookType)}</span>
                 <span className="flex-1 truncate text-gray-300">{f.content}</span>
-                <span className="text-yellow-400">+{f.rewardScore}分</span>
+                <span className="text-yellow-400">{t('outline.plusNScore', { n: f.rewardScore })}</span>
               </div>
             ))}
           </div>
@@ -608,7 +612,7 @@ const ForeshadowingTrackerView: React.FC = () => {
             onClick={() => setCurveLevel(level)}
             className={`px-2 py-0.5 text-xs rounded ${curveLevel === level ? 'bg-teal-700 text-white' : 'bg-gray-700 text-gray-400'}`}
           >
-            {level === 'event' ? '事件' : level === 'chapter' ? '章节' : '天'}
+            {level === 'event' ? t('outline.levelEvent') : level === 'chapter' ? t('outline.levelChapter') : t('outline.levelDay')}
           </button>
         ))}
       </div>
@@ -619,7 +623,7 @@ const ForeshadowingTrackerView: React.FC = () => {
       {/* 伏笔列表 */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm text-gray-300">伏笔列表</div>
+          <div className="text-sm text-gray-300">{t('outline.foreshadowList')}</div>
           <div className="flex gap-1">
             {(['all', 'pending', 'fulfilled', 'overdue'] as const).map(mode => (
               <button
@@ -627,14 +631,14 @@ const ForeshadowingTrackerView: React.FC = () => {
                 onClick={() => setViewMode(mode)}
                 className={`px-2 py-0.5 text-xs rounded ${viewMode === mode ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'}`}
               >
-                {mode === 'all' ? '全部' : mode === 'pending' ? '待收' : mode === 'fulfilled' ? '已收' : '逾期'}
+                {mode === 'all' ? t('outline.modeAll') : mode === 'pending' ? t('outline.modePendingShort') : mode === 'fulfilled' ? t('outline.modeFulfilledShort') : t('outline.overdue')}
               </button>
             ))}
           </div>
         </div>
 
         {filteredForeshadowings.length === 0 ? (
-          <div className="text-gray-500 text-sm text-center py-4">暂无伏笔</div>
+          <div className="text-gray-500 text-sm text-center py-4">{t('outline.noForeshadow')}</div>
         ) : (
           <div className="space-y-2">
             {filteredForeshadowings.map((f: any) => {
@@ -652,11 +656,11 @@ const ForeshadowingTrackerView: React.FC = () => {
                     <div className="flex-1">
                       <div className="text-sm text-gray-200">{f.content}</div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-400">
-                        {chapter && <span>第{chapter.chapterIndex}章</span>}
+                        {chapter && <span>{t('outline.plannedN', { n: chapter.chapterIndex })}</span>}
                         {f.hookType && <span>{f.hookType}</span>}
-                        {f.rewardScore && <span className="text-yellow-400">+{f.rewardScore}分</span>}
+                        {f.rewardScore && <span className="text-yellow-400">{t('outline.plusNScore', { n: f.rewardScore })}</span>}
                         <span className={isOverdue ? 'text-red-400' : f.type === 'resolved' ? 'text-green-400' : 'text-blue-400'}>
-                          {f.type === 'resolved' ? '✅已回收' : isOverdue ? '⚠️逾期' : `到期第${dueChapter}章`}
+                          {f.type === 'resolved' ? `✅${t('outline.resolved')}` : isOverdue ? `⚠️${t('outline.overdue')}` : t('outline.dueChapterN', { n: dueChapter })}
                         </span>
                       </div>
                     </div>
@@ -703,6 +707,7 @@ const EventForm = React.memo(({
   onDeleteForeshadowing?: (id: string) => void;
   onLinkForeshadowing?: (id: string) => void;
 }) => {
+  const { t } = useTranslation();
   const previewTime = formatTimeDisplay({ day: formData.day, hour: formData.hour, minute: formData.minute || 0 });
   const [showQuickCreate, setShowQuickCreate] = useState(false);
   const [quickCreateTitle, setQuickCreateTitle] = useState('');
@@ -843,7 +848,7 @@ const EventForm = React.memo(({
       {/* 时间戳输入：天 + 小时 + 分钟 */}
       <div className="grid grid-cols-4 gap-2 mb-2">
         <div>
-          <label className="text-xs text-gray-500">第几天</label>
+          <label className="text-xs text-gray-500">{t('outline.dayLabel')}</label>
           <input
             type="number"
             min="1"
@@ -864,7 +869,7 @@ const EventForm = React.memo(({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">小时</label>
+          <label className="text-xs text-gray-500">{t('outline.hourLabel')}</label>
           <input
             type="number"
             min="0"
@@ -886,7 +891,7 @@ const EventForm = React.memo(({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">分钟</label>
+          <label className="text-xs text-gray-500">{t('outline.minuteLabel')}</label>
           <input
             type="number"
             min="0"
@@ -908,7 +913,7 @@ const EventForm = React.memo(({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">时间显示</label>
+          <label className="text-xs text-gray-500">{t('outline.timeDisplayLabel')}</label>
           <div className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-blue-300">
             {previewTime}
           </div>
@@ -918,7 +923,7 @@ const EventForm = React.memo(({
       {/* 持续时间输入 */}
       <div className="grid grid-cols-3 gap-2">
         <div>
-          <label className="text-xs text-gray-500">持续时长</label>
+          <label className="text-xs text-gray-500">{t('outline.durationLabel')}</label>
           <input
             type="number"
             min="0"
@@ -939,62 +944,62 @@ const EventForm = React.memo(({
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">单位</label>
+          <label className="text-xs text-gray-500">{t('outline.unitLabel')}</label>
           <select
             value={formData.durationUnit}
             onChange={(e) => onFieldChange('durationUnit', e.target.value as 'hour' | 'day')}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           >
-            <option value="hour">小时</option>
-            <option value="day">天</option>
+            <option value="hour">{t('outline.hourUnit')}</option>
+            <option value="day">{t('outline.dayUnit')}</option>
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-500">说明</label>
+          <label className="text-xs text-gray-500">{t('outline.explanationLabel')}</label>
           <div className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs text-gray-400 flex items-center">
-            {formData.durationValue}{formData.durationUnit === 'hour' ? '小时' : '天'}
+            {formData.durationValue}{formData.durationUnit === 'hour' ? t('outline.hourUnit') : t('outline.dayUnit')}
           </div>
         </div>
       </div>
 
       <div>
-        <label className="text-xs text-gray-500">事件标题</label>
+        <label className="text-xs text-gray-500">{t('outline.eventTitle')}</label>
         <input
           type="text"
           value={formData.title}
           onChange={(e) => onFieldChange('title', e.target.value)}
-          placeholder="事件标题"
+          placeholder={t('outline.eventTitlePlaceholder')}
           className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-500">事件内容</label>
+        <label className="text-xs text-gray-500">{t('outline.eventContent')}</label>
         <textarea
           value={formData.content}
           onChange={(e) => onFieldChange('content', e.target.value)}
-          placeholder="事件详细描述..."
+          placeholder={t('outline.eventContentPlaceholder')}
           rows={3}
           className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-gray-500">地点</label>
+          <label className="text-xs text-gray-500">{t("outline.location")}</label>
           <input
             type="text"
             value={formData.location}
             onChange={(e) => onFieldChange('location', e.target.value)}
-            placeholder="事件地点"
+            placeholder={t("outline.locationPlaceholder")}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500">出场角色（逗号分隔）</label>
+          <label className="text-xs text-gray-500">{t("outline.charactersLabel")}</label>
           <input
             type="text"
             value={formData.characters}
             onChange={(e) => onFieldChange('characters', e.target.value)}
-            placeholder="角色A, 角色B"
+            placeholder={t("outline.charactersPlaceholder")}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           />
         </div>
@@ -1002,10 +1007,10 @@ const EventForm = React.memo(({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-xs text-gray-500">
-            情绪
+            {t("outline.emotion")}
             {formData.emotions.length > 0 && (
               <span className="ml-2 text-blue-400 font-medium">
-                [{formData.emotions.length}项 汇总{emotionTotal >= 0 ? '+' : ''}{emotionTotal}]
+                [{t('outline.emotionSummaryLabel', { count: formData.emotions.length, total: (emotionTotal >= 0 ? '+' : '') + emotionTotal })}]
               </span>
             )}
           </label>
@@ -1023,7 +1028,7 @@ const EventForm = React.memo(({
                       const newEmotions = formData.emotions.filter((_: EventEmotion, i: number) => i !== idx);
                       onFieldChange('emotions', newEmotions);
                     }}
-                    title="点击移除"
+                    title={t("outline.clickToRemove")}
                   >
                     {e.type}{e.score >= 0 ? '+' : ''}{e.score} ✕
                   </span>
@@ -1037,7 +1042,7 @@ const EventForm = React.memo(({
             onClick={() => setShowEmotionEditor(!showEmotionEditor)}
             className="w-full bg-gray-700 border border-gray-600 hover:border-gray-500 rounded px-2 py-1 text-sm text-gray-400 hover:text-gray-200 text-left"
           >
-            {showEmotionEditor ? '收起 ▲' : '+ 添加读者情绪'}
+            {showEmotionEditor ? t('outline.collapseArrow') : t('outline.addReaderEmotion')}
           </button>
           {showEmotionEditor && (
             <div className="mt-1 p-2 bg-gray-700/50 rounded border border-gray-600">
@@ -1092,13 +1097,13 @@ const EventForm = React.memo(({
                 const def = EMOTION_DEF_MAP.get(selectedEmotionType);
                 return def ? (
                   <div className="text-xs text-gray-500 mb-2 italic">
-                    💭 读者：「{def.readerVoice}」
+                    {t("outline.readerVoice", { voice: def.readerVoice })}
                   </div>
                 ) : null;
               })()}
               {/* 强度选择 */}
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-gray-500">强度：</span>
+                <span className="text-xs text-gray-500">{t("outline.intensityLabel")}</span>
                 <div className="flex gap-1">
                   {EMOTION_SCORES.map((s) => (
                     <button
@@ -1124,19 +1129,19 @@ const EventForm = React.memo(({
                 }}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-xs"
               >
-                + 添加「{selectedEmotionType}{selectedEmotionScore >= 0 ? '+' : ''}{selectedEmotionScore}」
+                {t('outline.addEmotionLabel', { type: selectedEmotionType, score: (selectedEmotionScore >= 0 ? '+' : '') + selectedEmotionScore })}
               </button>
             </div>
           )}
         </div>
         <div>
-          <label className="text-xs text-gray-500">故事线</label>
+          <label className="text-xs text-gray-500">{t("outline.storyLineLabel")}</label>
           <select
             value={formData.storyLineId}
             onChange={(e) => onFieldChange('storyLineId', e.target.value)}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           >
-            <option value="">默认主线</option>
+            <option value="">{t("outline.defaultMainLine")}</option>
             {storyLines.map(s => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -1144,14 +1149,14 @@ const EventForm = React.memo(({
         </div>
       </div>
       <div>
-        <label className="text-xs text-gray-500">所属章节（可选）</label>
+        <label className="text-xs text-gray-500">{t("outline.chapterOptionalLabel")}</label>
         {showQuickCreate ? (
           <div className="flex gap-1">
             <input
               type="text"
               value={quickCreateTitle}
               onChange={(e) => setQuickCreateTitle(e.target.value)}
-              placeholder="输入章节标题"
+              placeholder={t("outline.inputChapterTitle")}
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
               autoFocus
               disabled={isCreating}
@@ -1171,7 +1176,7 @@ const EventForm = React.memo(({
               disabled={!quickCreateTitle.trim() || isCreating}
               className="px-2 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded text-sm"
             >
-              {isCreating ? '...' : '创建'}
+              {isCreating ? '...' : t('common.create')}
             </button>
             <button
               onClick={() => {
@@ -1180,7 +1185,7 @@ const EventForm = React.memo(({
               }}
               className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm"
             >
-              取消
+              {t("common.cancel")}
             </button>
           </div>
         ) : (
@@ -1195,11 +1200,11 @@ const EventForm = React.memo(({
             }}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           >
-            <option value="">未分类</option>
+            <option value="">{t("outline.unclassified")}</option>
             {chapters.map(c => (
-              <option key={c.id} value={c.id}>第{c.chapterIndex}章「{c.title}」</option>
+              <option key={c.id} value={c.id}>{t("outline.chapterNTitle", { n: c.chapterIndex, title: c.title })}</option>
             ))}
-            <option value="__quick_create__">➕ 快速创建章节</option>
+            <option value="__quick_create__">{t("outline.quickCreateChapter")}</option>
           </select>
         )}
       </div>
@@ -1207,21 +1212,21 @@ const EventForm = React.memo(({
       {/* 伏笔编辑区域 */}
       <div className="border-t border-gray-700 pt-3 mt-3">
         <div className="flex items-center justify-between mb-2">
-          <label className="text-xs text-gray-500">关联伏笔</label>
+          <label className="text-xs text-gray-500">{t("outline.linkedForeshadowing")}</label>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setShowForeshadowSelector(!showForeshadowSelector)}
               className="text-xs text-green-400 hover:text-green-300"
             >
-              📎 关联已有
+              {t("outline.linkExisting")}
             </button>
             <button
               type="button"
               onClick={() => handleStartEditForeshadow()}
               className="text-xs text-blue-400 hover:text-blue-300"
             >
-              + 新建伏笔
+              {t("outline.newForeshadowBtn")}
             </button>
           </div>
         </div>
@@ -1229,13 +1234,13 @@ const EventForm = React.memo(({
         {/* 选择已有伏笔 */}
         {showForeshadowSelector && (
           <div className="mb-2 p-2 bg-gray-700/50 rounded border border-gray-600">
-            <label className="text-xs text-gray-500 mb-1 block">选择已有伏笔推进或收尾</label>
+            <label className="text-xs text-gray-500 mb-1 block">{t("outline.selectExistingToAdvance")}</label>
             {unresolvedForeshadowing.length > 0 ? (
               <div className="max-h-40 overflow-y-auto space-y-1">
                 {unresolvedForeshadowing.map(f => {
                   const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
-                  const labels: Record<string, string> = { planted: '🌱埋下', developed: '🌿推进', resolved: '✅收回' };
-                  const durationLabels: Record<string, string> = { short_term: '短期', mid_term: '中期', long_term: '长期' };
+                  const labels: Record<string, string> = { planted: t('outline.plantedLabel'), developed: t('outline.developLabel'), resolved: t('outline.resolveLabel') };
+                  const durationLabels: Record<string, string> = { short_term: t('outline.shortTerm'), mid_term: t('outline.midTerm'), long_term: t('outline.longTerm') };
 
                   return (
                     <div
@@ -1254,19 +1259,19 @@ const EventForm = React.memo(({
                         {labels[f.type]}
                       </span>
                       <span className="text-xs text-gray-400 shrink-0">
-                        {f.plannedChapter ? `第${f.plannedChapter}章` : '未设'}
+                        {f.plannedChapter ? t('outline.plannedN', { n: f.plannedChapter }) : t('outline.notSet')}
                       </span>
                       <span className="flex-1 text-sm text-gray-200 truncate">
                         {f.content}
                       </span>
-                      <span className="text-xs text-green-400">推进/收尾</span>
+                      <span className="text-xs text-green-400">{t("outline.advanceResolve")}</span>
                     </div>
                   );
                 })}
               </div>
             ) : (
               <div className="text-xs text-gray-500 py-2 text-center">
-                暂无可关联的伏笔
+                {t("outline.noForeshadowToLink")}
               </div>
             )}
           </div>
@@ -1280,8 +1285,8 @@ const EventForm = React.memo(({
               if (!f) return null;
 
               const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
-              const labels: Record<string, string> = { planted: '🌱埋下', developed: '🌿推进', resolved: '✅收回' };
-              const durationLabels: Record<string, string> = { short_term: '短期', mid_term: '中期', long_term: '长期' };
+              const labels: Record<string, string> = { planted: t('outline.plantedLabel'), developed: t('outline.developLabel'), resolved: t('outline.resolveLabel') };
+              const durationLabels: Record<string, string> = { short_term: t('outline.shortTerm'), mid_term: t('outline.midTerm'), long_term: t('outline.longTerm') };
 
               return (
                 <div
@@ -1296,7 +1301,7 @@ const EventForm = React.memo(({
                       {labels[f.type]}
                     </span>
                     <span className="text-xs text-gray-400 shrink-0">
-                      {f.plannedChapter ? `第${f.plannedChapter}章` : '未设'}
+                      {f.plannedChapter ? t('outline.plannedN', { n: f.plannedChapter }) : t('outline.notSet')}
                     </span>
                     <span className="flex-1 text-sm text-gray-200 truncate">
                       {f.content}
@@ -1305,7 +1310,7 @@ const EventForm = React.memo(({
                       type="button"
                       onClick={() => handleStartEditForeshadow(f)}
                       className="text-gray-500 hover:text-blue-400 p-1"
-                      title="编辑"
+                      title={t("common.edit")}
                     >
                       <Pencil size={12} />
                     </button>
@@ -1313,7 +1318,7 @@ const EventForm = React.memo(({
                       type="button"
                       onClick={() => onDeleteForeshadowing?.(fid)}
                       className="text-gray-500 hover:text-red-400 p-1"
-                      title="取消关联"
+                      title={t("outline.clickToRemove")}
                     >
                       <X size={12} />
                     </button>
@@ -1324,7 +1329,7 @@ const EventForm = React.memo(({
                     if (!parent) return null;
                     return (
                       <div className="flex items-center gap-1 text-xs text-orange-400 bg-orange-500/10 rounded px-2 py-1 ml-4">
-                        <span>↳ 推进自：</span>
+                        <span>{t("outline.continueFrom")}</span>
                         <span className="truncate">{parent.content}</span>
                       </div>
                     );
@@ -1342,10 +1347,10 @@ const EventForm = React.memo(({
             {parentForeshadowingId && foreshadowingItems?.get(parentForeshadowingId) && (() => {
               const parent = foreshadowingItems.get(parentForeshadowingId)!;
               const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
-              const labels: Record<string, string> = { planted: '🌱埋下', developed: '🌿推进', resolved: '✅收回' };
+              const labels: Record<string, string> = { planted: t('outline.plantedLabel'), developed: t('outline.developLabel'), resolved: t('outline.resolveLabel') };
               return (
                 <div className="mb-2 p-2 bg-orange-500/10 rounded border border-orange-500/30">
-                  <div className="text-xs text-orange-400 mb-1">正在推进的伏笔：</div>
+                  <div className="text-xs text-orange-400 mb-1">{t('outline.advancingForeshadow')}</div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs px-1.5 py-0.5 rounded shrink-0" style={{ backgroundColor: colors[parent.type] + '22', color: colors[parent.type] }}>
                       {labels[parent.type]}
@@ -1356,24 +1361,24 @@ const EventForm = React.memo(({
               );
             })()}
             <div className="text-xs text-gray-400">
-              {parentForeshadowingId ? '🌿 推进/收尾' : showForeshadowEditor === 'new' ? '🌱 新建伏笔' : '编辑伏笔'}
+              {parentForeshadowingId ? t('outline.advancingForeshadowTitle') : showForeshadowEditor === 'new' ? t('outline.newForeshadowTitle') : t('outline.editForeshadowTitle')}
             </div>
             <div>
               <label className="text-xs text-gray-500">
-                {parentForeshadowingId ? '推进/收尾描述' : '伏笔内容'}
+                {parentForeshadowingId ? t('outline.advanceDesc') : t('outline.foreshadowContentLabel')}
               </label>
               <input
                 type="text"
                 value={editingForeshadow.content}
                 onChange={(e) => setEditingForeshadow(prev => ({ ...prev, content: e.target.value }))}
-                placeholder={parentForeshadowingId ? "描述如何推进或收尾此伏笔（30字以内）" : "简洁描述伏笔（30字以内）"}
+                placeholder={parentForeshadowingId ? t("outline.advanceDescPlaceholder") : t("outline.foreshadowContentPlaceholder")}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
                 autoFocus
               />
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="text-xs text-gray-500">状态</label>
+                <label className="text-xs text-gray-500">{t("outline.foreshadowStatus")}</label>
                 <select
                   value={editingForeshadow.type}
                   onChange={(e) => setEditingForeshadow(prev => ({ ...prev, type: e.target.value as any }))}
@@ -1381,20 +1386,20 @@ const EventForm = React.memo(({
                 >
                   {parentForeshadowingId ? (
                     <>
-                      <option value="developed">🌿 推进</option>
-                      <option value="resolved">✅ 收回</option>
+                      <option value="developed">{t("outline.developOption")}</option>
+                      <option value="resolved">{t("outline.resolveOption")}</option>
                     </>
                   ) : (
                     <>
-                      <option value="planted">🌱 埋下</option>
-                      <option value="developed">🌿 推进</option>
-                      <option value="resolved">✅ 收回</option>
+                      <option value="planted">{t("outline.plantedOption")}</option>
+                      <option value="developed">{t("outline.developOption")}</option>
+                      <option value="resolved">{t("outline.resolveOption")}</option>
                     </>
                   )}
                 </select>
               </div>
               <div>
-                <label className="text-xs text-gray-500">计划回收章节</label>
+                <label className="text-xs text-gray-500">{t("outline.plannedChapter")}</label>
                 <input
                   type="number"
                   min="1"
@@ -1403,13 +1408,13 @@ const EventForm = React.memo(({
                     ...prev,
                     plannedChapter: e.target.value ? parseInt(e.target.value) : undefined
                   }))}
-                  placeholder="章"
+                  placeholder={t("outline.chapterPlaceholder")}
                   className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
                   disabled={!!parentForeshadowingId}
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-500">钩子强度</label>
+                <label className="text-xs text-gray-500">{t("outline.hookStrength")}</label>
                 <div className="flex gap-1">
                   {HOOK_STRENGTHS.map((s) => (
                     <button
@@ -1421,7 +1426,7 @@ const EventForm = React.memo(({
                       }`}
                       style={{ backgroundColor: s.bg, color: s.color }}
                     >
-                      {s.label}
+                      {t(s.i18nKey)}
                     </button>
                   ))}
                 </div>
@@ -1430,7 +1435,7 @@ const EventForm = React.memo(({
             {/* 钩子类型选择 */}
             {!parentForeshadowingId && editingForeshadow.type === 'planted' && (
               <div>
-                <label className="text-xs text-gray-500">钩子类型</label>
+                <label className="text-xs text-gray-500">{t("outline.hookType")}</label>
                 <div className="flex gap-1 flex-wrap">
                   {HOOK_TYPES.map((ht) => (
                     <button
@@ -1442,19 +1447,19 @@ const EventForm = React.memo(({
                       }`}
                       style={{ backgroundColor: ht.color + '22', color: ht.color }}
                     >
-                      {ht.icon} {ht.label}
+                      {ht.icon} {t(ht.i18nKey)}
                     </button>
                   ))}
                 </div>
               </div>
             )}
             <div>
-              <label className="text-xs text-gray-500">标签（逗号分隔）</label>
+              <label className="text-xs text-gray-500">{t("outline.tagsLabel")}</label>
               <input
                 type="text"
                 value={editingForeshadow.tags}
                 onChange={(e) => setEditingForeshadow(prev => ({ ...prev, tags: e.target.value }))}
-                placeholder="身世, 物品, 关系..."
+                placeholder={t("outline.tagsPlaceholder")}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
               />
             </div>
@@ -1465,7 +1470,7 @@ const EventForm = React.memo(({
                 disabled={!editingForeshadow.content.trim()}
                 className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded px-2 py-1 text-sm"
               >
-                保存
+                {t("common.save")}
               </button>
               <button
                 type="button"
@@ -1475,7 +1480,7 @@ const EventForm = React.memo(({
                 }}
                 className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 text-sm"
               >
-                取消
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -1484,10 +1489,10 @@ const EventForm = React.memo(({
 
       <div className="flex gap-2">
         <button onClick={onSubmit} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm">
-          确认
+          {t("common.confirm")}
         </button>
         <button onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm">
-          取消
+          {t("common.cancel")}
         </button>
       </div>
     </div>
@@ -1515,38 +1520,39 @@ const ChapterForm = React.memo(({
   const [showQuickCreateVolume, setShowQuickCreateVolume] = useState(false);
   const [quickVolumeTitle, setQuickVolumeTitle] = useState('');
   const [isCreatingVolume, setIsCreatingVolume] = useState(false);
+  const { t } = useTranslation();
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 space-y-3 border border-blue-500 mb-4">
       <div>
-        <label className="text-xs text-gray-500">章节标题</label>
+        <label className="text-xs text-gray-500">{t("outline.chapterTitle")}</label>
         <input
           type="text"
           value={formData.title}
           onChange={(e) => onFieldChange('title', e.target.value)}
-          placeholder="第一章"
+          placeholder={t("outline.chapterTitle")}
           className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-500">章节概要</label>
+        <label className="text-xs text-gray-500">{t("outline.chapterSummary")}</label>
         <textarea
           value={formData.summary}
           onChange={(e) => onFieldChange('summary', e.target.value)}
-          placeholder="章节概要..."
+          placeholder={t("outline.chapterSummary")}
           rows={2}
           className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm resize-none"
         />
       </div>
       <div>
-        <label className="text-xs text-gray-500">所属卷（可选）</label>
+        <label className="text-xs text-gray-500">{t("outline.volume")}</label>
         {showQuickCreateVolume ? (
           <div className="flex gap-1">
             <input
               type="text"
               value={quickVolumeTitle}
               onChange={(e) => setQuickVolumeTitle(e.target.value)}
-              placeholder="输入卷标题"
+              placeholder={t("outline.inputVolumeTitle")}
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
               autoFocus
               disabled={isCreatingVolume}
@@ -1566,7 +1572,7 @@ const ChapterForm = React.memo(({
               disabled={!quickVolumeTitle.trim() || isCreatingVolume}
               className="px-2 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white rounded text-sm"
             >
-              {isCreatingVolume ? '...' : '创建'}
+              {isCreatingVolume ? '...' : t('common.create')}
             </button>
             <button
               onClick={() => {
@@ -1575,7 +1581,7 @@ const ChapterForm = React.memo(({
               }}
               className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm"
             >
-              取消
+              {t("common.cancel")}
             </button>
           </div>
         ) : (
@@ -1590,20 +1596,20 @@ const ChapterForm = React.memo(({
             }}
             className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
           >
-            <option value="">未分组</option>
+            <option value="">{t("outline.unclassifiedShort")}</option>
             {volumes.map(v => (
-              <option key={v.id} value={v.id}>第{v.volumeIndex}卷「{v.title}」</option>
+              <option key={v.id} value={v.id}>{t("outline.volumeNTitle", { n: v.volumeIndex, title: v.title })}</option>
             ))}
-            <option value="__quick_create__">➕ 快速创建卷</option>
+            <option value="__quick_create__">{t("outline.quickCreateVolume")}</option>
           </select>
         )}
       </div>
       <div className="flex gap-2">
         <button onClick={onSubmit} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1 text-sm">
-          {mode === 'edit' ? '保存' : '确认'}
+          {mode === 'edit' ? t('common.save') : t('common.confirm')}
         </button>
         <button onClick={onCancel} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-3 py-1 text-sm">
-          取消
+          {t("common.cancel")}
         </button>
       </div>
     </div>
@@ -1622,32 +1628,33 @@ const ChapterCard = React.memo(({
   onEdit: () => void;
   onDelete: () => void;
 }) => {
+  const { t } = useTranslation();
   return (
     <div className="bg-gray-800 rounded-lg p-3 border border-gray-700 flex items-center justify-between">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 shrink-0">第{chapter.chapterIndex}章</span>
+          <span className="text-xs text-gray-500 shrink-0">{t("outline.plannedN", { n: chapter.chapterIndex })}</span>
           <h4 className="font-medium text-gray-200 truncate">{chapter.title}</h4>
         </div>
         {chapter.summary && (
           <p className="text-xs text-gray-400 mt-1 truncate">{chapter.summary}</p>
         )}
         <div className="text-xs text-gray-500 mt-1">
-          {chapter.eventIds.length} 个事件
+          {t("outline.nEvents", { count: chapter.eventIds.length })}
         </div>
       </div>
       <div className="flex items-center gap-1 ml-2">
         <button
           onClick={onEdit}
           className="p-1 text-gray-500 hover:text-blue-400"
-          title="编辑"
+          title={t("common.edit")}
         >
           <Pencil size={14} />
         </button>
         <button
           onClick={onDelete}
           className="p-1 text-gray-500 hover:text-red-400"
-          title="删除"
+          title={t("common.delete")}
         >
           <X size={14} />
         </button>
@@ -1676,6 +1683,7 @@ interface EventCardProps {
 }
 
 const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInfo, showChapterInfo, foreshadowingItems, onEdit, onDelete, isDragging, isDragOver, onDragStart, onDragEnd, onDragOver, onDrop }: EventCardProps) => {
+  const { t } = useTranslation();
   const handleEdit = useCallback(() => onEdit(event.id), [event.id, onEdit]);
   const handleDelete = useCallback(() => onDelete(event.id), [event.id, onDelete]);
 
@@ -1707,7 +1715,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
           {/* Drag Handle */}
           <div
             className="text-gray-500 hover:text-gray-300 cursor-grab active:cursor-grabbing pt-0.5"
-            title="拖动排序"
+            title={t("outline.dragToSort")}
           >
             <GripVertical size={16} />
           </div>
@@ -1732,14 +1740,14 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
           <button
             onClick={handleEdit}
             className="text-gray-500 hover:text-blue-400"
-            title="编辑"
+            title={t("common.edit")}
           >
             <Pencil size={14} />
           </button>
           <button
             onClick={handleDelete}
             className="text-gray-500 hover:text-red-400"
-            title="删除"
+            title={t("common.delete")}
           >
             <X size={14} />
           </button>
@@ -1748,7 +1756,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
 
       {showChapterInfo && chapterInfo && (
         <div className="text-xs text-gray-500 mb-2 ml-6">
-          所属章节：第{chapterInfo.chapterIndex}章「{chapterInfo.title}」
+          {t("outline.belongingChapter")}{t("outline.chapterNTitle", { n: chapterInfo.chapterIndex, title: chapterInfo.title })}
         </div>
       )}
 
@@ -1791,7 +1799,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
             const f = foreshadowingItems.get(fid);
             if (!f || !f.content) return null;
             const colors: Record<string, string> = { planted: '#ce9178', developed: '#dcdcaa', resolved: '#4ec9b0' };
-            const labels: Record<string, string> = { planted: '🌱埋', developed: '🌿进', resolved: '✅收' };
+            const labels: Record<string, string> = { planted: t('outline.plantedShort'), developed: t('outline.developShort'), resolved: t('outline.resolveShort') };
             const displayContent = f.content.length > 15 ? f.content.substring(0, 15) + '...' : f.content;
             const hookDef = f.hookType ? HOOK_TYPES.find(t => t.value === f.hookType) : null;
             const strengthDef = f.strength ? HOOK_STRENGTHS.find(t => t.value === f.strength) : null;
@@ -1800,7 +1808,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
                 <span
                   className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-help w-fit"
                   style={{ backgroundColor: colors[f.type] + '22', color: colors[f.type] }}
-                  title={`${f.content}${f.hookType ? ` | ${hookDef?.label || f.hookType}` : ''}${f.strength ? ` | ${strengthDef?.label || f.strength}` : ''}${f.plannedChapter ? ` | 第${f.plannedChapter}章收` : ''}${f.rewardScore ? ` | +${f.rewardScore}分` : ''}`}
+                  title={`${f.content}${f.hookType ? ` | ${hookDef ? t(hookDef.i18nKey) : f.hookType}` : ''}${f.strength ? ` | ${strengthDef ? t(strengthDef.i18nKey) : f.strength}` : ''}${f.plannedChapter ? `, t('outline.foreshadowDetailPlanned', { n: f.plannedChapter })` : ''}${f.rewardScore ? `, t('outline.foreshadowDetailScore', { n: f.rewardScore })` : ''}`}
                 >
                   {labels[f.type]} {displayContent}
                   {hookDef && <span className="opacity-70">{hookDef.icon}</span>}
@@ -1812,7 +1820,7 @@ const EventCard = React.memo(({ event, storyLineColor, storyLineName, chapterInf
                   if (!parent) return null;
                   return (
                     <span className="text-xs text-orange-400 ml-2 mt-0.5">
-                      ↳ 推进自：{parent.content.length > 12 ? parent.content.substring(0, 12) + '...' : parent.content}
+                      {t('outline.continueFrom')}{parent.content.length > 12 ? parent.content.substring(0, 12) + '...' : parent.content}
                     </span>
                   );
                 })()}
@@ -1864,6 +1872,7 @@ const VolumeSection = React.memo(({
   volumes: { id: string; volumeIndex: number; title: string }[];
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
+  const { t } = useTranslation();
   const totalEvents = chapters.reduce((sum, ch) => sum + ch.eventIds.length, 0);
 
   return (
@@ -1873,7 +1882,7 @@ const VolumeSection = React.memo(({
         <div className="bg-gray-800 p-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs text-gray-500">卷序号</label>
+              <label className="text-xs text-gray-500">{t("outline.volumeIndex")}</label>
               <input
                 type="number"
                 min="1"
@@ -1883,7 +1892,7 @@ const VolumeSection = React.memo(({
               />
             </div>
             <div>
-              <label className="text-xs text-gray-500">卷标题</label>
+              <label className="text-xs text-gray-500">{t("outline.volumeTitle")}</label>
               <input
                 type="text"
                 value={newVolume.title}
@@ -1893,7 +1902,7 @@ const VolumeSection = React.memo(({
             </div>
           </div>
           <div>
-            <label className="text-xs text-gray-500">卷描述</label>
+            <label className="text-xs text-gray-500">{t("outline.volumeDesc")}</label>
             <input
               type="text"
               value={newVolume.description}
@@ -1902,8 +1911,8 @@ const VolumeSection = React.memo(({
             />
           </div>
           <div className="flex gap-2">
-            <button onClick={onSaveVolume} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-sm">保存</button>
-            <button onClick={onCancelVolume} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 text-sm">取消</button>
+            <button onClick={onSaveVolume} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded px-2 py-1 text-sm">{t("common.save")}</button>
+            <button onClick={onCancelVolume} className="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded px-2 py-1 text-sm">{t("common.cancel")}</button>
           </div>
         </div>
       ) : (
@@ -1913,22 +1922,22 @@ const VolumeSection = React.memo(({
         >
           <div className="flex items-center gap-2">
             {isExpanded ? <ChevronDown size={16} className="text-gray-500" /> : <ChevronRight size={16} className="text-gray-500" />}
-            <span className="text-xs text-gray-500">第{volume.volumeIndex}卷</span>
+            <span className="text-xs text-gray-500">{t("outline.volumeN", { n: volume.volumeIndex })}</span>
             <h3 className="font-medium text-gray-200">{volume.title}</h3>
-            <span className="text-xs text-gray-500">({chapters.length}章 / {totalEvents}事件)</span>
+            <span className="text-xs text-gray-500">{t("outline.volumeNChapters", { chapters: chapters.length, events: totalEvents })}</span>
           </div>
           <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => onEditVolume(volume)}
               className="p-1 text-gray-500 hover:text-blue-400"
-              title="编辑卷"
+              title={t("outline.editVolumeTooltip")}
             >
               <Pencil size={14} />
             </button>
             <button
               onClick={() => onDeleteVolume(volume.id)}
               className="p-1 text-gray-500 hover:text-red-400"
-              title="删除卷"
+              title={t("outline.deleteVolumeTooltip")}
             >
               <X size={14} />
             </button>
@@ -1962,7 +1971,7 @@ const VolumeSection = React.memo(({
             )
           ))}
           {chapters.length === 0 && (
-            <div className="text-gray-500 text-sm text-center py-4">暂无章节</div>
+            <div className="text-gray-500 text-sm text-center py-4">{t("outline.noChapter")}</div>
           )}
         </div>
       )}
@@ -1971,6 +1980,7 @@ const VolumeSection = React.memo(({
 });
 
 const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   // 视图状态
   const [timelineLevel, setTimelineLevel] = useState<TimelineLevel>('events');
   const [eventGroupMode, setEventGroupMode] = useState<EventGroupMode>('day');
@@ -2454,16 +2464,16 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       if (eventGroupMode === 'day') {
         const day = event.timestamp?.day || 1;
         key = `day-${day}`;
-        label = `第 ${day} 天`;
+        label = `Day ${day}`;
       } else {
         // 按章节分组
         const chapter = event.chapterId ? chapterMap.get(event.chapterId) : null;
         if (chapter) {
           key = `chapter-${chapter.chapterIndex}`;
-          label = `第${chapter.chapterIndex}章「${chapter.title}」`;
+          label = `Ch.${chapter.chapterIndex} "${chapter.title}"`;
         } else {
           key = 'chapter-ungrouped';
-          label = '未分类事件';
+          label = t('outline.ungroupedEvents');
         }
       }
 
@@ -2484,14 +2494,14 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
             if (event.chapterId) {
               const chapter = chapterMap.get(event.chapterId);
               if (chapter) {
-                chapterSet.add(`第${chapter.chapterIndex}章`);
+                chapterSet.add(`Ch.${chapter.chapterIndex}`);
               }
             }
           });
           const chapters = Array.from(chapterSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
           return {
             ...group,
-            extraInfo: chapters.length > 0 ? `包含：${chapters.join('、')}` : undefined
+            extraInfo: chapters.length > 0 ? `Includes: ${chapters.join(", ")}` : undefined
           };
         } else {
           // 按章节分组：显示时间跨度
@@ -2509,13 +2519,13 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
             const endMinute = maxMins % 60;
 
             const formatTime = (day: number, hour: number, minute: number) => {
-              return minute > 0 ? `第${day}天${hour}:${minute.toString().padStart(2, '0')}` : `第${day}天${hour}:00`;
+              return minute > 0 ? `Day${day} ${hour}:${minute.toString().padStart(2, "0")}` : `Day${day} ${hour}:00`;
             };
 
             if (startDay === endDay && startHour === endHour && startMinute === endMinute) {
-              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour, startMinute)}` };
+              return { ...group, extraInfo: `Time: ${formatTime(startDay, startHour, startMinute)}` };
             } else {
-              return { ...group, extraInfo: `时间：${formatTime(startDay, startHour, startMinute)} ~ ${formatTime(endDay, endHour, endMinute)}` };
+              return { ...group, extraInfo: `Time: ${formatTime(startDay, startHour, startMinute)} ~ ${formatTime(endDay, endHour, endMinute)}` };
             }
           }
           return group;
@@ -2530,9 +2540,9 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div className="flex items-center gap-3">
           <Clock size={20} className="text-blue-400" />
-          <span className="font-semibold text-lg">时间线</span>
+          <span className="font-semibold text-lg">{t('outline.title')}</span>
           {timeline && (
-            <span className="text-sm text-gray-400">({getTimeRange() || '暂无时间'})</span>
+            <span className="text-sm text-gray-400">({getTimeRange() || t('outline.noTime')})</span>
           )}
         </div>
 
@@ -2545,12 +2555,12 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
       <div className="flex-1 overflow-y-auto p-4">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
-            <span className="text-gray-500">加载时间线...</span>
+            <span className="text-gray-500">{t("outline.timelineLoading")}</span>
           </div>
         ) : !timeline ? (
           <div className="flex flex-col items-center justify-center h-32 text-gray-500">
             <Clock size={32} className="mb-2 opacity-50" />
-            <p>时间线未初始化</p>
+            <p>{t("outline.timelineNotInit")}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -2562,7 +2572,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     timelineLevel === 'events' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
                   }`}
                 >
-                  事件
+                  {t('outline.events')}
                 </button>
                 <button
                   onClick={() => setTimelineLevel('chapters')}
@@ -2570,7 +2580,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     timelineLevel === 'chapters' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'
                   }`}
                 >
-                  章节
+                  {t('outline.chapters')}
                 </button>
                 <button
                   onClick={() => setTimelineLevel('foreshadowing')}
@@ -2578,7 +2588,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     timelineLevel === 'foreshadowing' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300'
                   }`}
                 >
-                  伏笔追踪
+                  {t('outline.foreshadowing')}
                 </button>
               </div>
 
@@ -2587,14 +2597,14 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                 <>
                   {/* Group Mode Selector */}
                   <div className="flex gap-1 mb-3 text-xs">
-                    <span className="text-gray-500 py-1">分组：</span>
+                    <span className="text-gray-500 py-1">{t("outline.groupByLabel")}</span>
                     <button
                       onClick={() => setEventGroupMode('none')}
                       className={`px-2 py-1 rounded ${
                         eventGroupMode === 'none' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      无
+                      {t("outline.groupNone")}
                     </button>
                     <button
                       onClick={() => setEventGroupMode('day')}
@@ -2602,7 +2612,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                         eventGroupMode === 'day' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      按天
+                      {t("outline.groupByDay")}
                     </button>
                     <button
                       onClick={() => setEventGroupMode('chapter')}
@@ -2610,7 +2620,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                         eventGroupMode === 'chapter' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400 hover:text-gray-200'
                       }`}
                     >
-                      按章节
+                      {t("outline.groupByChapter")}
                     </button>
                     {eventGroupMode !== 'none' && groupedEvents && (
                       <button
@@ -2625,7 +2635,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                         }}
                         className="px-2 py-1 rounded bg-gray-700 text-gray-400 hover:text-gray-200 ml-2"
                       >
-                        {collapsedGroups.size === groupedEvents.length ? '全部展开' : '全部折叠'}
+                        {collapsedGroups.size === groupedEvents.length ? t('outline.expandAll') : t('outline.collapseAll')}
                       </button>
                     )}
                   </div>
@@ -2637,7 +2647,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                   className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-400 transition-colors"
                 >
                   <Plus size={16} />
-                  <span>添加事件</span>
+                  <span>{t("outline.addEvent")}</span>
                 </button>
               )}
 
@@ -2668,7 +2678,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                 if (cachedEvents.length === 0 && !showAddEvent) {
                   return (
                     <div className="text-gray-500 text-sm text-center py-8">
-                      暂无事件，请添加事件或使用 Agent 生成时间线
+                      {t("outline.noEventHint")}
                     </div>
                   );
                 }
@@ -2734,7 +2744,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     <div className="space-y-2">
                       {/* Event Count */}
                       <div className="text-sm text-gray-500 mb-2">
-                        共 {cachedEvents.length} 个事件，{groupedEvents.length} 个分组
+                        {t("outline.nEventsGrouped", { total: cachedEvents.length, groups: groupedEvents.length })}
                       </div>
 
                       {groupedEvents.map(group => {
@@ -2753,7 +2763,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                                   <ChevronDown size={14} className="text-gray-500" />
                                 )}
                                 <span className="font-medium text-gray-200">{group.label}</span>
-                                <span className="text-xs text-gray-500">({group.events.length} 个事件)</span>
+                                <span className="text-xs text-gray-500">({t("outline.nEvents", { count: group.events.length })})</span>
                                 {group.extraInfo && (
                                   <span className="text-xs text-blue-400">{group.extraInfo}</span>
                                 )}
@@ -2782,7 +2792,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
 
                     {/* Event Count */}
                     <div className="mb-4 ml-10 text-sm text-gray-500">
-                      共 {cachedEvents.length} 个事件
+                      {t("outline.nEventsTotal", { count: cachedEvents.length })}
                     </div>
 
                     {/* Events - using optimized EventCard with Map lookups */}
@@ -2803,7 +2813,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                       className="w-full flex items-center justify-center gap-2 py-2 border border-dashed border-gray-600 rounded-lg text-gray-400 hover:text-gray-200 hover:border-gray-400 transition-colors mb-4"
                     >
                       <Plus size={16} />
-                      <span>添加章节</span>
+                      <span>{t('outline.addChapter')}</span>
                     </button>
                   )}
 
@@ -2825,7 +2835,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                     if (cachedChaptersList.length === 0 && cachedVolumesList.length === 0) {
                       return (
                         <div className="text-gray-500 text-sm text-center py-8">
-                          暂无章节，点击上方按钮添加
+                          {t("outline.noChapterHint")}
                         </div>
                       );
                     }
@@ -2880,7 +2890,7 @@ const OutlineViewer: React.FC<OutlineViewerProps> = ({ isOpen, onClose }) => {
                           if (ungrouped.length === 0) return null;
                           return (
                             <div className="space-y-2">
-                              <div className="text-sm text-gray-400 px-2">未分组章节</div>
+                              <div className="text-sm text-gray-400 px-2">{t("outline.ungroupedChapters")}</div>
                               {ungrouped.map(chapter => (
                                 <ChapterCard
                                   key={chapter.id}

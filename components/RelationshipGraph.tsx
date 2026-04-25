@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCenter, forceCollide, forceManyBody, forceRadial } from 'd3-force-3d';
 import { useRelationshipStore, RelationshipState } from '../stores/relationshipStore';
@@ -154,6 +155,7 @@ const Tooltip: React.FC<{
   relation: CharacterRelation;
   onClose: () => void;
 }> = ({ x, y, relation, onClose }) => {
+  const { t } = useTranslation();
   const dir = relation.isBidirectional ? '⇄' : '→';
   const color = getRelationColor(relation.type);
 
@@ -198,7 +200,7 @@ const Tooltip: React.FC<{
       )}
       {relation.chapterRef && (
         <div style={{ fontSize: 11, color: '#64748b', marginTop: 6 }}>
-          来源: {relation.chapterRef}
+          {t("relationship.source")}: {relation.chapterRef}
         </div>
       )}
     </div>
@@ -219,6 +221,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
   onLinkHover,
   onBackgroundDoubleClick,
 }) => {
+  const { t } = useTranslation();
   // Derive effective height: use prop, fallback to container height, or mobile default
   const effectiveHeight = height ?? (isMobile ? window.innerHeight - 160 : 500);
   const relations = useRelationshipStore((s: RelationshipState) => s.relations);
@@ -726,7 +729,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
       ctx.textBaseline = 'middle';
 
       // 标签背景
-      const labelText = relation.type;
+      const labelText = t("relationship.types." + relation.type);
       const textWidth = ctx.measureText(labelText).width;
       ctx.fillStyle = '#0f172a';
       ctx.globalAlpha = 1;
@@ -741,7 +744,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
     }
 
     ctx.globalAlpha = 1;
-  }, [activeNode, firstDegreeLinks, hoveredLink]);
+  }, [activeNode, firstDegreeLinks, hoveredLink, t]);
 
   const handleEngineStop = useCallback(() => {
     if (!fgRef.current) return;
@@ -848,7 +851,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="搜索角色或关系..."
+            placeholder={t("relationship.placeholders.search")}
             style={{
               background: 'transparent',
               border: 'none',
@@ -886,13 +889,13 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
           }}
         >
           <Filter size={14} />
-          {filterTypes.size > 0 ? `${filterTypes.size}` : '筛选'}
+          {filterTypes.size > 0 ? `${filterTypes.size}` : t('relationship.filter')}
         </button>
 
         {/* 重置视图 */}
         <button
           onClick={resetView}
-          title="重置视图"
+          title={t("relationship.tooltips.resetView")}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -911,7 +914,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
 
         <button
           onClick={relaxLayout}
-          title="重新散开"
+          title={t("relationship.tooltips.relaxLayout")}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -970,7 +973,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
                 minHeight: isMobile ? 36 : 'auto',
               }}
             >
-              {type}
+              {t("relationship.types." + type)}
             </button>
           ))}
         </div>
@@ -1037,8 +1040,8 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
           }}
         >
           {relations.length === 0
-            ? '暂无角色关系数据'
-            : '没有匹配的关系'}
+            ? t("relationship.emptyState.noData")
+            : t("relationship.emptyState.noMatch")}
         </div>
       )}
 
@@ -1057,7 +1060,7 @@ export const RelationshipGraph: React.FC<RelationshipGraphProps> = ({
           zIndex: 10,
         }}
       >
-        {graphData.nodes.length} 角色 · {filteredRelations.length} 关系
+        {t("relationship.statsBadge", { characters: graphData.nodes.length, relations: filteredRelations.length })}
       </div>
     </div>
   );

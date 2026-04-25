@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { RelationshipGraph, GraphLink } from './RelationshipGraph';
 import { useRelationshipStore, RelationshipState } from '../stores/relationshipStore';
 import { useCharacterMemoryStore, CharacterMemoryState } from '../stores/characterMemoryStore';
@@ -70,6 +71,7 @@ type DrawerMode = 'none' | 'create' | 'edit-link';
 type SelectMode = 'idle' | 'selecting';
 
 export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClose, isMobile = false }) => {
+  const { t } = useTranslation();
   const relations = useRelationshipStore((s: RelationshipState) => s.relations);
   const customRelationTypes = useRelationshipStore((s: RelationshipState) => s.customRelationTypes);
   const addRelation = useRelationshipStore((s: RelationshipState) => s.addRelation);
@@ -261,14 +263,14 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
   }, [editingRelation, editType, editStrength, editDescription, updateRelation, _syncToFiles]);
 
   const handleDelete = useCallback((id: string) => {
-    if (!confirm('确定删除这条关系吗？')) return;
+    if (!confirm(t('relationship.confirmDelete'))) return;
     deleteRelation(id);
     _syncToFiles();
   }, [deleteRelation, _syncToFiles]);
 
   const handleBatchDeleteFromNode = useCallback((ids: string[]) => {
     if (ids.length === 0) return;
-    if (!confirm(`确定删除选中的 ${ids.length} 条关系吗？`)) return;
+    if (!confirm(t('relationship.confirmBatchDelete', { count: ids.length }))) return;
     ids.forEach(id => deleteRelation(id));
     _syncToFiles();
   }, [deleteRelation, _syncToFiles]);
@@ -346,7 +348,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="搜索角色或关系..."
+            placeholder={t('relationship.placeholders.search')}
             style={{ background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 13, width: '100%' }}
           />
           {searchQuery && (
@@ -369,7 +371,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
           }}
         >
           <Filter size={14} />
-          {filterTypes.size > 0 ? `${filterTypes.size}` : '筛选'}
+          {filterTypes.size > 0 ? `${filterTypes.size}` : t('relationship.filter')}
         </button>
 
         {/* Stats */}
@@ -380,13 +382,13 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
           color: '#64748b', fontSize: 11,
           whiteSpace: 'nowrap',
         }}>
-          {filteredRelations.length} 关系
+          {t('relationship.relationCount', { count: filteredRelations.length })}
         </div>
 
         {/* Close */}
         {onClose && (
           <button onClick={onClose} style={btnStyle()}>
-            <X size={14} /> 关闭
+            <X size={14} /> {t('relationship.close')}
           </button>
         )}
       </div>
@@ -422,7 +424,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
                 transition: 'all 0.2s',
               }}
             >
-              {type}
+              {t("relationship.types." + type)}
             </button>
           ))}
         </div>
@@ -449,7 +451,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
           boxShadow: '0 4px 16px rgba(56, 189, 248, 0.2)',
         }}>
           <UserPlus size={14} />
-          已选择 <strong>{selectFrom}</strong> — 点击另一角色创建关系
+          {t("relationship.selected")} <strong>{selectFrom}</strong> — {t('relationship.selectAnother')}
           <button
             onClick={cancelSelectMode}
             style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', marginLeft: 4, padding: 0, display: 'flex' }}
@@ -471,7 +473,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
       {/* FAB */}
       <button
         onClick={handleBackgroundDoubleClick}
-        title="添加关系"
+        title={t('relationship.addRelation')}
         style={{
           position: 'absolute',
           bottom: isMobile ? 80 : 20,
@@ -526,7 +528,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
               </button>
             </div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>
-              {nodeRelations.length} 条关系
+              {t('relationship.relationCount', { count: nodeRelations.length })}
             </div>
             {/* Actions */}
             <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
@@ -534,14 +536,14 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
                 onClick={() => openCreateFromNode(selectedNode)}
                 style={{ ...btnStyle('#34d399'), flex: 1, justifyContent: 'center' }}
               >
-                <UserPlus size={12} /> 添加关系
+                <UserPlus size={12} /> {t('relationship.addRelation')}
               </button>
               <button
                 onClick={() => { handleNodeDoubleClick(selectedNode); setSelectedNode(null); }}
                 style={{ ...btnStyle('#60a5fa') }}
-                title="双击此角色开始连线"
+                title={t('relationship.tooltips.doubleClickToConnect')}
               >
-                <ChevronRight size={12} /> 连线
+                <ChevronRight size={12} /> {t('relationship.connect')}
               </button>
             </div>
           </div>
@@ -550,7 +552,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
             {nodeRelations.length === 0 ? (
               <div style={{ padding: '24px 16px', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
-                暂无关系数据
+                {t('relationship.noRelations')}
               </div>
             ) : (
               nodeRelations.map(r => {
@@ -565,12 +567,12 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
                           <span style={{ fontSize: 12, color: '#94a3b8' }}>{otherName}</span>
                         </div>
                         <select value={editType} onChange={e => setEditType(e.target.value)} style={{ ...selectStyle, padding: '4px 6px', fontSize: 12 }}>
-                          {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                          {allTypes.map(at => <option key={at} value={at}>{t("relationship.types." + at)}</option>)}
                         </select>
                         <select value={editStrength} onChange={e => setEditStrength(e.target.value as RelationStrength)} style={{ ...selectStyle, padding: '4px 6px', fontSize: 12 }}>
-                          <option value="强">强</option><option value="中">中</option><option value="弱">弱</option>
+                          <option value="强">{t('relationship.strengthLabels.强')}</option><option value="中">{t('relationship.strengthLabels.中')}</option><option value="弱">{t('relationship.strengthLabels.弱')}</option>
                         </select>
-                        <input type="text" value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="描述" style={{ ...inputStyle, padding: '4px 6px', fontSize: 12 }} />
+                        <input type="text" value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder={t('relationship.placeholders.description')} style={{ ...inputStyle, padding: '4px 6px', fontSize: 12 }} />
                         <div style={{ display: 'flex', gap: 4 }}>
                           <button onClick={() => {
                             if (!editingRelation) return;
@@ -593,7 +595,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
                           padding: '2px 7px', borderRadius: 999, fontSize: 11,
                           background: `${getRelationColor(r.type)}18`, color: getRelationColor(r.type),
                         }}>
-                          {r.type}
+                          {t("relationship.types." + r.type)}
                         </span>
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
                           <button
@@ -646,7 +648,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <HeartHandshake size={18} style={{ color: drawerMode === 'create' ? '#34d399' : '#60a5fa' }} />
                 <span style={{ fontSize: 15, fontWeight: 600, color: '#f8fafc' }}>
-                  {drawerMode === 'create' ? '添加关系' : '编辑关系'}
+                  {drawerMode === 'create' ? t('relationship.addRelation') : t('relationship.editRelation')}
                 </span>
               </div>
               <button onClick={cancelDrawer} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}>
@@ -666,17 +668,17 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
               {drawerMode === 'create' ? (
                 <>
                   <div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>角色 A</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{t('relationship.characterA')}</div>
                     <select value={createFrom} onChange={e => setCreateFrom(e.target.value)} style={selectStyle}>
-                      <option value="">选择角色</option>
+                      <option value="">{t('relationship.placeholders.selectCharacter')}</option>
                       {characterNames.map(n => <option key={n} value={n}>{n}</option>)}
                       {createFrom && !characterNames.includes(createFrom) && <option value={createFrom}>{createFrom}</option>}
                     </select>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>角色 B</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{t('relationship.characterB')}</div>
                     <select value={createTo} onChange={e => setCreateTo(e.target.value)} style={selectStyle}>
-                      <option value="">选择角色</option>
+                      <option value="">{t('relationship.placeholders.selectCharacter')}</option>
                       {characterNames.map(n => n !== createFrom && <option key={n} value={n}>{n}</option>)}
                       {createTo && createTo !== createFrom && <option value={createTo}>{createTo}</option>}
                     </select>
@@ -685,38 +687,38 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
               ) : null}
 
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>关系类型</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{t('relationship.relationType')}</div>
                 <select value={drawerMode === 'create' ? createType : editType} onChange={e => {
                   if (drawerMode === 'create') setCreateType(e.target.value);
                   else setEditType(e.target.value);
                 }} style={selectStyle}>
-                  <option value="">选择类型</option>
-                  {[...PRESET_RELATION_TYPES, ...customRelationTypes].map(t => <option key={t} value={t}>{t}</option>)}
-                  <option value="__custom__">自定义...</option>
+                  <option value="">{t('relationship.placeholders.selectType')}</option>
+                  {[...PRESET_RELATION_TYPES, ...customRelationTypes].map(rt => <option key={rt} value={rt}>{t("relationship.types." + rt)}</option>)}
+                  <option value="__custom__">{t('relationship.customType')}</option>
                 </select>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>强度</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{t('relationship.strength')}</div>
                 <select value={drawerMode === 'create' ? createStrength : editStrength}
                   onChange={e => drawerMode === 'create' ? setCreateStrength(e.target.value as RelationStrength) : setEditStrength(e.target.value as RelationStrength)}
                   style={selectStyle}>
-                  <option value="强">强</option><option value="中">中</option><option value="弱">弱</option>
+                  <option value="强">{t("relationship.strengthLabels.强")}</option><option value="中">{t("relationship.strengthLabels.中")}</option><option value="弱">{t("relationship.strengthLabels.弱")}</option>
                 </select>
               </div>
 
               {drawerMode === 'create' && createType === '__custom__' && (
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>自定义类型名称</div>
-                  <input type="text" value={createCustomType} onChange={e => setCreateCustomType(e.target.value)} placeholder="输入自定义关系类型..." style={inputStyle} />
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{t("relationship.customTypeName")}</div>
+                  <input type="text" value={createCustomType} onChange={e => setCreateCustomType(e.target.value)} placeholder={t("relationship.placeholders.customType")} style={inputStyle} />
                 </div>
               )}
 
               <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>关系描述</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{t("relationship.relationDescription")}</div>
                 <textarea
                   value={drawerMode === 'create' ? createDescription : editDescription}
                   onChange={e => drawerMode === 'create' ? setCreateDescription(e.target.value) : setEditDescription(e.target.value)}
-                  placeholder="描述这段关系..."
+                  placeholder={t("relationship.placeholders.describeRelation")}
                   rows={2}
                   style={{ ...inputStyle, resize: 'none', minHeight: isMobile ? 60 : 36 }}
                 />
@@ -725,14 +727,14 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({ onClos
             </div>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
-              <button onClick={cancelDrawer} style={btnStyle()}>取消</button>
+              <button onClick={cancelDrawer} style={btnStyle()}>{t("relationship.buttons.cancel")}</button>
               <button
                 onClick={drawerMode === 'create' ? handleCreate : handleSaveEdit}
                 disabled={drawerMode === 'create' ? (!createFrom || !createTo || (!createType && !createCustomType)) : false}
                 style={btnStyle(drawerMode === 'create' ? '#34d399' : '#60a5fa')}
               >
                 <Check size={14} />
-                {drawerMode === 'create' ? '确认添加' : '保存修改'}
+                {drawerMode === 'create' ? t("relationship.buttons.confirmAdd") : t("relationship.buttons.saveChanges")}
               </button>
             </div>
           </div>

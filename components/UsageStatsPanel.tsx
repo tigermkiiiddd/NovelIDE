@@ -4,10 +4,12 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUsageStatsStore } from '../stores/usageStatsStore';
 import { BarChart3, Clock, Zap, Trash2, TrendingUp, AlertTriangle } from 'lucide-react';
 
 export function UsageStatsPanel() {
+  const { t } = useTranslation();
   const { records, isLoaded, loadRecords, clearRecords, getSummary, getRecentRecords } = useUsageStatsStore();
   const [showConfirmClear, setShowConfirmClear] = useState(false);
 
@@ -49,9 +51,9 @@ export function UsageStatsPanel() {
 
   const statusLabel = (status: string) => {
     switch (status) {
-      case 'success': return '成功';
-      case 'error': return '失败';
-      case 'aborted': return '中断';
+      case 'success': return t('usageStats.status.success');
+      case 'error': return t('usageStats.status.error');
+      case 'aborted': return t('usageStats.status.aborted');
       default: return status;
     }
   };
@@ -62,14 +64,14 @@ export function UsageStatsPanel() {
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <BarChart3 size={22} className="text-blue-400" />
-          LLM 流量统计
+          {t('usageStats.title')}
         </h2>
         <button
           onClick={() => setShowConfirmClear(true)}
           className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 px-3 py-1.5 rounded border border-red-800/50 hover:bg-red-900/20 transition-colors"
         >
           <Trash2 size={12} />
-          清空数据
+          {t('usageStats.clearData')}
         </button>
       </div>
 
@@ -78,20 +80,20 @@ export function UsageStatsPanel() {
         <div className="bg-red-900/20 border border-red-800/50 rounded-lg p-4 flex items-center gap-3">
           <AlertTriangle size={18} className="text-red-400 shrink-0" />
           <div className="flex-1 text-sm text-red-200">
-            确定要清空所有流量统计数据吗？此操作不可恢复。
+            {t('usageStats.confirmClearMessage')}
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setShowConfirmClear(false)}
               className="px-3 py-1.5 text-xs text-gray-300 hover:text-white rounded border border-gray-600 hover:bg-gray-700 transition-colors"
             >
-              取消
+              {t('usageStats.buttons.cancel')}
             </button>
             <button
               onClick={() => { clearRecords(); setShowConfirmClear(false); }}
               className="px-3 py-1.5 text-xs text-white bg-red-700 hover:bg-red-600 rounded transition-colors"
             >
-              确认清空
+              {t('usageStats.buttons.confirmClear')}
             </button>
           </div>
         </div>
@@ -101,34 +103,34 @@ export function UsageStatsPanel() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard
           icon={<Zap size={18} className="text-amber-400" />}
-          label="今日 Token"
+          label={t('usageStats.todayToken')}
           value={formatNumber(todayStats.tokens)}
-          sub={`${todayStats.calls} 次调用`}
+          sub={t('usageStats.callsCount', { count: todayStats.calls })}
         />
         <StatCard
           icon={<TrendingUp size={18} className="text-blue-400" />}
-          label="本周 Token"
+          label={t('usageStats.weekToken')}
           value={formatNumber(weekTokens)}
-          sub={`${weekCalls} 次调用`}
+          sub={t('usageStats.callsCount', { count: weekCalls })}
         />
         <StatCard
           icon={<BarChart3 size={18} className="text-green-400" />}
-          label="总计 Token"
+          label={t('usageStats.totalToken')}
           value={formatNumber(summary.totalTokens)}
-          sub={`${summary.totalCalls} 次调用`}
+          sub={t('usageStats.callsCount', { count: summary.totalCalls })}
         />
         <StatCard
           icon={<Clock size={18} className="text-purple-400" />}
-          label="平均响应"
+          label={t('usageStats.avgResponse')}
           value={formatDuration(summary.avgDurationMs)}
-          sub="每次调用"
+          sub={t('usageStats.perCall')}
         />
       </div>
 
       {/* 模型分布 */}
       {Object.keys(summary.byModel).length > 0 && (
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-sm font-bold text-gray-300 mb-3">按模型分布</h3>
+          <h3 className="text-sm font-bold text-gray-300 mb-3">{t('usageStats.byModel')}</h3>
           <div className="space-y-2">
             {Object.entries(summary.byModel)
               .sort((a, b) => b[1].tokens - a[1].tokens)
@@ -153,7 +155,7 @@ export function UsageStatsPanel() {
       {/* 调用类型分布 */}
       {Object.keys(summary.byType).length > 0 && (
         <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-          <h3 className="text-sm font-bold text-gray-300 mb-3">按调用类型分布</h3>
+          <h3 className="text-sm font-bold text-gray-300 mb-3">{t('usageStats.byCallType')}</h3>
           <div className="flex flex-wrap gap-2">
             {Object.entries(summary.byType)
               .sort((a, b) => b[1].tokens - a[1].tokens)
@@ -161,7 +163,7 @@ export function UsageStatsPanel() {
                 <div key={type} className="bg-gray-700/50 border border-gray-600 rounded-lg px-3 py-2">
                   <div className="text-xs text-gray-400 uppercase">{type}</div>
                   <div className="text-sm font-bold text-white">{formatNumber(stats.tokens)} <span className="text-xs font-normal text-gray-500">tokens</span></div>
-                  <div className="text-xs text-gray-500">{stats.calls} 次</div>
+                  <div className="text-xs text-gray-500">{t('usageStats.times', { count: stats.calls })}</div>
                 </div>
               ))}
           </div>
@@ -170,20 +172,20 @@ export function UsageStatsPanel() {
 
       {/* 最近调用列表 */}
       <div className="bg-gray-800/50 border border-gray-700 rounded-lg overflow-hidden">
-        <h3 className="text-sm font-bold text-gray-300 px-4 py-3 border-b border-gray-700">最近调用</h3>
+        <h3 className="text-sm font-bold text-gray-300 px-4 py-3 border-b border-gray-700">{t('usageStats.recentCalls')}</h3>
         {recentRecords.length === 0 ? (
-          <div className="px-4 py-8 text-center text-gray-500 text-sm">暂无调用记录</div>
+          <div className="px-4 py-8 text-center text-gray-500 text-sm">{t('usageStats.noRecords')}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b border-gray-700">
-                  <th className="px-4 py-2 text-left">时间</th>
-                  <th className="px-4 py-2 text-left">模型</th>
-                  <th className="px-4 py-2 text-left">类型</th>
-                  <th className="px-4 py-2 text-right">Token</th>
-                  <th className="px-4 py-2 text-right">耗时</th>
-                  <th className="px-4 py-2 text-center">状态</th>
+                  <th className="px-4 py-2 text-left">{t("usageStats.table.time")}</th>
+                  <th className="px-4 py-2 text-left">{t("usageStats.table.model")}</th>
+                  <th className="px-4 py-2 text-left">{t("usageStats.table.type")}</th>
+                  <th className="px-4 py-2 text-right">{t("usageStats.table.token")}</th>
+                  <th className="px-4 py-2 text-right">{t("usageStats.table.duration")}</th>
+                  <th className="px-4 py-2 text-center">{t("usageStats.table.status")}</th>
                 </tr>
               </thead>
               <tbody>

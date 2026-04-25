@@ -1,5 +1,6 @@
 
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, X, GitCompare, CheckCheck, XCircle, Info } from 'lucide-react';
 import { DiffHunk, computeLineDiff, groupDiffIntoHunks } from '../utils/diffUtils';
 import { PendingChange } from '../types';
@@ -29,6 +30,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
   onRejectAll,
   onDismiss
 }) => {
+  const { t } = useTranslation();
   console.log('DiffViewer render', {
     originalLength: originalContent.length,
     modifiedLength: modifiedContent.length,
@@ -90,20 +92,20 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
               <Info size={16} />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-yellow-100 text-sm">无检测到差异</span>
-              <span className="text-xs text-yellow-400">patch 内容与原文相同，请手动确认</span>
+              <span className="font-medium text-yellow-100 text-sm">{t('diff.noDiff')}</span>
+              <span className="text-xs text-yellow-400">{t('diff.patchSame')}</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={onRejectAll} className="px-3 py-1 text-xs text-red-400 hover:bg-red-900/20 rounded border border-red-900/30 flex items-center gap-1">
-              <XCircle size={14} /> 否决
+              <XCircle size={14} /> {t('diff.reject')}
             </button>
           </div>
         </div>
         {/* 显示原始内容 */}
         <div className="flex-1 overflow-auto p-4">
-          <div className="text-xs text-gray-500 mb-2">文件内容（{originalContent.length} 字符）</div>
-          <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">{originalContent.slice(0, 2000)}{originalContent.length > 2000 ? '\n...(内容过长，已截断)' : ''}</pre>
+          <div className="text-xs text-gray-500 mb-2">{t('diff.fileContentChars', { count: originalContent.length })}</div>
+          <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">{originalContent.slice(0, 2000)}{originalContent.length > 2000 ? `\n...(${t('diff.contentTruncated')})` : ''}</pre>
         </div>
       </div>
     );
@@ -129,10 +131,10 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
 
         <div className="flex items-center gap-1 bg-gray-800/50 rounded-lg p-0.5 border border-gray-700/50">
             <button onClick={onRejectAll} className="flex items-center gap-1 px-3 py-1 text-xs text-red-400 hover:bg-red-900/20 rounded-l transition-colors border-r border-gray-700">
-                <XCircle size={14} /> <span className="hidden sm:inline">拒绝全部</span>
+                <XCircle size={14} /> <span className="hidden sm:inline">{t('diff.rejectAll')}</span>
             </button>
             <button onClick={onAcceptAll} className="flex items-center gap-1 px-3 py-1 text-xs text-green-400 hover:bg-green-900/20 rounded-r transition-colors font-medium">
-                <CheckCheck size={14} /> <span className="hidden sm:inline">批准全部</span>
+                <CheckCheck size={14} /> <span className="hidden sm:inline">{t('diff.approveAll')}</span>
             </button>
         </div>
       </div>
@@ -160,7 +162,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
                                         className="px-2 py-1 text-[10px] bg-red-900/20 text-red-400 hover:bg-red-900/40 rounded border border-red-900/30 flex items-center gap-1 transition-colors"
                                         style={{ pointerEvents: 'auto' }}
                                     >
-                                        <X size={10} /> 拒绝
+                                        <X size={10} /> {t('diff.rejectBtn')}
                                     </button>
                                     <button
                                         onClick={(e) => {
@@ -171,7 +173,7 @@ const DiffViewer: React.FC<DiffViewerProps> = ({
                                         className="px-2 py-1 text-[10px] bg-green-900/20 text-green-400 hover:bg-green-900/40 rounded border border-green-900/30 flex items-center gap-1 transition-colors"
                                         style={{ pointerEvents: 'auto' }}
                                     >
-                                        <Check size={10} /> 批准
+                                        <Check size={10} /> {t('diff.approveBtn')}
                                     </button>
                                 </div>
                             </div>

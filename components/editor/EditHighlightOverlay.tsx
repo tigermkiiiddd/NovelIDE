@@ -8,6 +8,7 @@
  */
 
 import React, { useMemo, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, X, GitCompare } from 'lucide-react';
 import { EditDiff, EditIncrement } from '../../types';
 import {
@@ -57,6 +58,7 @@ const EditHighlightOverlay: React.FC<EditHighlightOverlayProps> = ({
     showLineNumbers = true,
     paddingLeft
 }) => {
+    const { t } = useTranslation();
     const overlayRef = useRef<HTMLDivElement>(null);
 
     // Calculate left padding based on line numbers visibility
@@ -142,16 +144,16 @@ const EditHighlightOverlay: React.FC<EditHighlightOverlayProps> = ({
                                     <button
                                         onClick={(e) => handleAction(e, edit.id, 'reject')}
                                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-red-900/20 text-red-400 hover:bg-red-900/40 rounded border border-red-900/30 transition-colors"
-                                        title="拒绝此变更"
+                                        title={t('editHighlight.rejectChange')}
                                     >
-                                        <X size={10} /> 拒绝
+                                        <X size={10} /> {t('editHighlight.reject')}
                                     </button>
                                     <button
                                         onClick={(e) => handleAction(e, edit.id, 'accept')}
                                         className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] bg-green-900/20 text-green-400 hover:bg-green-900/40 rounded border border-green-900/30 transition-colors"
-                                        title="批准此变更"
+                                        title={t('editHighlight.approveChange')}
                                     >
-                                        <Check size={10} /> 批准
+                                        <Check size={10} /> {t('editHighlight.approve')}
                                     </button>
                                 </div>
                             </div>

@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Terminal, Code, Database, RefreshCw, Edit2, Check, ChevronDown, ChevronRight, Loader2, Wrench, Brain, AlertOctagon, FileText, MessageSquare, Layers, Wifi, Key, Clock, AlertTriangle, Zap, WifiOff, Ban, Cpu } from 'lucide-react';
 import { ChatMessage } from '../types';
 import APIInputView from './APIInputView';
@@ -35,6 +36,7 @@ const ErrorInfoView: React.FC<{
   isDebugMode: boolean;
   onRetry?: () => void;
 }> = ({ errorInfo, isDebugMode, onRetry }) => {
+  const { t } = useTranslation();
   const [showDebug, setShowDebug] = useState(false);
   const style = getErrorCategoryStyle(errorInfo.category);
   const Icon = style.icon;
@@ -56,7 +58,7 @@ const ErrorInfoView: React.FC<{
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${style.color} hover:bg-white/10 rounded-lg transition-colors`}
           >
             <RefreshCw size={12} />
-            重试
+            {t('common.retry')}
           </button>
         )}
       </div>
@@ -64,7 +66,7 @@ const ErrorInfoView: React.FC<{
       {/* Suggestions */}
       {errorInfo.suggestions.length > 0 && (
         <div className="px-4 py-3">
-          <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">解决建议</div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-2">{t('agentMessage.solutionSuggestions')}</div>
           <ul className="space-y-1.5">
             {errorInfo.suggestions.map((suggestion, idx) => (
               <li key={idx} className="flex items-start gap-2 text-xs text-gray-300">
@@ -85,7 +87,7 @@ const ErrorInfoView: React.FC<{
           >
             <span className="flex items-center gap-2">
               <Code size={12} />
-              Debug 详情
+              {t('agentMessage.debugDetails')}
             </span>
             <ChevronRight size={12} className={`transition-transform ${showDebug ? 'rotate-90' : ''}`} />
           </button>
@@ -96,7 +98,7 @@ const ErrorInfoView: React.FC<{
               {errorInfo.debugData.rawError && (
                 <JsonView
                   data={errorInfo.debugData.rawError}
-                  label="原始错误"
+                  label={t('agentMessage.rawError')}
                   icon={<AlertOctagon size={12} />}
                   color="text-red-300"
                 />
@@ -106,7 +108,7 @@ const ErrorInfoView: React.FC<{
               {errorInfo.debugData.request && (
                 <JsonView
                   data={errorInfo.debugData.request}
-                  label="请求信息"
+                  label={t('agentMessage.requestInfo')}
                   icon={<Zap size={12} />}
                   color="text-blue-300"
                 />
@@ -116,7 +118,7 @@ const ErrorInfoView: React.FC<{
               {errorInfo.debugData.response && (
                 <JsonView
                   data={errorInfo.debugData.response}
-                  label="响应信息"
+                  label={t('agentMessage.responseInfo')}
                   icon={<Database size={12} />}
                   color="text-green-300"
                 />
@@ -125,7 +127,7 @@ const ErrorInfoView: React.FC<{
               {/* Stack Trace */}
               {errorInfo.debugData.stack && (
                 <div>
-                  <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">堆栈追踪</div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wide mb-1">{t('agentMessage.stackTrace')}</div>
                   <pre className="text-[9px] text-gray-500 bg-black/50 p-2 rounded border border-gray-800 overflow-x-auto whitespace-pre-wrap">
                     {errorInfo.debugData.stack}
                   </pre>
@@ -143,36 +145,37 @@ const ErrorInfoView: React.FC<{
 const ResponseWarningBadge: React.FC<{
   warnings: any[];
 }> = ({ warnings }) => {
+  const { t } = useTranslation();
   if (!warnings || warnings.length === 0) return null;
 
-  // 提取警告类型
-  const hasTruncation = warnings.some((w: any) =>
-    typeof w === 'string' ? w.includes('truncated') || w.includes('length') :
-    w.title?.includes('截断')
-  );
-  const hasFilter = warnings.some((w: any) =>
-    typeof w === 'string' ? w.includes('filter') || w.includes('filtered') :
-    w.title?.includes('过滤')
-  );
+  // 提取警告类型 — check both English and translated keywords
+  const hasTruncation = warnings.some((w: any) => {
+    const s = typeof w === 'string' ? w : w.title || '';
+    return s.includes('truncated') || s.includes('length') || s.includes('截断') || s.includes(t('agentMessage.truncated'));
+  });
+  const hasFilter = warnings.some((w: any) => {
+    const s = typeof w === 'string' ? w : w.title || '';
+    return s.includes('filter') || s.includes('filtered') || s.includes('过滤') || s.includes(t('agentMessage.filtered'));
+  });
 
   return (
     <div className="mt-2 flex flex-wrap gap-2">
       {hasTruncation && (
         <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] bg-yellow-900/30 border border-yellow-700/50 text-yellow-400 rounded-full">
           <AlertTriangle size={10} />
-          <span>响应被截断</span>
+          <span>{t('agentMessage.truncated')}</span>
         </div>
       )}
       {hasFilter && (
         <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] bg-pink-900/30 border border-pink-700/50 text-pink-400 rounded-full">
           <Ban size={10} />
-          <span>内容被过滤</span>
+          <span>{t('agentMessage.filtered')}</span>
         </div>
       )}
       {!hasTruncation && !hasFilter && warnings.map((w: any, idx: number) => (
         <div key={idx} className="flex items-center gap-1.5 px-2 py-1 text-[10px] bg-orange-900/30 border border-orange-700/50 text-orange-400 rounded-full">
           <AlertTriangle size={10} />
-          <span>{typeof w === 'string' ? w : w.title || '警告'}</span>
+          <span>{typeof w === 'string' ? w : w.title || t('agentMessage.warning')}</span>
         </div>
       ))}
     </div>
@@ -192,6 +195,7 @@ interface DebugPayload {
 }
 
 const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPayload }) => {
+    const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'system' | 'history' | 'window'>('system');
 
     if (!debugPayload) return null;
@@ -202,7 +206,7 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                 <summary className="cursor-pointer list-none flex items-center gap-2 text-xs font-mono bg-purple-900/30 hover:bg-purple-900/50 border border-purple-700/50 p-2 rounded-lg transition-colors">
                     <ChevronRight size={12} className="group-open:rotate-90 transition-transform text-purple-400" />
                     <FileText size={12} className="text-purple-400" />
-                    <span className="text-purple-300 font-semibold">LLM 输入详情 (Debug)</span>
+                    <span className="text-purple-300 font-semibold">{t('agentMessage.llmInputDetails')}</span>
                     {debugPayload.slidingWindow && (
                         <span className="ml-auto text-[10px] text-purple-400 bg-purple-800/50 px-1.5 py-0.5 rounded">
                             📜 {debugPayload.slidingWindow.inContext}/{debugPayload.slidingWindow.windowSize}
@@ -267,10 +271,10 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                         {activeTab === 'history' && debugPayload.apiHistoryPreview && (
                             <div className="space-y-2">
                                 <div className="text-[10px] text-blue-400 font-mono mb-2">
-                                    发送给 LLM 的消息: {debugPayload.apiHistoryPreview.length} 条
+                                    {t('agentMessage.messagesToLLM', { count: debugPayload.apiHistoryPreview.length })}
                                     {debugPayload.totalHistoryLength !== debugPayload.apiHistoryPreview.length && (
                                         <span className="text-yellow-400 ml-2">
-                                            (原始 {debugPayload.totalHistoryLength} 条，已裁剪)
+                                            {t('agentMessage.originalTrimmed', { total: debugPayload.totalHistoryLength })}
                                         </span>
                                     )}
                                 </div>
@@ -337,7 +341,7 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                                     </div>
                                 </div>
                                 <div className="text-[10px] text-gray-500 italic">
-                                    💡 滑动窗口机制：只将最近 N 条消息发送给 LLM，以节省 Token 并保持上下文相关性。
+                                    {t('agentMessage.slidingWindowHint')}
                                 </div>
                             </div>
                         )}
@@ -364,6 +368,7 @@ const ToolLogMessage: React.FC<{
     isLoading: boolean;
     isDebugMode: boolean;
 }> = ({ text, rawParts, metadata, isLast, isLoading, isDebugMode }) => {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(isLast && isLoading);
 
     useEffect(() => {
@@ -388,11 +393,11 @@ const ToolLogMessage: React.FC<{
     // 普通模式：简化标题
     const titleText = isDebugMode
         ? (isRunning
-            ? (displayToolNames ? `工具执行中: ${displayToolNames}...` : '系统执行中...')
-            : (displayToolNames ? `工具执行结果: ${displayToolNames}` : '系统日志'))
+            ? (displayToolNames ? t('agentMessage.executingTool', { names: displayToolNames }) : t('agentMessage.systemRunning'))
+            : (displayToolNames ? t('agentMessage.toolResult', { names: displayToolNames }) : t('agentMessage.systemLog')))
         : (isRunning
-            ? '执行中...'
-            : (toolSummary ? toolSummary.summary : '执行完成'));
+            ? t('agentMessage.running')
+            : (toolSummary ? toolSummary.summary : t('agentMessage.complete')));
 
     // 从 text 中提取 thinking 内容（匹配 **思考内容**: 或 **反思内容**: 后的内容）
     const thinkingContent = (() => {
@@ -457,14 +462,14 @@ const ToolLogMessage: React.FC<{
                         </div>
                     )}
                     <div className="whitespace-pre-wrap leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar">
-                        {displayText || <span className="text-gray-600 italic">初始化执行环境...</span>}
+                        {displayText || <span className="text-gray-600 italic">{t('agentMessage.initEnvironment')}</span>}
                     </div>
                     {/* 详细工具输出 - 仅 Debug 模式显示 */}
                     {isDebugMode && toolResponses && toolResponses.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-800">
-                             <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">详细工具输出</div>
+                             <div className="text-[10px] text-gray-500 mb-2 uppercase tracking-wide">{t('agentMessage.detailedToolOutput')}</div>
                              {toolResponses.map((tr: any, idx: number) => (
-                                 <JsonView key={idx} data={tr.response} label={`原始输出: ${tr.name}`} icon={<Database size={12}/>} color="text-green-300"/>
+                                 <JsonView key={idx} data={tr.response} label={t('agentMessage.rawOutput', { name: tr.name })} icon={<Database size={12}/>} color="text-green-300"/>
                              ))}
                         </div>
                     )}
@@ -473,7 +478,7 @@ const ToolLogMessage: React.FC<{
                     {isDebugMode && metadata?.apiMetadata && (
                         <APIInputView
                             apiMetadata={metadata.apiMetadata}
-                            label="API 调用详情"
+                            label={t('agentMessage.apiCallDetails')}
                         />
                     )}
                 </div>
@@ -487,6 +492,7 @@ const ReasoningBlock: React.FC<{
     reasoning: string;
     isDebugMode: boolean;
 }> = ({ reasoning, isDebugMode }) => {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(!isDebugMode);
 
     // 截断过长内容用于预览
@@ -502,9 +508,9 @@ const ReasoningBlock: React.FC<{
             >
                 <ChevronRight size={14} className={`text-blue-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                 <Brain size={14} className="text-blue-400" />
-                <span className="font-medium text-blue-300 truncate flex-1">💭 模型思考过程</span>
+                <span className="font-medium text-blue-300 truncate flex-1">{t('agentMessage.modelThinking')}</span>
                 <span className="text-[10px] text-blue-400 bg-blue-900/50 px-1.5 py-0.5 rounded shrink-0">
-                    {isExpanded ? '收起' : '展开'}
+                    {isExpanded ? t('agentMessage.collapse') : t('agentMessage.expand')}
                 </span>
             </div>
             {isExpanded && (
@@ -523,10 +529,11 @@ const SubAgentOutputBlock: React.FC<{
     isLast: boolean;
     isLoading: boolean;
 }> = ({ text, isError, isLast, isLoading }) => {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(true);
 
     // 提取报告摘要（第一行）
-    const summaryLine = text.split('\n')[0] || '大纲处理完成';
+    const summaryLine = text.split('\n')[0] || t('agentMessage.outlineCompleteDefault');
 
     return (
         <div className="w-full max-w-[95%] sm:max-w-[85%] my-2">
@@ -538,10 +545,10 @@ const SubAgentOutputBlock: React.FC<{
                     <ChevronRight size={14} className={`text-purple-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                     <Cpu size={14} className="text-purple-400" />
                     <span className="font-medium text-purple-300 truncate flex-1">
-                        {isLoading ? '📝 大纲子Agent执行中...' : (isError ? '❌ 大纲处理失败' : '✅ 大纲处理完成')}
+                        {isLoading ? t('agentMessage.outlineSubAgentRunning') : (isError ? t('agentMessage.outlineSubAgentFailed') : t('agentMessage.outlineComplete'))}
                     </span>
                     <span className="text-[10px] text-purple-400 bg-purple-900/50 px-1.5 py-0.5 rounded">
-                        {isExpanded ? '收起' : '展开'}
+                        {isExpanded ? t('agentMessage.collapse') : t('agentMessage.expand')}
                     </span>
                 </div>
                 {isExpanded && (
@@ -556,6 +563,7 @@ const SubAgentOutputBlock: React.FC<{
 
 // --- Deep Thinking Card (Chat 面板可展开卡片) ---
 const DeepThinkingCard: React.FC<{ args: any }> = ({ args }) => {
+    const { t } = useTranslation();
     const [isExpanded, setIsExpanded] = useState(false);
     const [activePage, setActivePage] = useState<'p1' | 'p2' | 'p3'>('p1');
     const sessions = useAgentStore(state => state.sessions);
@@ -568,7 +576,7 @@ const DeepThinkingCard: React.FC<{ args: any }> = ({ args }) => {
     // create 时找到刚创建的 pad（最新的），list/view_log 时显示摘要
     const latestPad = pads.length > 0 ? pads[pads.length - 1] : null;
 
-    const pageLabels: Record<string, string> = { p1: 'P1 约束', p2: 'P2 广度', p3: 'P3 深度' };
+    const pageLabels: Record<string, string> = { p1: t('agentMessage.deepP1Constraint'), p2: t('agentMessage.deepP2Breadth'), p3: t('agentMessage.deepP3Depth') };
     const pageKeys: Record<string, 'p1_constraint' | 'p2_breadth' | 'p3_depth'> = {
         p1: 'p1_constraint', p2: 'p2_breadth', p3: 'p3_depth',
     };
@@ -580,7 +588,7 @@ const DeepThinkingCard: React.FC<{ args: any }> = ({ args }) => {
             <div className="mt-1 text-xs font-mono bg-[#0d1117] rounded-lg border border-amber-700/50 overflow-hidden">
                 <div className="px-3 py-2 bg-amber-900/20 text-amber-300 flex items-center gap-2">
                     <Brain size={12} className="text-amber-400" />
-                    <span>思考空间列表（{pads.length}个）</span>
+                    <span>{t('agentMessage.thinkSpaceList', { count: pads.length })}</span>
                 </div>
             </div>
         );
@@ -595,10 +603,10 @@ const DeepThinkingCard: React.FC<{ args: any }> = ({ args }) => {
             >
                 <Brain size={12} className="text-amber-400 shrink-0" />
                 <span className="text-amber-300 font-medium flex-1">
-                    {latestPad ? latestPad.title : '深度分析'}
+                    {latestPad ? latestPad.title : t('agentMessage.deepAnalysis')}
                 </span>
                 <span className="text-[10px] text-amber-400/60">
-                    {pads.length > 0 ? `${pads.length}个思考空间` : ''}
+                    {pads.length > 0 ? t('agentMessage.thinkSpaceCount', { count: pads.length }) : ''}
                 </span>
                 {isExpanded
                     ? <ChevronDown size={12} className="text-amber-400/60" />
@@ -629,14 +637,14 @@ const DeepThinkingCard: React.FC<{ args: any }> = ({ args }) => {
                     {/* 内容区 */}
                     <div className="p-3 max-h-80 overflow-y-auto">
                         <pre className="whitespace-pre-wrap text-gray-300 text-xs leading-relaxed font-sans">
-                            {activeContent || '（空白）'}
+                            {activeContent || t('agentMessage.blank')}
                         </pre>
                     </div>
 
                     {/* 编辑次数 */}
                     {latestPad.pages[pageKeys[activePage]].changelog.length > 0 && (
                         <div className="px-3 py-1.5 border-t border-gray-800 text-[10px] text-gray-500">
-                            {latestPad.pages[pageKeys[activePage]].changelog.length} 次编辑
+                            {t('agentMessage.editCount', { count: latestPad.pages[pageKeys[activePage]].changelog.length })}
                         </div>
                     )}
                 </div>
@@ -652,6 +660,7 @@ const isSubAgentTool = (name: string) => {
 };
 
 const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }> = ({ name, args, isDebugMode }) => {
+    const { t } = useTranslation();
     const { thinking, ...restArgs } = args || {};
     const summary = generateToolSummary(name, args);
     const files = useFileStore(state => state.files);
@@ -692,7 +701,7 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
                     <span className="font-medium flex-1">{summary.summary}</span>
                     {canOpenFile && (
                         <span className="text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded shrink-0">
-                            打开
+                            {t('agentMessage.open')}
                         </span>
                     )}
                 </div>
@@ -720,12 +729,11 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
                         <ChevronRight size={14} className={`text-purple-400 transition-transform ${isSubAgentExpanded ? 'rotate-90' : ''}`} />
                         <Cpu size={14} className="text-purple-400" />
                         <span className="font-medium text-purple-300 truncate flex-1">
-                            {name === 'processOutlineInput' ? '📝 大纲子Agent执行中...' :
-                             name === 'processOutlineInput' ? '📝 大纲子Agent执行中...' :
-                             `操作: ${summary.summary}`}
+                            {name === 'processOutlineInput' ? t('agentMessage.outlineSubAgentRunning') :
+                             t('agentMessage.operation', { summary: summary.summary })}
                         </span>
                         <span className="text-[10px] text-purple-400 bg-purple-900/50 px-1.5 py-0.5 rounded">
-                            {isSubAgentExpanded ? '收起' : '展开'}
+                            {isSubAgentExpanded ? t('agentMessage.collapse') : t('agentMessage.expand')}
                         </span>
                     </div>
                     {isSubAgentExpanded && content}
@@ -752,10 +760,10 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
             >
                 <div className="flex items-center gap-2">
                     <Wrench size={12} className="text-blue-400"/>
-                    <span>Agent 计划调用: {name}</span>
+                    <span>{t('agentMessage.agentPlanCall', { name })}</span>
                     {canOpenFile && (
                         <span className="text-[10px] text-blue-400 bg-blue-900/30 px-1.5 py-0.5 rounded">
-                            打开
+                            {t('agentMessage.open')}
                         </span>
                     )}
                 </div>
@@ -768,7 +776,7 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
                     <div className="flex items-start gap-2">
                         <Brain size={12} className="shrink-0 mt-0.5 text-blue-400 opacity-70" />
                         <div className="flex-1">
-                            <div className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide mb-1">思考</div>
+                            <div className="text-[10px] text-blue-400 font-semibold uppercase tracking-wide mb-1">{t('agentMessage.thinking')}</div>
                             <span className="opacity-90">{thinking}</span>
                         </div>
                     </div>
@@ -779,7 +787,7 @@ const ToolCallBlock: React.FC<{ name: string, args: any, isDebugMode: boolean }>
             <div className="p-3 text-gray-400 whitespace-pre-wrap overflow-x-auto select-text">
                  {Object.keys(restArgs).length > 0
                     ? JSON.stringify(restArgs, null, 2)
-                    : <span className="text-gray-600 italic">(无额外参数)</span>
+                    : <span className="text-gray-600 italic">{t('agentMessage.noExtraParams')}</span>
                  }
             </div>
         </div>
@@ -810,6 +818,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
     onRegenerate,
     onEditMessage
 }) => {
+  const { t } = useTranslation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -842,19 +851,19 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
     <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4 sm:space-y-6 bg-gray-900/95 overscroll-contain pb-24 sm:pb-20">
         {messages.length === 0 && (
         <div className="text-center text-gray-500 mt-10 text-sm px-4">
-            <p className="mb-2">👋 我是您的写作助手。</p>
-            <p>请告诉我您的目标，我会先创建计划。</p>
+            <p className="mb-2">{t('agentMessage.welcome')}</p>
+            <p>{t('agentMessage.welcomeHint')}</p>
             <button 
                 onClick={() => {
                     const input = document.querySelector('input[type="text"]') as HTMLInputElement;
                     if(input) {
-                        input.value = "帮我规划第一章的写作";
+                        input.value = t('agentMessage.defaultPrompt');
                         input.focus();
                     }
                 }}
                 className="mt-6 text-xs bg-gray-800 border border-gray-700 active:bg-gray-700 px-4 py-2 rounded-full transition-colors"
             >
-                试着说："帮我规划第一章的写作"
+                {t('agentMessage.suggestedPrompt')}{t('agentMessage.defaultPrompt')}
             </button>
         </div>
         )}
@@ -901,7 +910,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         <div key={msg.id} className="mx-4 my-2 p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-sm animate-in fade-in duration-300">
                             <div className="flex items-center gap-2 text-red-400 font-medium mb-1">
                                 <AlertOctagon size={14} />
-                                <span>工具执行失败</span>
+                                <span>{t('agentMessage.toolExecutionFailed')}</span>
                             </div>
                             <div className="text-red-300 text-xs font-mono whitespace-pre-wrap">{msg.text}</div>
                             {/* Intelligent Regenerate: If previous message was a Model Plan, retry that. Else retry self. */}
@@ -909,9 +918,9 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                 <button
                                     onClick={() => onRegenerate(prevMsg?.role === 'model' ? prevMsg.id : msg.id)}
                                     className="mt-2 p-1.5 text-xs text-red-400 hover:text-white flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
-                                    title="重试"
+                                    title={t('common.retry')}
                                 >
-                                    <RefreshCw size={12} /> <span>重试</span>
+                                    <RefreshCw size={12} /> <span>{t('common.retry')}</span>
                                 </button>
                             )}
                         </div>
@@ -933,9 +942,9 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                 <button
                                     onClick={() => onRegenerate(prevMsg?.role === 'model' ? prevMsg.id : msg.id)}
                                     className="p-1.5 text-xs text-gray-500 hover:text-red-400 flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
-                                    title="重新生成计划 (Retry Action)"
+                                    title={t('agentMessage.retryAction')}
                                 >
-                                    <RefreshCw size={12} /> <span className="text-[10px]">重试</span>
+                                    <RefreshCw size={12} /> <span className="text-[10px]">{t('common.retry')}</span>
                                 </button>
                             </div>
                         )}
@@ -956,8 +965,8 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                                 autoFocus
                             />
                             <div className="flex justify-end gap-3 mt-3">
-                                <button onClick={cancelEdit} className="px-4 py-2 text-sm text-gray-300 bg-gray-700 rounded-lg active:bg-gray-600">取消</button>
-                                <button onClick={() => saveEdit(msg.id)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg active:bg-blue-500 font-medium flex items-center gap-1"><Check size={16} /> 保存重试</button>
+                                <button onClick={cancelEdit} className="px-4 py-2 text-sm text-gray-300 bg-gray-700 rounded-lg active:bg-gray-600">{t('common.cancel')}</button>
+                                <button onClick={() => saveEdit(msg.id)} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg active:bg-blue-500 font-medium flex items-center gap-1"><Check size={16} /> {t('agentMessage.saveAndRetry')}</button>
                             </div>
                         </div>
                     </div>
@@ -986,7 +995,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     {/* Loop Count + Cache Hit Rate for Model Messages */}
                     {isModel && !!msg.metadata?.loopCount && (
                         <div className="text-[10px] text-gray-500 mb-1 px-1 font-mono flex items-center gap-2">
-                            <span>轮次 {String(msg.metadata.loopCount)}</span>
+                            <span>{t('agentMessage.loopCount', { count: String(msg.metadata.loopCount) })}</span>
                             {(() => {
                                 const usage = (msg.metadata?.apiMetadata as any)?.response?.usage;
                                 const cacheHit = usage?.cache_hit_tokens || 0;
@@ -1071,7 +1080,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                     {isDebugMode && !!msg.metadata?.apiMetadata && (
                         <APIInputView
                             apiMetadata={msg.metadata.apiMetadata as any}
-                            label="API 调用详情"
+                            label={t('agentMessage.apiCallDetails')}
                         />
                     )}
 
@@ -1086,7 +1095,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                             <button
                                 onClick={() => startEdit(msg)}
                                 className="p-2 text-gray-400 bg-gray-800/50 rounded-full hover:text-white hover:bg-gray-700 active:scale-95 transition-all backdrop-blur-sm"
-                                title="编辑并重新生成"
+                                title={t('agentMessage.editAndRegenerate')}
                             >
                                 <Edit2 size={14} />
                             </button>
@@ -1097,7 +1106,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                              <button
                                 onClick={() => onRegenerate(msg.id)}
                                 className="p-2 text-gray-400 bg-gray-800/50 rounded-full hover:text-white hover:bg-gray-700 active:scale-95 transition-all backdrop-blur-sm"
-                                title="重新生成此回复"
+                                title={t('agentMessage.regenerate')}
                              >
                                 <RefreshCw size={14} />
                              </button>
@@ -1115,7 +1124,7 @@ const AgentMessageList: React.FC<AgentMessageListProps> = ({
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></div>
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
                     </div>
-                    <div className="text-xs text-gray-500 mt-2 font-mono">Agent 思考中...</div>
+                    <div className="text-xs text-gray-500 mt-2 font-mono">{t('agentMessage.thinkingDot')}</div>
                 </div>
             </div>
         )}

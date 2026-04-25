@@ -4,6 +4,7 @@ import { AIConfig, AIProvider, OpenAIBackend, ModelRouteId, ModelRoute, ModelRou
 import { Cpu, Key, Globe, Box, Save, Hash, Shield, Plus, Trash2, Edit2, Check, AlertTriangle, Brain, Languages } from 'lucide-react';
 import { generateId } from '../services/fileSystem';
 import { useUiStore } from '../stores/uiStore';
+import { useTranslation } from 'react-i18next';
 
 interface AISettingsFormProps {
   config: AIConfig;
@@ -13,6 +14,7 @@ interface AISettingsFormProps {
 const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
   const language = useUiStore(state => state.language);
   const setLanguage = useUiStore(state => state.setLanguage);
+  const { t } = useTranslation();
   const [tempConfig, setTempConfig] = useState<AIConfig>(JSON.parse(JSON.stringify(config)));
   const [showKey, setShowKey] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -66,10 +68,10 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
 
   const handleDeleteBackend = () => {
       if (!tempConfig.openAIBackends || tempConfig.openAIBackends.length <= 1) {
-          alert("必须保留至少一个配置。");
+          alert(t('aiSettings.mustKeepOneConfig'));
           return;
       }
-      if (!confirm("确定删除此配置吗？")) return;
+      if (!confirm(t('aiSettings.confirmDeleteProvider'))) return;
 
       const newBackends = tempConfig.openAIBackends.filter(b => b.id !== tempConfig.activeOpenAIBackendId);
       setTempConfig(prev => ({
@@ -117,10 +119,10 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
      <div className="space-y-4 sm:space-y-6 animate-in slide-in-from-right-4 duration-200">
         <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4 mb-6">
             <h3 className="text-blue-300 font-bold flex items-center gap-2 mb-2">
-                <Cpu size={18}/> 模型配置
+                <Cpu size={18}/> {t('aiSettings.modelConfig')}
             </h3>
             <p className="text-xs text-blue-200/70">
-                支持 OpenAI 兼容格式，可连接 Google Gemini、DeepSeek、Moonshot、Ollama 等供应商。
+                {t('aiSettings.modelConfigDesc')}
             </p>
         </div>
 
@@ -132,7 +134,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                     {/* Provider Selector / Manager */}
                     <div className="flex flex-col sm:flex-row sm:items-end gap-3 mb-2">
                         <div className="flex-1">
-                            <label className="block text-xs font-medium text-blue-400 mb-1 uppercase tracking-wide">选择供应商</label>
+                            <label className="block text-xs font-medium text-blue-400 mb-1 uppercase tracking-wide">{t('aiSettings.selectProvider')}</label>
                             <div className="relative">
                                 <select
                                     value={activeBackend.id}
@@ -149,7 +151,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                         <button
                             onClick={handleAddBackend}
                             className="p-2.5 bg-gray-800 border border-gray-600 hover:bg-gray-700 active:bg-gray-600 text-blue-400 rounded-lg min-h-[44px] min-w-[44px] flex items-center justify-center"
-                            title="添加新供应商"
+                            title={t('aiSettings.addProvider')}
                         >
                             <Plus size={18} />
                         </button>
@@ -182,13 +184,13 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                 onClick={handleDeleteBackend}
                                 className="text-gray-500 hover:text-red-400 text-xs flex items-center gap-1 px-3 py-2 rounded hover:bg-red-900/20 active:bg-red-900/30 min-h-[44px]"
                             >
-                                <Trash2 size={14} /> 删除配置
+                                <Trash2 size={14} /> {t('aiSettings.deleteConfig')}
                             </button>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Globe size={16}/> Base URL
+                                <Globe size={16}/> {t('aiSettings.baseUrl')}
                             </label>
                             <input
                                 type="text"
@@ -201,7 +203,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Key size={16}/> API Key
+                                <Key size={16}/> {t('aiSettings.apiKey')}
                             </label>
                             <div className="relative">
                                 <input
@@ -215,14 +217,14 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                     onClick={() => setShowKey(!showKey)}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white active:text-white px-2 py-1 min-h-[44px] flex items-center justify-center"
                                 >
-                                    {showKey ? "隐藏" : "显示"}
+                                    {showKey ? t('aiSettings.hide') : t('aiSettings.show')}
                                 </button>
                             </div>
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Box size={16}/> Model Name
+                                <Box size={16}/> {t('aiSettings.modelName')}
                             </label>
                             <input
                                 type="text"
@@ -236,7 +238,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                         {/* Max Output Tokens */}
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Hash size={16}/> Max Output Tokens
+                                <Hash size={16}/> {t('aiSettings.maxOutputTokens')}
                             </label>
                             <input
                                 type="number"
@@ -246,7 +248,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                 className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
                             />
                             <p className="text-xs text-gray-500 mt-2">
-                                控制单次回复的最大长度。推荐: 8192。
+                                {t('aiSettings.maxOutputTokensHint')}
                             </p>
                         </div>
 
@@ -255,7 +257,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             <div className="flex items-center justify-between mb-2">
                                 <label className="text-sm font-medium text-gray-300 flex items-center gap-2">
                                     <Brain size={16} className="text-amber-400" />
-                                    思考模式
+                                    {t('aiSettings.thinkingMode')}
                                 </label>
                                 <button
                                     onClick={() => updateActiveBackend({ thinkingEnabled: !activeBackend.thinkingEnabled })}
@@ -271,22 +273,22 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                 </button>
                             </div>
                             <p className="text-xs text-gray-500 mb-3">
-                                启用后模型会在回复前进行深度思考（产生 reasoning_content）。仅部分模型支持。
+                                {t('aiSettings.thinkingModeDesc')}
                             </p>
                             {activeBackend.thinkingEnabled && (
                                 <div className="animate-in fade-in slide-in-from-top-2">
                                     <label className="block text-xs font-medium text-amber-400/80 mb-1.5">
-                                        Thinking Budget (tokens)
+                                        {t('aiSettings.thinkingBudgetLabel')}
                                     </label>
                                     <input
                                         type="number"
                                         value={activeBackend.thinkingBudgetTokens || ''}
                                         onChange={e => updateActiveBackend({ thinkingBudgetTokens: parseInt(e.target.value) || undefined })}
-                                        placeholder="例如: 32000"
+                                        placeholder={t('aiSettings.thinkingBudgetPlaceholder')}
                                         className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2.5 text-white focus:border-amber-500 focus:outline-none font-mono text-sm"
                                     />
                                     <p className="text-xs text-gray-600 mt-1.5">
-                                        限制模型在思考阶段消耗的最大 tokens。留空表示不限制。
+                                        {t('aiSettings.thinkingBudgetHint')}
                                     </p>
                                 </div>
                             )}
@@ -299,10 +301,10 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
             <div className="animate-in fade-in">
                 <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
                     <Shield size={16}/>
-                    Safety Setting
+                    {t('aiSettings.safetySettingLabel')}
                     {!isGeminiModel && (
                         <span className="text-[10px] text-yellow-500 bg-yellow-900/30 px-2 py-0.5 rounded border border-yellow-800 ml-auto flex items-center gap-1">
-                            <AlertTriangle size={10} /> 仅 Gemini 有效
+                            <AlertTriangle size={10} /> {t('aiSettings.geminiOnly')}
                         </span>
                     )}
                 </label>
@@ -312,14 +314,14 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                         onChange={e => setTempConfig({...tempConfig, safetySetting: e.target.value})}
                         className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none text-sm appearance-none"
                     >
-                        <option value="BLOCK_NONE">创意模式 / 无过滤 (BLOCK_NONE)</option>
-                        <option value="BLOCK_ONLY_HIGH">标准模式 (BLOCK_ONLY_HIGH)</option>
-                        <option value="BLOCK_MEDIUM_AND_ABOVE">严格模式 (BLOCK_MEDIUM_AND_ABOVE)</option>
+                        <option value="BLOCK_NONE">{t('aiSettings.safetyCreative')}</option>
+                        <option value="BLOCK_ONLY_HIGH">{t('aiSettings.safetyStandard')}</option>
+                        <option value="BLOCK_MEDIUM_AND_ABOVE">{t('aiSettings.safetyStrict')}</option>
                     </select>
                     <p className="text-xs text-gray-500 mt-2">
                         {isGeminiModel
-                            ? "控制 Gemini 模型对敏感内容的过滤阈值。"
-                            : "仅当使用 Gemini 模型时生效。其他模型（如 GPT-4、DeepSeek）会自动忽略此参数。"}
+                            ? t('aiSettings.safetyHintGemini')
+                            : t('aiSettings.safetyHintOther')}
                     </p>
                 </div>
             </div>
@@ -328,32 +330,21 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
             <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
                 <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
                     <Languages size={16} className="text-cyan-400" />
-                    {language === 'zh' ? '界面语言 / Language' : 'Language / 界面语言'}
+                    {t('aiSettings.language')}
                 </h4>
                 <p className="text-xs text-gray-500 mb-4">
-                    {language === 'zh' ? '选择界面显示语言。切换后立即生效。' : 'Select the display language. Changes take effect immediately.'}
+                    {t('aiSettings.languageDesc')}
                 </p>
-                <div className="flex gap-3">
-                    <button
-                        onClick={() => setLanguage('zh')}
-                        className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                            language === 'zh'
-                                ? 'bg-blue-600 border-blue-500 text-white'
-                                : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
-                        }`}
+                <div className="relative">
+                    <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value as 'zh' | 'en')}
+                        className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none appearance-none"
                     >
-                        中文
-                    </button>
-                    <button
-                        onClick={() => setLanguage('en')}
-                        className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
-                            language === 'en'
-                                ? 'bg-blue-600 border-blue-500 text-white'
-                                : 'bg-gray-900 border-gray-700 text-gray-400 hover:text-white hover:border-gray-500'
-                        }`}
-                    >
-                        English
-                    </button>
+                        <option value="zh">{t('aiSettings.langZh')}</option>
+                        <option value="en">{t('aiSettings.langEn')}</option>
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▼</div>
                 </div>
             </div>
 
@@ -361,16 +352,16 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
             <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
                 <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-3">
                     <Brain size={16} className="text-purple-400" />
-                    自动提取开关
+                    {t('aiSettings.autoExtraction')}
                 </h4>
                 <p className="text-xs text-gray-500 mb-4">
-                    控制知识图谱的自动提取行为。关闭后仍可手动触发提取。
+                    {t('aiSettings.autoExtractionDesc')}
                 </p>
                 <div className="space-y-3">
                     {([
-                        { key: 'conversation' as const, label: '对话自动提取', desc: '从用户对话中自动提取知识沉淀到知识图谱' },
-                        { key: 'document' as const, label: '文档自动提取', desc: '保存文档时自动提取知识（设定、规则等）' },
-                        { key: 'chapterAnalysis' as const, label: '章节自动分析', desc: 'AI 创建/修改正文草稿后自动分析角色与剧情' },
+                        { key: 'conversation' as const, label: t('aiSettings.conversationExtract'), desc: t('aiSettings.conversationExtractDesc') },
+                        { key: 'document' as const, label: t('aiSettings.documentExtract'), desc: t('aiSettings.documentExtractDesc') },
+                        { key: 'chapterAnalysis' as const, label: t('aiSettings.chapterAnalysis'), desc: t('aiSettings.chapterAnalysisDesc') },
                     ]).map(item => {
                         const enabled = tempConfig.autoExtraction?.[item.key] !== false;
                         return (
@@ -408,18 +399,18 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
             <div className="bg-gray-800/30 p-4 rounded-xl border border-gray-700">
                 <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
                     <Cpu size={16} className="text-amber-400" />
-                    模型路由
+                    {t('aiSettings.modelRoutes')}
                 </h4>
                 <p className="text-xs text-gray-500 mb-4">
-                    不同类型的任务可使用不同供应商/模型。留空表示使用当前活跃供应商。
+                    {t('aiSettings.modelRoutesDesc')}
                 </p>
                 <div className="space-y-3">
                     {([
-                        { id: 'main' as ModelRouteId, label: '主对话', desc: '核心对话引擎' },
-                        { id: 'polish' as ModelRouteId, label: '润色', desc: '文本润色/项目设定补全' },
-                        { id: 'outline' as ModelRouteId, label: '大纲', desc: '时间线/大纲构建' },
-                        { id: 'extraction' as ModelRouteId, label: '提取', desc: '知识图谱/章节分析/角色提取' },
-                        { id: 'subAgent' as ModelRouteId, label: '子Agent', desc: '其他子Agent任务' },
+                        { id: 'main' as ModelRouteId, label: t('aiSettings.routeMain'), desc: t('aiSettings.routeMainDesc') },
+                        { id: 'polish' as ModelRouteId, label: t('aiSettings.routePolish'), desc: t('aiSettings.routePolishDesc') },
+                        { id: 'outline' as ModelRouteId, label: t('aiSettings.routeOutline'), desc: t('aiSettings.routeOutlineDesc') },
+                        { id: 'extraction' as ModelRouteId, label: t('aiSettings.routeExtraction'), desc: t('aiSettings.routeExtractionDesc') },
+                        { id: 'subAgent' as ModelRouteId, label: t('aiSettings.routeSubAgent'), desc: t('aiSettings.routeSubAgentDesc') },
                     ]).map(route => {
                         const current = tempConfig.modelRoutes?.[route.id];
                         return (
@@ -434,7 +425,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                         onChange={e => updateModelRoute(route.id, { backendId: e.target.value || undefined })}
                                         className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:border-blue-500 focus:outline-none appearance-none"
                                     >
-                                        <option value="">活跃供应商</option>
+                                        <option value="">{t('aiSettings.activeProvider')}</option>
                                         {tempConfig.openAIBackends?.map(b => (
                                             <option key={b.id} value={b.id}>{b.name}</option>
                                         ))}
@@ -443,7 +434,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                                         type="text"
                                         value={current?.modelName || ''}
                                         onChange={e => updateModelRoute(route.id, { modelName: e.target.value || undefined })}
-                                        placeholder="默认模型"
+                                        placeholder={t('aiSettings.defaultModel')}
                                         className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:border-blue-500 focus:outline-none font-mono"
                                     />
                                 </div>
@@ -460,7 +451,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                 className="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-blue-900/30 min-h-[44px] w-full sm:w-auto justify-center"
             >
                 <Save size={18} />
-                保存并应用配置
+                {t('aiSettings.saveAndApply')}
             </button>
         </div>
      </div>

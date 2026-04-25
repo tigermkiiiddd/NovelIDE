@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, Suspense, lazy } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileNode } from '../types';
 import { Menu, MessageSquare, PanelLeftClose, PanelLeftOpen, BrainCircuit, HelpCircle, Zap, HeartHandshake } from 'lucide-react';
 import ErrorBoundary from './ErrorBoundary';
@@ -32,6 +33,7 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
+  const { t } = useTranslation();
   // --- UI Store (Persisted State) ---
   const {
       isSidebarOpen,
@@ -123,13 +125,13 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           // 后台重建文件 embedding 索引（非阻塞，慢慢执行）
           import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
             import('../stores/toastStore').then(({ toast }) => {
-              toast.info('正在构建搜索索引…', undefined, 10000);
+              toast.info(t('mainLayout.buildingSearchIndex'), undefined, 10000);
               const files = useFileStore.getState().files;
               indexFilesForSearch(files, projectId).then(count => {
-                toast.success(`搜索索引就绪（${count} 个文件）`);
+                toast.success(t('mainLayout.searchIndexReady', { count }));
               }).catch(err => {
                 console.error('[Embedding] 后台索引失败:', err);
-                toast.warning('搜索索引构建失败，搜索功能可能降级');
+                toast.warning(t('mainLayout.searchIndexFailed'));
               });
             });
           });
@@ -296,7 +298,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
             <button
               onClick={handleOpenTutorial}
               className="p-1 text-gray-400 active:text-white"
-              title="新手指南"
+              title={t('common.tutorial')}
             >
               <HelpCircle size={20} />
             </button>
@@ -325,14 +327,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isKnowledgeGraphOpen ? 'bg-purple-600/20 text-purple-400' : 'text-gray-400 hover:text-white'}`}
                  >
                     <BrainCircuit size={14} />
-                    知识图谱
+                    {t("mainLayout.knowledgeGraph")}
                  </button>
                  <button
                     onClick={() => setIsRelationshipViewOpen(!isRelationshipViewOpen)}
                     className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${isRelationshipViewOpen ? 'bg-pink-600/20 text-pink-400' : 'text-gray-400 hover:text-white'}`}
                  >
                     <HeartHandshake size={14} />
-                    人际关系
+                    {t("mainLayout.relationships")}
                  </button>
                  <button
                     onClick={toggleChat}

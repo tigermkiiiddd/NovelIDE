@@ -148,6 +148,9 @@ export const useUiStore = create<UiState>()(
           console.error('[UiStore] Hydration error:', error);
         } else {
           console.log('[UiStore] Hydration complete, hasSeenTutorial:', state?.hasSeenTutorial);
+          if (state?.language) {
+            i18n.changeLanguage(state.language);
+          }
         }
       }
     }

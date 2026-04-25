@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ErrorFallbackProps {
   error: Error;
@@ -6,6 +7,7 @@ interface ErrorFallbackProps {
 }
 
 function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
+  const { t } = useTranslation();
   return (
     <div style={{
       padding: '24px',
@@ -17,11 +19,11 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
       fontFamily: 'sans-serif',
     }}>
       <h3 style={{ margin: '0 0 12px 0', color: '#ff4d4f' }}>
-        页面出现错误
+        {t('errorBoundary.title')}
       </h3>
       <details style={{ marginBottom: '16px', whiteSpace: 'pre-wrap' }}>
         <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>
-          错误详情
+          {t('errorBoundary.details')}
         </summary>
         <code style={{ fontSize: '12px' }}>{error.message}</code>
         {error.stack && (
@@ -47,7 +49,7 @@ function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
           backgroundColor: '#fff',
         }}
       >
-        重试
+        {t('errorBoundary.retry')}
       </button>
     </div>
   );

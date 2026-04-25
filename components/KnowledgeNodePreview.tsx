@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Trash2,
   Globe,
@@ -30,44 +31,39 @@ import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 
 const CATEGORY_CONFIG: Record<
   KnowledgeCategory,
-  { icon: React.ReactNode; color: string; bgColor: string; label: string }
+  { icon: React.ReactNode; color: string; bgColor: string }
 > = {
   '设定': {
     icon: <Globe className="w-4 h-4" />,
     color: 'text-blue-400',
     bgColor: 'bg-blue-900/30',
-    label: '设定',
   },
   '规则': {
     icon: <BookOpen className="w-4 h-4" />,
     color: 'text-amber-400',
     bgColor: 'bg-amber-900/30',
-    label: '规则',
   },
   '禁止': {
     icon: <AlertTriangle className="w-4 h-4" />,
     color: 'text-red-400',
     bgColor: 'bg-red-900/30',
-    label: '禁止',
   },
   '风格': {
     icon: <PenTool className="w-4 h-4" />,
     color: 'text-purple-400',
     bgColor: 'bg-purple-900/30',
-    label: '风格',
   },
   '用户偏好': {
     icon: <User className="w-4 h-4" />,
     color: 'text-green-400',
     bgColor: 'bg-green-900/30',
-    label: '用户偏好',
   },
 };
 
 const IMPORTANCE_OPTIONS = [
-  { value: 'critical', label: '关键', color: 'text-red-400', bgColor: 'bg-red-900/30' },
-  { value: 'important', label: '重要', color: 'text-amber-400', bgColor: 'bg-amber-900/30' },
-  { value: 'normal', label: '普通', color: 'text-gray-400', bgColor: 'bg-gray-700/50' },
+  { value: 'critical', labelKey: 'knowledge.priority.critical', color: 'text-red-400', bgColor: 'bg-red-900/30' },
+  { value: 'important', labelKey: 'knowledge.priority.important', color: 'text-amber-400', bgColor: 'bg-amber-900/30' },
+  { value: 'normal', labelKey: 'knowledge.priority.normal', color: 'text-gray-400', bgColor: 'bg-gray-700/50' },
 ] as const;
 
 // ============================================
@@ -86,7 +82,7 @@ interface EditableTextProps {
 const EditableText: React.FC<EditableTextProps> = ({
   value,
   onChange,
-  placeholder = '点击输入...',
+  placeholder = '',
   className = '',
   multiline = false,
   maxLength,
@@ -145,6 +141,7 @@ interface Props {
 }
 
 export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete, onAdd }) => {
+  const { t, i18n } = useTranslation();
   const store = useKnowledgeGraphStore();
   const { availableSubCategories, getNodeDynamicState } = store;
 
@@ -250,14 +247,14 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
       <div className="h-full flex items-center justify-center text-gray-500 bg-gray-900">
         <div className="text-center">
           <div className="text-5xl mb-4">📚</div>
-          <p className="text-lg mb-4">选择一个知识节点查看详情</p>
+          <p className="text-lg mb-4">{t('knowledge.emptyState.selectNode')}</p>
           {onAdd && (
             <button
               onClick={onAdd}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded mx-auto"
             >
               <Plus className="w-4 h-4" />
-              添加知识
+              {t('knowledge.addTitle')}
             </button>
           )}
         </div>
@@ -272,7 +269,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
   const subCategories = availableSubCategories[currentCategory] || DEFAULT_SUB_CATEGORIES[currentCategory];
 
   const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString('zh-CN', {
+    return new Date(timestamp).toLocaleString(i18n.language, {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
@@ -297,7 +294,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
             className="bg-gray-800 border border-gray-600 rounded px-2 py-0.5 text-sm focus:border-blue-500 focus:outline-none hover:border-gray-500"
           >
             {(Object.keys(CATEGORY_CONFIG) as KnowledgeCategory[]).map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
+              <option key={cat} value={cat}>{t(`knowledge.categories.${cat}`)}</option>
             ))}
           </select>
           <ChevronRight className="w-3 h-3" />
@@ -323,7 +320,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         {node.wing && (
           <div className="flex items-center gap-1.5 mt-1.5">
             <span className="text-xs px-1.5 py-0.5 bg-blue-900/40 text-blue-300 rounded">
-              {WING_LABELS[node.wing as KnowledgeWing]}
+              {t(`knowledge.wings.${node.wing as KnowledgeWing}`)}
             </span>
             {node.room && (
               <>
@@ -340,7 +337,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         <EditableText
           value={localData.name || ''}
           onChange={(v) => handleChange('name', v)}
-          placeholder="节点名称"
+          placeholder={t('knowledge.placeholders.nodeName')}
           maxLength={20}
           className="text-xl font-semibold"
         />
@@ -350,22 +347,22 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
       <div className="flex-1 overflow-auto p-4 space-y-4">
         {/* 摘要 */}
         <div className="bg-gray-800/50 rounded p-3">
-          <label className="text-xs font-medium text-gray-500 block mb-1">摘要</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">{t('knowledge.labels.summary')}</label>
           <EditableText
             value={localData.summary || ''}
             onChange={(v) => handleChange('summary', v)}
-            placeholder="一句话概括..."
+            placeholder={t('knowledge.placeholders.summaryShort')}
             maxLength={50}
           />
         </div>
 
         {/* 详情 */}
         <div className="bg-gray-800/50 rounded p-3">
-          <label className="text-xs font-medium text-gray-500 block mb-1">详情（≤300字）</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">{t('knowledge.labels.detail300')}</label>
           <EditableText
             value={localData.detail || ''}
             onChange={(v) => handleChange('detail', v)}
-            placeholder="详细说明..."
+            placeholder={t('knowledge.placeholders.detailDesc')}
             multiline
             maxLength={300}
           />
@@ -374,7 +371,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         {/* 附件 */}
         <div className="bg-gray-800/50 rounded p-3">
           <label className="text-xs font-medium text-gray-500 block mb-2">
-            📎 附件
+            {t('knowledge.labels.attachments')}
           </label>
           {node.attachments && node.attachments.length > 0 ? (
             <div className="space-y-2">
@@ -391,7 +388,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
               ))}
             </div>
           ) : (
-            <div className="text-xs text-gray-500 italic">暂无附件</div>
+            <div className="text-xs text-gray-500 italic">{t('knowledge.noAttachments')}</div>
           )}
         </div>
 
@@ -399,7 +396,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         <div>
           <label className="text-xs font-medium text-gray-500 block mb-2">
             <Tag className="w-3 h-3 inline mr-1" />
-            标签
+            {t('knowledge.labels.tags')}
           </label>
           <div className="flex flex-wrap gap-2 mb-2">
             {(localData.tags || []).map((tag: string) => (
@@ -419,7 +416,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
           </div>
           <input
             type="text"
-            placeholder="输入标签后按回车添加..."
+            placeholder={t('knowledge.placeholders.tagInput')}
             className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -434,7 +431,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         <div>
           <label className="text-xs font-medium text-gray-500 block mb-2">
             <Star className="w-3 h-3 inline mr-1" />
-            重要度
+            {t('knowledge.labels.importance')}
           </label>
           <div className="flex gap-2">
             {IMPORTANCE_OPTIONS.map((opt) => (
@@ -447,7 +444,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
                     : 'bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600'
                 }`}
               >
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
@@ -457,32 +454,32 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
         <div className="bg-gray-800/30 rounded p-3">
           <label className="text-xs font-medium text-gray-500 block mb-2">
             <Clock className="w-3 h-3 inline mr-1" />
-            元数据
+            {t('knowledge.labels.metadata')}
           </label>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-500">创建时间</span>
+              <span className="text-gray-500">{t('knowledge.metadata.createdAt')}</span>
               <span className="text-gray-400">{formatDate(node.createdAt)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-500">更新时间</span>
+              <span className="text-gray-500">{t('knowledge.metadata.updatedAt')}</span>
               <span className="text-gray-400">{formatDate(node.updatedAt)}</span>
             </div>
             {node.metadata && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">激活度</span>
+                  <span className="text-gray-500">{t('knowledge.metadata.activation')}</span>
                   <span className="text-gray-400 flex items-center gap-1">
                     <Zap className="w-3 h-3 text-amber-400" />
                     {dynamicState ? (dynamicState.activation * 100).toFixed(0) + '%' : '100%'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">强度</span>
+                  <span className="text-gray-500">{t('knowledge.metadata.strength')}</span>
                   <span className="text-gray-400">{dynamicState ? (dynamicState.strength * 100).toFixed(0) + '%' : '100%'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">访问次数</span>
+                  <span className="text-gray-500">{t('knowledge.metadata.visitCount')}</span>
                   <span className="text-gray-400">{node.metadata.recallCount || 0}</span>
                 </div>
               </>
@@ -498,7 +495,7 @@ export const KnowledgeNodePreview: React.FC<Props> = ({ node, onUpdate, onDelete
           className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 rounded text-sm w-full justify-center"
         >
           <Trash2 className="w-4 h-4" />
-          删除此节点
+          {t('knowledge.buttons.deleteNode')}
         </button>
       </div>
     </div>

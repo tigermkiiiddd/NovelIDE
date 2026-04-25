@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   X, Check, XCircle, Send, MessageSquare, Plus, Trash2, Edit2,
   Clock, FileText, AlertCircle, CheckCircle2, ArrowLeft
@@ -53,6 +54,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
+  const { t } = useTranslation();
 
   if (!isOpen) return null;
 
@@ -64,10 +66,10 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
   };
 
   const statusLabels = {
-    draft: '等待审批',
-    reviewing: '审批中',
-    approved: '已批准',
-    rejected: '需修改'
+    draft: t('planNote.statusPending'),
+    reviewing: t('planNote.statusReviewing'),
+    approved: t('planNote.statusApproved'),
+    rejected: t('planNote.statusRevision')
   };
 
   const statusIcons = {
@@ -141,7 +143,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
             </button>
             <div className="flex items-center gap-2">
               <FileText className="text-purple-400" size={20} />
-              <h2 className="text-base font-semibold text-gray-100">Plan 笔记本</h2>
+              <h2 className="text-base font-semibold text-gray-100">{t('planNote.title')}</h2>
             </div>
           </div>
         </div>
@@ -149,8 +151,8 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-gray-500 py-12">
             <FileText size={48} className="mx-auto mb-4 opacity-50" />
-            <p className="text-lg">暂无 Plan 笔记本</p>
-            <p className="text-sm mt-2">开启 Plan 模式后，AI 会在这里记录思考内容</p>
+            <p className="text-lg">{t('planNote.empty')}</p>
+            <p className="text-sm mt-2">{t('planNote.emptyHint', { defaultValue: '' })}</p>
           </div>
         </div>
       </div>
@@ -180,7 +182,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
           </span>
         </div>
         <div className="text-xs text-gray-500">
-          更新于 {new Date(planNote.updatedAt).toLocaleString('zh-CN')}
+          {new Date(planNote.updatedAt).toLocaleString('zh-CN')}
         </div>
       </div>
 
@@ -189,8 +191,8 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
         {sortedLines.length === 0 ? (
           <div className="text-center text-gray-500 py-12">
             <FileText size={48} className="mx-auto mb-4 opacity-50" />
-            <p>Plan 笔记本为空</p>
-            <p className="text-sm mt-2">等待 AI 记录思考内容...</p>
+            <p>{t('planNote.emptyContent')}</p>
+            <p className="text-sm mt-2">{t('planNote.waitingAI')}</p>
           </div>
         ) : (
           sortedLines.map((line, index) => {
@@ -209,7 +211,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
                   <p className="flex-1 text-gray-200 whitespace-pre-wrap leading-relaxed">{line.text}</p>
                   <button
                     className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-gray-700 rounded text-gray-500 hover:text-blue-400 transition-all shrink-0"
-                    title="添加注释"
+                    title={t('planNote.addAnnotation')}
                   >
                     <MessageSquare size={16} />
                   </button>
@@ -221,7 +223,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
                     <textarea
                       value={annotationText}
                       onChange={(e) => setAnnotationText(e.target.value)}
-                      placeholder="输入您的注释..."
+                      placeholder={t('planNote.annotationPlaceholder')}
                       className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
                       rows={2}
                       autoFocus
@@ -234,14 +236,14 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
                         }}
                         className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
                       >
-                        取消
+                        {t('common.cancel')}
                       </button>
                       <button
                         onClick={() => handleAddAnnotation(line.id)}
                         disabled={!annotationText.trim()}
                         className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        添加注释
+                        {t('planNote.addAnnotation')}
                       </button>
                     </div>
                   </div>
@@ -272,13 +274,13 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
                                 }}
                                 className="px-2 py-1 text-xs text-gray-400 hover:text-white"
                               >
-                                取消
+                                {t('common.cancel')}
                               </button>
                               <button
                                 onClick={() => handleUpdateAnnotation(annotation.id)}
                                 className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500"
                               >
-                                保存
+                                {t('planNote.save')}
                               </button>
                             </div>
                           </div>
@@ -323,12 +325,12 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
       {showFeedbackInput && (
         <div className="px-4 py-4 bg-gray-900 border-t border-gray-700 shrink-0">
           <label className="block text-sm text-gray-400 mb-2">
-            请输入修改意见（将发送给 AI 重新规划）：
+            {t('planNote.feedbackPlaceholder')}：
           </label>
           <textarea
             value={feedbackText}
             onChange={(e) => setFeedbackText(e.target.value)}
-            placeholder="例如：第一章的情节需要更多冲突..."
+            placeholder="{t('planNote.feedbackPlaceholder')}"
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none"
             rows={3}
             autoFocus
@@ -341,7 +343,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
               }}
               className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
             >
-              取消
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleSendReworkFeedback}
@@ -349,7 +351,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
               className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Send size={16} />
-              发送修改意见
+              {t('planNote.sendFeedback')}
             </button>
           </div>
         </div>
@@ -361,7 +363,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
           {planNote.annotations.length > 0 && (
             <span className="inline-flex items-center gap-1">
               <MessageSquare size={14} />
-              {planNote.annotations.length} 条注释
+              {t('planNote.annotationCount', { count: planNote.annotations.length })}
             </span>
           )}
         </div>
@@ -374,14 +376,14 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 transition-colors"
               >
                 <Edit2 size={16} />
-                返工修改
+                {t('planNote.rework')}
               </button>
               <button
                 onClick={handleApprove}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors"
               >
                 <Check size={16} />
-                同意并执行
+                {t('planNote.approveAndExecute')}
               </button>
             </>
           )}
@@ -393,14 +395,14 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-gray-700 text-gray-200 rounded-lg hover:bg-gray-600 transition-colors"
               >
                 <Edit2 size={16} />
-                返工修改
+                {t('planNote.rework')}
               </button>
               <button
                 onClick={handleApprove}
                 className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-500 transition-colors"
               >
                 <Check size={16} />
-                同意并执行
+                {t('planNote.approveAndExecute')}
               </button>
             </>
           )}
@@ -408,7 +410,7 @@ const PlanNoteViewer: React.FC<PlanNoteViewerProps> = ({
           {planNote.status === 'approved' && (
             <span className="inline-flex items-center gap-2 px-4 py-2 text-sm text-green-400">
               <CheckCircle2 size={16} />
-              已批准执行
+              {t('planNote.approved')}
             </span>
           )}
         </div>

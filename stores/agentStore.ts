@@ -11,6 +11,7 @@ import {
 import { dbAPI } from '../services/persistence';
 import { generateId } from '../services/fileSystem';
 import { useSkillTriggerStore } from './skillTriggerStore';
+import i18n from '../i18n';
 
 // 简单的 debounce 工具函数
 const debounce = <T extends (...args: any[]) => any>(
@@ -199,7 +200,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           }
       },
 
-      createSession: (projectId: string, initialTitle = '新会话') => {
+      createSession: (projectId: string, initialTitle = i18n.t('storeMessages.newSession')) => {
         const currentSessions: ChatSession[] = get().sessions || [];
         const newSession: ChatSession = {
           id: generateId(),

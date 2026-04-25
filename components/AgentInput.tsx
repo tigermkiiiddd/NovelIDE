@@ -1,8 +1,10 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Send, FileText, Folder, Square, Sparkles, Brain } from 'lucide-react';
 import { FileNode, FileType } from '../types';
 import { getNodePath } from '../services/fileSystem';
+import { getNodeDisplayName } from '../utils/displayUtils';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useMemoryStackStore } from '../stores/memoryStackStore';
@@ -55,6 +57,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const [memoryExpanded, setMemoryExpanded] = useState(false);
+  const { t } = useTranslation();
 
   // 获取当前激活的技能（订阅 records 变化）
   const records = useSkillTriggerStore(state => state.records);
@@ -287,12 +290,12 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                   }}
                 >
                     <div className="p-3 bg-gray-850 text-xs text-gray-500 border-b border-gray-700 font-medium flex items-center justify-between rounded-t-xl">
-                        <span>选择文件引用</span>
+                        <span>{t('agentInput.selectFileRef')}</span>
                         <button
                           onClick={() => setShowMentionList(false)}
                           className="text-gray-400 hover:text-white"
                         >
-                          关闭
+                          {t('common.close')}
                         </button>
                     </div>
                     <ul className="overflow-y-auto p-2">
@@ -308,7 +311,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                                 >
                                     <div className="flex items-center gap-2 truncate">
                                         {file.type === FileType.FOLDER ? <Folder size={14} className="text-yellow-500" /> : <FileText size={14} className="text-blue-400" />}
-                                        <span className="truncate font-medium">{file.name}</span>
+                                        <span className="truncate font-medium">{getNodeDisplayName(file)}</span>
                                     </div>
                                     <span className={`text-xs ml-4 truncate max-w-[40%] ${index === mentionIndex ? 'text-blue-200' : 'text-gray-500'}`}>
                                         {fullPath}
@@ -322,7 +325,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                 /* Desktop: popup above input */
                 <div className="absolute bottom-full left-4 right-4 mb-2 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl overflow-hidden z-50 max-h-60 flex flex-col">
                     <div className="p-2 bg-gray-850 text-xs text-gray-500 border-b border-gray-700 font-medium">
-                        选择文件引用 (使用 ↑↓ Enter)
+                        {t('agentInput.selectFileRefDesktop')}
                     </div>
                     <ul className="overflow-y-auto">
                         {filteredFiles.map((file, index) => {
@@ -337,7 +340,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                                 >
                                     <div className="flex items-center gap-2 truncate">
                                         {file.type === FileType.FOLDER ? <Folder size={14} className="text-yellow-500" /> : <FileText size={14} className="text-blue-400 group-hover:text-blue-300" />}
-                                        <span className="truncate font-medium">{file.name}</span>
+                                        <span className="truncate font-medium">{getNodeDisplayName(file)}</span>
                                     </div>
                                     <span className={`text-xs ml-4 truncate max-w-[40%] ${index === mentionIndex ? 'text-blue-200' : 'text-gray-500'}`}>
                                         {fullPath}
@@ -356,19 +359,19 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
             <div className="mb-2 flex items-center gap-2 flex-wrap">
                 <span className="text-xs text-gray-400 flex items-center gap-1">
                     <Sparkles size={12} className="text-yellow-400" />
-                    当前已激活技能：
+                    {t('agentInput.activeSkills')}
                 </span>
                 {activeSkills.map(skill => (
                     <span
                         key={skill.skillId}
                         className="text-xs px-2 py-0.5 pr-1 bg-yellow-500/20 text-yellow-300 rounded-full border border-yellow-500/30 flex items-center gap-1"
-                        title={`命中词：${skill.matchText}`}
+                        title={t('agentInput.matchKeyword', { text: skill.matchText })}
                     >
                         <span>{skill.name.replace(/\s*\(.*?\)\s*$/, '')}</span>
                         <button
                             onClick={() => useSkillTriggerStore.getState().removeSkill(skill.skillId)}
                             className="ml-1 text-yellow-300/60 hover:text-yellow-300 leading-none"
-                            title="关闭"
+                            title={t('common.close')}
                         >×</button>
                     </span>
                 ))}
@@ -383,9 +386,9 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                     className="text-xs text-gray-400 flex items-center gap-1 hover:text-gray-300 transition-colors"
                 >
                     <Brain size={12} className="text-cyan-400" />
-                    记忆：{knowledgeState.residentDisplay.length + knowledgeState.recalledDisplay.length} 条
+                    {t('agentInput.memoryCount', { count: knowledgeState.residentDisplay.length + knowledgeState.recalledDisplay.length })}
                     {knowledgeState.activeFiles.length > 0 && (
-                      <span className="text-gray-500">· 文档：{knowledgeState.activeFiles.length} 个</span>
+                      <span className="text-gray-500">· {t('agentInput.docCount', { count: knowledgeState.activeFiles.length })}</span>
                     )}
                     <span className={`transition-transform ${memoryExpanded ? 'rotate-90' : ''}`}>▸</span>
                 </button>
@@ -400,7 +403,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                                 <button
                                     onClick={() => useAgentStore.getState().addHiddenKnowledgeNode(node.id)}
                                     className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
-                                    title="本次对话隐藏"
+                                    title={t('agentInput.hideThisConversation')}
                                 >×</button>
                             </span>
                         ))}
@@ -413,7 +416,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                                 <button
                                     onClick={() => useAgentStore.getState().removeRecalledKnowledgeNode(node.id)}
                                     className="ml-1 text-cyan-300/60 hover:text-cyan-300 leading-none"
-                                    title="关闭"
+                                    title={t('common.close')}
                                 >×</button>
                             </span>
                         ))}
@@ -442,7 +445,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder={isLoading ? "正在生成中..." : "输入 @ 引用文件... (Ctrl+Enter 发送)"}
+            placeholder={isLoading ? t('agentInput.placeholderGenerating') : t('agentInput.placeholder')}
             className="flex-1 bg-gray-900 text-white placeholder-gray-500 border border-gray-600 rounded-xl px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm disabled:opacity-70 resize-none overflow-y-auto min-h-[40px] max-h-[200px]"
             autoComplete="off"
             disabled={isLoading}
@@ -453,7 +456,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                 type="button"
                 onClick={onStop}
                 className="p-2 mb-0.5 bg-red-600 text-white rounded-full hover:bg-red-500 transition-colors shadow-lg animate-in zoom-in-50 duration-200"
-                title="停止生成"
+                title={t('agentInput.stopGenerating')}
             >
                 <Square size={18} fill="currentColor" />
             </button>
@@ -462,7 +465,7 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
                 type="submit"
                 disabled={!input.trim()}
                 className="p-2 mb-0.5 bg-blue-600 text-white rounded-full hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                title="发送 (Ctrl+Enter)"
+                title={t('agentInput.send')}
             >
                 <Send size={18} />
             </button>

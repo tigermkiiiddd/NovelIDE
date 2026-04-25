@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import ForceGraph2D from 'react-force-graph-2d';
 import { forceCenter, forceCollide, forceManyBody, forceRadial } from 'd3-force-3d';
 import {
@@ -108,6 +109,7 @@ const NodeTooltip: React.FC<{
   node: MemPalaceNode;
   onClose: () => void;
 }> = ({ x, y, node, onClose }) => {
+  const { t } = useTranslation();
   if (node.nodeType === 'room') return null;
 
   const wing = node.wing || 'world';
@@ -142,14 +144,14 @@ const NodeTooltip: React.FC<{
         <div style={{ fontSize: 13, color: '#cbd5e1', marginBottom: 8, lineHeight: 1.5 }}>{node.summary}</div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b' }}>
-        <span style={{ color: colors.main }}>{WING_LABELS[wing]}</span>
+        <span style={{ color: colors.main }}>{t(`knowledge.wings.${wing}`)}</span>
         {node.room && (
           <>
             <span>›</span>
             <span>{node.room}</span>
           </>
         )}
-        {node.importance === 'critical' && <span style={{ color: '#ef4444', marginLeft: 'auto' }}>关键</span>}
+        {node.importance === 'critical' && <span style={{ color: '#ef4444', marginLeft: 'auto' }}>{t('knowledge.priority.critical')}</span>}
       </div>
       {node.tags && node.tags.length > 0 && (
         <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
@@ -174,6 +176,7 @@ interface Props {
 }
 
 export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '' }) => {
+  const { t } = useTranslation();
   const store = useKnowledgeGraphStore();
   const { nodes, edges, ensureInitialized, addNode, addNodeWithEmbedding, updateNode, deleteNode } = store;
 
@@ -258,7 +261,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       processedRooms.add(key);
       const anchorId = `room:${key}`;
       roomAnchors.set(key, anchorId);
-      graphNodes.push({ id: anchorId, name: n.room || '未分类', nodeType: 'room', roomLabel: n.room || '未分类', roomWing: n.wing, roomCount: roomNodeCounts[key] || 0, val: 0 });
+      graphNodes.push({ id: anchorId, name: n.room || t('knowledge.uncategorized'), nodeType: 'room', roomLabel: n.room || t('knowledge.uncategorized'), roomWing: n.wing, roomCount: roomNodeCounts[key] || 0, val: 0 });
     });
 
     // 创建知识节点
@@ -283,7 +286,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
     });
 
     return { nodes: graphNodes, links: graphLinks };
-  }, [nodes, edges, activeWings, searchQuery]);
+  }, [nodes, edges, activeWings, searchQuery, t]);
 
   // 搜索高亮
   const searchHighlightIds = useMemo(() => {
@@ -612,7 +615,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       ctx.font = `500 ${fontSize}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const text = edgeType;
+      const text = t(`knowledge.edgeTypes.${edgeType}`);
       const tw = ctx.measureText(text).width;
       ctx.fillStyle = 'rgba(7,11,20,0.85)';
       ctx.beginPath();
@@ -621,7 +624,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       ctx.fillStyle = color;
       ctx.fillText(text, midX, midY);
     }
-  }, [hoveredNodeId, selectedNodeId, animFrame]);
+  }, [hoveredNodeId, selectedNodeId, animFrame, t]);
 
   const paintLinkPointerArea = useCallback((link: any, color: string, ctx: CanvasRenderingContext2D) => {
     const src = typeof link.source === 'object' ? link.source : { x: 0, y: 0 };
@@ -647,8 +650,8 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
       {/* Mobile tab */}
       {selectedNodeId && isMobile && (
         <div className="md:hidden flex border-b border-gray-800 shrink-0">
-          <button onClick={() => setMobileTab('graph')} className={`flex-1 py-2 text-sm text-center ${mobileTab === 'graph' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500'}`}>星图</button>
-          <button onClick={() => setMobileTab('detail')} className={`flex-1 py-2 text-sm text-center ${mobileTab === 'detail' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500'}`}>详情</button>
+          <button onClick={() => setMobileTab('graph')} className={`flex-1 py-2 text-sm text-center ${mobileTab === 'graph' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500'}`}>{t('knowledge.tabs.starMap')}</button>
+          <button onClick={() => setMobileTab('detail')} className={`flex-1 py-2 text-sm text-center ${mobileTab === 'detail' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500'}`}>{t('knowledge.tabs.detail')}</button>
         </div>
       )}
 
@@ -672,15 +675,15 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
         <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', gap: 8, alignItems: 'center', zIndex: 20, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 10, background: 'rgba(10,15,30,0.85)', border: '1px solid rgba(148,163,184,0.15)', flex: 1, maxWidth: 240 }}>
             <Search size={14} style={{ color: '#64748b', flexShrink: 0 }} />
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="搜索记忆星辰..."
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('knowledge.placeholders.searchStars')}
               style={{ background: 'transparent', border: 'none', outline: 'none', color: '#f8fafc', fontSize: 13, width: '100%' }} />
             {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0 }}><X size={14} /></button>}
           </div>
           <button onClick={() => setShowWingFilter(!showWingFilter)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 10, background: activeWings.size > 0 ? 'rgba(59,130,246,0.15)' : 'rgba(10,15,30,0.85)', border: activeWings.size > 0 ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(148,163,184,0.15)', color: activeWings.size > 0 ? '#93c5fd' : '#94a3b8', cursor: 'pointer', fontSize: 13 }}>
-            <Filter size={14} />{activeWings.size > 0 ? `${activeWings.size}` : '星域'}
+            <Filter size={14} />{activeWings.size > 0 ? `${activeWings.size}` : t('knowledge.wingFilter')}
           </button>
-          <button onClick={resetView} title="重置视图" style={{ padding: '6px 10px', borderRadius: 10, background: 'rgba(10,15,30,0.85)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}><Maximize2 size={14} /></button>
-          <button onClick={relaxLayout} title="重新散开" style={{ padding: '6px 10px', borderRadius: 10, background: 'rgba(10,15,30,0.85)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}><RotateCcw size={14} /></button>
+          <button onClick={resetView} title={t('knowledge.tooltips.resetView')} style={{ padding: '6px 10px', borderRadius: 10, background: 'rgba(10,15,30,0.85)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}><Maximize2 size={14} /></button>
+          <button onClick={relaxLayout} title={t('knowledge.tooltips.relaxLayout')} style={{ padding: '6px 10px', borderRadius: 10, background: 'rgba(10,15,30,0.85)', border: '1px solid rgba(148,163,184,0.15)', color: '#94a3b8', cursor: 'pointer' }}><RotateCcw size={14} /></button>
           <button onClick={() => setShowAddModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderRadius: 10, background: 'rgba(59,130,246,0.2)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd', cursor: 'pointer', fontSize: 13 }}>
             <Plus size={14} />
           </button>
@@ -694,7 +697,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
               const isActive = activeWings.has(wing);
               return (
                 <button key={wing} onClick={() => toggleWing(wing)} style={{ padding: '4px 10px', borderRadius: 999, fontSize: 12, border: `1px solid ${colors.main}${isActive ? 'cc' : '40'}`, background: isActive ? `${colors.main}25` : 'transparent', color: isActive ? colors.light : '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {WING_ICONS[wing]} {WING_LABELS[wing]}
+                  {WING_ICONS[wing]} {t(`knowledge.wings.${wing}`)}
                 </button>
               );
             })}
@@ -738,7 +741,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
             <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: '#475569', fontSize: 14, zIndex: 10 }}>
               <div className="text-center">
                 <div className="text-4xl mb-3">🌌</div>
-                <p>{searchQuery ? '没有匹配的星辰' : '星空尚未点亮，点击 + 创建记忆'}</p>
+                <p>{searchQuery ? t('knowledge.emptyState.noMatch') : t('knowledge.emptyState.skyNotLit')}</p>
               </div>
             </div>
           )}
@@ -746,7 +749,7 @@ export const KnowledgeTreeView: React.FC<Props> = ({ onSelectNode, className = '
 
         {/* 统计角标 */}
         <div style={{ position: 'absolute', bottom: 12, right: 12, padding: '4px 10px', borderRadius: 8, background: 'rgba(10,15,30,0.8)', border: '1px solid rgba(148,163,184,0.1)', color: '#475569', fontSize: 11, zIndex: 10 }}>
-          {knowledgeNodeCount} 星辰 · {edgeCount} 关联
+          {t('knowledge.statsBadge', { stars: knowledgeNodeCount, edges: edgeCount })}
         </div>
 
         {/* Tooltip */}

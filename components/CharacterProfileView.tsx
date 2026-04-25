@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Activity,
   BookOpen,
@@ -167,6 +168,7 @@ const CategoryCard: React.FC<{
   defaultExpanded?: boolean;
   characterName: string;
 }> = ({ categoryName, category, defaultExpanded = false, characterName }) => {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = React.useState(defaultExpanded);
   const [isAddingSubCategory, setIsAddingSubCategory] = React.useState(false);
   const [newSubCategoryName, setNewSubCategoryName] = React.useState('');
@@ -240,9 +242,9 @@ const CategoryCard: React.FC<{
             {CATEGORY_ICONS[categoryName]}
           </div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#f8fafc' }}>{categoryName}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#f8fafc' }}>{t(`character.categories.${categoryName}`)}</div>
             <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
-              {isOverwrite ? '覆盖型' : '累加型'} · {subCategoryCount} 小分类 · {entryCount} 条目
+              {isOverwrite ? t('character.overwriteType') : t('character.accumulateType')} · {subCategoryCount} 小分类 · {entryCount} 条目
             </div>
           </div>
         </div>
@@ -287,7 +289,7 @@ const CategoryCard: React.FC<{
                 if (availablePresets.length > 0) {
                   return (
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>快速选择：</div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>{t('character.quickSelect')}：</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                         {availablePresets.map((preset) => (
                           <button
@@ -519,6 +521,7 @@ const SkillEditForm: React.FC<{
   onSave: (value: SkillValue) => void;
   onCancel: () => void;
 }> = ({ initialValue, onSave, onCancel }) => {
+  const { t } = useTranslation();
   const parsed = typeof initialValue === 'object' && initialValue !== null
     ? initialValue as SkillValue
     : { quality: '入门' as const, description: '', unlockCondition: '' };
@@ -530,35 +533,35 @@ const SkillEditForm: React.FC<{
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 60 }}>品质：</span>
+        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 60 }}>{t('character.qualityLabel')}:</span>
         <select
           value={quality}
           onChange={(e) => setQuality(e.target.value as SkillValue['quality'])}
           style={{ ...selectStyle, flex: 1 }}
         >
-          <option value="未掌握">未掌握</option>
-          <option value="入门">入门</option>
-          <option value="熟练">熟练</option>
-          <option value="精通">精通</option>
-          <option value="大师">大师</option>
+          <option value="未掌握">{t('character.quality.未掌握')}</option>
+          <option value="入门">{t('character.quality.入门')}</option>
+          <option value="熟练">{t('character.quality.熟练')}</option>
+          <option value="精通">{t('character.quality.精通')}</option>
+          <option value="大师">{t('character.quality.大师')}</option>
         </select>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 60, paddingTop: 6 }}>描述：</span>
+        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 60, paddingTop: 6 }}>{t('character.description')}:</span>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           style={{ ...inputStyle, flex: 1, minHeight: 60, resize: 'vertical' }}
-          placeholder="技能描述"
+          placeholder={t('character.descriptionPlaceholder')}
         />
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 60, paddingTop: 6 }}>解锁条件：</span>
+        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 60, paddingTop: 6 }}>{t('character.unlockCondition')}:</span>
         <textarea
           value={unlockCondition}
           onChange={(e) => setUnlockCondition(e.target.value)}
           style={{ ...inputStyle, flex: 1, minHeight: 60, resize: 'vertical' }}
-          placeholder="解锁或提升条件"
+          placeholder={t('character.unlockConditionPlaceholder')}
         />
       </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -676,6 +679,7 @@ const SubCategoryView: React.FC<{
   categoryName: CharacterCategoryName;
   characterName: string;
 }> = ({ subCategoryName, value, isOverwrite, accentColor, categoryName, characterName }) => {
+  const { t } = useTranslation();
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -861,14 +865,14 @@ const SubCategoryView: React.FC<{
                 setNewName(subCategoryName);
               }}
               style={{ ...editBtnStyle, color: '#94a3b8' }}
-              title="取消"
+              title={t('common.cancel')}
             >
               <X size={16} />
             </button>
             <button
               onClick={handleRename}
               style={{ ...editBtnStyle, color: '#34d399' }}
-              title="确认"
+              title={t('common.confirm')}
             >
               <Check size={16} />
             </button>
@@ -940,21 +944,21 @@ const SubCategoryView: React.FC<{
             <button
               onClick={() => setIsRenaming(true)}
               style={{ ...editBtnStyle, fontSize: 11 }}
-              title="重命名"
+              title={t('character.rename')}
             >
-              重命名
+              {t('character.rename')}
             </button>
             <button
               onClick={() => setEditingIndex(0)}
               style={editBtnStyle}
-              title="编辑内容"
+              title={t('character.editContent')}
             >
               <Pencil size={14} />
             </button>
             <button
               onClick={() => setConfirmDelete(0)}
               style={{ ...editBtnStyle, color: '#ef4444' }}
-              title="删除"
+              title={t('common.delete')}
             >
               <Trash2 size={14} />
             </button>
@@ -1012,14 +1016,14 @@ const SubCategoryView: React.FC<{
                 setNewName(subCategoryName);
               }}
               style={{ ...editBtnStyle, color: '#94a3b8' }}
-              title="取消"
+              title={t('common.cancel')}
             >
               <X size={16} />
             </button>
             <button
               onClick={handleRename}
               style={{ ...editBtnStyle, color: '#34d399' }}
-              title="确认"
+              title={t('common.confirm')}
             >
               <Check size={16} />
             </button>
@@ -1067,14 +1071,14 @@ const SubCategoryView: React.FC<{
           <button
             onClick={() => setIsRenaming(true)}
             style={{ ...editBtnStyle, fontSize: 11 }}
-            title="重命名"
+            title={t('character.rename')}
           >
-            重命名
+            {t('character.rename')}
           </button>
           <button
             onClick={() => setConfirmDelete(-1)}
             style={{ ...editBtnStyle, color: '#ef4444' }}
-            title="删除整个子分类"
+            title={t('character.deleteSubCategory')}
           >
             <Trash2 size={14} />
           </button>
@@ -1192,14 +1196,14 @@ const SubCategoryView: React.FC<{
                   <button
                     onClick={() => setEditingIndex(index)}
                     style={editBtnStyle}
-                    title="编辑"
+                    title={t('common.edit')}
                   >
                     <Pencil size={12} />
                   </button>
                   <button
                     onClick={() => setConfirmDelete(index)}
                     style={{ ...editBtnStyle, color: '#ef4444' }}
-                    title="删除"
+                    title={t('common.delete')}
                   >
                     <Trash2 size={12} />
                   </button>
@@ -1252,6 +1256,7 @@ const RelationshipGraphSection: React.FC<{ characterName: string }> = ({ charact
 };
 
 export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ filePath, content }) => {
+  const { t } = useTranslation();
   const profiles = useCharacterMemoryStore((state: CharacterMemoryState) => state.profiles);
   const characterName = useMemo(() => deriveCharacterName(filePath), [filePath]);
   const fallbackProfile = useMemo(() => parseFallbackProfile(content), [content]);
@@ -1287,7 +1292,7 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
       >
         <div style={{ maxWidth: 560, textAlign: 'center' }}>
           <User size={42} style={{ marginBottom: 14, color: '#38bdf8' }} />
-          <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>角色档案尚未生成</div>
+          <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>{t('character.notGenerated')}</div>
           <div style={{ fontSize: 14, lineHeight: 1.7, color: '#94a3b8' }}>
             当前文件位于 <code>{unicodeProfileFolder}</code>，但还没有可渲染的角色画像数据。
             <br />
@@ -1399,7 +1404,7 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                 }}
               >
                 <History size={16} />
-                版本历史
+                {t('character.versionHistory')}
               </button>
             </div>
 
@@ -1413,11 +1418,11 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
                 width: isMobile ? '100%' : undefined,
               }}
             >
-              <MetricCard label="总条目" value={String(stats.totalEntries)} accent="#38bdf8" />
-              <MetricCard label="覆盖型" value={String(stats.overwriteCount)} accent="#34d399" />
-              <MetricCard label="累加型" value={String(stats.accumulateCount)} accent="#f59e0b" />
+              <MetricCard label={t('character.totalEntries')} value={String(stats.totalEntries)} accent="#38bdf8" />
+              <MetricCard label={t('character.overwriteType')} value={String(stats.overwriteCount)} accent="#34d399" />
+              <MetricCard label={t('character.accumulateType')} value={String(stats.accumulateCount)} accent="#f59e0b" />
               <MetricCard
-                label="大分类"
+                label={t('character.categoryDesc')}
                 value={String(Object.keys(profile.categories).filter((k) => profile.categories[k]).length)}
                 accent="#a78bfa"
               />
@@ -1437,7 +1442,7 @@ export const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({ file
             lineHeight: 1.6,
           }}
         >
-          <strong style={{ color: '#cbd5e1' }}>分类说明：</strong>
+          <strong style={{ color: '#cbd5e1' }}>{t('character.categoryDesc')}：</strong>
           {isMobile ? <br /> : <span style={{ marginLeft: 8 }} />}
             <span style={{ color: '#34d399' }}>● 覆盖型</span>（状态/属性/目标/技能）只保留最新值；
             <span style={{ color: '#f59e0b', marginLeft: isMobile ? 0 : 12 }}>● 累加型</span>（关系/经历/记忆）保留历史记录

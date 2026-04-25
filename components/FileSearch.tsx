@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, X, File, FileText, Type, ChevronDown, ChevronUp } from 'lucide-react';
 import { useFileStore } from '../stores/fileStore';
 import { useUiStore } from '../stores/uiStore';
@@ -33,6 +34,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
   onClose,
   onFileSelect
 }) => {
+  const { t } = useTranslation();
   const files = useFileStore(state => state.files);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState<'name' | 'content'>('content');
@@ -157,7 +159,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <h2 className="text-lg font-bold flex items-center gap-2 text-gray-100">
             <Search size={20} className="text-blue-400" />
-            搜索文件
+            {t('fileSearch.title')}
           </h2>
           <button
             onClick={onClose}
@@ -201,7 +203,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
                 }`}
               >
                 <File size={16} />
-                文件名
+                {t('fileSearch.fileName')}
               </button>
               <button
                 onClick={() => setSearchType('content')}
@@ -212,7 +214,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
                 }`}
               >
                 <FileText size={16} />
-                文件内容
+                {t('fileSearch.fileContent')}
               </button>
             </div>
 
@@ -223,7 +225,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
                   ? 'bg-blue-600 border-blue-500 text-white'
                   : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
               }`}
-              title="区分大小写"
+              title={t('fileSearch.caseSensitive')}
             >
               Aa
             </button>
@@ -235,12 +237,12 @@ export const FileSearch: React.FC<FileSearchProps> = ({
           {searchTerm && results.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
               <Search size={48} className="mb-4 opacity-20" />
-              <p>未找到匹配的文件</p>
+              <p>{t('fileSearch.noResults')}</p>
             </div>
           ) : !searchTerm ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
               <Search size={48} className="mb-4 opacity-20" />
-              <p>输入关键词开始搜索</p>
+              <p>{t('fileSearch.enterKeyword')}</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-800">
@@ -266,7 +268,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
                     </span>
                     <span className="text-xs text-gray-600">{result.filePath}</span>
                     <span className="ml-auto text-xs text-gray-500">
-                      {result.matches.length} 处匹配
+                      {t('fileSearch.matchCount', { count: result.matches.length })}
                     </span>
                   </div>
 
@@ -285,7 +287,7 @@ export const FileSearch: React.FC<FileSearchProps> = ({
                   ))}
                   {result.type === 'content' && result.matches.length > 3 && (
                     <div className="ml-6 text-xs text-gray-600">
-                      还有 {result.matches.length - 3} 处匹配...
+                      {t('fileSearch.moreMatches', { count: result.matches.length - 3 })}
                     </div>
                   )}
 
@@ -303,8 +305,8 @@ export const FileSearch: React.FC<FileSearchProps> = ({
         {/* Footer */}
         {results.length > 0 && (
           <div className="p-3 border-t border-gray-700 text-xs text-gray-500 flex items-center justify-between">
-            <span>找到 {results.length} 个文件</span>
-            <span className="text-gray-600">使用 ↑↓ 导航，Enter 打开</span>
+            <span>{t('fileSearch.resultsCount', { count: results.length })}</span>
+            <span className="text-gray-600">{t('fileSearch.navHint')}</span>
           </div>
         )}
       </div>

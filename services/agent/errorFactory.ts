@@ -9,6 +9,7 @@ import {
   AgentErrorInfo,
   AIResponseMetadata,
 } from '../../types/agentErrors';
+import i18n from '../../i18n';
 
 /**
  * 从原始错误中提取有用信息
@@ -108,13 +109,13 @@ export function networkError(error: any, requestInfo?: any): AgentErrorInfo {
   return {
     category: AgentErrorCategory.NETWORK,
     severity: AgentErrorSeverity.MEDIUM,
-    title: '网络连接失败',
-    message: `无法连接到 AI 服务。${code ? `错误代码: ${code}` : ''}`,
+    title: i18n.t('errors.network.title'),
+    message: i18n.t('errors.network.message', { code: code ? `错误代码: ${code}` : '' }),
     suggestions: [
-      '请检查您的网络连接是否正常',
-      '如果您使用代理，请确保代理设置正确',
-      '请检查 API Base URL 是否正确',
-      '稍后重试，服务可能暂时不可用',
+      i18n.t('errors.network.checkNetwork'),
+      i18n.t('errors.network.checkProxy'),
+      i18n.t('errors.network.checkBaseUrl'),
+      i18n.t('errors.network.retryLater'),
     ],
     recoverable: true,
     debugData: {
@@ -131,28 +132,28 @@ export function networkError(error: any, requestInfo?: any): AgentErrorInfo {
 export function apiError(error: any, requestInfo?: any, responseInfo?: any): AgentErrorInfo {
   const { status, message } = extractErrorContext(error);
 
-  let title = 'API 请求失败';
+  let title = i18n.t('errors.api.title');
   let detailedMessage = message;
   const suggestions: string[] = [];
 
   if (status === 400) {
-    title = '请求参数错误';
-    detailedMessage = 'API 收到了无效的请求参数。';
-    suggestions.push('请检查请求格式是否正确');
-    suggestions.push('如果问题持续，请尝试重新开始对话');
+    title = i18n.t('errors.api.badRequestTitle');
+    detailedMessage = i18n.t('errors.api.badRequestMessage');
+    suggestions.push(i18n.t('errors.api.badRequestFormat'));
+    suggestions.push(i18n.t('errors.api.restartChat'));
   } else if (status === 404) {
-    title = 'API 端点不存在';
-    detailedMessage = '请求的 API 端点不存在，请检查 Base URL。';
-    suggestions.push('请确认 API Base URL 是否正确');
-    suggestions.push('请确认模型名称是否正确');
+    title = i18n.t('errors.api.notFoundTitle');
+    detailedMessage = i18n.t('errors.api.notFoundMessage');
+    suggestions.push(i18n.t('errors.api.confirmBaseUrl'));
+    suggestions.push(i18n.t('errors.api.confirmModelName'));
   } else if (isServerError(error)) {
-    title = '服务器错误';
-    detailedMessage = `AI 服务返回了服务器错误 (${status})。`;
-    suggestions.push('这是服务端问题，请稍后重试');
-    suggestions.push('如果问题持续，请联系服务提供商');
+    title = i18n.t('errors.api.serverErrorTitle');
+    detailedMessage = i18n.t('errors.api.serverErrorMessage', { status });
+    suggestions.push(i18n.t('errors.api.serverRetryLater'));
+    suggestions.push(i18n.t('errors.api.contactProvider'));
   } else {
-    suggestions.push('请查看详细错误信息');
-    suggestions.push('如果问题持续，请尝试重新开始对话');
+    suggestions.push(i18n.t('errors.api.viewDetails'));
+    suggestions.push(i18n.t('errors.api.restartChat'));
   }
 
   return {
@@ -186,12 +187,12 @@ export function rateLimitError(error: any, requestInfo?: any): AgentErrorInfo {
   return {
     category: AgentErrorCategory.RATE_LIMIT,
     severity: AgentErrorSeverity.LOW,
-    title: '请求过于频繁',
-    message: `您发送请求的速度太快了。${retryAfter}`,
+    title: i18n.t('errors.rateLimit.title'),
+    message: i18n.t('errors.rateLimit.message', { retryHint: retryAfter }),
     suggestions: [
-      '请等待几秒后重试',
-      '如果使用免费 API，可能需要降低请求频率',
-      '考虑升级您的 API 套餐以获得更高的配额',
+      i18n.t('errors.rateLimit.wait'),
+      i18n.t('errors.rateLimit.reduceFrequency'),
+      i18n.t('errors.rateLimit.upgradePlan'),
     ],
     recoverable: true,
     debugData: {
@@ -209,13 +210,13 @@ export function authError(error: any, requestInfo?: any): AgentErrorInfo {
   return {
     category: AgentErrorCategory.AUTH,
     severity: AgentErrorSeverity.HIGH,
-    title: 'API 认证失败',
-    message: 'API Key 无效或已过期，请检查您的配置。',
+    title: i18n.t('errors.auth.title'),
+    message: i18n.t('errors.auth.message'),
     suggestions: [
-      '请确认 API Key 是否正确',
-      '请确认 API Key 是否已过期',
-      '如果使用第三方代理，请确认其支持您的 API Key',
-      '前往 AI 设置页面更新您的 API Key',
+      i18n.t('errors.auth.checkKey'),
+      i18n.t('errors.auth.checkExpiry'),
+      i18n.t('errors.auth.checkProxy'),
+      i18n.t('errors.auth.goToSettings'),
     ],
     recoverable: true,  // 允许重试，用户可能已更新 API Key
     debugData: {
@@ -233,12 +234,12 @@ export function parseError(error: any, rawResponse?: any, requestInfo?: any): Ag
   return {
     category: AgentErrorCategory.PARSE,
     severity: AgentErrorSeverity.MEDIUM,
-    title: '响应解析失败',
-    message: '无法解析 AI 服务的响应，响应格式可能异常。',
+    title: i18n.t('errors.parse.title'),
+    message: i18n.t('errors.parse.message'),
     suggestions: [
-      '这可能是临时问题，请重试',
-      '如果问题持续，请检查 API 是否兼容 OpenAI 格式',
-      '请查看 Debug 模式下的原始响应',
+      i18n.t('errors.parse.retry'),
+      i18n.t('errors.parse.checkFormat'),
+      i18n.t('errors.parse.viewDebug'),
     ],
     recoverable: true,
     debugData: {
@@ -265,45 +266,45 @@ export function contentError(
 
   switch (reason) {
     case 'truncated':
-      title = '响应被截断';
-      message = 'AI 的响应超过了最大长度限制，内容可能不完整。';
+      title = i18n.t('errors.content.truncatedTitle');
+      message = i18n.t('errors.content.truncatedMessage');
       suggestions = [
-        '这可能导致任务未完成，请让 AI 继续',
-        '可以尝试减少上下文信息或简化请求',
-        '在 AI 设置中增加 Max Output Tokens',
+        i18n.t('errors.content.continueTask'),
+        i18n.t('errors.content.simplifyRequest'),
+        i18n.t('errors.content.increaseTokens'),
       ];
       severity = AgentErrorSeverity.LOW;
       break;
 
     case 'empty':
-      title = '收到空响应';
-      message = 'AI 服务返回了空响应，可能是限流或服务暂时不可用。';
+      title = i18n.t('errors.content.emptyTitle');
+      message = i18n.t('errors.content.emptyMessage');
       suggestions = [
-        '请稍后重试',
-        '检查是否触发了 API 限流',
-        '查看 Debug 模式下的响应详情',
+        i18n.t('errors.content.retryLater'),
+        i18n.t('errors.content.checkRateLimit'),
+        i18n.t('errors.content.viewDebug'),
       ];
       severity = AgentErrorSeverity.MEDIUM;
       break;
 
     case 'filtered':
-      title = '内容被过滤';
-      message = 'AI 服务的安全过滤器拦截了响应内容。';
+      title = i18n.t('errors.content.filteredTitle');
+      message = i18n.t('errors.content.filteredMessage');
       suggestions = [
-        '尝试修改您的请求措辞',
-        '如果是 Gemini API，可以在设置中调整安全级别',
-        '某些敏感话题可能无法获得完整回复',
+        i18n.t('errors.content.rephrase'),
+        i18n.t('errors.content.adjustSafety'),
+        i18n.t('errors.content.sensitiveTopics'),
       ];
       severity = AgentErrorSeverity.MEDIUM;
       break;
 
     default:
-      title = '响应内容异常';
-      message = 'AI 服务返回了异常的响应内容。';
+      title = i18n.t('errors.content.unknownTitle');
+      message = i18n.t('errors.content.unknownMessage');
       suggestions = [
-        '请重试您的请求',
-        '查看 Debug 模式下的响应详情',
-        '如果问题持续，请尝试其他模型',
+        i18n.t('errors.content.retryRequest'),
+        i18n.t('errors.content.viewDebug'),
+        i18n.t('errors.content.tryOtherModel'),
       ];
       severity = AgentErrorSeverity.MEDIUM;
   }
@@ -401,7 +402,7 @@ export function formatErrorForDisplay(errorInfo: AgentErrorInfo): string {
 
   if (errorInfo.suggestions.length > 0) {
     lines.push('');
-    lines.push('解决建议:');
+    lines.push(i18n.t('errors.suggestionsLabel'));
     errorInfo.suggestions.forEach((s, i) => {
       lines.push(`  ${i + 1}. ${s}`);
     });

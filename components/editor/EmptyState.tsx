@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
 
 export interface EmptyStateProps {
@@ -12,10 +13,11 @@ export interface EmptyStateProps {
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({ className = '' }) => {
+  const { t } = useTranslation();
   return (
     <div className={`flex flex-col items-center justify-center h-full text-gray-500 bg-[#0d1117] ${className}`}>
       <FileText size={48} className="mb-4 opacity-20" />
-      <p className="text-sm">选择一个文件开始写作</p>
+      <p className="text-sm">{t('emptyState.selectFile')}</p>
     </div>
   );
 };

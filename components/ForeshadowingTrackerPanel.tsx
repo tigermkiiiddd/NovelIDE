@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, AlertTriangle, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
 import { useWorldTimelineStore } from '../stores/worldTimelineStore';
 import { useChapterAnalysisStore } from '../stores/chapterAnalysisStore';
@@ -89,6 +90,7 @@ const EMOTION_COLORS: Record<string, { color: string; bg: string }> = {
 };
 
 const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ isOpen, onClose }) => {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [curveView, setCurveView] = useState<CurveView>('both');
   const [curveLevel, setCurveLevel] = useState<'event' | 'chapter' | 'day'>('event');
@@ -222,7 +224,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
         <div className="relative" style={{ height }}>
           <svg viewBox="0 0 100 100" className="w-full" style={{ height }} preserveAspectRatio="none">
             <line x1="0" y1="50" x2="100" y2="50" stroke="#333" strokeWidth="0.5" strokeDasharray="2,2" />
-            <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" fill="#555" fontSize="8">暂无数据</text>
+            <text x="50" y="50" textAnchor="middle" dominantBaseline="middle" fill="#555" fontSize="8">{t('outline.noData')}</text>
           </svg>
         </div>
       );
@@ -277,7 +279,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div className="flex items-center gap-3">
           <BarChart3 size={20} className="text-purple-400" />
-          <span className="font-semibold text-lg">伏笔追踪</span>
+          <span className="font-semibold text-lg">{t('outline.foreshadowing')}</span>
         </div>
         <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded">
           <X size={20} />
@@ -289,10 +291,10 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
         {/* 统计卡片 */}
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: '总伏笔', value: stats.total, color: 'text-gray-300' },
-            { label: '待回收', value: stats.pending, color: 'text-blue-400' },
-            { label: '已回收', value: stats.fulfilled, color: 'text-green-400' },
-            { label: '逾期', value: stats.overdue, color: 'text-red-400' }
+            { label: t('outline.totalForeshadow'), value: stats.total, color: 'text-gray-300' },
+            { label: t('outline.pending'), value: stats.pending, color: 'text-blue-400' },
+            { label: t('outline.resolved'), value: stats.fulfilled, color: 'text-green-400' },
+            { label: t('outline.overdue'), value: stats.overdue, color: 'text-red-400' }
           ].map((stat) => (
             <div key={stat.label} className="bg-gray-800 rounded p-2 text-center">
               <div className={`text-xl font-bold ${stat.color}`}>{stat.value}</div>
@@ -320,7 +322,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
           <div className="bg-gray-800 rounded p-3">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle size={14} className="text-orange-400" />
-              <span className="text-sm font-medium text-orange-400">预警</span>
+              <span className="text-sm font-medium text-orange-400">{t('outline.warning')}</span>
             </div>
             <div className="space-y-1">
               {overdue.slice(0, 3).map((f: ForeshadowingItem) => {
@@ -394,7 +396,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
           <div className="bg-gray-800 rounded p-3">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp size={14} className="text-blue-400" />
-              <span className="text-sm font-medium text-blue-400">读者情绪曲线</span>
+              <span className="text-sm font-medium text-blue-400">{t('outline.emotionCurve')}</span>
             </div>
             {nodeCurveStats && (
               <div className="text-xs text-gray-500 mb-2">
@@ -440,7 +442,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
           <div className="bg-gray-800 rounded p-3">
             <div className="flex items-center gap-2 mb-2">
               <TrendingDown size={14} className="text-orange-400" />
-              <span className="text-sm font-medium text-orange-400">钩子情绪奖励曲线</span>
+              <span className="text-sm font-medium text-orange-400">{t('outline.hookEmotionReward')}</span>
             </div>
             {hookCurveStats && (
               <div className="text-xs text-gray-500 mb-2">
@@ -486,7 +488,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
           <div className="bg-gray-800 rounded p-3">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp size={14} className="text-yellow-400" />
-              <span className="text-sm font-medium text-yellow-400">奖励分累计曲线</span>
+              <span className="text-sm font-medium text-yellow-400">{t('outline.rewardCumulative')}</span>
             </div>
             {renderMiniChart(
               rewardCurveData.map(d => ({ x: d.chapter, y: d.score })),
@@ -500,7 +502,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
         {/* 伏笔列表 */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">伏笔列表</span>
+            <span className="text-sm font-medium text-gray-300">{t('outline.foreshadowList')}</span>
             <div className="flex gap-1 text-xs">
               {([
                 ['all', '全部'],
@@ -523,7 +525,7 @@ const ForeshadowingTrackerPanel: React.FC<ForeshadowingTrackerPanelProps> = ({ i
 
           <div className="space-y-1 max-h-96 overflow-y-auto">
             {filteredForeshadowings.length === 0 ? (
-              <div className="text-center text-gray-500 py-4 text-sm">暂无伏笔</div>
+              <div className="text-center text-gray-500 py-4 text-sm">{t('outline.noForeshadow')}</div>
             ) : (
               filteredForeshadowings.map((f: ForeshadowingItem) => {
                 const event = timeline?.events.find(e => e.id === f.sourceRef);

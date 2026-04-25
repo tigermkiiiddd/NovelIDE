@@ -14,6 +14,7 @@ import { useFileStore } from '../stores/fileStore';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { findNodeByPath } from '../services/fileSystem';
 import { getWindowedMessages, MAX_CONTEXT_MESSAGES } from '../domains/agentContext/windowing';
+import i18n from '../i18n';
 
 
 // Facade Hook
@@ -162,7 +163,7 @@ export const useAgent = (
       addMessage({
         id: generateId(),
         role: 'system',
-        text: `🔍 正在自动分析章节: ${change.fileName}`,
+        text: i18n.t('storeMessages.autoAnalyzing', { fileName: change.fileName }),
         timestamp: Date.now(),
         metadata: { logType: 'info' }
       });
@@ -180,7 +181,7 @@ export const useAgent = (
         addMessage({
           id: generateId(),
           role: 'system',
-          text: `✅ 章节分析完成: ${change.fileName}`,
+          text: i18n.t('storeMessages.analysisComplete', { fileName: change.fileName }),
           timestamp: Date.now(),
           metadata: { logType: 'success' }
         });
@@ -190,7 +191,7 @@ export const useAgent = (
         addMessage({
           id: generateId(),
           role: 'system',
-          text: `⚠️ 章节分析失败: ${err.message}`,
+          text: i18n.t('storeMessages.analysisFailed', { error: err.message }),
           timestamp: Date.now(),
           metadata: { logType: 'error' }
         });
@@ -215,7 +216,7 @@ export const useAgent = (
             addMessage({
               id: generateId(),
               role: 'system',
-              text: `🧠 已从文档提取知识：新增 ${result.added} 条，更新 ${result.updated} 条，关联 ${result.linked} 条`,
+              text: i18n.t('storeMessages.knowledgeExtracted', { added: result.added, updated: result.updated, linked: result.linked }),
               timestamp: Date.now(),
               metadata: { logType: 'success', extractionSummary: result.summary, filePath: change.fileName }
             });

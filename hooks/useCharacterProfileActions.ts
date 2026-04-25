@@ -13,6 +13,7 @@ import { AIService } from '../services/geminiService';
 import { createRoutedAIService } from '../services/modelRouter';
 import { buildProjectOverviewPrompt } from '../utils/projectContext';
 import { ToolDefinition } from '../services/agent/types';
+import i18n from '../i18n';
 
 interface CharacterProfileActionsResult {
   isInitializing: boolean;
@@ -268,7 +269,7 @@ ${content}
 
     if (!toolArgs) {
       console.log('[CharacterProfile] AI 未调用工具，response:', JSON.stringify(response, null, 2));
-      return { success: false, error: 'AI 未返回工具调用结果' };
+      return { success: false, error: i18n.t('storeMessages.aiAnalysisFailed') };
     }
 
     console.log('[CharacterProfile] Tool args:', JSON.stringify(toolArgs, null, 2));
@@ -327,7 +328,7 @@ ${content}
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error('[CharacterProfile] AI 分析失败:', errorMsg);
-    return { success: false, error: `AI 分析失败: ${errorMsg}` };
+    return { success: false, error: `${i18n.t('storeMessages.aiAnalysisFailed')}: ${errorMsg}` };
   }
 };
 
@@ -477,7 +478,7 @@ ${content}
     return { success: true, updates: parsed.updates || [] };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
-    return { success: false, error: `AI 分析失败: ${errorMsg}` };
+    return { success: false, error: `${i18n.t('storeMessages.aiAnalysisFailed')}: ${errorMsg}` };
   }
 };
 
@@ -512,14 +513,14 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       const existing = getByName(characterName);
       if (existing) {
         console.log('[CharacterProfile] 角色已存在:', existing.characterId);
-        setError(`角色 "${characterName}" 的档案已存在`);
+        setError(i18n.t('storeMessages.profileAlreadyExists', { name: characterName }));
         setIsInitializing(false);
         return false;
       }
 
       // 创建 AI 服务（使用轻量模型）
       if (!aiConfig.apiKey) {
-        setError('未配置 API Key，无法使用 AI 分析');
+        setError(i18n.t('storeMessages.noApiKey'));
         setIsInitializing(false);
         return false;
       }
@@ -535,7 +536,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       const result = await analyzeCharacterCardWithAI(aiService, characterName, content, projectOverview);
 
       if (!result.success || !result.subCategories) {
-        setError(result.error || 'AI 分析失败');
+        setError(result.error || i18n.t('storeMessages.aiAnalysisFailed'));
         setIsInitializing(false);
         return false;
       }
@@ -560,7 +561,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       return true;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(`初始化失败: ${errorMsg}`);
+      setError(i18n.t('storeMessages.initFailed', { error: errorMsg }));
       setIsInitializing(false);
       return false;
     }
@@ -581,7 +582,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       // 获取所有角色档案
       const profiles = useCharacterMemoryStore.getState().profiles;
       if (profiles.length === 0) {
-        setError('没有可更新的角色档案');
+        setError(i18n.t('storeMessages.noProfilesToUpdate'));
         setIsUpdating(false);
         return false;
       }
@@ -592,14 +593,14 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       );
 
       if (mentionedProfiles.length === 0) {
-        setError('正文中未找到已建档的角色');
+        setError(i18n.t('storeMessages.noCharactersInText'));
         setIsUpdating(false);
         return false;
       }
 
       // 检查 API 配置
       if (!aiConfig.apiKey) {
-        setError('未配置 API Key，无法使用 AI 分析');
+        setError(i18n.t('storeMessages.noApiKey'));
         setIsUpdating(false);
         return false;
       }
@@ -615,7 +616,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       const result = await analyzeChapterWithAI(aiService, content, chapterRef, mentionedProfiles, projectOverview);
 
       if (!result.success) {
-        setError(result.error || 'AI 分析失败');
+        setError(result.error || i18n.t('storeMessages.aiAnalysisFailed'));
         setIsUpdating(false);
         return false;
       }
@@ -642,7 +643,7 @@ export const useCharacterProfileActions = (): CharacterProfileActionsResult => {
       return true;
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(`更新失败: ${errorMsg}`);
+      setError(i18n.t('storeMessages.updateFailed', { error: errorMsg }));
       setIsUpdating(false);
       return false;
     }

@@ -1,5 +1,6 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Sparkles, X, History, Plus, Trash2, MessageSquare, AlertTriangle, ArrowRight, Cpu, Download, Bug, ClipboardList, Layers, Brain, Lightbulb } from 'lucide-react';
 import { ChatMessage, TodoItem, ChatSession, FileNode, PendingChange, PlanNote } from '../types';
 import AgentMessageList from './AgentMessageList';
@@ -66,6 +67,7 @@ interface AgentChatProps {
 
 // --- Thinking Pad Panels (chat 顶部，多话题同时显示) ---
 const ThinkingPadTabs: React.FC = () => {
+  const { t } = useTranslation();
   const sessions = useAgentStore(state => state.sessions);
   const currentSessionId = useAgentStore(state => state.currentSessionId);
   const setVirtualFile = useFileStore(state => state.setVirtualFile);
@@ -79,7 +81,7 @@ const ThinkingPadTabs: React.FC = () => {
     <div className="border-b border-gray-800/50 bg-gray-900/50 max-h-60 overflow-y-auto shrink-0">
       <div className="flex items-center gap-1 px-3 py-1 sticky top-0 bg-gray-900/90 backdrop-blur-sm z-10">
         <Brain size={11} className="text-amber-400/70 shrink-0" />
-        <span className="text-[10px] text-amber-400/60 font-mono">深度思考（{pads.length}个话题）</span>
+        <span className="text-[10px] text-amber-400/60 font-mono">{t('agentChat.deepThinkingTopics', { count: pads.length })}</span>
       </div>
       {pads.map(pad => (
         <ThinkingPadPanel key={pad.id} pad={pad} setVirtualFile={setVirtualFile} />
@@ -98,6 +100,7 @@ const ThinkingPadPanel: React.FC<{
   pad: any;
   setVirtualFile: (f: FileNode | null) => void;
 }> = ({ pad, setVirtualFile }) => {
+  const { t } = useTranslation();
   const openPage = (key: string, file: string) => {
     const content = pad.pages[key]?.content || '';
     setVirtualFile({
@@ -118,7 +121,7 @@ const ThinkingPadPanel: React.FC<{
           key={key}
           onClick={() => openPage(key, file)}
           className="px-1.5 py-0.5 text-[10px] font-mono rounded text-blue-400/50 hover:text-blue-400 hover:bg-blue-900/20 transition-colors shrink-0"
-          title={`在编辑器中打开 ${file}`}
+          title={t('agentChat.openInEditor', { file })}
         >
           {name} ↗
         </button>
@@ -158,6 +161,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
 }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [showMemoryDebug, setShowMemoryDebug] = useState(false);
+  const { t } = useTranslation();
   // Reset memory debug panel when project/session changes
   const prevSessionIdRef = useRef(currentSessionId);
   useEffect(() => {
@@ -224,7 +228,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
   const handleDeleteSession = useCallback((e: React.MouseEvent, id: string) => {
       e.stopPropagation();
       // Simple confirm is effective for preventing accidental mobile deletions
-      if (window.confirm("确定要删除此会话吗？")) {
+      if (window.confirm(t('agentChat.confirmDeleteSession'))) {
           onDeleteSession(id);
       }
   }, [onDeleteSession]);
@@ -269,12 +273,12 @@ const AgentChat: React.FC<AgentChatProps> = ({
                      </div>
                  )}
                  {messageWindowInfo && (
-                     <div className="flex items-center gap-1" title={`滑动窗口: 发送给 AI 的是最近 ${messageWindowInfo.windowSize} 条消息`}>
+                     <div className="flex items-center gap-1" title={t('agentChat.slidingWindowTooltip', { size: messageWindowInfo.windowSize })}>
                         <span className={messageWindowInfo.dropped > 0 ? 'text-yellow-500' : ''}>
                             📜 {messageWindowInfo.inContext}/{messageWindowInfo.windowSize}
                         </span>
                         {messageWindowInfo.dropped > 0 && (
-                            <span className="text-yellow-600" title={`已省略 ${messageWindowInfo.dropped} 条旧消息`}>
+                            <span className="text-yellow-600" title={t('agentChat.droppedMessagesTooltip', { count: messageWindowInfo.dropped })}>
                                 (-{messageWindowInfo.dropped})
                             </span>
                         )}
@@ -303,7 +307,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                           ? 'bg-purple-600/20 text-purple-400'
                           : 'hover:bg-gray-800 text-gray-500 hover:text-white'
                   }`}
-                  title={planMode ? "关闭 Plan 模式" : "开启 Plan 模式"}
+                  title={planMode ? t('agentChat.closePlanMode') : t('agentChat.openPlanMode')}
               >
                   <ClipboardList size={18} />
               </button>
@@ -317,7 +321,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                           ? 'bg-amber-600/20 text-amber-400'
                           : 'hover:bg-gray-800 text-gray-500 hover:text-white'
                   }`}
-                  title={thinkingMode ? "关闭思考模式" : "开启思考模式"}
+                  title={thinkingMode ? t('agentChat.closeThinkingMode') : t('agentChat.openThinkingMode')}
               >
                   <Lightbulb size={18} />
               </button>
@@ -327,7 +331,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
               <button
                   onClick={onOpenPlanViewer}
                   className="p-2 rounded-lg transition-colors bg-purple-600/20 text-purple-400 hover:bg-purple-600/30"
-                  title="查看 Plan 笔记本"
+                  title={t('agentChat.viewPlanNotebook')}
               >
                   <MessageSquare size={18} />
               </button>
@@ -340,7 +344,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                         ? 'bg-orange-600/20 text-orange-400'
                         : 'hover:bg-gray-800 text-gray-500 hover:text-white'
                 }`}
-                title={isDebugMode ? "关闭调试模式" : "开启调试模式"}
+                title={isDebugMode ? t('agentChat.closeDebugMode') : t('agentChat.openDebugMode')}
             >
                 <Bug size={18} />
             </button>
@@ -349,7 +353,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 <button
                     onClick={() => setShowMemoryDebug(true)}
                     className="p-2 rounded-lg bg-orange-600/20 text-orange-400 hover:bg-orange-600/30 transition-colors"
-                    title="记忆衰减管理"
+                    title={t('agentChat.memoryDecay')}
                 >
                     <Layers size={18} />
                 </button>
@@ -358,7 +362,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 <button
                     onClick={handleExportCurrentSession}
                     className="p-2 rounded-lg transition-colors hover:bg-gray-800 text-gray-500 hover:text-white"
-                    title="导出当前会话 (Markdown)"
+                    title={t('agentChat.exportSession')}
                 >
                     <Download size={18} />
                 </button>
@@ -366,7 +370,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
             <button 
                 onClick={() => setShowHistory(!showHistory)} 
                 className={`p-2 rounded-lg transition-colors ${showHistory ? 'bg-blue-600 text-white' : 'hover:bg-gray-800 text-gray-400'}`}
-                title="历史记录"
+                title={t('agentChat.history')}
             >
                 <History size={20} />
             </button>
@@ -386,7 +390,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
         // --- History View ---
         <div className="flex-1 overflow-y-auto bg-gray-950 p-4 animate-in slide-in-from-right-10 fade-in duration-200">
             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-gray-300 font-medium">会话历史</h3>
+                <h3 className="text-gray-300 font-medium">{t('agentChat.sessionHistory')}</h3>
                 <button 
                     onClick={() => {
                         onCreateSession();
@@ -395,7 +399,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                     className="flex items-center gap-1 text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-colors shadow-lg shadow-blue-900/20 active:scale-95"
                 >
                     <Plus size={16} />
-                    新会话
+                    {t('agentChat.newSession')}
                 </button>
             </div>
             
@@ -417,7 +421,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                             <div className="flex items-center gap-3 mb-1 pr-16">
                                 <MessageSquare size={16} className={`shrink-0 ${session.id === currentSessionId ? "text-blue-400" : "text-gray-600"}`} />
                                 <span className={`font-medium text-base truncate ${session.id === currentSessionId ? 'text-blue-100' : 'text-gray-300'}`}>
-                                    {session.title || '无标题会话'}
+                                    {session.title || t('agentChat.untitledSession')}
                                 </span>
                             </div>
                             
@@ -425,14 +429,14 @@ const AgentChat: React.FC<AgentChatProps> = ({
                                 <button 
                                     onClick={(e) => handleExportSession(e, session)}
                                     className="p-2 text-gray-500 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-                                    title="导出会话"
+                                    title={t('agentChat.exportSessionShort')}
                                 >
                                     <Download size={16} />
                                 </button>
                                 <button 
                                     onClick={(e) => handleDeleteSession(e, session.id)}
                                     className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                                    title="删除会话"
+                                    title={t('agentChat.deleteSession')}
                                 >
                                     <Trash2 size={16} />
                                 </button>
@@ -440,7 +444,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                         </div>
                         <div className="text-xs text-gray-500 flex justify-between mt-3 px-1">
                             <span>{new Date(session.lastModified).toLocaleString([], {month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit'})}</span>
-                            <span>{session.messages.length} 条消息</span>
+                            <span>{t('agentChat.messageCount', { count: session.messages.length })}</span>
                         </div>
                     </div>
                 ))}
@@ -466,7 +470,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                                 <span className="text-xs text-yellow-500/70 truncate w-full text-left">{change.fileName}</span>
                             </div>
                             <div className="flex items-center gap-1 text-xs bg-yellow-900/40 px-2 py-1 rounded border border-yellow-700/30 whitespace-nowrap">
-                                审查 <ArrowRight size={10} />
+                                {t('agentChat.review')} <ArrowRight size={10} />
                             </div>
                         </button>
                     ))}
@@ -479,7 +483,7 @@ const AgentChat: React.FC<AgentChatProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-purple-300 text-sm">
                     <ClipboardList size={16} className="text-purple-400" />
-                    <span>Plan 模式已启用</span>
+                    <span>{t('agentChat.planModeEnabled')}</span>
                     {currentPlanNote && (
                       <span className="text-purple-500 text-xs">
                         - {currentPlanNote.title}
@@ -491,12 +495,12 @@ const AgentChat: React.FC<AgentChatProps> = ({
                       onClick={onOpenPlanViewer}
                       className="text-xs text-purple-400 hover:text-purple-300 underline"
                     >
-                      查看笔记本
+                      {t('agentChat.viewNotebook')}
                     </button>
                   )}
                 </div>
                 <p className="text-xs text-purple-500 mt-1">
-                  AI 正在规划中，等待审批后才会执行文件操作
+                  {t('agentChat.planModeHint')}
                 </p>
               </div>
             )}
@@ -506,10 +510,10 @@ const AgentChat: React.FC<AgentChatProps> = ({
               <div className="bg-amber-900/20 border-b border-amber-800/50 px-4 py-2 shrink-0">
                 <div className="flex items-center gap-2 text-amber-300 text-sm">
                   <Lightbulb size={16} className="text-amber-400" />
-                  <span>思考模式已启用</span>
+                  <span>{t('agentChat.thinkingModeEnabled')}</span>
                 </div>
                 <p className="text-xs text-amber-500 mt-1">
-                  AI 将在回复前进行深度思考（可能增加响应时间和 token 消耗）
+                  {t('agentChat.thinkingModeHint')}
                 </p>
               </div>
             )}

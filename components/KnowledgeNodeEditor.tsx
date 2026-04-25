@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Save, Plus, AlertCircle } from 'lucide-react';
 import {
   KnowledgeCategory,
@@ -21,18 +22,18 @@ import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 // 常量
 // ============================================
 
-const CATEGORY_OPTIONS: { value: KnowledgeCategory; label: string }[] = [
-  { value: '设定', label: '设定 - 世界观、背景、体系' },
-  { value: '规则', label: '规则 - 必须遵守的创作规则' },
-  { value: '禁止', label: '禁止 - 不能做的事情' },
-  { value: '风格', label: '风格 - 文风、写作风格' },
-  { value: '用户偏好', label: '用户偏好 - 个人写作习惯（全局）' },
+const CATEGORY_OPTIONS: { value: KnowledgeCategory; labelKey: string }[] = [
+  { value: '设定', labelKey: 'knowledge.categories.设定' },
+  { value: '规则', labelKey: 'knowledge.categories.规则' },
+  { value: '禁止', labelKey: 'knowledge.categories.禁止' },
+  { value: '风格', labelKey: 'knowledge.categories.风格' },
+  { value: '用户偏好', labelKey: 'knowledge.categories.用户偏好' },
 ];
 
 const IMPORTANCE_OPTIONS = [
-  { value: 'normal', label: '普通' },
-  { value: 'important', label: '重要' },
-  { value: 'critical', label: '关键（会注入系统提示词）' },
+  { value: 'normal', labelKey: 'knowledge.priority.normal' },
+  { value: 'important', labelKey: 'knowledge.priority.important' },
+  { value: 'critical', labelKey: 'knowledge.priority.critical' },
 ] as const;
 
 const MAX_NAME_LENGTH = 20;
@@ -62,6 +63,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
   defaultCategory = '设定',
   defaultWing,
 }) => {
+  const { t } = useTranslation();
   const store = useKnowledgeGraphStore();
   const availableSubCategories = store.availableSubCategories;
   const availableTags = store.availableTags;
@@ -104,13 +106,13 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
   // 验证错误
   const errors = useMemo(() => {
     const result: string[] = [];
-    if (!name.trim()) result.push('名称不能为空');
-    if (name.length > MAX_NAME_LENGTH) result.push(`名称不能超过${MAX_NAME_LENGTH}字`);
-    if (!summary.trim()) result.push('摘要不能为空');
-    if (summary.length > MAX_SUMMARY_LENGTH) result.push(`摘要不能超过${MAX_SUMMARY_LENGTH}字`);
-    if (detail.length > MAX_DETAIL_LENGTH) result.push(`详情不能超过${MAX_DETAIL_LENGTH}字`);
+    if (!name.trim()) result.push(t('knowledge.errors.nameRequired'));
+    if (name.length > MAX_NAME_LENGTH) result.push(t('knowledge.errors.nameMaxLength', { max: MAX_NAME_LENGTH }));
+    if (!summary.trim()) result.push(t('knowledge.errors.summaryRequired'));
+    if (summary.length > MAX_SUMMARY_LENGTH) result.push(t('knowledge.errors.summaryMaxLength', { max: MAX_SUMMARY_LENGTH }));
+    if (detail.length > MAX_DETAIL_LENGTH) result.push(t('knowledge.errors.detailMaxLength', { max: MAX_DETAIL_LENGTH }));
     return result;
-  }, [name, summary, detail]);
+  }, [name, summary, detail, t]);
 
   // 是否可以保存
   const canSave = errors.length === 0;
@@ -155,7 +157,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
       {/* 标题 */}
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-lg font-medium">
-          {node ? `编辑: ${node.name}` : '添加知识'}
+          {node ? t('knowledge.editTitle', { name: node.name }) : t('knowledge.addTitle')}
         </h3>
         <button onClick={onCancel} className="text-gray-400 hover:text-white">
           <X className="w-5 h-5" />
@@ -166,7 +168,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
       <div className="space-y-4">
         {/* 一级分类 */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">一级分类 *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.category')} *</label>
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value as KnowledgeCategory)}
@@ -174,7 +176,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
           >
             {CATEGORY_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                {opt.label}
+                {t(opt.labelKey)}
               </option>
             ))}
           </select>
@@ -183,7 +185,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
         {/* Wing/Room 宫殿位置 */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Wing</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.wing')}</label>
             <select
               value={wing || ''}
               onChange={(e) => {
@@ -198,21 +200,21 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
               }}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
             >
-              <option value="">自动</option>
+              <option value="">{t('knowledge.labels.auto')}</option>
               {(Object.keys(WING_LABELS) as KnowledgeWing[]).map((w) => (
-                <option key={w} value={w}>{WING_LABELS[w]}</option>
+                <option key={w} value={w}>{t(`knowledge.wings.${w}`)}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Room</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.room')}</label>
             <select
               value={room || ''}
               onChange={(e) => setRoom(e.target.value || undefined)}
               disabled={!wing}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
             >
-              <option value="">自动</option>
+              <option value="">{t('knowledge.labels.auto')}</option>
               {wing && WING_ROOMS[wing]?.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
@@ -222,7 +224,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
 
         {/* 二级分类 */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">二级分类 *</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.subCategory')} *</label>
           <select
             value={subCategory}
             onChange={(e) => setSubCategory(e.target.value)}
@@ -238,12 +240,12 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
 
         {/* 三级主题 */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">三级主题（可选）</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.topicOptional')}</label>
           <input
             type="text"
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
-            placeholder="如：魔法体系、战斗规则"
+            placeholder={t('knowledge.placeholders.topic')}
             className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
           />
         </div>
@@ -251,13 +253,13 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
         {/* 名称 */}
         <div>
           <label className="block text-sm text-gray-400 mb-1">
-            名称 * ({name.length}/{MAX_NAME_LENGTH})
+            {t('knowledge.labels.name')} * ({name.length}/{MAX_NAME_LENGTH})
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="简短明确的名称"
+            placeholder={t('knowledge.placeholders.name')}
             className={`w-full bg-gray-700 border rounded px-3 py-2 text-white placeholder-gray-500 focus:outline-none ${
               name.length > MAX_NAME_LENGTH ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
             }`}
@@ -267,12 +269,12 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
         {/* 摘要 */}
         <div>
           <label className="block text-sm text-gray-400 mb-1">
-            摘要 * ({summary.length}/{MAX_SUMMARY_LENGTH})
+            {t('knowledge.labels.summary')} * ({summary.length}/{MAX_SUMMARY_LENGTH})
           </label>
           <textarea
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
-            placeholder="一句话概括，≤50字"
+            placeholder={t('knowledge.placeholders.summary')}
             rows={2}
             className={`w-full bg-gray-700 border rounded px-3 py-2 text-white placeholder-gray-500 focus:outline-none resize-none ${
               summary.length > MAX_SUMMARY_LENGTH ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
@@ -283,12 +285,12 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
         {/* 详情 */}
         <div>
           <label className="block text-sm text-gray-400 mb-1">
-            详情（可选）({detail.length}/{MAX_DETAIL_LENGTH})
+            {t('knowledge.labels.detailOptional')} ({detail.length}/{MAX_DETAIL_LENGTH})
           </label>
           <textarea
             value={detail}
             onChange={(e) => setDetail(e.target.value)}
-            placeholder="详细说明，≤200字。如果更长，请拆分为多个节点"
+            placeholder={t('knowledge.placeholders.detail')}
             rows={4}
             className={`w-full bg-gray-700 border rounded px-3 py-2 text-white placeholder-gray-500 focus:outline-none resize-none ${
               detail.length > MAX_DETAIL_LENGTH ? 'border-red-500' : 'border-gray-600 focus:border-blue-500'
@@ -298,7 +300,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
 
         {/* 标签 */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">标签</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.tags')}</label>
           <div className="flex flex-wrap gap-1 mb-2">
             {tags.map((tag) => (
               <span
@@ -321,7 +323,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
-              placeholder="输入标签后按回车"
+              placeholder={t('knowledge.placeholders.tagInput')}
               list="available-tags"
               className="flex-1 bg-gray-700 border border-gray-600 rounded px-3 py-1.5 text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
             />
@@ -335,16 +337,16 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
           {/* 可用标签 */}
           {availableTags.length > 0 && (
             <div className="mt-2">
-              <span className="text-xs text-gray-500 mr-1">可用：</span>
-              {availableTags.slice(0, 10).map((t) => (
+              <span className="text-xs text-gray-500 mr-1">{t('knowledge.labels.available')}</span>
+              {availableTags.slice(0, 10).map((at) => (
                 <button
-                  key={t}
-                  onClick={() => !tags.includes(t) && setTags([...tags, t])}
+                  key={at}
+                  onClick={() => !tags.includes(at) && setTags([...tags, at])}
                   className={`text-xs px-1.5 py-0.5 rounded mr-1 ${
-                    tags.includes(t) ? 'bg-gray-600 text-gray-400' : 'bg-gray-700 text-gray-400 hover:text-white'
+                    tags.includes(at) ? 'bg-gray-600 text-gray-400' : 'bg-gray-700 text-gray-400 hover:text-white'
                   }`}
                 >
-                  {t}
+                  {at}
                 </button>
               ))}
             </div>
@@ -353,7 +355,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
 
         {/* 重要程度 */}
         <div>
-          <label className="block text-sm text-gray-400 mb-1">重要程度</label>
+          <label className="block text-sm text-gray-400 mb-1">{t('knowledge.labels.importance')}</label>
           <div className="flex gap-2">
             {IMPORTANCE_OPTIONS.map((opt) => (
               <button
@@ -365,7 +367,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
                     : 'bg-gray-700 text-gray-400 hover:text-white'
                 }`}
               >
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
@@ -392,7 +394,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
           onClick={onCancel}
           className="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded"
         >
-          取消
+          {t('knowledge.buttons.cancel')}
         </button>
         <button
           onClick={handleSave}
@@ -404,7 +406,7 @@ export const KnowledgeNodeEditor: React.FC<Props> = ({
           }`}
         >
           <Save className="w-4 h-4" />
-          保存
+          {t('knowledge.buttons.save')}
         </button>
       </div>
     </div>

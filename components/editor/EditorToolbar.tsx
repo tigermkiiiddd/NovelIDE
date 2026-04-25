@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FileText,
   Edit3,
@@ -80,6 +81,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
   onToggleCaseSensitive,
   onOpenVersionHistory
 }) => {
+  const { t } = useTranslation();
   return (
     <>
       <div className={`flex items-center justify-between px-4 py-2 border-b shrink-0 transition-colors ${
@@ -90,11 +92,11 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <FileText size={16} className="text-blue-400" />
           <span className={`font-medium truncate font-mono text-xs sm:text-sm flex items-center gap-2 text-gray-200`}>
             {fileName || 'Untitled'}
-            {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" title="Unsaved changes" />}
+            {isDirty && <div className="w-1.5 h-1.5 rounded-full bg-yellow-500" title={t('editorToolbar.unsavedChanges')} />}
           </span>
           {fileName && (
             <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono leading-none">
-              <span>{wordCount} 字</span>
+              <span>{t('editorToolbar.wordCount', { count: wordCount })}</span>
               <span className="text-gray-700">|</span>
               <span>Ln {cursorStats?.line}, Col {cursorStats?.col}</span>
             </div>
@@ -109,7 +111,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${
               searchOpen ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-700'
             }`}
-            title="搜索 (Ctrl+F)"
+            title={t('editorToolbar.search')}
           >
             <Search size={14} />
           </button>
@@ -120,7 +122,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all ${
               mode === 'edit' || isSplitView ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'
             }`}
-            title={wordWrap ? "自动换行: 开启" : "自动换行: 关闭"}
+            title={wordWrap ? t('editorToolbar.wordWrapOn') : t('editorToolbar.wordWrapOff')}
           >
             <WrapText size={14} />
           </button>
@@ -129,7 +131,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${
               mode === 'edit' || isSplitView ? 'bg-gray-700 text-blue-400' : 'text-gray-500 hover:text-gray-300'
             }`}
-            title="显示行号"
+            title={t('editorToolbar.showLineNumbers')}
           >
             <ListOrdered size={14} />
           </button>
@@ -141,7 +143,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${
               canUndo ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-700 cursor-not-allowed'
             }`}
-            title="Undo (Ctrl+Z)"
+            title={t('editorToolbar.undo')}
           >
             <RotateCcw size={14} />
           </button>
@@ -151,7 +153,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 ${
               canRedo ? 'text-gray-400 hover:text-white hover:bg-gray-700' : 'text-gray-700 cursor-not-allowed'
             }`}
-            title="Redo (Ctrl+Shift+Z)"
+            title={t('editorToolbar.redo')}
           >
             <RotateCw size={14} />
           </button>
@@ -160,7 +162,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <button
             onClick={onOpenVersionHistory}
             className="flex items-center justify-center w-8 h-7 rounded transition-all border-r border-gray-700 mr-1 text-gray-400 hover:text-white hover:bg-gray-700"
-            title="版本历史"
+            title={t('editorToolbar.versionHistory')}
           >
             <History size={14} />
           </button>
@@ -171,7 +173,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all ${
               mode === 'edit' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'
             }`}
-            title="Edit Mode"
+            title={t('editorToolbar.editMode')}
           >
             <Edit3 size={14} />
           </button>
@@ -180,7 +182,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`flex items-center justify-center w-8 h-7 rounded transition-all ${
               mode === 'preview' && !isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'
             }`}
-            title="Preview Mode"
+            title={t('editorToolbar.previewMode')}
           >
             <Eye size={14} />
           </button>
@@ -189,7 +191,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
             className={`hidden md:flex items-center justify-center w-8 h-7 rounded transition-all border-l border-gray-700 ml-1 ${
               isSplitView ? 'bg-gray-700 text-blue-400 shadow-sm' : 'text-gray-500 hover:text-gray-300'
             }`}
-            title={isSplitView ? "关闭分屏" : "开启分屏"}
+            title={isSplitView ? t('editorToolbar.closeSplit') : t('editorToolbar.openSplit')}
           >
             {isSplitView ? <Columns size={14} /> : <AlignJustify size={14} />}
           </button>
@@ -204,7 +206,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange?.(e.target.value)}
-              placeholder="搜索..."
+              placeholder={t('editorToolbar.searchPlaceholder')}
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
               autoFocus
             />
@@ -223,7 +225,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               onClick={onSearchPrev}
               disabled={!searchTerm || totalMatches === 0}
               className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="上一个 (Shift+Enter)"
+              title={t('editorToolbar.prevMatch')}
             >
               <ChevronUp size={16} />
             </button>
@@ -231,7 +233,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
               onClick={onSearchNext}
               disabled={!searchTerm || totalMatches === 0}
               className="p-1.5 rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              title="下一个 (Enter)"
+              title={t('editorToolbar.nextMatch')}
             >
               <ChevronDown size={16} />
             </button>
@@ -250,7 +252,7 @@ export const EditorToolbar: React.FC<EditorToolbarProps> = ({
                 ? 'bg-blue-600 border-blue-500 text-white'
                 : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'
             }`}
-            title="区分大小写"
+            title={t('editorToolbar.caseSensitive')}
           >
             Aa
           </button>

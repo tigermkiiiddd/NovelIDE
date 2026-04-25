@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '../stores/projectStore';
 import { useAgentStore } from '../stores/agentStore';
 import { AIService } from '../services/geminiService';
@@ -7,7 +8,7 @@ import { createRoutedAIService } from '../services/modelRouter';
 import { exportProject, importProject } from '../services/projectService';
 import { getDisplayVersion } from '../utils/version';
 import { getPresetById } from '../services/resources/presets';
-import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info, Languages } from 'lucide-react';
+import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
 import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
 import { useUiStore } from '../stores/uiStore';
@@ -17,6 +18,7 @@ interface ProjectManagerProps {
 }
 
 const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
+  const { t } = useTranslation();
   // Use Zustand Selector
   const projects = useProjectStore(state => state.projects);
   const isLoading = useProjectStore(state => state.isLoading);
@@ -133,7 +135,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm('确定要删除这个项目吗？所有文件将无法恢复。')) {
+    if (confirm(t('projectManager.confirmDelete'))) {
         await deleteProject(id);
     }
   };
@@ -154,7 +156,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
       } catch (err) {
-          alert('导出失败: ' + err);
+          alert(t('projectManager.exportFailed', { error: String(err) }));
       }
   };
 
@@ -172,9 +174,9 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
               const content = event.target?.result as string;
               await importProject(content);
               await refreshProjects();
-              alert('项目导入成功！');
+              alert(t('projectManager.importSuccess'));
           } catch (err) {
-              alert('导入失败: 无效的项目文件');
+              alert(t('projectManager.importFailed'));
               console.error(err);
           }
       };
@@ -185,7 +187,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
   // Open Modal logic
   const handleOpenPolishModal = () => {
       if (!hasApiKey) {
-          if (confirm("未检测到 API Key。AI 润色功能需要配置 API Key 才能使用。\n是否现在打开设置进行配置？")) {
+          if (confirm(t('projectManager.confirmNoApiKey'))) {
               setIsSettingsOpen(true);
           }
           return;
@@ -365,7 +367,7 @@ ${polishInstruction || '(无额外指令)'}
 
       } catch (e) {
           console.error(e);
-          alert('AI 润色失败，请检查配置或网络。');
+          alert(t('projectManager.polishFailed'));
       } finally {
           setIsPolishing(false);
       }
@@ -408,21 +410,24 @@ ${polishInstruction || '(无额外指令)'}
                 v{getDisplayVersion()}
               </span>
             </div>
-            <p className="text-gray-500 mt-2">选择一个项目开始创作，或创建一个新的世界。</p>
+            <p className="text-gray-500 mt-2">{t('projectManager.subtitle')}</p>
           </div>
           <div className="flex w-full gap-2 md:w-auto md:gap-3">
-             <button
-                onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-                className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-3 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
-                title={language === 'zh' ? 'Switch to English' : '切换到中文'}
-             >
-                <Languages size={20} />
-                <span className="text-xs font-medium">{language === 'zh' ? 'EN' : '中'}</span>
-             </button>
+             <div className="relative">
+                <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value as 'zh' | 'en')}
+                    className="appearance-none bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2.5 pr-8 rounded-lg border border-gray-700 min-h-[44px] text-xs font-medium focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                    <option value="zh">{t('aiSettings.langZh')}</option>
+                    <option value="en">{t('aiSettings.langEn')}</option>
+                </select>
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-xs">▼</div>
+             </div>
              <button
                 onClick={() => setIsSettingsOpen(true)}
                 className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-3 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
-                title="全局 AI 设置"
+                title={t('projectManager.globalSettingsTooltip')}
              >
                 <Settings size={20} />
              </button>
@@ -438,14 +443,14 @@ ${polishInstruction || '(无额外指令)'}
                 className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 active:bg-gray-600 text-gray-300 px-4 py-2.5 rounded-lg transition-colors border border-gray-700 min-h-[44px]"
               >
                 <Upload size={20} />
-                <span className="hidden sm:inline">导入</span>
+                <span className="hidden sm:inline">{t('common.import')}</span>
               </button>
               <button
                 onClick={() => setIsCreating(true)}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 rounded-lg transition-colors shadow-lg min-h-[44px]"
               >
                 <Plus size={20} />
-                <span>新建项目</span>
+                <span>{t('projectManager.newProject')}</span>
               </button>
           </div>
         </header>
@@ -457,17 +462,17 @@ ${polishInstruction || '(无额外指令)'}
               <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                   <Book size={20} className="text-blue-400" />
-                  创建新项目
+                  {t('projectManager.createProject')}
                 </h3>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleOpenPolishModal}
-                    title={!hasApiKey ? "需要先配置 API Key" : "AI 智能润色"}
+                    title={!hasApiKey ? t('projectManager.aiPolishNoApiKey') : t('projectManager.aiPolishButton')}
                     className="text-xs flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-3 py-1.5 rounded-full min-h-[36px]"
                   >
                     <Sparkles size={12} />
-                    润色
+                    {t('projectManager.aiPolishShort')}
                   </button>
                   <button onClick={resetForm} className="p-2 text-gray-400 active:text-white min-h-[44px] min-w-[44px] flex items-center justify-center">
                     <X size={24} />
@@ -483,14 +488,14 @@ ${polishInstruction || '(无额外指令)'}
                       onClick={resetForm}
                       className="flex-1 px-4 py-2.5 text-gray-400 transition-colors active:text-white rounded-lg border border-gray-700 min-h-[44px]"
                     >
-                      取消
+                      {t('common.cancel')}
                     </button>
                     <button
                       type="submit"
                       disabled={!name.trim()}
                       className="flex-1 rounded-lg bg-blue-600 px-6 py-2.5 text-white shadow-lg shadow-blue-900/20 transition-all active:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
                     >
-                      创建
+                      {t('common.create')}
                     </button>
                   </div>
                 </form>
@@ -505,16 +510,16 @@ ${polishInstruction || '(无额外指令)'}
             <div className="p-4 sm:p-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                     <Book size={20} className="text-blue-400" />
-                    创建新项目
+                    {t('projectManager.createProject')}
                 </h3>
                 <button
                     type="button"
                     onClick={handleOpenPolishModal}
-                    title={!hasApiKey ? "需要先配置 API Key" : "根据输入内容自动完善设定"}
+                    title={!hasApiKey ? t('projectManager.aiPolishNoApiKey') : t('projectManager.aiPolishHasApiKey')}
                     className="text-xs flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded-full shadow-lg transition-all transform active:scale-95 ring-1 ring-white/10"
                 >
                     <Sparkles size={12} />
-                    AI 智能润色
+                    {t('projectManager.aiPolishButton')}
                 </button>
             </div>
 
@@ -528,14 +533,14 @@ ${polishInstruction || '(无额外指令)'}
                     onClick={resetForm}
                     className="w-full px-4 py-2 text-gray-400 transition-colors hover:text-white sm:w-auto"
                   >
-                    取消
+                    {t('common.cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={!name.trim()}
                     className="w-full rounded-lg bg-blue-600 px-6 py-2 text-white shadow-lg shadow-blue-900/20 transition-all hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                   >
-                    创建
+                    {t('common.create')}
                   </button>
                 </div>
               </form>
@@ -548,7 +553,7 @@ ${polishInstruction || '(无额外指令)'}
           {projects.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-gray-500 border-2 border-dashed border-gray-800 rounded-xl">
               <Book size={48} className="mb-4 opacity-20" />
-              <p>暂无项目，请点击右上方按钮创建。</p>
+              <p>{t('projectManager.emptyState')}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -566,14 +571,14 @@ ${polishInstruction || '(无额外指令)'}
                         <button
                             onClick={(e) => handleExport(e, project.id)}
                             className="p-2.5 text-gray-500 hover:text-white hover:bg-gray-700 active:bg-gray-600 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                            title="导出项目"
+                            title={t('projectManager.exportProject')}
                         >
                             <Download size={16} />
                         </button>
                         <button
                             onClick={(e) => handleDelete(e, project.id)}
                             className="p-2.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 active:bg-red-900/30 rounded-full transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-                            title="删除项目"
+                            title={t('projectManager.deleteProject')}
                         >
                             <Trash2 size={16} />
                         </button>
@@ -583,20 +588,20 @@ ${polishInstruction || '(无额外指令)'}
                   <h3 className="font-bold text-lg text-gray-100 mb-1 truncate">{project.name}</h3>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">
-                        {project.genre || '通用'}
+                        {project.genre || t('projectManager.genreDefault')}
                     </span>
                     <span className="text-xs text-gray-500 flex items-center gap-1">
-                        <Target size={10} /> {project.targetChapters}章
+                        <Target size={10} /> {t('projectManager.chapterUnit', { count: project.targetChapters })}
                     </span>
                   </div>
                   <p className="text-sm text-gray-500 mb-6 line-clamp-2 h-10">
-                    {project.description || '暂无简介'}
+                    {project.description || t('projectManager.noDescription')}
                   </p>
 
                   <div className="mt-auto flex items-center text-xs text-gray-600 pt-3 border-t border-gray-800">
                     <Clock size={12} className="mr-1" />
                     <span>
-                      最后编辑: {new Date(project.lastModified).toLocaleDateString()}
+                      {t('projectManager.lastEdited', { date: new Date(project.lastModified).toLocaleDateString() })}
                     </span>
                   </div>
                 </div>
@@ -633,7 +638,7 @@ ${polishInstruction || '(无额外指令)'}
                 <div className="p-4 sm:p-6 overflow-y-auto custom-scrollbar">
                     <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-gray-100">
                         <Settings className="text-blue-400" />
-                        全局 AI 配置
+                        {t('projectManager.globalSettings')}
                     </h2>
                     <AISettingsForm
                         config={aiConfig}
@@ -656,7 +661,7 @@ ${polishInstruction || '(无额外指令)'}
                 <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Sparkles size={18} className="text-purple-400" />
-                        AI 设定助手
+                        {t('projectManager.aiAssistant')}
                     </h3>
                     <button
                         onClick={() => setShowPolishModal(false)}
@@ -669,12 +674,12 @@ ${polishInstruction || '(无额外指令)'}
 
                 <div className="mb-4 flex-1">
                     <label className="block text-sm text-gray-400 mb-2">
-                        额外指令 / 修改需求 (可选)
+                        {t('projectManager.aiExtraInstruction')}
                     </label>
                     <textarea
                         value={polishInstruction}
                         onChange={e => setPolishInstruction(e.target.value)}
-                        placeholder="例如：把主角改成反派、风格要更黑暗一点、或者将背景设定在赛博朋克世界..."
+                        placeholder={t('projectManager.aiPlaceholder')}
                         className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white focus:border-purple-500 focus:outline-none resize-none h-32 text-sm placeholder-gray-600"
                         autoComplete="off"
                     />
@@ -686,7 +691,7 @@ ${polishInstruction || '(无额外指令)'}
                         className="px-4 py-2.5 text-sm text-gray-400 hover:text-white transition-colors min-h-[44px]"
                         disabled={isPolishing}
                     >
-                        取消
+                        {t('common.cancel')}
                     </button>
                     <button
                         onClick={handleRunPolish}
@@ -694,7 +699,7 @@ ${polishInstruction || '(无额外指令)'}
                         className="px-6 py-2.5 text-sm bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white rounded-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-purple-900/20 min-h-[44px]"
                     >
                         {isPolishing ? <Loader2 size={16} className="animate-spin"/> : <Sparkles size={16} />}
-                        {isPolishing ? 'AI 正在构思...' : '开始生成'}
+                        {isPolishing ? t('projectManager.aiGenerating') : t('projectManager.aiStartGenerate')}
                     </button>
                 </div>
             </div>

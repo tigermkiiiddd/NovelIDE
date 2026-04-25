@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Menu, ArrowLeft, Settings, Search, HelpCircle } from 'lucide-react';
 import FileExplorer from './FileExplorer';
 import FileSearch from './FileSearch';
@@ -32,6 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onAnalyzeFile
 }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const { t } = useTranslation();
 
   // Global keyboard shortcut for search (Ctrl+Shift+F)
   useEffect(() => {
@@ -96,10 +98,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           <button
             onClick={() => setIsSearchOpen(true)}
             className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-400 bg-gray-800/50 hover:bg-gray-800 hover:text-white rounded-lg transition-colors"
-            title="搜索文件 (Ctrl+Shift+F)"
+            title={t('sidebar.searchTooltip')}
           >
             <Search size={16} />
-            <span>搜索文件...</span>
+            <span>{t('sidebar.searchFiles')}</span>
             <span className="ml-auto text-xs text-gray-600">Ctrl+Shift+F</span>
           </button>
         </div>
@@ -111,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 className="flex items-center space-x-2 text-sm text-gray-400 hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-gray-800"
             >
                 <ArrowLeft size={16} />
-                <span>返回项目列表</span>
+                <span>{t('sidebar.backToProjects')}</span>
             </button>
         </div>
 
@@ -139,7 +141,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 className="flex items-center space-x-2 w-full p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
             >
                 <Settings size={16} />
-                <span>项目概览 & 设置</span>
+                <span>{t('sidebar.projectOverviewSettings')}</span>
             </button>
             {onOpenTutorial && (
               <button
@@ -147,7 +149,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   className="flex items-center space-x-2 w-full p-2 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
               >
                   <HelpCircle size={16} />
-                  <span>新手指南</span>
+                  <span>{t('common.tutorial')}</span>
               </button>
             )}
         </div>

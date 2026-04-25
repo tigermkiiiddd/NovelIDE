@@ -27,6 +27,7 @@ import { createRoutedAIService } from '../services/modelRouter';
 import { runChapterAnalysisAgent, applyMergeActions } from '../services/subAgents/chapterAnalysisAgent';
 import { getNodePath } from '../services/fileSystem';
 import { getOfficialCharacterList } from '../utils/characterUtils';
+import i18n from '../i18n';
 
 // ============================================
 // 数据迁移函数：旧格式 → 新格式
@@ -537,7 +538,7 @@ export const useChapterAnalysisStore: UseBoundStore<StoreApi<ChapterAnalysisStat
 
       } catch (error: any) {
         console.error('[ChapterAnalysisStore] 提取失败:', error);
-        state.setExtractionError(error.message || '未知错误');
+        state.setExtractionError(error.message || i18n.t('storeMessages.unknownError'));
         throw error;
       } finally {
         state.setExtracting(false);

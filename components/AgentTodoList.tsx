@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ListTodo, ChevronDown, ChevronUp } from 'lucide-react';
 import { TodoItem } from '../types';
 
@@ -8,6 +9,7 @@ interface AgentTodoListProps {
 }
 
 const AgentTodoList: React.FC<AgentTodoListProps> = ({ todos }) => {
+  const { t } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(true);
   const pendingCount = todos.filter(t => t.status === 'pending').length;
 
@@ -19,7 +21,7 @@ const AgentTodoList: React.FC<AgentTodoListProps> = ({ todos }) => {
         >
             <div className="flex items-center gap-2">
                 <ListTodo size={14} className={pendingCount > 0 ? "text-yellow-400" : "text-gray-500"} />
-                <span>任务面板 (待办: {pendingCount})</span>
+                <span>{t('todo.title', { count: pendingCount })}</span>
             </div>
             {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
@@ -28,7 +30,7 @@ const AgentTodoList: React.FC<AgentTodoListProps> = ({ todos }) => {
             <div className="px-3 pb-3 max-h-40 overflow-y-auto">
                 {todos.length === 0 ? (
                     <div className="text-xs text-gray-600 italic py-2 text-center border border-dashed border-gray-700 rounded">
-                        暂无任务 (Agent 空闲)
+                        {t('todo.empty')}
                     </div>
                 ) : (
                     <ul className="space-y-1">

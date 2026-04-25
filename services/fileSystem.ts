@@ -223,9 +223,8 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       version: 1,
     }, null, 2)),
 
-    // --- 98_技能配置/skills/核心/ (soul + protocol) ---
+    // --- 98_技能配置/skills/核心/ (soul only, protocol is code-embedded) ---
     createFile('soul.md', coreCatFolder.id, DEFAULT_SOUL),
-    createFile('protocol.md', coreCatFolder.id, DEFAULT_PROTOCOL),
   ];
 
   // --- 分类 Skill 创建 ---

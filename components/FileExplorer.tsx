@@ -1,8 +1,10 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileNode, FileType } from '../types';
 import { Folder, FileText, ChevronRight, ChevronDown, Plus, Trash2, FilePlus, FolderPlus, X, Edit2, Download, Sparkles } from 'lucide-react';
 import { downloadSingleFile, downloadFolderAsZip } from '../utils/exportUtils';
+import { getNodeDisplayName } from '../utils/displayUtils';
 import { ProtectionLevel, getProtectionLevel } from '../domains/file/protectionRegistry';
 import { getNodePath } from '../services/fileSystem';
 
@@ -29,6 +31,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   onAnalyzeFile,
   className
 }) => {
+  const { t } = useTranslation();
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['root']));
 
   // --- Modal State ---
@@ -122,7 +125,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     const children = sortedTree.get(parentId) || [];
 
     if (children.length === 0 && parentId === 'root') {
-       return <div className="p-4 text-gray-500 text-sm text-center">暂无文件</div>
+       return <div className="p-4 text-gray-500 text-sm text-center">{t('fileExplorer.empty')}</div>
     }
 
     return children.map(node => {
@@ -163,7 +166,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             </span>
 
             <span className={`flex-1 truncate text-sm ${isActive ? 'text-white font-medium' : 'text-gray-300'}`}>
-              {node.name}
+              {getNodeDisplayName(node)}
             </span>
 
             {/* Actions Group - Always visible for mobile */}
@@ -180,7 +183,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                         onAnalyzeFile(node);
                       }}
                       className="p-1 hover:text-purple-400 text-gray-500 transition-colors"
-                      title="章节分析"
+                      title={t('fileExplorer.chapterAnalysis')}
                     >
                       <Sparkles size={14} />
                     </button>
@@ -191,7 +194,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 <button
                     onClick={(e) => handleDownloadClick(e, node)}
                     className="p-1 hover:text-green-400 text-gray-500 transition-colors"
-                    title={node.type === FileType.FOLDER ? "下载文件夹 (Zip)" : "下载文件"}
+                    title={node.type === FileType.FOLDER ? t('fileExplorer.downloadFolder') : t('fileExplorer.downloadFile')}
                 >
                     <Download size={14} />
                 </button>
@@ -200,7 +203,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 <button
                     onClick={(e) => handleRenameClick(e, node)}
                     className="p-1 hover:text-white text-gray-500 transition-colors"
-                    title="重命名"
+                    title={t('fileExplorer.rename')}
                 >
                     <Edit2 size={14} />
                 </button>
@@ -211,14 +214,14 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                         <button
                             onClick={(e) => handleCreateClick(e, node.id, 'FILE')}
                             className="p-1 hover:text-blue-400 text-gray-500 transition-colors"
-                            title="新建文件"
+                            title={t('fileExplorer.newFile')}
                         >
                             <FilePlus size={14} />
                         </button>
                         <button
                             onClick={(e) => handleCreateClick(e, node.id, 'FOLDER')}
                             className="p-1 hover:text-yellow-400 text-gray-500 transition-colors"
-                            title="新建文件夹"
+                            title={t('fileExplorer.newFolder')}
                         >
                             <FolderPlus size={14} />
                         </button>
@@ -234,7 +237,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                             onDeleteFile(node.id);
                         }}
                         className="p-1 hover:text-red-400 text-gray-500 transition-colors"
-                        title="删除"
+                        title={t('common.delete')}
                     >
                         <Trash2 size={14} />
                     </button>
@@ -253,7 +256,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   return (
     <div className={`overflow-y-auto h-full ${className}`}>
       <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-850 sticky top-0 z-10">
-        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">项目文件</h2>
+        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider">{t('fileExplorer.projectFiles')}</h2>
       </div>
       <div className="py-2">
         {renderTree('root')}
@@ -272,7 +275,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                             ? <Edit2 size={16} className="text-purple-400"/> 
                             : (modalType === 'FILE' ? <FilePlus size={16} className="text-blue-400"/> : <FolderPlus size={16} className="text-yellow-400"/>)
                         }
-                        {modalType === 'RENAME' ? '重命名' : (modalType === 'FILE' ? '新建文件' : '新建文件夹')}
+                        {modalType === 'RENAME' ? t('fileExplorer.renameTitle') : (modalType === 'FILE' ? t('fileExplorer.newFileTitle') : t('fileExplorer.newFolderTitle'))}
                     </h3>
                     <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-white transition-colors">
                         <X size={18} />
@@ -280,7 +283,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 </div>
                 <form onSubmit={handleModalSubmit} className="p-4">
                     <label className="block text-xs text-gray-400 mb-1.5 uppercase tracking-wide">
-                        {modalType === 'FILE' ? '文件名' : (modalType === 'FOLDER' ? '文件夹名称' : '新名称')}
+                        {modalType === 'FILE' ? t('fileExplorer.fileLabel') : (modalType === 'FOLDER' ? t('fileExplorer.folderLabel') : t('fileExplorer.renameLabel'))}
                     </label>
                     <input 
                         ref={inputRef}
@@ -288,7 +291,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                         value={inputValue}
                         onChange={e => setInputValue(e.target.value)}
                         className="w-full bg-gray-900 border border-gray-600 rounded-lg p-2.5 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-gray-600"
-                        placeholder={modalType === 'FILE' ? "例如: 第一章.md" : "例如: 设定集"}
+                        placeholder={modalType === 'FILE' ? t('fileExplorer.filePlaceholder') : t('fileExplorer.folderPlaceholder')}
                     />
                     <div className="flex justify-end gap-3 mt-4">
                         <button 
@@ -296,14 +299,14 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                             onClick={() => setIsModalOpen(false)}
                             className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
                         >
-                            取消
+                            {t('common.cancel')}
                         </button>
                         <button 
                             type="submit"
                             disabled={!inputValue.trim()}
                             className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/20"
                         >
-                            {modalType === 'RENAME' ? '确认修改' : '创建'}
+                            {modalType === 'RENAME' ? t('fileExplorer.confirmRename') : t('common.create')}
                         </button>
                     </div>
                 </form>

@@ -8,6 +8,7 @@ import AISettingsForm from './AISettingsForm';
 import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
 import { UsageStatsPanel } from './UsageStatsPanel';
 import { EmbeddingAdminPanel } from './EmbeddingAdminPanel';
+import { useTranslation } from 'react-i18next';
 
 interface ProjectOverviewProps {
   project: ProjectMeta;
@@ -24,6 +25,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
     project, files, isOpen, onClose, onUpdate,
     aiConfig, onUpdateAIConfig
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'overview' | 'settings' | 'usage' | 'embedding'>('overview');
 
   // Overview State
@@ -109,7 +111,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                     : 'text-gray-400 border-transparent hover:text-gray-200'
                 }`}
               >
-                  <span className="flex items-center gap-2"><TrendingUp size={16}/> 项目概览</span>
+                  <span className="flex items-center gap-2"><TrendingUp size={16}/> {t('projectOverview.tab')}</span>
               </button>
               <button
                 onClick={() => setActiveTab('settings')}
@@ -119,7 +121,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                     : 'text-gray-400 border-transparent hover:text-gray-200'
                 }`}
               >
-                   <span className="flex items-center gap-2"><Settings size={16}/> AI 设置</span>
+                   <span className="flex items-center gap-2"><Settings size={16}/> {t('projectOverview.aiSettings')}</span>
               </button>
               <button
                 onClick={() => setActiveTab('usage')}
@@ -157,12 +159,12 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
                 {/* Project Metadata Form */}
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-medium text-gray-300">基础信息 & 规划</h3>
+                        <h3 className="text-lg font-medium text-gray-300">{t('projectOverview.basicInfo')}</h3>
                         <button
                             onClick={handleSaveProject}
                             className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded flex items-center gap-1 transition-colors"
                         >
-                            <Save size={12} /> 保存更改
+                            <Save size={12} /> {t('projectOverview.saveChanges')}
                         </button>
                     </div>
 
@@ -188,9 +190,9 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({
 
                 {/* Footer Info */}
                 <div className="text-center text-xs text-gray-600 pt-8 border-t border-gray-800">
-                    项目ID: {project.id} <br/>
-                    创建时间: {new Date(project.createdAt).toLocaleString()} <br/>
-                    最后修改: {new Date(project.lastModified).toLocaleString()}
+                    {t('projectOverview.projectId', { id: project.id })} <br/>
+                    {t('projectOverview.createdAt', { date: new Date(project.createdAt).toLocaleString() })} <br/>
+                    {t('projectOverview.lastModified', { date: new Date(project.lastModified).toLocaleString() })}
                 </div>
             </div>
           )}

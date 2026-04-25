@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface JsonViewerProps {
   content: string;
 }
 
 export const JsonViewer: React.FC<JsonViewerProps> = ({ content }) => {
+  const { t } = useTranslation();
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['']));
 
   const parsedJson = useMemo(() => {
@@ -30,7 +32,7 @@ export const JsonViewer: React.FC<JsonViewerProps> = ({ content }) => {
   if (!parsedJson) {
     return (
       <div style={{ padding: '20px', color: '#f48771', backgroundColor: '#1e1e1e' }}>
-        无效的 JSON 格式
+        {t('jsonViewer.invalidJson')}
       </div>
     );
   }

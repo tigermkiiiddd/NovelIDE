@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import { PlanNote, PlanNoteLine, PlanNoteAnnotation } from '../types';
 import { dbAPI } from '../services/persistence';
 import { generateId } from '../services/fileSystem';
+import i18n from '../i18n';
 
 // 简单的 debounce 工具函数
 const debounce = <T extends (...args: any[]) => any>(
@@ -106,7 +107,7 @@ export const usePlanStore = create<PlanState>((set, get) => ({
     }
   },
 
-  createPlanNote: (sessionId, projectId, title = '新计划') => {
+  createPlanNote: (sessionId, projectId, title = i18n.t('storeMessages.newPlan')) => {
     const newPlan: PlanNote = {
       id: generateId(),
       sessionId,

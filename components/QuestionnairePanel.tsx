@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight, Check, Star, HelpCircle } from 'lucide-react';
 import { Questionnaire } from '../types';
 
@@ -20,6 +21,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
   onNavigate,
   onComplete,
 }) => {
+  const { t } = useTranslation();
   const { questions, currentIndex } = questionnaire;
   const currentQuestion = questions[currentIndex];
   const total = questions.length;
@@ -75,7 +77,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
       <div className="px-2.5 py-1 bg-amber-900/20 border-b border-amber-800/30 flex items-center justify-between">
         <div className="flex items-center gap-1">
           <HelpCircle size={11} className="text-amber-400" />
-          <span className="text-[11px] font-medium text-amber-200">澄清问卷</span>
+          <span className="text-[11px] font-medium text-amber-200">{t('questionnaire.title')}</span>
         </div>
         <div className="text-[10px] text-amber-400/60 font-mono">
           {currentIndex + 1}/{total}
@@ -102,7 +104,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
                 : 'bg-purple-900/50 text-purple-400 border border-purple-800/50'
               }
             `}>
-              {currentQuestion.type === 'single' ? '单选' : '多选'}
+              {currentQuestion.type === 'single' ? t('questionnaire.singleSelect') : t('questionnaire.multiSelect')}
             </span>
             <span className="text-xs text-gray-200 font-medium leading-snug">{currentQuestion.text}</span>
           </div>
@@ -143,7 +145,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
                         {option.label}
                       </span>
                       {option.isRecommended && (
-                        <span className="ml-1 text-[9px] text-amber-400">★ 推荐</span>
+                        <span className="ml-1 text-[9px] text-amber-400">{t('questionnaire.recommended')}</span>
                       )}
                       <p className="text-[11px] text-gray-500 leading-snug mt-0.5">
                         {option.description}
@@ -178,7 +180,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
                   )}
                 </div>
                 <span className={`text-[11px] font-medium ${isOptionSelected(OTHER_OPTION_ID) ? 'text-amber-200' : 'text-gray-300'}`}>
-                  其他（请说明）
+                  {t('questionnaire.otherOption')}
                 </span>
               </div>
             </button>
@@ -189,7 +191,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
                 <textarea
                   value={currentQuestion.userTextAnswer || ''}
                   onChange={(e) => onTextAnswer(currentQuestion.id, e.target.value)}
-                  placeholder="请填写你的想法..."
+                  placeholder={t('questionnaire.otherPlaceholder')}
                   rows={2}
                   className="w-full bg-gray-900/60 text-gray-200 placeholder-gray-600 border border-amber-700/40 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-amber-500/60 resize-none leading-snug"
                 />
@@ -210,7 +212,7 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
           `}
         >
           <ChevronLeft size={13} />
-          上一题
+          {t('questionnaire.prevQuestion')}
         </button>
 
         <div className="flex items-center gap-0.5">
@@ -241,14 +243,14 @@ const QuestionnairePanel: React.FC<QuestionnairePanelProps> = ({
             `}
           >
             <Check size={11} />
-            完成
+            {t('questionnaire.complete')}
           </button>
         ) : (
           <button
             onClick={() => onNavigate(currentIndex + 1)}
             className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
           >
-            下一题
+            {t('questionnaire.nextQuestion')}
             <ChevronRight size={13} />
           </button>
         )}

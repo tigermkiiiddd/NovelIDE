@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ProjectMeta, FileNode, FileType } from '../types';
 import { useProjectStats } from '../hooks/useProjectStats';
 import { Settings, FileText, CheckCircle, Target, GitBranch, AlertCircle, HelpCircle } from 'lucide-react';
@@ -22,6 +23,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
   isAgentThinking
 }) => {
   const stats = useProjectStats(project, files);
+  const { t } = useTranslation();
 
   return (
     <div className="h-7 bg-[#161b22] border-t border-gray-800 flex items-center justify-between px-2 sm:px-3 text-[10px] sm:text-[11px] select-none text-gray-400 font-mono shrink-0 safe-area-bottom">
@@ -59,25 +61,25 @@ const StatusBar: React.FC<StatusBarProps> = ({
          <div
             onClick={onOpenSettings}
             className="flex items-center gap-2 sm:gap-4 cursor-pointer hover:bg-gray-800 h-7 px-1.5 sm:px-2 transition-colors rounded"
-            title="点击查看详细项目概览"
+            title={t('statusBar.clickToViewOverview')}
          >
              {/* Word Count - Always visible */}
              <div className="flex items-center gap-1 hover:text-white">
                 <FileText size={12} className="shrink-0" />
                 <span>{stats.wordCount.toLocaleString()}</span>
-                <span className="hidden sm:inline">字</span>
+                <span className="hidden sm:inline">{t('statusBar.wordUnit')}</span>
              </div>
 
              {/* Chapter Progress - Desktop: full text, Mobile: simplified */}
              <div className="flex items-center gap-1 hover:text-white">
                 <Target size={12} className="shrink-0 hidden sm:block" />
                 <span className="sm:hidden text-[10px]">{stats.chapterCount}/{project.targetChapters}</span>
-                <span className="hidden sm:inline">{stats.chapterCount}/{project.targetChapters} 章</span>
+                <span className="hidden sm:inline">{t('statusBar.chapterProgress', { current: stats.chapterCount, target: project.targetChapters })}</span>
              </div>
 
              {/* Clue Rate - Desktop: text, Mobile: icon color only */}
              <div className="flex items-center gap-1 hover:text-white">
-                <span title={`伏笔率: ${stats.clueRate}%`}>
+                <span title={t('statusBar.clueRateTooltip', { rate: stats.clueRate })}>
                   <CheckCircle
                     className={`shrink-0 w-3 h-3 ${
                       stats.clueRate === 100 ? 'text-green-500' :
@@ -85,7 +87,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
                     }`}
                   />
                 </span>
-                <span className="hidden sm:inline">伏笔 {stats.clueRate}%</span>
+                <span className="hidden sm:inline">{t('statusBar.clueRate', { rate: stats.clueRate })}</span>
              </div>
 
              {/* Simple Progress Bar - Desktop only */}
@@ -98,7 +100,7 @@ const StatusBar: React.FC<StatusBarProps> = ({
 
              <Settings size={12} className="text-gray-500 hover:text-white ml-1 sm:ml-2 shrink-0 cursor-pointer" onClick={onOpenSettings} />
              {onOpenTutorial && (
-               <span title="新手指南">
+               <span title={t('common.tutorial')}>
                  <HelpCircle
                    className="hidden sm:block text-gray-500 hover:text-white shrink-0 cursor-pointer w-3 h-3"
                    onClick={onOpenTutorial}
