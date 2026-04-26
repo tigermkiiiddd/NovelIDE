@@ -25,9 +25,6 @@ export const fixWindowStart = (messages: ChatMessage[]): ChatMessage[] => {
 export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
   if (messages.length === 0) return messages;
 
-  console.log(`[fixWindowIntegrity] INPUT: ${messages.length} messages`);
-  messages.forEach((m, i) => console.log(`  [${i}] role=${m.role}, id=${m.id}, hasRawParts=${!!m.rawParts}, isToolOutput=${m.isToolOutput}, text=${m.text?.substring(0, 50)}`));
-
   const result: ChatMessage[] = [];
   let lastToolCallsMessage: ChatMessage | null = null;
 
@@ -83,9 +80,6 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
     result.push(message);
   }
 
-  console.log(`[fixWindowIntegrity] OUTPUT: ${result.length} messages`);
-  result.forEach((m, i) => console.log(`  [${i}] role=${m.role}, id=${m.id}, text=${m.text?.substring(0, 50)}`));
-
   return result;
 };
 
@@ -93,6 +87,9 @@ export const getWindowedMessages = (
   messages: ChatMessage[],
   maxMessages: number = MAX_CONTEXT_MESSAGES
 ): ChatMessage[] => {
+  // Fixed window first, then repair tool-call boundaries for API validity.
+  // The window does not mutate old message contents; continuity belongs to
+  // project assets and workflow retrieval, not chat-history decay.
   const base = buildSimpleHistory(messages, { maxMessages });
   return fixWindowIntegrity(fixWindowStart(base));
 };

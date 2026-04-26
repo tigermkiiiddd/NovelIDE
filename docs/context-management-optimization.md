@@ -20,12 +20,12 @@ long-running coherence, and prompt-cache reuse.
    `constructSystemPrompt` currently receives project state, todos, messages, and memory inputs.
    This makes the first part of the request change often, which lowers prefix-cache reuse.
 
-2. History decay mutates older messages
+2. Fixed window replaces dynamic history decay
 
-   `buildSimpleHistory` can strip tool args or remove old tool call/result pairs. This is useful
-   for token control, but it means the same earlier conversation can serialize differently over
-   time, which is unfriendly to provider prompt caches. For fiction continuity, the deeper risk is
-   treating old chat/tool logs as truth instead of querying canon assets.
+   `buildSimpleHistory` now keeps a fixed recent transcript and does not strip tool args, remove old
+   model text by age, or rewrite previous messages. Tool call/result legality is repaired after
+   slicing. Fiction continuity should come from canon assets and workflow retrieval instead of
+   dynamic chat-history decay.
 
 3. Tool-name drift
 
@@ -86,6 +86,7 @@ observations instead of remaining as raw payloads.
 - Add classifier aliases for current tool names.
 - Refresh available tools inside each ReAct loop iteration.
 - Remove duplicate window repair code from the engine path.
+- Remove dynamic history decay; keep a fixed sliding transcript window plus tool-boundary repair.
 
 ### Phase 2: Cache-Friendly Prompt Assembly
 
