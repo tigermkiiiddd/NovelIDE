@@ -6,7 +6,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUsageStatsStore } from '../stores/usageStatsStore';
-import { BarChart3, Clock, Zap, Trash2, TrendingUp, AlertTriangle } from 'lucide-react';
+import { BarChart3, Clock, Database, Zap, Trash2, TrendingUp, AlertTriangle } from 'lucide-react';
 
 export function UsageStatsPanel() {
   const { t } = useTranslation();
@@ -100,7 +100,7 @@ export function UsageStatsPanel() {
       )}
 
       {/* 概览卡片 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatCard
           icon={<Zap size={18} className="text-amber-400" />}
           label={t('usageStats.todayToken')}
@@ -124,6 +124,12 @@ export function UsageStatsPanel() {
           label={t('usageStats.avgResponse')}
           value={formatDuration(summary.avgDurationMs)}
           sub={t('usageStats.perCall')}
+        />
+        <StatCard
+          icon={<Database size={18} className="text-cyan-400" />}
+          label="Cache Hit"
+          value={`${(summary.cacheHitRate * 100).toFixed(1)}%`}
+          sub={`${formatNumber(summary.totalCacheHitTokens)} / ${formatNumber(summary.totalCacheHitTokens + summary.totalCacheMissTokens)}`}
         />
       </div>
 
@@ -184,27 +190,35 @@ export function UsageStatsPanel() {
                   <th className="px-4 py-2 text-left">{t("usageStats.table.model")}</th>
                   <th className="px-4 py-2 text-left">{t("usageStats.table.type")}</th>
                   <th className="px-4 py-2 text-right">{t("usageStats.table.token")}</th>
+                  <th className="px-4 py-2 text-right">Cache</th>
                   <th className="px-4 py-2 text-right">{t("usageStats.table.duration")}</th>
                   <th className="px-4 py-2 text-center">{t("usageStats.table.status")}</th>
                 </tr>
               </thead>
               <tbody>
-                {recentRecords.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-700/50 hover:bg-gray-700/20">
-                    <td className="px-4 py-2 text-gray-400 whitespace-nowrap">{formatTime(r.timestamp)}</td>
-                    <td className="px-4 py-2 text-gray-300">{r.model}</td>
-                    <td className="px-4 py-2">
-                      <span className="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">{r.callType}</span>
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-300">{formatNumber(r.totalTokens)}</td>
-                    <td className="px-4 py-2 text-right text-gray-400">{formatDuration(r.durationMs)}</td>
-                    <td className="px-4 py-2 text-center">
-                      <span className={`text-xs font-medium ${statusColor(r.status)}`}>
-                        {statusLabel(r.status)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {recentRecords.map((r) => {
+                  const cacheTotal = (r.cacheHitTokens || 0) + (r.cacheMissTokens || 0);
+                  const cacheRate = cacheTotal > 0 ? ((r.cacheHitTokens || 0) / cacheTotal) * 100 : null;
+                  return (
+                    <tr key={r.id} className="border-b border-gray-700/50 hover:bg-gray-700/20">
+                      <td className="px-4 py-2 text-gray-400 whitespace-nowrap">{formatTime(r.timestamp)}</td>
+                      <td className="px-4 py-2 text-gray-300">{r.model}</td>
+                      <td className="px-4 py-2">
+                        <span className="text-xs bg-gray-700 text-gray-300 px-1.5 py-0.5 rounded">{r.callType}</span>
+                      </td>
+                      <td className="px-4 py-2 text-right text-gray-300">{formatNumber(r.totalTokens)}</td>
+                      <td className="px-4 py-2 text-right text-gray-400">
+                        {cacheRate === null ? '-' : `${cacheRate.toFixed(0)}%`}
+                      </td>
+                      <td className="px-4 py-2 text-right text-gray-400">{formatDuration(r.durationMs)}</td>
+                      <td className="px-4 py-2 text-center">
+                        <span className={`text-xs font-medium ${statusColor(r.status)}`}>
+                          {statusLabel(r.status)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -1,7 +1,15 @@
-import { ChatMessage } from '../../types';
+import { AIConfig, ChatMessage } from '../../types';
 import { buildSimpleHistory } from './historyBuilder';
 
 export const MAX_CONTEXT_MESSAGES = 30;
+export const MIN_CONTEXT_MESSAGES = 8;
+export const MAX_CONTEXT_WINDOW_MESSAGES = 120;
+
+export const resolveContextWindowMessages = (aiConfig?: Pick<AIConfig, 'contextWindowMessages'> | null): number => {
+  const value = Number(aiConfig?.contextWindowMessages);
+  if (!Number.isFinite(value) || value <= 0) return MAX_CONTEXT_MESSAGES;
+  return Math.min(MAX_CONTEXT_WINDOW_MESSAGES, Math.max(MIN_CONTEXT_MESSAGES, Math.round(value)));
+};
 
 const getFunctionCallIds = (message: ChatMessage): string[] =>
   message.rawParts

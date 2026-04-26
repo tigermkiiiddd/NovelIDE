@@ -24,7 +24,7 @@ import { UsageCallType } from '../../types/usageStats';
 import {
   createApiHistoryPreview,
   getWindowedMessages,
-  MAX_CONTEXT_MESSAGES,
+  resolveContextWindowMessages,
 } from '../../domains/agentContext/windowing';
 
 // read 类工具前缀列表 — 用于对话提取时过滤掉纯查询结果
@@ -200,10 +200,11 @@ export const useAgentEngine = ({
         // Lazy loading must be evaluated per loop so search_tools/activate_skill
         // changes are visible to the very next model call in this user turn.
         const toolsForMode = getAllToolsForLLM();
+        const contextWindowSize = resolveContextWindowMessages(useAgentStore.getState().aiConfig);
 
         // 固定滑动窗口：只取最新的 N 条消息，然后修复工具调用边界
         const totalMessages = currentMessages.length;
-        const windowedMessages = getWindowedMessages(currentMessages, MAX_CONTEXT_MESSAGES);
+        const windowedMessages = getWindowedMessages(currentMessages, contextWindowSize);
 
         const inContextCount = windowedMessages.length;
         const droppedCount = totalMessages - inContextCount;
@@ -236,7 +237,7 @@ export const useAgentEngine = ({
             slidingWindow: {
               inContext: inContextCount,
               dropped: droppedCount,
-              windowSize: MAX_CONTEXT_MESSAGES
+              windowSize: contextWindowSize
             }
           };
           updateMessageMetadata(lastMsg.id, { debugPayload });

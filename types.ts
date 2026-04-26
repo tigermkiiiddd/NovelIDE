@@ -328,6 +328,7 @@ export interface AIConfig {
   modelName: string; // Active Model Name
   lightweightModelName?: string; // Lightweight model for auto-tasks (chapter analysis, etc.)
   maxOutputTokens?: number; // 控制单次回复的最大长度
+  contextWindowMessages?: number; // 对话历史滑动窗口消息数
   safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE (Gemini only)
 
   // Multi-Provider Support
@@ -355,6 +356,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   modelName: 'deepseek-chat',
   lightweightModelName: 'deepseek-coder', // 轻量任务专用模型
   maxOutputTokens: 8192,
+  contextWindowMessages: 30,
   safetySetting: 'BLOCK_NONE',
   openAIBackends: [
       {

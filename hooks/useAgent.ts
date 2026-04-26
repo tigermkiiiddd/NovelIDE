@@ -13,7 +13,7 @@ import { useAgentStore } from '../stores/agentStore';
 import { useFileStore } from '../stores/fileStore';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { findNodeByPath } from '../services/fileSystem';
-import { getWindowedMessages, MAX_CONTEXT_MESSAGES } from '../domains/agentContext/windowing';
+import { getWindowedMessages, resolveContextWindowMessages } from '../domains/agentContext/windowing';
 import i18n from '../i18n';
 
 const isContentWriteTool = (toolName?: string): boolean =>
@@ -43,6 +43,7 @@ export const useAgent = (
   } = context;
 
   const todos = currentSession?.todos || [];
+  const contextWindowSize = resolveContextWindowMessages(aiConfig);
 
   // Plan Mode State - 使用 useMemo 根据当前会话动态计算 currentPlanNote
   const planMode = usePlanStore(state => state.planMode.isEnabled);
@@ -86,15 +87,15 @@ export const useAgent = (
   const messageWindowInfo = useMemo(() => {
       const messages = currentSession?.messages || [];
       const total = messages.length;
-      const inContext = getWindowedMessages(messages, MAX_CONTEXT_MESSAGES).length;
+      const inContext = getWindowedMessages(messages, contextWindowSize).length;
       const dropped = Math.max(0, total - inContext);
       return {
           total,
           inContext,
           dropped,
-          windowSize: MAX_CONTEXT_MESSAGES
+          windowSize: contextWindowSize
       };
-  }, [currentSession?.messages]);
+  }, [currentSession?.messages, contextWindowSize]);
 
   const tokenUsage = useMemo(() => {
       const MAX_TOKENS_GEMINI = 1000000;
@@ -106,7 +107,7 @@ export const useAgent = (
 
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
       const msgs = currentSession?.messages || [];
-      const windowedMessages = getWindowedMessages(msgs, MAX_CONTEXT_MESSAGES);
+      const windowedMessages = getWindowedMessages(msgs, contextWindowSize);
       const sysPrompt = constructSystemPrompt(
         files,
         project,
@@ -129,7 +130,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, contextWindowSize, files, project, todos, currentSession?.messages, planMode]);
 
   // --- 技能激活由 Agent 自主通过 activate_skill 工具决定 ---
   const triggerSkill = (_text: string) => {

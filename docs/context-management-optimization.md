@@ -13,12 +13,12 @@ NovelIDE is moving from a long prompt plus chat history model toward a small Con
 The goal is not only to reduce token count. The context manager should improve tool accuracy,
 long-running coherence, and prompt-cache reuse.
 
-## Current Risks
+## Resolved In This Pass
 
-1. Dynamic system prompt churn
+1. Dynamic system prompt churn reduced
 
-   `constructSystemPrompt` currently receives project state, todos, messages, and memory inputs.
-   This makes the first part of the request change often, which lowers prefix-cache reuse.
+   `constructSystemPrompt` now keeps the core protocol and skill index ahead of the dynamic
+   `<runtime_context>`. User turn history is no longer duplicated in the system prompt.
 
 2. Fixed window replaces dynamic history decay
 
@@ -27,23 +27,24 @@ long-running coherence, and prompt-cache reuse.
    slicing. Fiction continuity should come from canon assets and workflow retrieval instead of
    dynamic chat-history decay.
 
-3. Tool-name drift
+3. Tool-name drift handled
 
-   The visible tool protocol now prefers `glob`, `read`, `grep`, `write`, and `edit`, while parts of
-   the history classifier still identify older names such as `listFiles`, `readFile`, `writeFile`,
-   and `patchFile`. New tool calls can fall into `UNKNOWN`, so decay policies no longer match the
-   intended tool semantics.
+   Current visible tool names (`glob`, `read`, `grep`, `write`, `edit`) map to legacy categories for
+   debug/stat compatibility.
 
-4. Lazy tool refresh timing
+4. Lazy tool refresh timing fixed
 
-   Tool definitions are prepared once before the ReAct loop. If `search_tools` or `activate_skill`
-   unlocks new categories, the next model call in the same user turn should see the refreshed tool
-   set.
+   Tool definitions are refreshed inside the ReAct loop, so `search_tools` and `activate_skill`
+   affect the next model call in the same user turn.
 
-5. Duplicate window integrity logic
+5. Duplicate window integrity logic removed
 
-   Context window repair exists in `domains/agentContext/windowing.ts`, but a second local copy also
-   exists in `useAgentEngine`. Duplicate logic increases the chance of behavior drift.
+   Context window repair has a single source of truth in `domains/agentContext/windowing.ts`.
+
+6. Tool history integrity hardened
+
+   Window repair now checks tool call/result ids, and missing function-call ids are filled before
+   messages enter history.
 
 ## Target Design
 
@@ -103,17 +104,18 @@ observations instead of remaining as raw payloads.
 
 ### Phase 4: Context Telemetry
 
-Expose per-request context stats:
+Partially implemented through existing settings/debug surfaces:
+
+- API usage panel shows cache hit/miss aggregate and recent-call cache rate.
+- History debug panel shows fixed window size, sent/dropped/skipped messages, tool call/result count,
+  and estimated transcript tokens.
+
+Remaining optional telemetry:
 
 - stable prompt tokens
 - runtime context tokens
 - memory tokens
-- transcript tokens
 - tool schema tokens
-- cache hit/miss tokens
-- dropped message count
-- cleared tool result count
-- generated observation count
 
 ## Success Criteria
 
@@ -123,3 +125,4 @@ Expose per-request context stats:
 - Cache hit ratio improves when users continue working in the same project/session.
 - Long sessions retain decisions and project facts through canon assets and workflow recall, without
   carrying stale raw tool dumps.
+- Context window size is configurable in settings.

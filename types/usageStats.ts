@@ -28,6 +28,9 @@ export interface UsageStatsSummary {
   totalPromptTokens: number;
   totalCompletionTokens: number;
   totalTokens: number;
+  totalCacheHitTokens: number;
+  totalCacheMissTokens: number;
+  cacheHitRate: number;
   avgDurationMs: number;
   byModel: Record<string, { calls: number; tokens: number }>;
   byType: Record<string, { calls: number; tokens: number }>;

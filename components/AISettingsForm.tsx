@@ -252,6 +252,28 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             </p>
                         </div>
 
+                        {/* Context Window */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
+                                <Hash size={16}/> Context Window Messages
+                            </label>
+                            <input
+                                type="number"
+                                min={8}
+                                max={120}
+                                value={tempConfig.contextWindowMessages ?? 30}
+                                onChange={e => setTempConfig(prev => ({
+                                    ...prev,
+                                    contextWindowMessages: Math.min(120, Math.max(8, parseInt(e.target.value, 10) || 30))
+                                }))}
+                                placeholder="30"
+                                className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
+                            />
+                            <p className="text-xs text-gray-500 mt-2">
+                                固定滑动窗口保留的最近消息数。小说连续性依赖项目资产召回，不建议调得过大。
+                            </p>
+                        </div>
+
                         {/* Thinking Mode Toggle */}
                         <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-3">
                             <div className="flex items-center justify-between mb-2">

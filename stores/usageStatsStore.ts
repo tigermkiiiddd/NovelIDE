@@ -54,11 +54,15 @@ function computeSummary(records: UsageRecord[]): UsageStatsSummary {
 
   let totalPromptTokens = 0;
   let totalCompletionTokens = 0;
+  let totalCacheHitTokens = 0;
+  let totalCacheMissTokens = 0;
   let totalDuration = 0;
 
   for (const r of records) {
     totalPromptTokens += r.promptTokens;
     totalCompletionTokens += r.completionTokens;
+    totalCacheHitTokens += r.cacheHitTokens || 0;
+    totalCacheMissTokens += r.cacheMissTokens || 0;
     totalDuration += r.durationMs;
 
     // byModel
@@ -80,11 +84,16 @@ function computeSummary(records: UsageRecord[]): UsageStatsSummary {
     byDay[day].tokens += r.totalTokens;
   }
 
+  const cacheTotal = totalCacheHitTokens + totalCacheMissTokens;
+
   return {
     totalCalls: records.length,
     totalPromptTokens,
     totalCompletionTokens,
     totalTokens: totalPromptTokens + totalCompletionTokens,
+    totalCacheHitTokens,
+    totalCacheMissTokens,
+    cacheHitRate: cacheTotal > 0 ? totalCacheHitTokens / cacheTotal : 0,
     avgDurationMs: records.length > 0 ? Math.round(totalDuration / records.length) : 0,
     byModel,
     byType,
