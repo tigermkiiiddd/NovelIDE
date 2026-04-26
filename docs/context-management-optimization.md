@@ -6,8 +6,8 @@ NovelIDE is moving from a long prompt plus chat history model toward a small Con
 
 - Stable protocol: durable behavior contract, tool rules, and skill index.
 - Runtime state: current project, mode, todos, active file, and task state.
-- Working memory: compact, task-local continuity for the current collaboration.
-- Retrieved memory: project knowledge loaded by topic instead of always-on bulk context.
+- Working memory: task-local continuity for the current collaboration.
+- Canon retrieval: project truth loaded from the right asset/tool by workflow, not inferred from chat.
 - Ephemeral transcript: recent user/model/tool messages needed for short-term continuity.
 
 The goal is not only to reduce token count. The context manager should improve tool accuracy,
@@ -24,7 +24,8 @@ long-running coherence, and prompt-cache reuse.
 
    `buildSimpleHistory` can strip tool args or remove old tool call/result pairs. This is useful
    for token control, but it means the same earlier conversation can serialize differently over
-   time, which is unfriendly to provider prompt caches.
+   time, which is unfriendly to provider prompt caches. For fiction continuity, the deeper risk is
+   treating old chat/tool logs as truth instead of querying canon assets.
 
 3. Tool-name drift
 
@@ -59,14 +60,19 @@ task status. Keep section order deterministic.
 
 ### L2 Working Memory
 
-Compact task continuity. Contains current objective, completed steps, pending decisions, recent
-edits, and non-negotiable constraints. This should be maintained as state, not rediscovered from
-raw chat history each turn.
+Task continuity. Contains current objective, completed steps, pending decisions, recent edits, and
+non-negotiable constraints. This should be maintained as state, not rediscovered from raw chat
+history each turn.
 
-### L3 Retrieved Memory
+### L3 Canon Retrieval
 
-Topic-based project knowledge. Character, worldbuilding, outline, user preference, and prior
-creative decisions should be loaded only when relevant.
+Workflow-guided project truth. Skills decide which canon source to query:
+
+- writing rules and world rules: `query_memory`
+- foreshadowing: `outline_getUnresolvedForeshadowing` / `outline_getForeshadowingDetail`
+- plot events and chapters: outline/timeline tools
+- character state: character tools and character profile files
+- prose continuity: previous chapter via `glob`/`read`
 
 ### L4 Ephemeral Transcript
 
@@ -87,15 +93,12 @@ observations instead of remaining as raw payloads.
 - Move `userInputHistory` out of the stable system prompt.
 - Keep deterministic ordering for files, skills, memory sections, and tools.
 
-### Phase 3: Observation-Based Compaction
+### Phase 3: Workflow-Guided Continuity Gates
 
-- Preserve only the recent transcript as raw messages.
-- Convert old tool calls/results into stable observations:
-  - `glob`/`grep`/`read`: file observation
-  - `write`/`edit`: edit record
-  - review/analysis tools: decision record
-  - failed tools: failure cause and retry hint
-- Keep generated observations stable unless new facts supersede them.
+- Treat compression as a fallback for unusually long ReAct chains, not as the primary fiction memory.
+- Strengthen skill workflows with explicit pre-write retrieval gates and post-write sync gates.
+- Ensure writing workflows query canon sources instead of relying on chat summaries.
+- Keep raw transcript short; continuity should come from structured assets and tool recall.
 
 ### Phase 4: Context Telemetry
 
@@ -117,4 +120,5 @@ Expose per-request context stats:
 - Tool activation takes effect on the next LLM call within the same user turn.
 - The engine has a single source of truth for context window integrity.
 - Cache hit ratio improves when users continue working in the same project/session.
-- Long sessions retain decisions and project facts without carrying stale raw tool dumps.
+- Long sessions retain decisions and project facts through canon assets and workflow recall, without
+  carrying stale raw tool dumps.

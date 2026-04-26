@@ -109,10 +109,6 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 确定需要 deep_thinking 后 → activate_skill("深度思考方法论") 加载完整工作流。
 
 ---
-## 项目概况
-{{PROJECT_INFO}}
-
----
 ## 操作规则
 
 - 并发优先：独立工具同一轮调用
@@ -134,59 +130,19 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - **final_answer**：唯一终止方式，必须调用
 - **记忆宫殿**：query_memory / manage_memory / link_memory / memory_status / traverse_memory
 - **项目元数据**：updateProjectMeta
-- **技能系统**（必须遵守）：先查看下方 <available_skills>。任务明显匹配某个技能时，直接 activate_skill 加载再操作；不确定有哪些技能或简介不够时，才调用 skills_list。激活 skill 会**自动解锁该技能配套工具类别**（如大纲构建 skill 自动解锁 outline 工具），无需再调用 search_tools。不要为了形式每轮扫描 skills_list；也不要错过关键方法论。
+- **技能系统**（必须遵守）：先查看 <available_skills>。任务明显匹配某个技能时，直接 activate_skill 加载再操作；不确定有哪些技能或简介不够时，才调用 skills_list。激活 skill 会**自动解锁该技能配套工具类别**（如大纲构建 skill 自动解锁 outline 工具），无需再调用 search_tools。不要为了形式每轮扫描 skills_list；也不要错过关键方法论。
 - 执行型任务不描述行动，直接调工具；工具结果直接接受
 
 ---
-## 上下文
+## 运行时上下文使用规则
 
-**待办**：
-{{PENDING_TODOS}}
-
-**用户意图历史**：
-{{USER_INPUT_HISTORY}}
-
-**文件目录结构**：
-{{FILE_TREE}}
-
+- 当前项目、待办、文件目录等动态信息位于后方 <runtime_context>。
+- 不要把聊天历史当成小说事实来源；故事事实、角色状态、伏笔、大纲和写作规则必须通过对应工具或项目资产召回。
 **写正文前**：activate_skill("正文写作流程")，按 Skill 指引完成准备
 **完成后**：标记 TODO 完成
 **文件命名**：正文 05_正文草稿/卷[X]_章[X]_[章节名].md | 角色 02_角色档案/[前缀]_[姓名].md
-
-{{SKILL_LIST}}
 `;
 
-
-/**
- * 提取并格式化用户输入历史
- * @param messages - 会话消息数组
- * @returns 格式化后的用户输入历史文本
- */
-const extractUserInputHistory = (messages: any[] | undefined): string => {
-  if (!messages || messages.length === 0) {
-    return "(暂无用户输入历史)";
-  }
-
-  // 筛选所有用户角色消息
-  const userMessages = messages.filter(m => m.role === 'user');
-
-  if (userMessages.length === 0) {
-    return "(暂无用户输入历史)";
-  }
-
-  // 格式化为带时间戳的列表
-  return userMessages.map((msg, index) => {
-    const time = new Date(msg.timestamp).toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    // 截断过长的消息（可选，避免 token 消耗过大）
-    const text = msg.text.length > 100
-      ? msg.text.substring(0, 100) + '...'
-      : msg.text;
-    return `${index + 1}. [${time}] ${text}`;
-  }).join('\n');
-};
 
 export const constructSystemPrompt = (
   files: FileNode[],
@@ -223,15 +179,15 @@ export const constructSystemPrompt = (
   let emergentSkillsData = "(无额外技能)";
 
   if (skillsFolder) {
-    const categoryFolders = files.filter(
-      f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER && SKILL_CATEGORIES.includes(f.name)
-    );
+    const categoryFolders = files
+      .filter(f => f.parentId === skillsFolder.id && f.type === FileType.FOLDER && SKILL_CATEGORIES.includes(f.name))
+      .sort((a, b) => SKILL_CATEGORIES.indexOf(a.name) - SKILL_CATEGORIES.indexOf(b.name));
 
     const categoryLines: string[] = [];
     for (const catFolder of categoryFolders) {
-      const catSkills = files.filter(
-        f => f.parentId === catFolder.id && f.type === FileType.FILE && !f.hidden
-      );
+      const catSkills = files
+        .filter(f => f.parentId === catFolder.id && f.type === FileType.FILE && !f.hidden)
+        .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
 
       const entries: string[] = [];
       for (const f of catSkills) {
@@ -262,7 +218,9 @@ export const constructSystemPrompt = (
 
   // File Context (Folders Only)
   // 优化：仅提供文件夹结构，减少 Context 占用。Agent 需通过工具查找具体文件。
-  const folderOnlyFiles = files.filter(f => f.type === FileType.FOLDER);
+  const folderOnlyFiles = files
+    .filter(f => f.type === FileType.FOLDER)
+    .sort((a, b) => getNodePath(a, files).localeCompare(getNodePath(b, files), 'zh-CN'));
   const fileTree = getFileTreeStructure(folderOnlyFiles);
 
   // Task Context
@@ -271,8 +229,9 @@ export const constructSystemPrompt = (
     ? pendingList.map((t, i) => `> - [${i}] ${t.task}`).join('\n')
     : "> (无待办事项)";
 
-  // User Input History (新增)
-  const userInputHistory = extractUserInputHistory(messages);
+  // Keep historical user turns out of the system prompt. The raw transcript already
+  // appears in API history; duplicating it here churns the prompt-cache prefix.
+  const userInputHistory = '';
 
   // 角色档案不再独立注入 L1，agent 按需 read 查看角色档案
 
@@ -289,24 +248,45 @@ export const constructSystemPrompt = (
 
   // --- 技能内容通过 activate_skill tool response 返回，不再注入 system prompt ---
 
+  const runtimeContext = [
+    '<runtime_context>',
+    '## 项目概况',
+    projectInfo || '(暂无项目概况)',
+    '',
+    '## 待办',
+    pendingTodos,
+    '',
+    '## 文件目录结构',
+    fileTree || '(暂无文件目录)',
+    '',
+    `## 正文字数目标\n${wordsPerChapter}`,
+    '</runtime_context>',
+  ].join('\n');
+
   // --- 4层记忆栈构建 ---
   const typedKnowledgeNodes = (knowledgeNodes || []) as KnowledgeNode[];
   // 提取用户最后一条消息，用于 L2 按需加载的话题检测
   const lastUserMessage = messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || null;
   const memoryStackPrompt = buildMemoryStack({
-    agentInstruction: soulInstruction + '\n\n' + protocolInstruction,
-    projectInfo,
-    fileTree,
-    todos: pendingTodos,
+    agentInstruction: [
+      soulInstruction,
+      protocolInstruction,
+      skillListSection,
+    ].filter(Boolean).join('\n\n'),
+    projectInfo: '',
+    fileTree: '',
+    todos: '',
     userInputHistory,
     wordsPerChapter,
     templateList: '',
-    skillList: skillListSection,
+    skillList: '',
     knowledgeNodes: typedKnowledgeNodes,
     userMessage: lastUserMessage,
   });
 
   return `
 ${memoryStackPrompt}
+
+${runtimeContext}
 `;
 };
