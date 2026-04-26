@@ -259,7 +259,7 @@ export const useAgentTools = ({
             addPendingChange(execResult.change);
             logToUi(`📝 变更已提交审查 (自动继续): ${execResult.change.description}`);
             // 告诉 Agent 动作已排队，可以假设成功并继续
-            resultString = `Action queued (ID: ${execResult.change.id}). You may proceed with subsequent tasks assuming this change will be approved.`;
+            resultString = `Change queued for user approval (ID: ${execResult.change.id}). You may proceed with subsequent tasks assuming this change will be approved.`;
         } else if (execResult.type === 'EXECUTED') {
             resultString = execResult.result;
         } else {

@@ -16,6 +16,12 @@ import { findNodeByPath } from '../services/fileSystem';
 import { getWindowedMessages, MAX_CONTEXT_MESSAGES } from '../domains/agentContext/windowing';
 import i18n from '../i18n';
 
+const isContentWriteTool = (toolName?: string): boolean =>
+  toolName === 'write' ||
+  toolName === 'edit' ||
+  toolName === 'createFile' ||
+  toolName === 'updateFile' ||
+  toolName === 'patchFile';
 
 // Facade Hook
 export const useAgent = (
@@ -154,8 +160,7 @@ export const useAgent = (
     // 新增：检测是否为"05_正文草稿"文件的写入操作
     console.log('[AutoAnalysis] 检查文件:', change.fileName, '工具:', change.toolName);
 
-    if (change.fileName?.startsWith('05_正文草稿/') &&
-        (change.toolName === 'createFile' || change.toolName === 'updateFile' || change.toolName === 'patchFile')) {
+    if (change.fileName?.startsWith('05_正文草稿/') && isContentWriteTool(change.toolName)) {
 
       console.log('[AutoAnalysis] ✅ 触发条件满足，开始章节分析');
 
@@ -203,7 +208,7 @@ export const useAgent = (
     const { autoExtraction } = useAgentStore.getState().aiConfig;
     if (autoExtraction?.document !== false &&
         change.fileName &&
-        (change.toolName === 'createFile' || change.toolName === 'updateFile' || change.toolName === 'patchFile')) {
+        isContentWriteTool(change.toolName)) {
       const currentFiles = useFileStore.getState().files;
       const targetFile = findNodeByPath(currentFiles, change.fileName);
 

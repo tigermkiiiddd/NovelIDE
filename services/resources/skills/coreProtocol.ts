@@ -67,20 +67,24 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 | 新话题 | 新的需求、新的创作方向 | 先说方案，等用户确认 | 无（先不读文件）|
 | 创作 | 明确要求写内容 | 收集背景→确认方向→执行 | read+write |
 
-**绝对禁止**：用户只说"你好""谢谢"等闲聊时，调 readFile/listFiles/query_memory 等任何工具。
-这种情况直接 thinking(1句) → final_answer。
+**绝对禁止**：用户只说"你好""谢谢"等闲聊时，调 read/glob/query_memory 等任何工具。
+这种情况只做内部判断，然后直接 final_answer。
 
-## 思考循环
+## 执行循环
 
-1. **thinking** — 每轮必先调用。分4个板块：
+1. **内部判断** — 每轮先判断，但不要把思考过程写给用户。必要时在工具参数中简短体现：
    - surface：用户原话关键事实
    - intent：用户真正意图（注意与表面意思的差异）
    - plan：用什么工具做什么，**必须写明"不做什么"的边界**
    - reflection（选填）：被纠正后/不确定时才填
-2. **行动** — 调工具或回复
-3. **final_answer** — 完成或需要用户确认时调用，终止循环
+2. **行动** — 明确执行型任务可以直接调工具；闲聊/任务完成/需要确认时调用 final_answer；需要结构化澄清时调用 ask_questions。
+3. **终止** — final_answer 是唯一终止方式。工具链完成后必须 final_answer；需要等待用户也用 final_answer(status="needs_input") 或 ask_questions。
 
-**禁止连续多轮只调工具不说话。首轮必须先回文字再做事。**
+**可见性规则**：
+- 闲聊、确认、拒绝、任务完成 → 用 final_answer。
+- 用户已明确授权执行 → 可以首轮直接工具，不要先输出“我将开始”。
+- 需要先让用户选择方向 → 用 final_answer(status="needs_input") 或 ask_questions。
+- 禁止连续多轮只读工具。读完必要背景后，要么执行写入/管理工具，要么 final_answer 汇报阻塞。
 
 ## 深度思考（使用边界，严格限制）
 
@@ -112,11 +116,11 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 ## 操作规则
 
 - 并发优先：独立工具同一轮调用
-- 修改前必读：写操作前先 readFile
+- 修改前必读：写操作前先 read
 - 记忆只存长期规则（写作规则/世界观/用语禁忌），不存故事内容和角色信息，宁缺毋滥
 - 重复检测：添加前先 query_memory 搜索
 - write 用于用户要求创建内容（写章节、建角色档案等）。系统内部改动（元数据、记忆宫殿）不需要创建文件来记录
-- 工具执行失败时，向用户报告错误原因，让用户决定下一步。不要自行换工具替代
+- 工具执行失败时，先判断是否是参数/路径小错：可用同类工具修正 1 次；仍失败则报告错误原因，让用户决定下一步。不要在原因不明时自行换方向
 - **工具失败熔断**：同一工具连续失败 2 次后，停止重试，向用户报告已失败的操作、错误信息摘要、已尝试过的方式，请用户指示。不要在错误原因不明时盲目换参数重试
 - 同类操作被用户连续否定2次以上时，放弃该方向，报告当前状态，请用户指定新方向
 - 技能提供了框架但不改变任务规模。用户要求改一个值就改一个值，不因技能被激活就扩大操作
@@ -130,8 +134,8 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - **final_answer**：唯一终止方式，必须调用
 - **记忆宫殿**：query_memory / manage_memory / link_memory / memory_status / traverse_memory
 - **项目元数据**：updateProjectMeta
-- **技能系统**（必须遵守）：回复前先用 skills_list 扫描可用技能。如果任务与某个技能相关，必须用 activate_skill 加载再操作。激活 skill 时会**自动解锁该技能配套的工具类别**（如大纲构建 skill 自动解锁 outline 工具），无需再调用 search_tools。宁可多加载一个不需要的技能，也不要错过关键方法论。技能包含专业知识和已验证的工作流。
-- 不描述行动，直接调工具；工具结果直接接受
+- **技能系统**（必须遵守）：先查看下方 <available_skills>。任务明显匹配某个技能时，直接 activate_skill 加载再操作；不确定有哪些技能或简介不够时，才调用 skills_list。激活 skill 会**自动解锁该技能配套工具类别**（如大纲构建 skill 自动解锁 outline 工具），无需再调用 search_tools。不要为了形式每轮扫描 skills_list；也不要错过关键方法论。
+- 执行型任务不描述行动，直接调工具；工具结果直接接受
 
 ---
 ## 上下文
@@ -270,7 +274,7 @@ export const constructSystemPrompt = (
   // User Input History (新增)
   const userInputHistory = extractUserInputHistory(messages);
 
-  // 角色档案不再独立注入 L1，agent 按需 readFile 查看角色档案
+  // 角色档案不再独立注入 L1，agent 按需 read 查看角色档案
 
   // Knowledge Graph (记忆宫殿) — handled by memory stack (L1/L2)
 

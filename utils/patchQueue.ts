@@ -10,8 +10,67 @@
  */
 
 import { FilePatch, DiffSessionState } from '../types';
-import { applyPatchInMemory } from './diffUtils';
 import { applyEditsSimple } from './patchUtils';
+
+type PendingChangeLike = {
+  id?: string;
+  toolName: string;
+  newContent: string | null;
+  args?: any;
+  timestamp: number;
+};
+
+const normalizeToolName = (toolName: string): 'write' | 'edit' | 'delete' | 'other' => {
+  switch (toolName) {
+    case 'write':
+    case 'createFile':
+    case 'updateFile':
+      return 'write';
+    case 'edit':
+    case 'patchFile':
+      return 'edit';
+    case 'deleteFile':
+      return 'delete';
+    default:
+      return 'other';
+  }
+};
+
+const splitLines = (content: string): string[] => {
+  if (content === '') return [];
+  return content.split(/\r?\n/);
+};
+
+const replaceByExactText = (content: string, oldContent: string, newContent: string): string | null => {
+  const index = content.indexOf(oldContent);
+  if (index === -1) return null;
+  return content.slice(0, index) + newContent + content.slice(index + oldContent.length);
+};
+
+const applyAcceptedPatch = (content: string, patch: FilePatch): string => {
+  const contentLines = splitLines(content);
+  const oldLines = splitLines(patch.oldContent);
+  const newLines = splitLines(patch.newContent);
+  const startIndex = Math.max(0, patch.startLineOriginal - 1);
+
+  // Prefer the hunk's line window. This avoids applying a repeated paragraph to
+  // the first identical occurrence elsewhere in the file.
+  if (startIndex <= contentLines.length) {
+    const candidate = contentLines.slice(startIndex, startIndex + oldLines.length).join('\n');
+    if (candidate === patch.oldContent) {
+      const nextLines = [...contentLines];
+      nextLines.splice(startIndex, oldLines.length, ...newLines);
+      return nextLines.join('\n');
+    }
+  }
+
+  // Fallback for old sessions whose line numbers may no longer be reliable.
+  const fallback = replaceByExactText(content, patch.oldContent, patch.newContent);
+  if (fallback !== null) return fallback;
+
+  console.warn('[applyPatchQueue] 未找到匹配内容，跳过 patch:', patch.id);
+  return content;
+};
 
 /**
  * Apply all patches in the queue to the source snapshot
@@ -29,15 +88,7 @@ export const applyPatchQueue = (session: DiffSessionState): string => {
 
   for (const patch of sortedPatches) {
     if (patch.type === 'accept') {
-      // 使用字符串匹配替代行号定位
-      const index = result.indexOf(patch.oldContent);
-      if (index !== -1) {
-        result = result.slice(0, index) +
-                 patch.newContent +
-                 result.slice(index + patch.oldContent.length);
-      } else {
-        console.warn('[applyPatchQueue] 未找到匹配内容，跳过 patch:', patch.id);
-      }
+      result = applyAcceptedPatch(result, patch);
     }
     // Reject: do nothing, keep original content
   }
@@ -82,12 +133,7 @@ export const areAllHunksProcessed = (
  */
 export const mergePendingChanges = (
   baseContent: string,
-  changes: Array<{
-    toolName: string;
-    newContent: string | null;
-    args?: any;
-    timestamp: number;
-  }>
+  changes: PendingChangeLike[]
 ): string => {
   console.log('[mergePendingChanges] Starting merge:', {
     baseContentLength: baseContent.length,
@@ -97,8 +143,12 @@ export const mergePendingChanges = (
 
   if (changes.length === 0) return baseContent;
 
-  // Sort by timestamp to apply changes in order
-  const sortedChanges = [...changes].sort((a, b) => a.timestamp - b.timestamp);
+  // Sort by timestamp + id to apply changes in a deterministic order.
+  const sortedChanges = [...changes].sort((a, b) => {
+    const timeDiff = a.timestamp - b.timestamp;
+    if (timeDiff !== 0) return timeDiff;
+    return (a.id || '').localeCompare(b.id || '');
+  });
 
   let result = baseContent;
 
@@ -109,28 +159,30 @@ export const mergePendingChanges = (
       resultBeforeLength: result.length
     });
 
-    if (change.toolName === 'updateFile' || change.toolName === 'createFile') {
-      // Full content replacement for existing file
-      // createFile on existing file is treated as updateFile (兜底处理旧数据)
-      if (change.toolName === 'createFile') {
-        console.warn('[mergePendingChanges] createFile on existing file, treating as updateFile (legacy data)');
-      }
-      result = change.newContent || '';
-      console.log('[mergePendingChanges] After updateFile/createFile:', {
+    const normalizedTool = normalizeToolName(change.toolName);
+
+    if (normalizedTool === 'write') {
+      // Full content replacement for existing file. `write` is the current tool;
+      // createFile/updateFile are legacy-compatible pending changes.
+      result = change.newContent ?? '';
+      console.log('[mergePendingChanges] After write:', {
         resultLength: result.length,
         resultPreview: result.substring(0, 100)
       });
-    } else if (change.toolName === 'patchFile') {
-      // Apply patch edits using common utility
+    } else if (normalizedTool === 'edit') {
+      // Apply edit operations against the accumulated shadow content.
       const edits = change.args?.edits || [];
       if (edits.length > 0) {
         result = applyEditsSimple(result, edits);
-        console.log('[mergePendingChanges] After patchFile:', {
+        console.log('[mergePendingChanges] After edit:', {
           editsCount: edits.length,
           resultLength: result.length,
           resultPreview: result.substring(0, 100)
         });
       }
+    } else if (normalizedTool === 'delete') {
+      result = '';
+      console.log('[mergePendingChanges] After delete:', { resultLength: result.length });
     }
   }
 

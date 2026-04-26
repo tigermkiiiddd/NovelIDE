@@ -478,7 +478,7 @@ export const executeManageEvolution = async (args: {
           sourceMemoryIds: sourceMemories.map((m: AgentMemoryEntry) => m.id),
           content: skillContent,
         },
-        hint: '此技能内容需要通过 writeFile 工具写入到 98_技能配置/skills/ 目录下才能生效',
+        hint: '此技能内容需要通过 write 工具写入到 98_技能配置/skills/ 目录下才能生效',
       });
     }
 
@@ -520,7 +520,7 @@ export const executeManageEvolution = async (args: {
         success: true,
         message: `已基于 ${corrections.length} 条纠正和 ${insights.length} 条洞察生成优化建议`,
         optimization,
-        hint: '请根据建议修改对应的技能文件（通过 patchFile 或 writeFile）',
+        hint: '请根据建议修改对应的技能文件（通过 edit 或 write）',
       });
     }
 

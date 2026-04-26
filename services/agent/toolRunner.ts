@@ -168,6 +168,18 @@ const truncate = (str: string, maxLen: number): string => {
     return str.substring(0, maxLen) + '...';
 };
 
+const displayToolName = (name: string): string => {
+    const aliases: Record<string, string> = {
+        createFile: 'write',
+        updateFile: 'write',
+        patchFile: 'edit',
+        readFile: 'read',
+        searchFiles: 'grep',
+        listFiles: 'glob',
+    };
+    return aliases[name] || name;
+};
+
 /**
  * Generate EditDiffs from whole-file comparison (for updateFile/createFile).
  * Uses line diff + hunk grouping to create granular EditDiff objects.
@@ -345,7 +357,8 @@ export const executeTool = async (
 
     // Construct Log Elements
     const logTimestamp = new Date().toLocaleTimeString();
-    let startLog = `[${logTimestamp}] ▶️ **调用工具**: \`${name}\`\n`;
+    const visibleToolName = displayToolName(name);
+    let startLog = `[${logTimestamp}] ▶️ **调用工具**: \`${visibleToolName}\`\n`;
 
     if (thinking) {
         startLog += `🧠 **思考**: ${thinking}\n`;
@@ -389,7 +402,7 @@ export const executeTool = async (
     if (requiresApproval.includes(name)) {
         try {
             const changeId = generateId();
-            let description = `Request to ${name}`;
+            let description = `Request to ${visibleToolName}`;
             let originalContent = null;
             let newContent = null;
             
@@ -398,7 +411,7 @@ export const executeTool = async (
 
             // 禁止通过通用文件工具修改 .json 文件（业务数据隔离，请使用专用工具）
             if (filePath && filePath.toLowerCase().endsWith('.json')) {
-                return { type: 'ERROR', message: `Error: .json 文件禁止通过 ${name} 工具修改（业务数据隔离，请使用专用工具如 manage_memory、manage_relationships、update_character_profile 等）` };
+                return { type: 'ERROR', message: `Error: .json 文件禁止通过 ${visibleToolName} 工具修改（业务数据隔离，请使用专用工具如 manage_memory、manage_relationships、update_character_profile 等）` };
             }
             if (args.newName && args.newName.toLowerCase().endsWith('.json')) {
                 return { type: 'ERROR', message: `Error: 不能重命名为 .json 文件（业务数据隔离）` };
@@ -453,7 +466,7 @@ export const executeTool = async (
                     return { type: 'ERROR', message: 'Cannot delete virtual thinking files.' };
                 }
 
-                return { type: 'ERROR', message: `Unsupported operation on virtual path: ${name}` };
+                return { type: 'ERROR', message: `Unsupported operation on virtual path: ${visibleToolName}` };
             }
 
             // Resolve file for diff preview (Physical File)
@@ -839,7 +852,7 @@ export const executeTool = async (
                     result = `[REFLECTION] focus=${args.focus}, confidence=${args.confidence ?? 'N/A'}\n观察: ${args.observation?.slice(0, 200)}\n分析: ${args.analysis?.slice(0, 300)}\n结论: ${args.conclusion?.slice(0, 200)}`;
                     break;
                 default:
-                    result = `Error: 工具 "${name}" 不存在。\n\n可能原因和纠正方法：\n1. 拼写错误 — 常见工具参考：read, write, query_memory, manage_memory, manageTodos, final_answer, skills_list 等\n2. 类别未激活 — 如果是 memory/character/relationship/outline 类工具，请先调用 search_tools(categories=["..."]) 激活对应类别\n3. 工具已废弃 — 该工具可能已被移除\n\n建议：调用 search_tools() 查看当前所有可用工具的完整列表。`;
+                    result = `Error: 工具 "${visibleToolName}" 不存在。\n\n可能原因和纠正方法：\n1. 拼写错误 — 常见工具参考：glob, read, grep, write, edit, manageTodos, final_answer, skills_list, activate_skill\n2. 类别未激活 — 如果是 memory/character/relationship/outline 类工具，请先调用 search_tools(categories=["..."]) 激活对应类别，或 activate_skill 加载相关技能\n3. 工具已废弃 — 该工具可能已被移除\n\n建议：先查看当前 system prompt 中的 <available_skills>，必要时调用 skills_list 或 search_tools。`;
             }
         }
         

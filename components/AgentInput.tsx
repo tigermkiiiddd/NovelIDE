@@ -89,9 +89,9 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
       .filter(Boolean)
       .map(n => ({ id: n!.id, name: n!.name }));
 
-    // 活跃文档 = 对话中 readFile 过、且未衰减的文件
+    // 活跃文档 = 对话中 read/readFile 过、且未衰减的文件
     const messages = session?.messages || [];
-    // readFile 的 content 维度衰减 8 轮后 args 被清空，AI 实质不再持有文件内容
+    // read/readFile 的 content 维度衰减 8 轮后 args 被清空，AI 实质不再持有文件内容
     const READFILE_CONTENT_DECAY = 8;
     // 从后往前计算轮次
     let roundCounter = 0;
@@ -100,17 +100,17 @@ const AgentInput: React.FC<AgentInputProps> = ({ onSendMessage, onStop, isLoadin
       roundsMap.set(messages[i].id, roundCounter);
       if (messages[i].role === 'user' || messages[i].role === 'model') roundCounter++;
     }
-    // 收集未衰减的 readFile 路径（去重，保留最近的）
+    // 收集未衰减的 read/readFile 路径（去重，保留最近的）
     const seenPaths = new Set<string>();
     const activeFiles: Array<{ path: string; name: string }> = [];
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
       const rounds = roundsMap.get(msg.id) ?? 0;
       if (rounds >= READFILE_CONTENT_DECAY) continue;
-      // 从 rawParts 中提取 readFile 调用
+      // 从 rawParts 中提取 read/readFile 调用
       if (msg.rawParts) {
         for (const part of msg.rawParts) {
-          if ('functionCall' in part && part.functionCall.name === 'readFile') {
+          if ('functionCall' in part && (part.functionCall.name === 'read' || part.functionCall.name === 'readFile')) {
             const args = typeof part.functionCall.args === 'string'
               ? JSON.parse(part.functionCall.args)
               : part.functionCall.args;

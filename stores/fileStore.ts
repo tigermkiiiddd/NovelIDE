@@ -371,7 +371,7 @@ ${i18n.t('searchDiligence.warningBody', { count: fileResults.length })}
 - ${i18n.t('searchDiligence.warningRule3')}
 
 ${i18n.t('searchDiligence.fileListHeader')}
-${fileResults.map(f => `  - readFile("${getNodePath(f, files)}")`).join('\n')}
+${fileResults.map(f => `  - read("${getNodePath(f, files)}")`).join('\n')}
 ==================================================`
       : fileResults.length === 1
         ? `\n\n> ${i18n.t('searchDiligence.singleFileHint')}`

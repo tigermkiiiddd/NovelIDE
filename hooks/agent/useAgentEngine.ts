@@ -29,7 +29,7 @@ import {
 
 // read 类工具前缀列表 — 用于对话提取时过滤掉纯查询结果
 const READ_TOOL_PREFIXES = [
-  'read', 'listFiles', 'glob', 'grep', 'search_',
+  'read', 'readFile', 'listFiles', 'glob', 'grep', 'search_',
   'query_', 'get', 'skills_list', 'activate_skill'
 ];
 

@@ -71,6 +71,7 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
         summary: restArgs.path ? i18n.t('toolSummary.writeFile', { path: restArgs.path }) : i18n.t('toolSummary.writeFileShort')
       };
 
+    case 'edit':
     case 'patchFile':
       const editCount = restArgs.edits?.length || 0;
       return {
@@ -94,22 +95,27 @@ export function generateToolSummary(name: string, args: any): ToolSummary {
           : i18n.t('toolSummary.renameFileShort')
       };
 
+    case 'read':
     case 'readFile':
       return {
         action: 'read',
         summary: restArgs.path ? i18n.t('toolSummary.readFile', { path: restArgs.path }) : i18n.t('toolSummary.readFileShort')
       };
 
+    case 'glob':
     case 'listFiles':
       return {
         action: 'list',
         summary: restArgs.path ? i18n.t('toolSummary.listDir', { path: restArgs.path }) : i18n.t('toolSummary.listDirShort')
       };
 
+    case 'grep':
     case 'searchFiles':
       return {
         action: 'search',
-        summary: restArgs.query ? i18n.t('toolSummary.searchFiles', { query: truncate(restArgs.query, 40) }) : i18n.t('toolSummary.searchFilesShort')
+        summary: (restArgs.pattern || restArgs.query)
+          ? i18n.t('toolSummary.searchFiles', { query: truncate(restArgs.pattern || restArgs.query, 40) })
+          : i18n.t('toolSummary.searchFilesShort')
       };
 
     case 'globFiles':

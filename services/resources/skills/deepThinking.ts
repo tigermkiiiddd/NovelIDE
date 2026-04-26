@@ -321,10 +321,10 @@ deep_thinking(action: "create", title: "简短中文标题")
 ### 操作流程
 
 1. **创建** → \`deep_thinking(create)\` → 拿到路径
-2. **读模板** → \`readFile(.thinking/{标题}/01_约束.md)\` → 看到模板结构
-3. **填内容** → \`writeFile(.thinking/{标题}/01_约束.md, 你的分析)\` → 按模板结构填写
-4. **迭代修改** → \`editFile\` 追加或修改内容
-5. **下一页** → \`readFile\` P2 模板 → \`writeFile\` 填写 → P3 同理
+2. **读模板** → \`read(.thinking/{标题}/01_约束.md)\` → 看到模板结构
+3. **填内容** → \`write(.thinking/{标题}/01_约束.md, 你的分析)\` → 按模板结构填写
+4. **迭代修改** → \`edit\` 追加或修改内容
+5. **下一页** → \`read\` P2 模板 → \`write\` 填写 → P3 同理
 
 ### 模板是起点，不是终点
 
@@ -336,7 +336,7 @@ deep_thinking(action: "create", title: "简短中文标题")
 ### 回溯操作
 
 在 P2 或 P3 中发现约束问题时：
-1. \`readFile\` 回到 P1 → \`editFile\` 更新约束状态（推翻/降级/新增）
+1. \`read\` 回到 P1 → \`edit\` 更新约束状态（推翻/降级/新增）
 2. 在约束变化记录表中新增一行，标注触发回溯的原因
 3. 回到 P2 或 P3 继续推进
 
@@ -347,11 +347,11 @@ deep_thinking(action: "create", title: "简短中文标题")
 
 ---
 
-## 与 thinking 工具的关系
+## 与内部判断的关系
 
-- **thinking**：每轮必调，快速分析意图。在 intent 中判断复杂度
+- **内部判断**：每轮先快速分析意图，在心里判断复杂度，不调用额外工具
 - **deep_thinking**：复杂场景才调，创建三页虚拟纸进行结构化分析
-- 两者独立，互不替代。thinking 的 intent 判断结果决定是否需要 deep_thinking
+- 两者独立，互不替代。内部复杂度判断决定是否需要 deep_thinking
 `;
 
 /** Skill metadata for registration */

@@ -86,7 +86,7 @@ export const applyEdits = (
         return {
           content: result,
           success: false,
-          error: `❌ patchFile 失败: 参数格式已更新，不再支持行号模式。`
+          error: `❌ edit 失败: 参数格式已更新，不再支持行号模式。`
         };
       }
       continue;
@@ -100,7 +100,7 @@ export const applyEdits = (
         return {
           content: result,
           success: false,
-          error: `❌ patchFile 失败 (Edit ${i + 1}): 必须指定 mode ("single", "global", "insert")`
+          error: `❌ edit 失败 (Edit ${i + 1}): 必须指定 mode ("single", "global", "insert")`
         };
       }
       continue;
@@ -113,7 +113,7 @@ export const applyEdits = (
           return {
             content: result,
             success: false,
-            error: `❌ patchFile 失败 (Edit ${i + 1}): insert 模式必须指定 after 或 before`
+            error: `❌ edit 失败 (Edit ${i + 1}): insert 模式必须指定 after 或 before`
           };
         }
         continue;
@@ -131,14 +131,14 @@ export const applyEdits = (
               return {
                 content: result,
                 success: false,
-                error: `❌ patchFile 失败 (Edit ${i + 1}): 未找到 after 内容`
+                error: `❌ edit 失败 (Edit ${i + 1}): 未找到 after 内容`
               };
             }
             if (matches.length > 1) {
               return {
                 content: result,
                 success: false,
-                error: `❌ patchFile 失败 (Edit ${i + 1}): after 内容匹配 ${matches.length} 处，需要更精确`
+                error: `❌ edit 失败 (Edit ${i + 1}): after 内容匹配 ${matches.length} 处，需要更精确`
               };
             }
             const match = matches[0];
@@ -160,14 +160,14 @@ export const applyEdits = (
             return {
               content: result,
               success: false,
-              error: `❌ patchFile 失败 (Edit ${i + 1}): 未找到 before 内容`
+              error: `❌ edit 失败 (Edit ${i + 1}): 未找到 before 内容`
             };
           }
           if (matches.length > 1) {
             return {
               content: result,
               success: false,
-              error: `❌ patchFile 失败 (Edit ${i + 1}): before 内容匹配 ${matches.length} 处，需要更精确`
+              error: `❌ edit 失败 (Edit ${i + 1}): before 内容匹配 ${matches.length} 处，需要更精确`
             };
           }
           const match = matches[0];
@@ -190,7 +190,7 @@ export const applyEdits = (
         return {
           content: result,
           success: false,
-          error: `❌ patchFile 失败 (Edit ${i + 1}): oldContent 不能为空`
+          error: `❌ edit 失败 (Edit ${i + 1}): oldContent 不能为空`
         };
       }
       continue;
@@ -213,7 +213,7 @@ export const applyEdits = (
         return {
           content: result,
           success: false,
-          error: `❌ patchFile 失败 (Edit ${i + 1}): 未找到匹配内容。
+          error: `❌ edit 失败 (Edit ${i + 1}): 未找到匹配内容。
 
 【可能原因】
 1. oldContent 与原文不完全一致（空格、换行、标点差异）
@@ -228,7 +228,7 @@ export const applyEdits = (
         return {
           content: result,
           success: false,
-          error: `❌ patchFile 失败 (Edit ${i + 1}): 找到 ${matches.length} 处匹配，但使用的是单点模式。
+          error: `❌ edit 失败 (Edit ${i + 1}): 找到 ${matches.length} 处匹配，但使用的是单点模式。
 
 【匹配位置】
 ${positions}

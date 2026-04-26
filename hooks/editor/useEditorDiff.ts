@@ -23,6 +23,20 @@ import { FileNode, PendingChange, DiffSessionState, FilePatch, EditDiff, EditInc
 
 export type EditorMode = 'edit' | 'preview' | 'diff';
 
+const isContentWriteTool = (toolName?: string): boolean =>
+  toolName === 'write' ||
+  toolName === 'edit' ||
+  toolName === 'createFile' ||
+  toolName === 'updateFile' ||
+  toolName === 'patchFile';
+
+const getEffectiveToolName = (change: PendingChange | null): string => {
+  if (!change) return '';
+  if (change.toolName !== 'merged') return change.toolName;
+  const sourceChanges = change.metadata?.sourceChanges as PendingChange[] | undefined;
+  return sourceChanges?.find(c => isContentWriteTool(c.toolName))?.toolName || '';
+};
+
 export interface UseEditorDiffOptions {
   activeFile: FileNode | undefined;
   activeFileId: string | null;
@@ -117,7 +131,13 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
 
     // 对于虚拟文件，使用 metadata.virtualFilePath 匹配
     const filePath: string = (activeFile.metadata?.virtualFilePath as string | undefined) || getNodePath(activeFile, files);
-    const fileChanges = pendingChanges.filter(c => c.fileName === filePath);
+    const fileChanges = pendingChanges
+      .filter(c => c.fileName === filePath)
+      .sort((a, b) => {
+        const timeDiff = a.timestamp - b.timestamp;
+        if (timeDiff !== 0) return timeDiff;
+        return a.id.localeCompare(b.id);
+      });
 
     if (fileChanges.length === 0) return null;
 
@@ -151,6 +171,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
     const finalContent = mergePendingChanges(
       originalContent,
       fileChanges.map(c => ({
+        id: c.id,
         toolName: c.toolName,
         newContent: c.newContent,
         args: c.args,
@@ -565,8 +586,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
   }, [diffSession, mergedPendingChange, activePendingChange]);
 
   const triggerChapterAnalysis = useCallback((filePath: string, toolName: string) => {
-    if (filePath?.startsWith('05_正文草稿/') &&
-      (toolName === 'createFile' || toolName === 'updateFile' || toolName === 'patchFile')) {
+    if (filePath?.startsWith('05_正文草稿/') && isContentWriteTool(toolName)) {
       addMessage({
         id: Math.random().toString(),
         role: 'system',
@@ -726,7 +746,7 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
           if (newFileId) {
             useFileStore.getState().setActiveFileId(newFileId);
           }
-        } else if (fileToSaveId && finalContent) {
+        } else if (fileToSaveId && finalContent !== null && finalContent !== undefined) {
           // 普通文件，直接保存
           computedContentFileIdRef.current = null;
           saveFileContent(fileToSaveId, finalContent);
@@ -759,7 +779,8 @@ export const useEditorDiff = (options: UseEditorDiffOptions): EditorDiffHookResu
       metadata: { logType: 'success' }
     });
 
-    triggerChapterAnalysis(filePath as string, targetChange.toolName);
+    const effectiveToolName = getEffectiveToolName(targetChange);
+    triggerChapterAnalysis(filePath as string, effectiveToolName);
     triggerDocumentMemoryExtraction(filePath as string, finalContent);
 
     setTimeout(() => {
