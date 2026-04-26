@@ -1,4 +1,4 @@
-import { constructSystemPrompt } from '../../../services/resources/skills/coreProtocol';
+import { PROJECT_SOUL_TEMPLATE, constructSystemPrompt } from '../../../services/resources/skills/coreProtocol';
 import { FileNode, FileType, TodoItem } from '../../../types';
 
 const folder = (id: string, name: string, parentId: string | null = null): FileNode => ({
@@ -58,5 +58,49 @@ describe('constructSystemPrompt', () => {
     expect(prompt.indexOf('A技能')).toBeLessThan(prompt.indexOf('B技能'));
     expect(prompt).toContain('继续写第二章');
     expect(prompt.indexOf('<available_skills>')).toBeLessThan(prompt.indexOf('<runtime_context>'));
+  });
+
+  it('combines global soul with project soul override', () => {
+    const files: FileNode[] = [
+      folder('cfg', '98_技能配置'),
+      folder('skills', 'skills', 'cfg'),
+      folder('core', '核心', 'skills'),
+      file('soul', 'soul.md', 'core', '## 当前项目 Soul 覆盖\n\n- 本项目使用冷峻克制的语气。'),
+    ];
+
+    const prompt = constructSystemPrompt(
+      files,
+      undefined,
+      [],
+      [],
+      false,
+      [],
+      '## 全局 Soul\n\n- 用户喜欢直接结论。',
+    );
+
+    expect(prompt).toContain('用户喜欢直接结论');
+    expect(prompt).toContain('本项目使用冷峻克制的语气');
+  });
+
+  it('does not inject the project soul template as an override', () => {
+    const files: FileNode[] = [
+      folder('cfg', '98_技能配置'),
+      folder('skills', 'skills', 'cfg'),
+      folder('core', '核心', 'skills'),
+      file('soul', 'soul.md', 'core', PROJECT_SOUL_TEMPLATE),
+    ];
+
+    const prompt = constructSystemPrompt(files, undefined, [], [], false, [], '## 全局 Soul\n\n- 全局规则');
+
+    expect(prompt).toContain('全局规则');
+    expect(prompt).not.toContain('本文件只写当前项目的特殊人格/风格要求');
+  });
+
+  it('includes soul update criteria in the stable protocol', () => {
+    const prompt = constructSystemPrompt([], undefined, [], [], false, []);
+
+    expect(prompt).toContain('## Soul 更新准则');
+    expect(prompt).toContain('更新全局 Soul 必须使用 manage_global_soul');
+    expect(prompt).toContain('项目 98_技能配置/skills/核心/soul.md');
   });
 });

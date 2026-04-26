@@ -29,6 +29,7 @@ import { executeDeepThinking, isVirtualThinkingPath, resolveVirtualFile, writeVi
 import { executeSearchTools } from './tools/searchTools';
 import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
 import { executeQueryEvolution, executeManageEvolution } from './tools/evolutionTools';
+import { executeManageGlobalSoul } from './tools/globalSoulTools';
 
 import { useVersionStore } from '../../stores/versionStore';
 import { useAgentStore } from '../../stores/agentStore';
@@ -846,6 +847,9 @@ export const executeTool = async (
                     break;
                 case 'manage_evolution':
                     result = await executeManageEvolution(args);
+                    break;
+                case 'manage_global_soul':
+                    result = await executeManageGlobalSoul(args);
                     break;
                 // --- REFLECTION TOOL (internal, silent) ---
                 case 'reflection':

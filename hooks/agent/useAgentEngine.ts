@@ -8,6 +8,7 @@ import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService'
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
+import { useGlobalSoulStore } from '../../stores/globalSoulStore';
 
 import { lifecycleManager } from '../../domains/agentContext/toolLifecycle';
 import { useAgentContext } from './useAgentContext';
@@ -26,6 +27,7 @@ import {
   getWindowedMessages,
   resolveContextWindowMessages,
 } from '../../domains/agentContext/windowing';
+import { estimatePromptTokens } from '../../utils/tokenEstimator';
 
 // read 类工具前缀列表 — 用于对话提取时过滤掉纯查询结果
 const READ_TOOL_PREFIXES = [
@@ -160,13 +162,16 @@ export const useAgentEngine = ({
       // 3. 构建 System Prompt (LLM Input Part 1)
       // 获取记忆宫殿数据
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
+      await useGlobalSoulStore.getState().load();
+      const globalSoul = useGlobalSoulStore.getState().soul;
       const fullSystemInstruction = constructSystemPrompt(
         files,
         project,
         freshTodos,
         freshSession?.messages,  // 传递会话消息历史（用于 L2 按需话题检测）
         planMode,  // 传递 Plan 模式状态
-        knowledgeNodes  // 传递记忆宫殿节点
+        knowledgeNodes,  // 传递记忆宫殿节点
+        globalSoul
       );
 
       // 后台语义增强 L2（为下一轮准备，不阻塞当前轮）
@@ -223,6 +228,11 @@ export const useAgentEngine = ({
 
         // 格式化为 API 需要的结构
         const apiHistory = createApiHistoryPreview(windowedMessages);
+        const estimatedPromptTokens = estimatePromptTokens({
+          systemInstruction: fullSystemInstruction,
+          messages: windowedMessages,
+          tools: toolsForMode,
+        });
 
         // --- CRITICAL: IMMEDIATE INPUT VISUALIZATION ---
         // Identify the trigger message for this turn (The User message or the Tool Result message)
@@ -291,6 +301,7 @@ export const useAgentEngine = ({
             model: aiMetadata.model || useAgentStore.getState().aiConfig.modelName || 'unknown',
             provider,
             promptTokens: aiMetadata.usage.prompt_tokens || 0,
+            estimatedPromptTokens,
             completionTokens: aiMetadata.usage.completion_tokens || 0,
             totalTokens: aiMetadata.usage.total_tokens || 0,
             cacheHitTokens: aiMetadata.usage.cache_hit_tokens,

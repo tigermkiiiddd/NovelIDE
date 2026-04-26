@@ -52,6 +52,23 @@ export const DEFAULT_SOUL = `## 身份
 <!-- - 喜欢短句，不喜欢大段心理描写 -->
 <!-- - 偏好第三人称叙事 -->
 <!-- - 对话占比 40-50% -->
+
+## 跨项目记忆与风格继承
+- Soul 是跨项目人格与协作偏好的主载体，记录用户长期偏好、沟通习惯、工作方法和稳定创作倾向
+- 默认只继承用户偏好与通用方法论，不自动继承具体作品的角色口吻、专有名词、世界设定、剧情事实和项目级 prose fingerprint
+- 作品风格只能软继承：把它当作倾向和建议，遇到当前项目设定、题材、读者定位或项目 soul 覆盖时，当前项目优先
+- 如果用户明确要求从某项目派生风格，先说明继承范围，再只迁移可复用的节奏、叙事密度、语言偏好和审美原则
+`;
+
+export const PROJECT_SOUL_TEMPLATE = `## 当前项目 Soul 覆盖
+
+<!-- 本文件只写当前项目的特殊人格/风格要求。 -->
+<!-- 全局 Soul 在所有项目共享；不要在这里复制全局偏好。 -->
+<!-- 示例：
+- 本项目正文更冷峻克制，减少解释性旁白。
+- 本项目不继承其他项目的角色口吻、专有名词和世界设定。
+- 本项目以第三人称有限视角为主。
+-->
 `;
 
 export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
@@ -123,12 +140,37 @@ export const DEFAULT_PROTOCOL = `## 意图分类（每轮最优先）
 - 涉及替换/修改指令时，先确认修改的对象范围（是改称呼方式、改内容、还是改角色本身），不确定时问一句
 
 ---
+## Soul 更新准则
+
+Soul 不是普通记事本，只记录会长期改变 Agent 行为的稳定规则。更新前先判断作用域：
+
+| 内容类型 | 写入位置 | 准则 |
+|---------|----------|------|
+| 用户长期协作偏好、沟通习惯、稳定审美、反复纠正过的行为规则 | 全局 Soul | 跨项目适用，至少满足“明确要求”或“重复出现/高重要度纠正”之一 |
+| 当前作品的题材语气、叙事视角、语言密度、项目特殊禁忌 | 项目 Soul 覆盖 | 只影响当前项目，不得复制到全局 Soul |
+| 世界观、角色口吻、专有名词、剧情事实、伏笔、章节状态 | 项目资产/记忆宫殿/大纲工具 | 禁止写入全局 Soul |
+| 一次性的临时指令、当前任务偏好、用户随口选择 | 不写入 Soul | 只在当前任务执行 |
+
+**触发条件**：
+- 用户明确说“记住/以后都/全局/跨项目/写进 Soul” → 可以更新对应 Soul。
+- 用户纠正了 Agent 的工作方式，且该纠正会跨项目复用 → 记录为自进化 correction；如果用户要求固化，再进入全局 Soul。
+- 同一偏好或工作方式重复出现 2 次以上，或一次纠正影响严重 → 可建议写入全局 Soul，但不要擅自扩大含义。
+
+**写入边界**：
+- 写入全局 Soul 时，用简短规则表达，不保存聊天原文、隐私细节、项目事实和角色内容。
+- 写入项目 Soul 覆盖时，只写当前项目特殊规则；不要把全局偏好复制进去。
+- 更新全局 Soul 必须使用 manage_global_soul：先 action="read"，再 action="patch"；不得用项目文件工具伪造全局更新。
+- 若 manage_global_soul 不可用，不要声称“已更新全局 Soul”；改用 manage_evolution 记录，或在 final_answer 中说明需要用户到“设置 → 全局 Soul”确认。
+- 修改项目 98_技能配置/skills/核心/soul.md 前必须 read；只做最小 patch，保留用户已有规则。
+
+---
 ## 工具速查
 
 - **决策链**：glob(发现) → read(查看) → 小改edit / 大改write
 - **edit**：字符串精确匹配，mode: single/global/insert，10条以内打包
 - **final_answer**：唯一终止方式，必须调用
 - **记忆宫殿**：query_memory / manage_memory / link_memory / memory_status / traverse_memory
+- **全局 Soul**：manage_global_soul(action="read"|"patch")，仅用于跨项目长期人格/偏好规则
 - **项目元数据**：updateProjectMeta
 - **技能系统**（必须遵守）：先查看 <available_skills>。任务明显匹配某个技能时，直接 activate_skill 加载再操作；不确定有哪些技能或简介不够时，才调用 skills_list。激活 skill 会**自动解锁该技能配套工具类别**（如大纲构建 skill 自动解锁 outline 工具），无需再调用 search_tools。不要为了形式每轮扫描 skills_list；也不要错过关键方法论。
 - 执行型任务不描述行动，直接调工具；工具结果直接接受
@@ -150,7 +192,8 @@ export const constructSystemPrompt = (
   todos: TodoItem[],
   messages?: any[],
   planMode?: boolean,
-  knowledgeNodes?: any[]  // 记忆宫殿数据
+  knowledgeNodes?: any[],  // 记忆宫殿数据
+  globalSoul?: string
 ): string => {
   // --- 1. 变量组装 (Variable Assembly) ---
   const skillFolder = files.find(f => f.name === '98_技能配置');
@@ -168,7 +211,16 @@ export const constructSystemPrompt = (
     : null;
   // Fallback: search globally
   if (!soulFile) soulFile = files.find(f => f.name === 'soul.md' && f.type === FileType.FILE);
-  const soulInstruction = soulFile?.content || DEFAULT_SOUL;
+  const projectSoul = soulFile?.content?.trim() || '';
+  const globalSoulInstruction = globalSoul?.trim() || DEFAULT_SOUL;
+  const isEmptyProjectSoul =
+    projectSoul === DEFAULT_SOUL.trim() ||
+    projectSoul === PROJECT_SOUL_TEMPLATE.trim();
+  const projectSoulOverride =
+    projectSoul && !isEmptyProjectSoul
+      ? `## 项目 Soul 覆盖\n\n${projectSoul}`
+      : '';
+  const soulInstruction = [globalSoulInstruction, projectSoulOverride].filter(Boolean).join('\n\n---\n\n');
 
   // Protocol: 内部代码驱动，不从文件系统读取
   const protocolInstruction = DEFAULT_PROTOCOL;

@@ -1,0 +1,73 @@
+NovelIDE Non-Commercial Source License
+
+Copyright (c) 2026 NovelIDE contributors.
+All rights reserved except as expressly granted below.
+
+1. Grant of Non-Commercial Use
+
+Permission is granted to use, copy, modify, and run this software and its
+source code for personal, educational, research, evaluation, and other
+non-commercial purposes, subject to the terms of this license.
+
+2. Commercial Use Requires Prior Written Permission
+
+Commercial use is not permitted without prior written permission from the
+copyright holder.
+
+Commercial use includes, but is not limited to:
+
+- offering this software, a modified version, or a derivative work as a paid
+  product or paid service;
+- operating this software as part of a SaaS, hosted service, subscription
+  service, or commercial platform;
+- integrating this software into a commercial product, workflow, internal
+  business system, or client deliverable;
+- selling, sublicensing, renting, leasing, or commercially distributing this
+  software or derivative works;
+- using this software to provide paid consulting, agency, writing, editing,
+  generation, automation, or other commercial services.
+
+For commercial licensing, please contact the project owner.
+
+3. Redistribution
+
+Redistribution of the original or modified source code is permitted only for
+non-commercial purposes and must retain this license, copyright notices, and
+all attribution notices.
+
+4. No Trademark Rights
+
+This license does not grant permission to use the names, logos, trademarks, or
+branding of NovelIDE or NovelGenie except as required for reasonable attribution.
+
+5. Third-Party Components
+
+Third-party dependencies and assets may be subject to their own licenses. This
+license applies only to the project code and materials owned by the NovelIDE
+copyright holder.
+
+6. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM,
+OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+中文说明
+
+NovelIDE 源码可见，但不是允许任意商用的开源协议。
+
+在遵守本许可证的前提下，你可以将本项目用于个人学习、研究、评估和其他非商业用途。
+
+未经版权所有者事先书面许可，禁止任何商业用途，包括但不限于：
+
+- 将本软件、修改版或衍生作品作为付费产品或付费服务提供；
+- 将本软件作为 SaaS、托管服务、订阅服务或商业平台的一部分运营；
+- 将本软件集成到商业产品、商业工作流、企业内部系统或客户交付项目中；
+- 销售、再授权、出租、租赁或商业分发本软件或其衍生作品；
+- 使用本软件提供付费咨询、代理、写作、编辑、生成、自动化或其他商业服务。
+
+商业授权请联系项目所有者。

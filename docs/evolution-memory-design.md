@@ -84,16 +84,19 @@ manage_evolution(action, ...)
 
 ### 5. 跨项目人格
 
-现有 soul.md 是项目级的（存在 `98_技能配置/skills/核心/`）。
-新增全局 soul：`localStorage` 或 IndexedDB 中存一份 `global_soul`，
-项目 soul 继承并覆盖全局 soul。
+全局 Soul 已作为正式能力接入：`stores/globalSoulStore.ts` 通过 IndexedDB settings
+保存 `globalSoul`，设置弹窗提供“全局 Soul”编辑页。项目内的
+`98_技能配置/skills/核心/soul.md` 不再承担主人格职责，只作为当前项目覆盖层。
 
 ```
-全局 soul (IndexedDB)
+全局 soul (IndexedDB settings.globalSoul)
   └── 用户偏好、通用写作风格、沟通习惯
 项目 soul (项目文件)
   └── 项目特定设定（题材风格、角色语气等）
 ```
+
+合成顺序：`globalSoul + projectSoulOverride`。若项目 `soul.md` 仍是旧版默认 soul，
+系统将其视为未设置覆盖，避免重复注入。
 
 ### 6. 短期跨会话记忆
 

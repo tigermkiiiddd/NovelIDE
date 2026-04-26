@@ -54,6 +54,29 @@ Cache-friendly and deterministic. Contains Soul summary, protocol, core tool gui
 stable skill index. It should avoid current user input, volatile todos, file tree changes, and
 retrieved memory.
 
+Soul is now split into two layers:
+
+- Global Soul: app-level, cross-project, stored in IndexedDB settings and edited from global settings.
+  It carries NovelGenie's long-term personality, collaboration preferences, user preferences, and
+  reusable style tendencies.
+- Project Soul Override: project-level `98_技能配置/skills/核心/soul.md`. It only records the current
+  project's special requirements and overrides the global soul when there is tension.
+
+Default inheritance rule: user preferences and methods can cross projects; concrete story facts,
+character voices, proper nouns, world rules, plot state, and a project's prose fingerprint cannot
+cross projects unless the user explicitly asks to derive style from that project.
+
+The stable protocol includes Soul update criteria:
+
+- Global Soul accepts only long-lived cross-project collaboration preferences, communication habits,
+  stable aesthetics, and high-importance corrections.
+- Project Soul Override accepts only current-project tone, POV, prose-density, and project-specific
+  constraints.
+- Project facts, character voices, proper nouns, plot state, and foreshadowing stay in project
+  assets/canon tools, not global Soul.
+- If the runtime has no direct global Soul write tool, the agent must not claim it updated global
+  Soul; it should record self-evolution memory or ask the user to confirm in global settings.
+
 ### L1 Runtime State
 
 Small and dynamic. Contains mode, active file, current todos, active tool categories, and current

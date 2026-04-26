@@ -14,6 +14,7 @@ export interface UsageRecord {
   model: string;
   provider: 'openai-compatible' | 'anthropic' | 'glm';
   promptTokens: number;
+  estimatedPromptTokens?: number;
   completionTokens: number;
   totalTokens: number;
   cacheHitTokens?: number;

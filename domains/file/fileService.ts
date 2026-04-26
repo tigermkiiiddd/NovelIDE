@@ -14,7 +14,7 @@
 
 import { FileNode, FileType } from '../../types';
 import {
-  DEFAULT_SOUL,
+  PROJECT_SOUL_TEMPLATE,
   DEFAULT_PROTOCOL,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
@@ -179,8 +179,8 @@ export class FileService {
     const reviewCatFolder = ensureFolder('审核', skillsFolder.id);
     const patchCatFolder = ensureFolder('补丁', skillsFolder.id);
 
-    // 2. 确保 核心 skill: soul.md (protocol 由代码驱动，不存文件)
-    ensureFile('soul.md', coreCatFolder.id, DEFAULT_SOUL);
+    // 2. 确保 核心 skill: soul.md (项目级覆盖；全局 Soul 由设置管理)
+    ensureFile('soul.md', coreCatFolder.id, PROJECT_SOUL_TEMPLATE);
 
     // 3. 确保 99_创作规范 文件夹（仅保留目录，不创建模板文件）
     ensureFolder('99_创作规范', 'root');

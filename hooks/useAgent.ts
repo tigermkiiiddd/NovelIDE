@@ -1,5 +1,5 @@
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { ChatMessage, FileNode, ProjectMeta, PendingChange } from '../types';
 import { generateId } from '../services/fileSystem';
 import { constructSystemPrompt } from '../services/resources/skills/coreProtocol';
@@ -12,9 +12,17 @@ import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useFileStore } from '../stores/fileStore';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
+import { useGlobalSoulStore } from '../stores/globalSoulStore';
 import { findNodeByPath } from '../services/fileSystem';
 import { getWindowedMessages, resolveContextWindowMessages } from '../domains/agentContext/windowing';
 import i18n from '../i18n';
+import { getAllToolsForLLM } from '../services/agent/tools/indexLazy';
+import { useUsageStatsStore } from '../stores/usageStatsStore';
+import {
+  estimatePromptTokens,
+  getPromptCalibrationFactor,
+  resolveTokenLimit,
+} from '../utils/tokenEstimator';
 
 const isContentWriteTool = (toolName?: string): boolean =>
   toolName === 'write' ||
@@ -30,6 +38,20 @@ export const useAgent = (
     activeFile: FileNode | null,
     tools: AgentToolsImplementation
 ) => {
+  const globalSoul = useGlobalSoulStore(state => state.soul);
+  const loadGlobalSoul = useGlobalSoulStore(state => state.load);
+  const usageRecords = useUsageStatsStore(state => state.records);
+  const usageStatsLoaded = useUsageStatsStore(state => state.isLoaded);
+  const loadUsageStats = useUsageStatsStore(state => state.loadRecords);
+
+  useEffect(() => {
+      loadGlobalSoul();
+  }, [loadGlobalSoul]);
+
+  useEffect(() => {
+      if (!usageStatsLoaded) loadUsageStats();
+  }, [usageStatsLoaded, loadUsageStats]);
+
   // 1. 初始化上下文 (Store & AI Service)
   const context = useAgentContext(project);
   const {
@@ -98,31 +120,32 @@ export const useAgent = (
   }, [currentSession?.messages, contextWindowSize]);
 
   const tokenUsage = useMemo(() => {
-      const MAX_TOKENS_GEMINI = 1000000;
-      const MAX_TOKENS_DEFAULT = 128000;
-      // Check if using Gemini via OpenAI-compatible endpoint
-      const isGemini = aiConfig.modelName?.toLowerCase().includes('gemini') ||
-                       aiConfig.baseUrl?.includes('generativelanguage.googleapis.com');
-      const limit = isGemini ? MAX_TOKENS_GEMINI : MAX_TOKENS_DEFAULT;
+      const limit = resolveTokenLimit(aiConfig.modelName, aiConfig.baseUrl);
 
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
       const msgs = currentSession?.messages || [];
       const windowedMessages = getWindowedMessages(msgs, contextWindowSize);
+      const toolsForMode = getAllToolsForLLM();
       const sysPrompt = constructSystemPrompt(
         files,
         project,
         todos,
         msgs,
         planMode,
-        knowledgeNodes
+        knowledgeNodes,
+        globalSoul
       );
-      const msgsText = windowedMessages.reduce((acc: string, m: ChatMessage) => {
-          let content = m.text;
-          if (m.rawParts) content += JSON.stringify(m.rawParts);
-          return acc + content;
-      }, "");
 
-      const estimatedTokens = Math.ceil((sysPrompt.length + msgsText.length) / 2);
+      const baseEstimate = estimatePromptTokens({
+        systemInstruction: sysPrompt,
+        messages: windowedMessages,
+        tools: toolsForMode,
+      });
+      const provider = aiConfig.baseUrl?.toLowerCase().includes('anthropic') ? 'anthropic'
+        : aiConfig.baseUrl?.includes('/paas/') ? 'glm'
+        : 'openai-compatible';
+      const calibration = getPromptCalibrationFactor(usageRecords, aiConfig.modelName, provider);
+      const estimatedTokens = Math.ceil(baseEstimate * calibration);
       const percent = Math.min(100, (estimatedTokens / limit) * 100);
 
       return {
@@ -130,7 +153,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.modelName, aiConfig.baseUrl, contextWindowSize, files, project, todos, currentSession?.messages, planMode]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, contextWindowSize, files, project, todos, currentSession?.messages, planMode, globalSoul, usageRecords]);
 
   // --- 技能激活由 Agent 自主通过 activate_skill 工具决定 ---
   const triggerSkill = (_text: string) => {

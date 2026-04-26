@@ -4,7 +4,7 @@ import {
   PROJECT_PROFILE_TEMPLATE,
   STYLE_GUIDE_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
-  DEFAULT_SOUL,
+  PROJECT_SOUL_TEMPLATE,
   DEFAULT_PROTOCOL,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
@@ -223,8 +223,8 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       version: 1,
     }, null, 2)),
 
-    // --- 98_技能配置/skills/核心/ (soul only, protocol is code-embedded) ---
-    createFile('soul.md', coreCatFolder.id, DEFAULT_SOUL),
+    // --- 98_技能配置/skills/核心/ (project soul override only; global Soul lives in settings) ---
+    createFile('soul.md', coreCatFolder.id, PROJECT_SOUL_TEMPLATE),
   ];
 
   // --- 分类 Skill 创建 ---

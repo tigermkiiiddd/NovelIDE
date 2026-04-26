@@ -159,6 +159,7 @@ interface NovelGenieDB extends DBSchema {
         model: string;
         provider: string;
         promptTokens: number;
+        estimatedPromptTokens?: number;
         completionTokens: number;
         totalTokens: number;
         cacheHitTokens?: number;
@@ -432,6 +433,25 @@ export const dbAPI = {
   saveAIConfig: async (config: AIConfig) => {
     const db = await initDB();
     await db.put('settings', config, 'global');
+  },
+
+  getGlobalSoul: async (): Promise<string | undefined> => {
+    try {
+      const db = await initDB();
+      return await db.get('settings', 'globalSoul');
+    } catch (error) {
+      console.error('读取全局 Soul 失败:', error);
+      return undefined;
+    }
+  },
+
+  saveGlobalSoul: async (soul: string) => {
+    try {
+      const db = await initDB();
+      await db.put('settings', soul, 'globalSoul');
+    } catch (error) {
+      console.error('保存全局 Soul 失败:', error);
+    }
   },
 
   // UI State (Active project/session)

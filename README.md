@@ -9,6 +9,20 @@
 
 [中文](#简介) | [English](#introduction)
 
+## 授权协议 / License
+
+**NovelIDE 源码可见，但不是允许任意商用的开源协议。**
+
+本项目允许个人学习、研究、评估和其他非商业用途。未经版权所有者事先书面许可，禁止商业使用，包括但不限于 SaaS/托管服务、商业平台、付费产品、商业集成、客户交付项目、二次销售、商业分发，以及使用本软件提供付费写作、编辑、生成、自动化或咨询服务。
+
+商业授权请联系项目所有者。完整条款见 [LICENSE](./LICENSE)。
+
+**NovelIDE is source-available, but it is not licensed for unrestricted commercial use.**
+
+You may use this project for personal, educational, research, evaluation, and other non-commercial purposes. Commercial use requires prior written permission from the copyright holder, including but not limited to SaaS/hosted services, commercial platforms, paid products, commercial integrations, client deliverables, resale, commercial distribution, or paid writing/editing/generation/automation/consulting services powered by this software.
+
+For commercial licensing, please contact the project owner. See [LICENSE](./LICENSE) for the full terms.
+
 ## 简介 / Introduction
 
 **NovelIDE** 是一款面向小说作者的集成开发环境，融合了先进的 AI 技术与专业的写作工具。通过智能助手、高级编辑器和完善的项目管理功能，帮助作者专注于创作本身。
@@ -146,6 +160,12 @@ npm run dev
 ```
 
 应用将在 http://localhost:6388 启动 / App will start at http://localhost:6388.
+
+## 商业授权 / Commercial Licensing
+
+如需将 NovelIDE 用于商业产品、SaaS、企业内部商业流程、客户项目、付费服务或其他商业场景，请先取得书面授权。
+
+If you want to use NovelIDE in a commercial product, SaaS, internal business workflow, client project, paid service, or any other commercial scenario, please obtain written permission first.
 
 ## 项目结构 / Project Structure
 
