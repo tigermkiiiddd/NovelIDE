@@ -3,7 +3,7 @@ import { useRef, useCallback, useMemo } from 'react';
 import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote, ContentPart } from '../../types';
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
-import { getAllToolsForLLM, handleSearchToolsCall } from '../../services/agent/tools/indexLazy';
+import { getAllToolsForLLM } from '../../services/agent/tools/indexLazy';
 import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService';
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
@@ -164,9 +164,6 @@ export const useAgentEngine = ({
         freshSession?.messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '',
       ).catch(() => {}); // 静默失败，不影响主流程
 
-      // Lazy loading: 合并始终激活工具 + 目录 + search_tools + 已激活工具
-      const toolsForMode = getAllToolsForLLM();
-
       let loopCount = 0;
       const MAX_LOOPS = 90;
       let keepGoing = true;
@@ -189,128 +186,13 @@ export const useAgentEngine = ({
         const currentFreshSession = currentGlobalSessions.find(s => s.id === currentSessionId);
         const currentMessages = currentFreshSession?.messages || [];
 
+        // Lazy loading must be evaluated per loop so search_tools/activate_skill
+        // changes are visible to the very next model call in this user turn.
+        const toolsForMode = getAllToolsForLLM();
+
         // 滑动窗口：只取最新的 N 条消息，但使用精细化分类器
         const totalMessages = currentMessages.length;
         const windowedMessages = getWindowedMessages(currentMessages, MAX_CONTEXT_MESSAGES);
-
-        // --- 滑动窗口完整性修正 ---
-        // OpenAI API 要求：tool_calls 必须紧跟 tool response
-        // 如果窗口从中间截断，可能导致消息序列不合法
-        // 检查并修正窗口起始位置，确保消息序列完整
-        const fixWindowStart = (msgs: any[]): any[] => {
-          if (msgs.length === 0) return msgs;
-
-          // 检查第一条消息
-          const firstMsg = msgs[0];
-
-          // 情况1: 第一条是 system (UI系统消息) -> 视为 user，合法
-          if (firstMsg.role === 'system') {
-            // 继续检查剩余消息
-            const fixedRest = fixWindowStart(msgs.slice(1));
-            return [firstMsg, ...fixedRest];
-          }
-
-          // 情况2: 第一条是 model/assistant 且有 tool_calls -> 非法（缺少对应的 user 或 tool response）
-          if ((firstMsg.role === 'model' || firstMsg.role === 'assistant') && firstMsg.rawParts?.some((p: any) => p.functionCall)) {
-            const toolNames = firstMsg.rawParts
-              ?.filter((p: any) => p.functionCall)
-              .map((p: any) => p.functionCall.name)
-              .join(', ');
-            console.warn(`[窗口-Start] 丢弃孤立 tool_calls 消息（窗口首条）: [${toolNames}]`);
-            return fixWindowStart(msgs.slice(1));
-          }
-
-          // 情况3: 第一条是 user/system 但内容是 tool response (rawParts 有 functionResponse)
-          // 这种情况是合法的，因为 tool response 可以作为新一轮的起始
-          if ((firstMsg.role === 'user' || firstMsg.role === 'system') && firstMsg.rawParts?.some((p: any) => p.functionResponse)) {
-            const toolNames = firstMsg.rawParts
-              ?.filter((p: any) => p.functionResponse)
-              .map((p: any) => p.functionResponse.name)
-              .join(', ');
-            console.warn(`[窗口-Start] 窗口首条是孤立 tool response（无对应 call），保留作上下文: [${toolNames}]`);
-            return msgs;
-          }
-
-          return msgs;
-        };
-
-        // --- 滑动窗口内部完整性检查（最后防线） ---
-        // buildSimpleHistory 已保证工具调用对完整性。
-        // 此函数仅处理边界截断导致的孤立消息。
-        // ⚠️ 并发工具模式：1条 model 消息 → N条 system 消息（1:N 关系）
-        const fixWindowIntegrity = (msgs: any[]): any[] => {
-          if (msgs.length === 0) return msgs;
-
-          const result: any[] = [];
-
-          // 用于追踪：最近一个进入 result 的 model/assistant（有 tool_calls）消息
-          // 支持 1 model → N system 的并发模式
-          let lastToolCallsMsg: any = null;
-
-          for (let i = 0; i < msgs.length; i++) {
-            const msg = msgs[i];
-
-            // 检查是否是 tool response 消息
-            const hasToolResponse = (msg.role === 'system' || msg.role === 'user') &&
-              (msg.rawParts?.some((p: any) => p.functionResponse) || msg.isToolOutput);
-
-            if (hasToolResponse) {
-              // ⚠️ 关键修复：检查 lastToolCallsMsg 而不是 result[-1]
-              // 原因：并发工具下多条 system 响应连续出现，result[-1] 是上一个 system 响应，
-              // 但它们都属于同一个 model tool_calls 消息，所以需要追踪该 model 消息
-              if (!lastToolCallsMsg) {
-                const toolNames = msg.rawParts
-                  ?.filter((p: any) => p.functionResponse)
-                  .map((p: any) => p.functionResponse.name)
-                  .join(', ');
-                console.warn(`[窗口-Integrity] 丢弃孤立 tool response（i=${i}，工具: [${toolNames}]），前方无 tool_calls`);
-                continue;
-              }
-              // tool response 合法，继续
-            } else {
-              // 非 tool response 消息出现，重置 lastToolCallsMsg
-              lastToolCallsMsg = null;
-            }
-
-            // 检查是否是带 tool_calls 的 assistant 消息
-            const hasToolCalls = (msg.role === 'model' || msg.role === 'assistant') &&
-              msg.rawParts?.some((p: any) => p.functionCall);
-
-            if (hasToolCalls) {
-              // 向前扫描：检查是否有对应的 tool response 紧随其后（跳过非 response 消息）
-              let hasNextResponse = false;
-              for (let j = i + 1; j < msgs.length; j++) {
-                const next = msgs[j];
-                const isResponse = (next?.role === 'system' || next?.role === 'user') &&
-                  (next?.rawParts?.some((p: any) => p.functionResponse) || next?.isToolOutput);
-                if (isResponse) {
-                  hasNextResponse = true;
-                  break;
-                }
-                // 如果遇到非 response 的实质性消息，就停止扫描
-                const isSubstantial = next?.role === 'model' || next?.role === 'assistant' ||
-                  (next?.role === 'user' && !next?.rawParts?.some((p: any) => p.functionResponse));
-                if (isSubstantial) break;
-              }
-
-              if (!hasNextResponse) {
-                const toolNames = msg.rawParts
-                  ?.filter((p: any) => p.functionCall)
-                  .map((p: any) => p.functionCall.name)
-                  .join(', ');
-                console.warn(`[窗口-Integrity] 丢弃孤立 tool_calls 消息（i=${i}，工具: [${toolNames}]），后方无 tool response`);
-                continue;
-              }
-
-              // 记录这个有效的 tool_calls 消息
-              lastToolCallsMsg = msg;
-            }
-
-            result.push(msg);
-          }
-
-          return result;
-        };
 
         const inContextCount = windowedMessages.length;
         const droppedCount = totalMessages - inContextCount;

@@ -26,6 +26,34 @@ export enum ToolType {
   UNKNOWN = 'unknown'
 }
 
+const TOOL_TYPE_ALIASES: Record<string, ToolType> = {
+  read: ToolType.READ_FILE,
+  readfile: ToolType.READ_FILE,
+
+  write: ToolType.WRITE_FILE,
+  writefile: ToolType.WRITE_FILE,
+
+  edit: ToolType.PATCH_FILE,
+  patchfile: ToolType.PATCH_FILE,
+
+  createfile: ToolType.CREATE_FILE,
+  updatefile: ToolType.UPDATE_FILE,
+  deletefile: ToolType.DELETE_FILE,
+
+  glob: ToolType.LIST_FILES,
+  listfiles: ToolType.LIST_FILES,
+  grep: ToolType.LIST_FILES,
+  searchfiles: ToolType.LIST_FILES,
+  searchfile: ToolType.LIST_FILES,
+
+  managetodos: ToolType.MANAGE_TODOS,
+  manageplannote: ToolType.MANAGE_PLAN_NOTE,
+  updateprojectmeta: ToolType.UPDATE_PROJECT_META
+};
+
+const normalizeToolName = (toolName: string): string =>
+  toolName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 /**
  * 内容价值等级
  */
@@ -149,9 +177,12 @@ const RESULT_VALUE_CONFIG: Record<ToolType, Record<string, { type: ContentType; 
  * 从工具名称获取工具类型
  */
 export const getToolType = (toolName: string): ToolType => {
-  const normalized = toolName.toLowerCase().replace(/_/g, '');
+  const normalized = normalizeToolName(toolName);
+  const alias = TOOL_TYPE_ALIASES[normalized];
+  if (alias) return alias;
+
   const toolKey = Object.keys(ToolType).find(
-    key => ToolType[key as keyof typeof ToolType].toLowerCase().replace(/_/g, '') === normalized
+    key => normalizeToolName(ToolType[key as keyof typeof ToolType]) === normalized
   );
   return toolKey ? ToolType[toolKey as keyof typeof ToolType] : ToolType.UNKNOWN;
 };
