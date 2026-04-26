@@ -3,6 +3,18 @@ import { buildSimpleHistory } from './historyBuilder';
 
 export const MAX_CONTEXT_MESSAGES = 30;
 
+const getFunctionCallIds = (message: ChatMessage): string[] =>
+  message.rawParts
+    ?.filter((part: any) => part.functionCall)
+    .map((part: any) => part.functionCall.id)
+    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0) ?? [];
+
+const getFunctionResponseIds = (message: ChatMessage): string[] =>
+  message.rawParts
+    ?.filter((part: any) => part.functionResponse)
+    .map((part: any) => part.functionResponse.id)
+    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0) ?? [];
+
 export const fixWindowStart = (messages: ChatMessage[]): ChatMessage[] => {
   if (messages.length === 0) return messages;
 
@@ -49,7 +61,9 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
       message.rawParts?.some((part: any) => part.functionCall);
 
     if (hasToolCalls) {
-      let hasNextResponse = false;
+      const callIds = getFunctionCallIds(message);
+      const responseIds = new Set<string>();
+      let responseCount = 0;
 
       for (let j = i + 1; j < messages.length; j++) {
         const next = messages[j];
@@ -58,8 +72,9 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
           (next?.rawParts?.some((part: any) => part.functionResponse) || next?.isToolOutput);
 
         if (isResponse) {
-          hasNextResponse = true;
-          break;
+          responseCount++;
+          getFunctionResponseIds(next).forEach(id => responseIds.add(id));
+          continue;
         }
 
         const isSubstantial =
@@ -69,7 +84,11 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
         if (isSubstantial) break;
       }
 
-      if (!hasNextResponse) {
+      const hasCompleteResponses = callIds.length > 0
+        ? callIds.every(id => responseIds.has(id))
+        : responseCount > 0;
+
+      if (!hasCompleteResponses) {
         console.log(`[fixWindowIntegrity] SKIP isolated toolCall: msgId=${message.id}, text=${message.text?.substring(0, 50)}`);
         continue;
       }

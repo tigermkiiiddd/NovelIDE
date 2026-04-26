@@ -33,6 +33,17 @@ const READ_TOOL_PREFIXES = [
   'query_', 'get', 'skills_list', 'activate_skill'
 ];
 
+const ensureFunctionCallIds = (parts: any[]): any[] => parts.map((part: any) => {
+  if (!part?.functionCall || part.functionCall.id) return part;
+  return {
+    ...part,
+    functionCall: {
+      ...part.functionCall,
+      id: generateId(),
+    },
+  };
+});
+
 /**
  * 过滤对话消息，用于知识提取：
  * 1. 范围：从最近一条 user 消息开始到当前（本轮对话）
@@ -190,7 +201,7 @@ export const useAgentEngine = ({
         // changes are visible to the very next model call in this user turn.
         const toolsForMode = getAllToolsForLLM();
 
-        // 滑动窗口：只取最新的 N 条消息，但使用精细化分类器
+        // 固定滑动窗口：只取最新的 N 条消息，然后修复工具调用边界
         const totalMessages = currentMessages.length;
         const windowedMessages = getWindowedMessages(currentMessages, MAX_CONTEXT_MESSAGES);
 
@@ -297,12 +308,13 @@ export const useAgentEngine = ({
         }
 
         const content = candidates[0].content;
-        const parts = content.parts;
+        const rawParts = content.parts;
 
         // 防御性保护：部分提供方可能返回空 parts，避免“无工具调用→直接退出”的静默失败
-        if (!parts || parts.length === 0) {
+        if (!rawParts || rawParts.length === 0) {
           throw contentError('empty', aiMetadata, response);
         }
+        const parts = ensureFunctionCallIds(rawParts);
 
         // 检查 finish_reason 并处理内容问题
         const finishReasonError = checkFinishReason(
