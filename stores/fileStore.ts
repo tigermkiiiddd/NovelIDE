@@ -162,10 +162,13 @@ export const useFileStore = create<FileState>((set, get) => ({
       timeout = setTimeout(() => {
         import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
           import('./toastStore').then(({ toast }) => {
-            toast.info(i18n.t('storeMessages.updatingSearchIndex'));
             indexFilesForSearch(files, currentProjectId)
-              .then(() => toast.success(i18n.t('storeMessages.searchIndexUpdated')))
-              .catch(() => toast.warning(i18n.t('storeMessages.searchIndexFailed')));
+              .then((count) => {
+                if (count > 0) {
+                  toast.success(i18n.t('storeMessages.searchIndexUpdated'), undefined, 1600);
+                }
+              })
+              .catch(() => toast.warning(i18n.t('storeMessages.searchIndexFailed'), undefined, 3000));
           });
         });
       }, 2000); // 2秒防抖：等用户停止输入后再重建

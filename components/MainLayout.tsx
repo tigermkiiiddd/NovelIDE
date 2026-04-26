@@ -125,13 +125,14 @@ const MainLayout: React.FC<MainLayoutProps> = ({ projectId, onBack }) => {
           // 后台重建文件 embedding 索引（非阻塞，慢慢执行）
           import('../domains/memory/fileSearchService').then(({ indexFilesForSearch }) => {
             import('../stores/toastStore').then(({ toast }) => {
-              toast.info(t('mainLayout.buildingSearchIndex'), undefined, 10000);
               const files = useFileStore.getState().files;
               indexFilesForSearch(files, projectId).then(count => {
-                toast.success(t('mainLayout.searchIndexReady', { count }));
+                if (count > 0) {
+                  toast.success(t('mainLayout.searchIndexReady', { count }), undefined, 1800);
+                }
               }).catch(err => {
                 console.error('[Embedding] 后台索引失败:', err);
-                toast.warning(t('mainLayout.searchIndexFailed'));
+                toast.warning(t('mainLayout.searchIndexFailed'), undefined, 3000);
               });
             });
           });

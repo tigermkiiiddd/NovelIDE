@@ -33,8 +33,9 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
   return (
     <div
       className={`
-        flex items-start gap-3 p-3 rounded-lg border shadow-lg min-w-[300px] max-w-[450px]
+        flex items-start gap-2.5 p-2.5 rounded-lg border shadow-lg w-[min(360px,calc(100vw-24px))]
         transition-all duration-200
+        pointer-events-auto
         ${bgColors[toast.type]}
         ${isExiting ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'}
         animate-slide-in-right
@@ -44,7 +45,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium text-white">{toast.title}</div>
         {toast.message && (
-          <div className="text-xs text-gray-300 mt-1 break-all">{toast.message}</div>
+          <div className="text-xs text-gray-300 mt-1 break-words line-clamp-2">{toast.message}</div>
         )}
       </div>
       <button
@@ -63,7 +64,7 @@ const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2">
+    <div className="fixed top-3 right-3 z-[9999] flex flex-col gap-2 pointer-events-none">
       {toasts.map((t) => (
         <ToastItem key={t.id} toast={t} />
       ))}

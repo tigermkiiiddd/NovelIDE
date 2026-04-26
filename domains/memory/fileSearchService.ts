@@ -21,6 +21,7 @@ import { dbAPI } from '../../services/persistence';
 const CHUNK_SIZE = 500;
 const CHUNK_OVERLAP = 50;
 const EMBEDDING_SCHEMA_VERSION = 1;
+const IDLE_TIMEOUT_MS = 1200;
 
 interface FileChunk {
   fileId: string;
@@ -37,6 +38,32 @@ const chunkCache = new Map<string, FileChunk[]>();
 const indexedVersions = new Map<string, number>();
 // 当前项目ID（用于隔离）
 let currentProjectId: string | null = null;
+// 最新索引任务编号；新任务启动时旧任务会在下一个 yield 点退出
+let activeIndexRunId = 0;
+
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+async function waitForIdle(): Promise<void> {
+  if (typeof window === 'undefined') {
+    await wait(0);
+    return;
+  }
+
+  const requestIdle = window.requestIdleCallback;
+  if (typeof requestIdle === 'function') {
+    await new Promise<void>(resolve => {
+      requestIdle(() => resolve(), { timeout: IDLE_TIMEOUT_MS });
+    });
+    return;
+  }
+
+  await wait(16);
+}
+
+async function yieldToMainThread(runId: number): Promise<boolean> {
+  await waitForIdle();
+  return runId === activeIndexRunId;
+}
 
 function isJsonFile(name: string): boolean {
   return name.toLowerCase().endsWith('.json');
@@ -205,14 +232,22 @@ function countTotalChunks(cache: Map<string, FileChunk[]>): number {
  * - 失败清理：部分失败时清除该文件的不完整缓存
  */
 export async function indexFilesForSearch(files: FileNode[], projectId: string): Promise<number> {
+  const runId = ++activeIndexRunId;
+  await waitForIdle();
+  if (runId !== activeIndexRunId) return 0;
+
   await loadEmbeddingsFromDB(projectId);
+  if (runId !== activeIndexRunId) return 0;
 
   const fileNodes = files.filter(
     f => f.type === FileType.FILE && !f.hidden && f.content && !isJsonFile(f.name)
   );
 
   let indexed = 0;
+  let modelReady = false;
   for (const file of fileNodes) {
+    if (!(await yieldToMainThread(runId))) return 0;
+
     const version = file.lastModified || 0;
 
     // 检查是否需要重新索引
@@ -232,9 +267,16 @@ export async function indexFilesForSearch(files: FileNode[], projectId: string):
     let allSuccess = true;
 
     try {
-      await initEmbeddingModel();
+      if (!modelReady) {
+        await waitForIdle();
+        if (runId !== activeIndexRunId) return 0;
+        await initEmbeddingModel();
+        modelReady = true;
+      }
 
       for (let i = 0; i < chunks.length; i++) {
+        if (!(await yieldToMainThread(runId))) return 0;
+
         const text = chunks[i].trim();
         if (!text) continue;
 
@@ -274,6 +316,7 @@ export async function indexFilesForSearch(files: FileNode[], projectId: string):
   // 清理已删除文件的缓存
   const activeIds = new Set(fileNodes.map(f => f.id));
   for (const fileId of chunkCache.keys()) {
+    if (runId !== activeIndexRunId) return 0;
     if (!activeIds.has(fileId)) {
       chunkCache.delete(fileId);
       indexedVersions.delete(fileId);
@@ -284,6 +327,7 @@ export async function indexFilesForSearch(files: FileNode[], projectId: string):
   const validation = validateAndCleanChunkCache();
 
   if (indexed > 0 || validation.changed) {
+    if (!(await yieldToMainThread(runId))) return 0;
     const saveSuccess = await saveEmbeddingsToDB(projectId);
     if (!saveSuccess) {
       console.error('[fileSearchService] IndexedDB 持久化失败，内存缓存将在页面刷新后丢失');
