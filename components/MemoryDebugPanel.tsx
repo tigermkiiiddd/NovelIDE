@@ -1,11 +1,7 @@
 import React, { useMemo } from 'react';
 import { Layers, X } from 'lucide-react';
 import { ChatMessage, ChatSession } from '../types';
-import {
-  getWindowedMessages,
-  resolveContextWindowMessages,
-} from '../domains/agentContext/windowing';
-import { useAgentStore } from '../stores/agentStore';
+import { getWindowedMessages } from '../domains/agentContext/windowing';
 
 interface Props {
   session: ChatSession | null;
@@ -39,19 +35,16 @@ const roleClass = (role: ChatMessage['role']) => {
   return 'bg-gray-500/20 text-gray-300';
 };
 
-const rowState = (message: ChatMessage, inWindow: boolean) => {
+const rowState = (message: ChatMessage, inContext: boolean) => {
   if (message.skipInHistory) return { label: 'skipInHistory', cls: 'border-rose-500/30 bg-rose-500/10 text-rose-300' };
-  if (!inWindow) return { label: 'outside window', cls: 'border-amber-500/30 bg-amber-500/10 text-amber-300' };
+  if (!inContext) return { label: 'filtered', cls: 'border-amber-500/30 bg-amber-500/10 text-amber-300' };
   return { label: 'sent', cls: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300' };
 };
 
 const MemoryDebugPanel: React.FC<Props> = ({ session, onClose }) => {
-  const aiConfig = useAgentStore(state => state.aiConfig);
-  const windowSize = resolveContextWindowMessages(aiConfig);
-
   const data = useMemo(() => {
     const messages = session?.messages || [];
-    const windowed = getWindowedMessages(messages, windowSize);
+    const windowed = getWindowedMessages(messages);
     const sentIds = new Set(windowed.map(m => m.id));
     const skipped = messages.filter(m => m.skipInHistory).length;
     const toolCalls = windowed.filter(hasFunctionCall).length;
@@ -68,7 +61,7 @@ const MemoryDebugPanel: React.FC<Props> = ({ session, onClose }) => {
       transcriptTokens,
       dropped: Math.max(0, messages.length - windowed.length),
     };
-  }, [session, windowSize]);
+  }, [session]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4">
@@ -77,8 +70,8 @@ const MemoryDebugPanel: React.FC<Props> = ({ session, onClose }) => {
           <div className="flex items-center gap-3">
             <Layers className="text-orange-400" size={20} />
             <div>
-              <div className="font-medium text-white">History Window Debug</div>
-              <div className="text-xs text-gray-500">Fixed transcript window; no dynamic history decay or compression.</div>
+              <div className="font-medium text-white">History Context Debug</div>
+              <div className="text-xs text-gray-500">Full transcript history; no message-count sliding window.</div>
             </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-2 text-gray-400 hover:bg-gray-700">
@@ -89,8 +82,7 @@ const MemoryDebugPanel: React.FC<Props> = ({ session, onClose }) => {
         <div className="grid gap-3 border-b border-gray-700 bg-gray-900 px-4 py-3 md:grid-cols-6">
           <Stat label="Total" value={data.messages.length} />
           <Stat label="Sent" value={data.windowed.length} />
-          <Stat label="Window" value={windowSize} />
-          <Stat label="Dropped/Skip" value={`${data.dropped}/${data.skipped}`} />
+          <Stat label="Filtered/Skip" value={`${data.dropped}/${data.skipped}`} />
           <Stat label="Tool Pairs" value={`${data.toolCalls}/${data.toolResponses}`} />
           <Stat label="Est. Tokens" value={data.transcriptTokens} />
         </div>

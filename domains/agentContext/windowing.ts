@@ -1,15 +1,5 @@
-import { AIConfig, ChatMessage } from '../../types';
+import { ChatMessage } from '../../types';
 import { buildSimpleHistory } from './historyBuilder';
-
-export const MAX_CONTEXT_MESSAGES = 30;
-export const MIN_CONTEXT_MESSAGES = 8;
-export const MAX_CONTEXT_WINDOW_MESSAGES = 120;
-
-export const resolveContextWindowMessages = (aiConfig?: Pick<AIConfig, 'contextWindowMessages'> | null): number => {
-  const value = Number(aiConfig?.contextWindowMessages);
-  if (!Number.isFinite(value) || value <= 0) return MAX_CONTEXT_MESSAGES;
-  return Math.min(MAX_CONTEXT_WINDOW_MESSAGES, Math.max(MIN_CONTEXT_MESSAGES, Math.round(value)));
-};
 
 const getFunctionCallIds = (message: ChatMessage): string[] =>
   message.rawParts
@@ -22,6 +12,33 @@ const getFunctionResponseIds = (message: ChatMessage): string[] =>
     ?.filter((part: any) => part.functionResponse)
     .map((part: any) => part.functionResponse.id)
     .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0) ?? [];
+
+const isUserIntentMessage = (message: ChatMessage): boolean =>
+  message.role === 'user' &&
+  !message.isToolOutput &&
+  !message.rawParts?.some((part: any) => part.functionResponse);
+
+const findLatestUserIntent = (messages: ChatMessage[]): ChatMessage | null => {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (isUserIntentMessage(message)) return message;
+  }
+
+  return null;
+};
+
+const ensureLatestUserIntent = (
+  messages: ChatMessage[],
+  windowedMessages: ChatMessage[]
+): ChatMessage[] => {
+  const latestUserIntent = findLatestUserIntent(messages);
+  if (!latestUserIntent) return windowedMessages;
+  if (windowedMessages.some(message => message.id === latestUserIntent.id)) {
+    return windowedMessages;
+  }
+
+  return [latestUserIntent, ...windowedMessages];
+};
 
 export const fixWindowStart = (messages: ChatMessage[]): ChatMessage[] => {
   if (messages.length === 0) return messages;
@@ -112,13 +129,14 @@ export const fixWindowIntegrity = (messages: ChatMessage[]): ChatMessage[] => {
 
 export const getWindowedMessages = (
   messages: ChatMessage[],
-  maxMessages: number = MAX_CONTEXT_MESSAGES
+  _maxMessages?: number
 ): ChatMessage[] => {
-  // Fixed window first, then repair tool-call boundaries for API validity.
+  // Keep the full transcript, then repair tool-call boundaries for API validity.
   // The window does not mutate old message contents; continuity belongs to
-  // project assets and workflow retrieval, not chat-history decay.
-  const base = buildSimpleHistory(messages, { maxMessages });
-  return fixWindowIntegrity(fixWindowStart(base));
+  // project assets and workflow retrieval, not chat-history decay or truncation.
+  const base = buildSimpleHistory(messages);
+  const anchored = ensureLatestUserIntent(messages, base);
+  return fixWindowIntegrity(fixWindowStart(anchored));
 };
 
 export const createApiHistoryPreview = (messages: ChatMessage[]) =>

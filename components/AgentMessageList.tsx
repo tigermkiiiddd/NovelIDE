@@ -187,10 +187,10 @@ interface DebugPayload {
     systemInstruction?: string;
     apiHistoryPreview?: Array<{ role: string; parts: any[] }>;
     totalHistoryLength?: number;
-    slidingWindow?: {
+    historyContext?: {
         inContext: number;
         dropped: number;
-        windowSize: number;
+        total: number;
     };
 }
 
@@ -207,10 +207,10 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                     <ChevronRight size={12} className="group-open:rotate-90 transition-transform text-purple-400" />
                     <FileText size={12} className="text-purple-400" />
                     <span className="text-purple-300 font-semibold">{t('agentMessage.llmInputDetails')}</span>
-                    {debugPayload.slidingWindow && (
+                    {debugPayload.historyContext && (
                         <span className="ml-auto text-[10px] text-purple-400 bg-purple-800/50 px-1.5 py-0.5 rounded">
-                            📜 {debugPayload.slidingWindow.inContext}/{debugPayload.slidingWindow.windowSize}
-                            {debugPayload.slidingWindow.dropped > 0 && ` (-${debugPayload.slidingWindow.dropped})`}
+                            📜 {debugPayload.historyContext.inContext}/{debugPayload.historyContext.total}
+                            {debugPayload.historyContext.dropped > 0 && ` (-${debugPayload.historyContext.dropped})`}
                         </span>
                     )}
                 </summary>
@@ -249,7 +249,7 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                             }`}
                         >
                             <Layers size={10} />
-                            Sliding Window
+                            History Context
                         </button>
                     </div>
 
@@ -303,45 +303,45 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                             </div>
                         )}
 
-                        {/* Sliding Window Tab */}
-                        {activeTab === 'window' && debugPayload.slidingWindow && (
+                        {/* History Context Tab */}
+                        {activeTab === 'window' && debugPayload.historyContext && (
                             <div className="space-y-3">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-cyan-900/20 border border-cyan-700/50 rounded-lg p-3 text-center">
                                         <div className="text-2xl font-mono font-bold text-cyan-300">
-                                            {debugPayload.slidingWindow.inContext}
+                                            {debugPayload.historyContext.inContext}
                                         </div>
                                         <div className="text-[10px] text-cyan-400 uppercase tracking-wide mt-1">
                                             In Context
                                         </div>
                                     </div>
                                     <div className={`border rounded-lg p-3 text-center ${
-                                        debugPayload.slidingWindow.dropped > 0
+                                        debugPayload.historyContext.dropped > 0
                                             ? 'bg-yellow-900/20 border-yellow-700/50'
                                             : 'bg-gray-800/50 border-gray-700/50'
                                     }`}>
                                         <div className={`text-2xl font-mono font-bold ${
-                                            debugPayload.slidingWindow.dropped > 0 ? 'text-yellow-300' : 'text-gray-400'
+                                            debugPayload.historyContext.dropped > 0 ? 'text-yellow-300' : 'text-gray-400'
                                         }`}>
-                                            {debugPayload.slidingWindow.dropped}
+                                            {debugPayload.historyContext.dropped}
                                         </div>
                                         <div className={`text-[10px] uppercase tracking-wide mt-1 ${
-                                            debugPayload.slidingWindow.dropped > 0 ? 'text-yellow-400' : 'text-gray-500'
+                                            debugPayload.historyContext.dropped > 0 ? 'text-yellow-400' : 'text-gray-500'
                                         }`}>
-                                            Dropped
+                                            Filtered
                                         </div>
                                     </div>
                                 </div>
                                 <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
                                     <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-2">
-                                        Window Size (MAX_CONTEXT_MESSAGES)
+                                        Total Messages
                                     </div>
                                     <div className="text-xl font-mono font-bold text-gray-200">
-                                        {debugPayload.slidingWindow.windowSize}
+                                        {debugPayload.historyContext.total}
                                     </div>
                                 </div>
                                 <div className="text-[10px] text-gray-500 italic">
-                                    {t('agentMessage.slidingWindowHint')}
+                                    {t('agentMessage.historyContextHint')}
                                 </div>
                             </div>
                         )}

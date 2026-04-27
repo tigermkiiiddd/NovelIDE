@@ -35,6 +35,7 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
           finalConfig.apiKey = activeBackend.apiKey;
           finalConfig.modelName = activeBackend.modelName;
           finalConfig.maxOutputTokens = activeBackend.maxOutputTokens;
+          finalConfig.contextTokenLimit = activeBackend.contextTokenLimit ?? tempConfig.contextTokenLimit ?? 256000;
           finalConfig.thinkingEnabled = activeBackend.thinkingEnabled;
           finalConfig.thinkingBudgetTokens = activeBackend.thinkingBudgetTokens;
       }
@@ -252,25 +253,25 @@ const AISettingsForm: React.FC<AISettingsFormProps> = ({ config, onSave }) => {
                             </p>
                         </div>
 
-                        {/* Context Window */}
+                        {/* Context Token Limit */}
                         <div>
                             <label className="block text-sm font-medium text-gray-400 mb-2 flex items-center gap-2">
-                                <Hash size={16}/> Context Window Messages
+                                <Hash size={16}/> Context Token Limit
                             </label>
                             <input
                                 type="number"
-                                min={8}
-                                max={120}
-                                value={tempConfig.contextWindowMessages ?? 30}
-                                onChange={e => setTempConfig(prev => ({
-                                    ...prev,
-                                    contextWindowMessages: Math.min(120, Math.max(8, parseInt(e.target.value, 10) || 30))
-                                }))}
-                                placeholder="30"
+                                min={8192}
+                                step={1024}
+                                value={activeBackend.contextTokenLimit ?? tempConfig.contextTokenLimit ?? 256000}
+                                onChange={e => {
+                                    const rawValue = parseInt(e.target.value, 10);
+                                    updateActiveBackend({ contextTokenLimit: Number.isFinite(rawValue) && rawValue > 0 ? rawValue : undefined });
+                                }}
+                                placeholder="256000"
                                 className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:border-blue-500 focus:outline-none font-mono text-sm"
                             />
                             <p className="text-xs text-gray-500 mt-2">
-                                固定滑动窗口保留的最近消息数。小说连续性依赖项目资产召回，不建议调得过大。
+                                用于上下文用量统计和预警。默认 256k，不再按 30 轮消息裁剪 history。
                             </p>
                         </div>
 

@@ -41,6 +41,7 @@ describe('tokenEstimator', () => {
   it('resolves model-specific token limits before falling back', () => {
     expect(resolveTokenLimit('gemini-2.5-pro', '')).toBe(1_000_000);
     expect(resolveTokenLimit('claude-3-5-sonnet', '')).toBe(200_000);
-    expect(resolveTokenLimit('unknown-model', '')).toBe(128_000);
+    expect(resolveTokenLimit('unknown-model', '')).toBe(256_000);
+    expect(resolveTokenLimit('unknown-model', '', 256_000)).toBe(256_000);
   });
 });

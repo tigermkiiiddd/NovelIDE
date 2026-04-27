@@ -87,7 +87,11 @@ export const getPromptCalibrationFactor = (
   return totalWeight > 0 ? clamp(weightedRatio / totalWeight, 0.55, 2.2) : 1;
 };
 
-export const resolveTokenLimit = (modelName?: string, baseUrl?: string): number => {
+export const resolveTokenLimit = (modelName?: string, baseUrl?: string, configuredLimit?: number): number => {
+  if (Number.isFinite(configuredLimit) && Number(configuredLimit) > 0) {
+    return Math.round(Number(configuredLimit));
+  }
+
   const model = modelName?.toLowerCase() || '';
   const url = baseUrl?.toLowerCase() || '';
 
@@ -103,5 +107,5 @@ export const resolveTokenLimit = (modelName?: string, baseUrl?: string): number 
   if (model.includes('16k')) return 16_000;
   if (model.includes('8k')) return 8_000;
 
-  return 128_000;
+  return 256_000;
 };

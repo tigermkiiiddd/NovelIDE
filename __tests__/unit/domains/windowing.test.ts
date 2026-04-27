@@ -9,7 +9,7 @@ const msg = (partial: Partial<ChatMessage> & Pick<ChatMessage, 'id' | 'role'>): 
 });
 
 describe('history windowing', () => {
-  it('uses a fixed sliding window without mutating old tool args', () => {
+  it('keeps full history without mutating old tool args', () => {
     const toolCall = msg({
       id: 'm1',
       role: 'model',
@@ -37,7 +37,7 @@ describe('history windowing', () => {
     expect(result.map(m => m.id)).toEqual(['m0', 'm1', 'm2', 'm3', 'm4', 'm5']);
   });
 
-  it('repairs tool boundaries after slicing the fixed window', () => {
+  it('keeps complete history instead of slicing by the old fixed window', () => {
     const messages = [
       msg({ id: 'm0', role: 'user', text: 'start' }),
       msg({
@@ -56,7 +56,50 @@ describe('history windowing', () => {
 
     const result = getWindowedMessages(messages, 2);
 
-    expect(result.map(m => m.id)).toEqual(['m3']);
+    expect(result.map(m => m.id)).toEqual(['m0', 'm1', 'm2', 'm3']);
+  });
+
+  it('keeps the initial user intent during a long tool loop', () => {
+    const messages = [
+      msg({ id: 'm0', role: 'user', text: '设计世界观' }),
+      msg({
+        id: 'm1',
+        role: 'model',
+        rawParts: [{ functionCall: { name: 'listFiles', id: 'call-1', args: {} } }],
+      }),
+      msg({
+        id: 'm2',
+        role: 'system',
+        isToolOutput: true,
+        rawParts: [{ functionResponse: { name: 'listFiles', id: 'call-1', response: { result: '01_世界观/' } } }],
+      }),
+      msg({
+        id: 'm3',
+        role: 'model',
+        rawParts: [{ functionCall: { name: 'memory_status', id: 'call-2', args: {} } }],
+      }),
+      msg({
+        id: 'm4',
+        role: 'system',
+        isToolOutput: true,
+        rawParts: [{ functionResponse: { name: 'memory_status', id: 'call-2', response: { result: '14 nodes' } } }],
+      }),
+      msg({
+        id: 'm5',
+        role: 'model',
+        rawParts: [{ functionCall: { name: 'memory_status', id: 'call-3', args: { mode: 'ids' } } }],
+      }),
+      msg({
+        id: 'm6',
+        role: 'system',
+        isToolOutput: true,
+        rawParts: [{ functionResponse: { name: 'memory_status', id: 'call-3', response: { result: 'node ids' } } }],
+      }),
+    ];
+
+    const result = getWindowedMessages(messages, 4);
+
+    expect(result.map(m => m.id)).toEqual(['m0', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6']);
   });
 
   it('drops a tool call when not all call ids have matching responses', () => {

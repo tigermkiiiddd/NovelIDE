@@ -7,30 +7,24 @@ import {
 import { LifecycleManager } from './toolLifecycle';
 
 interface HistoryBuilderConfig {
-  maxMessages: number;
+  maxMessages?: number;
 }
 
-const DEFAULT_CONFIG: HistoryBuilderConfig = {
-  maxMessages: 30,
-};
+const DEFAULT_CONFIG: HistoryBuilderConfig = {};
 
 /**
- * Build API history with a fixed sliding window.
+ * Build API history without message-count truncation.
  *
  * This intentionally does not classify, decay, strip tool args, or remove old
  * model text by age. Fiction continuity should come from canon assets and
- * workflow-guided retrieval, while chat history remains a recent transcript.
+ * workflow-guided retrieval, while chat history remains a complete transcript.
  */
 export const buildSimpleHistory = (
   messages: ChatMessage[],
-  config: Partial<HistoryBuilderConfig> = {},
+  _config: Partial<HistoryBuilderConfig> = {},
 ): ChatMessage[] => {
-  const cfg = { ...DEFAULT_CONFIG, ...config };
-  if (cfg.maxMessages <= 0) return [];
-
   return messages
-    .filter(message => !message.skipInHistory)
-    .slice(-cfg.maxMessages);
+    .filter(message => !message.skipInHistory);
 };
 
 /**

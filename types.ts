@@ -304,6 +304,7 @@ export interface OpenAIBackend {
   modelName: string;
   lightweightModelName?: string; // 轻量模型 (legacy, use modelRoutes instead)
   maxOutputTokens?: number;      // 最长输出
+  contextTokenLimit?: number;    // 上下文 token 上限，用于统计和预警
   // 思考模式配置
   thinkingEnabled?: boolean;     // 是否启用思考模式
   thinkingBudgetTokens?: number; // 思考预算 (tokens)
@@ -328,7 +329,8 @@ export interface AIConfig {
   modelName: string; // Active Model Name
   lightweightModelName?: string; // Lightweight model for auto-tasks (chapter analysis, etc.)
   maxOutputTokens?: number; // 控制单次回复的最大长度
-  contextWindowMessages?: number; // 对话历史滑动窗口消息数
+  contextTokenLimit?: number; // 上下文 token 上限，用于统计和预警
+  contextWindowMessages?: number; // legacy: no longer used by main agent history
   safetySetting?: string; // BLOCK_NONE, BLOCK_ONLY_HIGH, BLOCK_MEDIUM_AND_ABOVE (Gemini only)
 
   // Multi-Provider Support
@@ -356,7 +358,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
   modelName: 'deepseek-chat',
   lightweightModelName: 'deepseek-coder', // 轻量任务专用模型
   maxOutputTokens: 8192,
-  contextWindowMessages: 30,
+  contextTokenLimit: 256_000,
   safetySetting: 'BLOCK_NONE',
   openAIBackends: [
       {

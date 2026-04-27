@@ -14,7 +14,7 @@ import { useFileStore } from '../stores/fileStore';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
 import { useGlobalSoulStore } from '../stores/globalSoulStore';
 import { findNodeByPath } from '../services/fileSystem';
-import { getWindowedMessages, resolveContextWindowMessages } from '../domains/agentContext/windowing';
+import { getWindowedMessages } from '../domains/agentContext/windowing';
 import i18n from '../i18n';
 import { getAllToolsForLLM } from '../services/agent/tools/indexLazy';
 import { useUsageStatsStore } from '../stores/usageStatsStore';
@@ -65,8 +65,6 @@ export const useAgent = (
   } = context;
 
   const todos = currentSession?.todos || [];
-  const contextWindowSize = resolveContextWindowMessages(aiConfig);
-
   // Plan Mode State - 使用 useMemo 根据当前会话动态计算 currentPlanNote
   const planMode = usePlanStore(state => state.planMode.isEnabled);
   const planNotes = usePlanStore(state => state.planNotes);
@@ -103,28 +101,27 @@ export const useAgent = (
       currentPlanNote
   });
 
-  // --- 4. 辅助功能 (Token 估算 & 滑动窗口 & 审批逻辑) ---
+  // --- 4. 辅助功能 (Token 估算、完整历史与审批逻辑) ---
 
-  // 滑动窗口信息：用于 UI 显示
+  // 历史信息：主 Agent 不再按消息数滑动裁剪，只过滤 skipInHistory 与修复工具边界。
   const messageWindowInfo = useMemo(() => {
       const messages = currentSession?.messages || [];
       const total = messages.length;
-      const inContext = getWindowedMessages(messages, contextWindowSize).length;
+      const inContext = getWindowedMessages(messages).length;
       const dropped = Math.max(0, total - inContext);
       return {
           total,
           inContext,
-          dropped,
-          windowSize: contextWindowSize
+          dropped
       };
-  }, [currentSession?.messages, contextWindowSize]);
+  }, [currentSession?.messages]);
 
   const tokenUsage = useMemo(() => {
-      const limit = resolveTokenLimit(aiConfig.modelName, aiConfig.baseUrl);
+      const limit = resolveTokenLimit(aiConfig.modelName, aiConfig.baseUrl, aiConfig.contextTokenLimit);
 
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
       const msgs = currentSession?.messages || [];
-      const windowedMessages = getWindowedMessages(msgs, contextWindowSize);
+      const windowedMessages = getWindowedMessages(msgs);
       const toolsForMode = getAllToolsForLLM();
       const sysPrompt = constructSystemPrompt(
         files,
@@ -153,7 +150,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.modelName, aiConfig.baseUrl, contextWindowSize, files, project, todos, currentSession?.messages, planMode, globalSoul, usageRecords]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode, globalSoul, usageRecords]);
 
   // --- 技能激活由 Agent 自主通过 activate_skill 工具决定 ---
   const triggerSkill = (_text: string) => {

@@ -51,8 +51,8 @@ interface AgentChatProps {
   isMobile: boolean;
   // Token Usage
   tokenUsage?: { used: number; limit: number; percent: number };
-  // Message Window Info (滑动窗口)
-  messageWindowInfo?: { total: number; inContext: number; dropped: number; windowSize: number };
+  // Message context info
+  messageWindowInfo?: { total: number; inContext: number; dropped: number };
   // Plan Mode Props
   planMode?: boolean;
   onTogglePlanMode?: () => void;
@@ -273,9 +273,9 @@ const AgentChat: React.FC<AgentChatProps> = ({
                      </div>
                  )}
                  {messageWindowInfo && (
-                     <div className="flex items-center gap-1" title={t('agentChat.slidingWindowTooltip', { size: messageWindowInfo.windowSize })}>
+                     <div className="flex items-center gap-1" title={t('agentChat.historyContextTooltip')}>
                         <span className={messageWindowInfo.dropped > 0 ? 'text-yellow-500' : ''}>
-                            📜 {messageWindowInfo.inContext}/{messageWindowInfo.windowSize}
+                            📜 {messageWindowInfo.inContext}/{messageWindowInfo.total}
                         </span>
                         {messageWindowInfo.dropped > 0 && (
                             <span className="text-yellow-600" title={t('agentChat.droppedMessagesTooltip', { count: messageWindowInfo.dropped })}>

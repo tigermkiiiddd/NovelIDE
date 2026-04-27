@@ -4,6 +4,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { AIConfig } from "../types";
 import { ToolDefinition } from "./agent/types";
 import { AIResponseMetadata } from "../types/agentErrors";
+import {
+  buildThinkingRequestFields,
+  detectProvider,
+  detectNativeProtocol,
+  shouldReplayReasoningContent,
+} from "./ai/providerAdapter";
 
 // --- Constants ---
 // Helper to generate settings based on config threshold
@@ -37,9 +43,10 @@ export class AIService {
 
     let baseURL = this.config.baseUrl || '';
 
-    // 根据 baseUrl 特征判断协议类型
-    const isAnthropicProtocol = baseURL.toLowerCase().includes('anthropic');
-    const isGLMProtocol = baseURL.includes('/paas/');
+    // 协议由 endpoint 决定；模型能力由 providerAdapter 按 modelName 判断。
+    const nativeProtocol = detectNativeProtocol(baseURL);
+    const isAnthropicProtocol = nativeProtocol === 'anthropic';
+    const isGLMProtocol = nativeProtocol === 'glm';
 
     if (isAnthropicProtocol) {
       // Anthropic 原生协议（GLM Coding Plan 等）
@@ -142,20 +149,25 @@ export class AIService {
     
     // 根据 baseUrl 特征判断协议
     const baseURL = this.config.baseUrl || '';
-    const isAnthropicProtocol = baseURL.toLowerCase().includes('anthropic');
+    const nativeProtocol = detectNativeProtocol(baseURL);
+    const isAnthropicProtocol = nativeProtocol === 'anthropic';
 
     if (isAnthropicProtocol) {
       return this.sendMessageAnthropic(history, message, systemInstruction, tools, signal,
-        maxTokensOverride, temperatureOverride, modelOverride);
+        maxTokensOverride, temperatureOverride, modelOverride, thinkingEnabledOverride);
     }
 
     if (this.isGLMProtocol) {
       return this.sendMessageGLM(history, message, systemInstruction, tools, signal,
-        maxTokensOverride, temperatureOverride, modelOverride);
+        maxTokensOverride, temperatureOverride, modelOverride, thinkingEnabledOverride);
     }
 
     if (!this.client) throw new Error("API Key not configured.");
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+
+    const modelName = modelOverride || this.config.modelName || 'gemini-2.0-flash';
+    const provider = detectProvider(baseURL, modelName);
+    const isGemini = provider.kind === 'gemini';
 
     // 1. Prepare Messages for OpenAI
     const openAIMessages: any[] = [
@@ -204,11 +216,14 @@ export class AIService {
           const textContent = msg.parts?.find((p: any) => p.text)?.text || '';
           const reasoningContent = msg.parts?.find((p: any) => p.reasoning)?.reasoning || '';
 
-          // DeepSeek 等 reasoning 模型要求 assistant 消息必须包含 content 字段，
-          // 即使为空字符串，只要有 reasoning_content 就必须同时有 content
+          // DeepSeek thinking mode needs reasoning_content only for assistant
+          // messages that performed tool calls. For ordinary turns, sending
+          // reasoning_content back is unnecessary and may be rejected/ignored.
           const assistantMsg: any = { role: 'assistant', content: textContent || '' };
-          if (reasoningContent) assistantMsg.reasoning_content = reasoningContent;
           if (toolCalls && toolCalls.length > 0) assistantMsg.tool_calls = toolCalls;
+          if (reasoningContent && shouldReplayReasoningContent(provider, !!toolCalls?.length)) {
+            assistantMsg.reasoning_content = reasoningContent;
+          }
 
           openAIMessages.push(assistantMsg);
       }
@@ -221,9 +236,6 @@ export class AIService {
 
     try {
       // 2. Prepare Request Options (with Gemini Safety Settings Injection)
-      const modelName = modelOverride || this.config.modelName || 'gemini-2.0-flash';
-      const isGemini = modelName.toLowerCase().includes('gemini');
-
       const requestPayload: any = {
         model: modelName,
         messages: openAIMessages,
@@ -248,23 +260,23 @@ export class AIService {
       // Thinking Mode (支持 Anthropic / DeepSeek / OpenAI-o 系列等思考模式)
       const thinkingEnabled = thinkingEnabledOverride ?? this.config.thinkingEnabled ?? false;
       const thinkingBudget = this.config.thinkingBudgetTokens;
-      if (thinkingEnabled) {
-        requestPayload.thinking = {
-          type: 'enabled',
-          ...(thinkingBudget && thinkingBudget > 0 ? { budget_tokens: thinkingBudget } : {}),
-        };
-      }
+      Object.assign(
+        requestPayload,
+        buildThinkingRequestFields(provider, { enabled: thinkingEnabled, budgetTokens: thinkingBudget })
+      );
 
       // Build request metadata for debug display
       const requestStartTime = Date.now();
       const requestMetadata = {
         endpoint: `${this.sdkBaseURL}/chat/completions`,
         model: modelName,
-        max_tokens: this.config.maxOutputTokens,
+        max_tokens: requestPayload.max_tokens,
         messageCount: openAIMessages.length,
         hasTools: tools.length > 0,
         toolCount: tools.length,
         safetySettings: requestPayload.safetySettings,
+        thinking: requestPayload.thinking,
+        reasoning_effort: requestPayload.reasoning_effort,
         timestamp: new Date().toISOString(),
       };
 
@@ -605,7 +617,8 @@ export class AIService {
     signal?: AbortSignal,
     maxTokensOverride?: number,
     temperatureOverride?: number,
-    modelOverride?: string
+    modelOverride?: string,
+    thinkingEnabledOverride?: boolean
   ): Promise<any> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -652,12 +665,20 @@ export class AIService {
 
     // 2. 构建请求
     const modelName = modelOverride || this.config.modelName || 'glm-4';
+    const provider = detectProvider(this.config.baseUrl, modelName);
     const requestPayload: any = {
       model: modelName,
       messages: anthropicMessages,
       max_tokens: maxTokensOverride ?? this.config.maxOutputTokens ?? 8192,
       stream: true,
     };
+    Object.assign(
+      requestPayload,
+      buildThinkingRequestFields(provider, {
+        enabled: thinkingEnabledOverride ?? this.config.thinkingEnabled ?? false,
+        budgetTokens: this.config.thinkingBudgetTokens,
+      })
+    );
     if (systemInstruction) {
       requestPayload.system = systemInstruction;
     }
@@ -788,7 +809,8 @@ export class AIService {
     signal?: AbortSignal,
     maxTokensOverride?: number,
     temperatureOverride?: number,
-    modelOverride?: string
+    modelOverride?: string,
+    thinkingEnabledOverride?: boolean
   ): Promise<any> {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
@@ -838,6 +860,7 @@ export class AIService {
 
     // 2. 构建请求
     const modelName = modelOverride || this.config.modelName || 'glm-5';
+    const provider = detectProvider(this.config.baseUrl, modelName);
     const requestPayload: any = {
       model: modelName,
       messages: glmMessages,
@@ -845,6 +868,13 @@ export class AIService {
       max_tokens: maxTokensOverride ?? this.config.maxOutputTokens ?? 8192,
       temperature: temperatureOverride ?? 0.7,
     };
+    Object.assign(
+      requestPayload,
+      buildThinkingRequestFields(provider, {
+        enabled: thinkingEnabledOverride ?? this.config.thinkingEnabled ?? false,
+        budgetTokens: this.config.thinkingBudgetTokens,
+      })
+    );
     if (tools.length > 0) {
       requestPayload.tools = tools;
       requestPayload.tool_choice = 'auto';

@@ -25,7 +25,6 @@ import { UsageCallType } from '../../types/usageStats';
 import {
   createApiHistoryPreview,
   getWindowedMessages,
-  resolveContextWindowMessages,
 } from '../../domains/agentContext/windowing';
 import { estimatePromptTokens } from '../../utils/tokenEstimator';
 
@@ -205,11 +204,9 @@ export const useAgentEngine = ({
         // Lazy loading must be evaluated per loop so search_tools/activate_skill
         // changes are visible to the very next model call in this user turn.
         const toolsForMode = getAllToolsForLLM();
-        const contextWindowSize = resolveContextWindowMessages(useAgentStore.getState().aiConfig);
-
-        // 固定滑动窗口：只取最新的 N 条消息，然后修复工具调用边界
+        // 完整历史：不按消息数裁剪，只过滤 skipInHistory 并修复工具调用边界。
         const totalMessages = currentMessages.length;
-        const windowedMessages = getWindowedMessages(currentMessages, contextWindowSize);
+        const windowedMessages = getWindowedMessages(currentMessages);
 
         const inContextCount = windowedMessages.length;
         const droppedCount = totalMessages - inContextCount;
@@ -241,13 +238,13 @@ export const useAgentEngine = ({
         if (lastMsg) {
           const debugPayload = {
             systemInstruction: fullSystemInstruction,
-            apiHistoryPreview: apiHistory, // Show windowed history
+            apiHistoryPreview: apiHistory,
             totalHistoryLength: totalMessages,
-            // 滑动窗口信息
-            slidingWindow: {
+            // 历史上下文信息
+            historyContext: {
               inContext: inContextCount,
               dropped: droppedCount,
-              windowSize: contextWindowSize
+              total: totalMessages
             }
           };
           updateMessageMetadata(lastMsg.id, { debugPayload });
@@ -364,7 +361,7 @@ export const useAgentEngine = ({
             if (truncatedTools.length > 0) {
               console.warn(`[AgentEngine] 截断检测：${truncatedTools.join(', ')} 参数不完整，跳过执行`);
               // 为截断的工具生成错误响应（不执行）
-              // CRITICAL: 必须保留 reasoning part，DeepSeek 要求后续请求回传 reasoning_content
+              // 保留 reasoning part 仅用于 UI 展示；发送 API 历史时会过滤 reasoning_content。
               const reasoningParts = parts.filter((p: any) => p.reasoning);
               addMessage({
                 id: generateId(),
@@ -742,6 +739,7 @@ export const useAgentEngine = ({
           role: 'system',
           text: errorDisplayText,
           timestamp: Date.now(),
+          skipInHistory: true,
           metadata: {
             logType: 'error',
             errorInfo: errorInfo, // 存储结构化错误信息供 UI 使用
