@@ -26,7 +26,8 @@ import {
   createApiHistoryPreview,
   getWindowedMessages,
 } from '../../domains/agentContext/windowing';
-import { estimatePromptTokens } from '../../utils/tokenEstimator';
+import { buildCompressedHistoryView } from '../../domains/agentContext/contextCompression';
+import { estimatePromptTokens, resolveTokenLimit } from '../../utils/tokenEstimator';
 
 // read 类工具前缀列表 — 用于对话提取时过滤掉纯查询结果
 const READ_TOOL_PREFIXES = [
@@ -207,12 +208,25 @@ export const useAgentEngine = ({
         // 完整历史：不按消息数裁剪，只过滤 skipInHistory 并修复工具调用边界。
         const totalMessages = currentMessages.length;
         const windowedMessages = getWindowedMessages(currentMessages);
+        const currentAiConfig = useAgentStore.getState().aiConfig;
+        const tokenLimit = resolveTokenLimit(
+          currentAiConfig.modelName,
+          currentAiConfig.baseUrl,
+          currentAiConfig.contextTokenLimit
+        );
+        const compressionResult = buildCompressedHistoryView({
+          messages: windowedMessages,
+          systemInstruction: fullSystemInstruction,
+          tools: toolsForMode,
+          tokenLimit,
+        });
+        const historyMessages = compressionResult.messages;
 
-        const inContextCount = windowedMessages.length;
+        const inContextCount = historyMessages.length;
         const droppedCount = totalMessages - inContextCount;
 
         // ▼ 窗口构建摘要
-        const windowSummary = windowedMessages.map((m, idx) => {
+        const windowSummary = historyMessages.map((m, idx) => {
           const toolNames = m.rawParts
             ?.filter((p: any) => p.functionCall || p.functionResponse)
             .map((p: any) => p.functionCall?.name || p.functionResponse?.name)
@@ -224,10 +238,10 @@ export const useAgentEngine = ({
         );
 
         // 格式化为 API 需要的结构
-        const apiHistory = createApiHistoryPreview(windowedMessages);
+        const apiHistory = createApiHistoryPreview(historyMessages);
         const estimatedPromptTokens = estimatePromptTokens({
           systemInstruction: fullSystemInstruction,
-          messages: windowedMessages,
+          messages: historyMessages,
           tools: toolsForMode,
         });
 
@@ -245,7 +259,19 @@ export const useAgentEngine = ({
               inContext: inContextCount,
               dropped: droppedCount,
               total: totalMessages
-            }
+            },
+            contextCompression: {
+              compressed: compressionResult.compressed,
+              compressedUntilMessageId: compressionResult.compressedUntilMessageId,
+              originalMessageCount: compressionResult.debug.originalMessageCount,
+              sentMessageCount: compressionResult.debug.sentMessageCount,
+              compressedMessageCount: compressionResult.debug.compressedMessageCount,
+              originalEstimatedTokens: compressionResult.debug.originalEstimatedTokens,
+              compressedEstimatedTokens: compressionResult.debug.compressedEstimatedTokens,
+              thresholdTokens: compressionResult.debug.thresholdTokens,
+              compressionNodePreview: compressionResult.debug.compressionNodePreview,
+              recentDocumentRefs: compressionResult.debug.recentDocumentRefs,
+            },
           };
           updateMessageMetadata(lastMsg.id, { debugPayload });
         }

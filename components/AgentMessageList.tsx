@@ -192,6 +192,18 @@ interface DebugPayload {
         dropped: number;
         total: number;
     };
+    contextCompression?: {
+        compressed: boolean;
+        compressedUntilMessageId?: string;
+        originalMessageCount: number;
+        sentMessageCount: number;
+        compressedMessageCount: number;
+        originalEstimatedTokens: number;
+        compressedEstimatedTokens: number;
+        thresholdTokens: number;
+        compressionNodePreview?: string;
+        recentDocumentRefs?: Array<{ path: string; name: string; action: string; sourceMessageId: string; summary: string }>;
+    };
 }
 
 const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPayload }) => {
@@ -343,6 +355,28 @@ const DebugPayloadView: React.FC<{ debugPayload: DebugPayload }> = ({ debugPaylo
                                 <div className="text-[10px] text-gray-500 italic">
                                     {t('agentMessage.historyContextHint')}
                                 </div>
+                                {debugPayload.contextCompression && (
+                                    <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-3">
+                                        <div className="text-[10px] text-gray-400 uppercase tracking-wide mb-2">
+                                            Context Compression
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-300 font-mono">
+                                            <div>compressed: {String(debugPayload.contextCompression.compressed)}</div>
+                                            <div>until: {debugPayload.contextCompression.compressedUntilMessageId || 'n/a'}</div>
+                                            <div>original: {debugPayload.contextCompression.originalMessageCount}</div>
+                                            <div>sent: {debugPayload.contextCompression.sentMessageCount}</div>
+                                            <div>covered: {debugPayload.contextCompression.compressedMessageCount}</div>
+                                            <div>threshold: {debugPayload.contextCompression.thresholdTokens}</div>
+                                            <div>tokens before: {debugPayload.contextCompression.originalEstimatedTokens}</div>
+                                            <div>tokens sent: {debugPayload.contextCompression.compressedEstimatedTokens}</div>
+                                        </div>
+                                        {debugPayload.contextCompression.compressionNodePreview && (
+                                            <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-gray-800 bg-black/30 p-2 text-[9px] text-gray-400">
+                                                {debugPayload.contextCompression.compressionNodePreview}
+                                            </pre>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
