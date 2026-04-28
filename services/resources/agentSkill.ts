@@ -2,6 +2,7 @@
 // Export individual skills from the skills directory
 export * from './skills/worldBuilder';
 export * from './skills/outlineArchitect';
+export * from './skills/outlineCreation';
 export * from './skills/characterDesigner';
 export * from './skills/characterStatus';
 export * from './skills/draftExpander';
