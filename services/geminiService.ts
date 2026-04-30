@@ -42,6 +42,9 @@ export class AIService {
     if (!apiKey) return;
 
     let baseURL = this.config.baseUrl || '';
+    if (baseURL.startsWith('/') && typeof window !== 'undefined') {
+      baseURL = `${window.location.origin}${baseURL}`;
+    }
 
     // 协议由 endpoint 决定；模型能力由 providerAdapter 按 modelName 判断。
     const nativeProtocol = detectNativeProtocol(baseURL);

@@ -383,6 +383,14 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
           modelName: 'moonshot-v1-8k'
       },
       {
+          id: 'kimi-proxy',
+          name: 'Kimi Proxy (Cloudflare)',
+          baseUrl: '/api/ai/openai-compatible/kimi',
+          apiKey: '',
+          modelName: 'kimi-for-coding',
+          contextTokenLimit: 128000
+      },
+      {
           id: 'openai-official',
           name: 'OpenAI Official',
           baseUrl: 'https://api.openai.com/v1',

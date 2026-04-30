@@ -14,6 +14,7 @@ import {
   SKILL_EXPECTATION_MANAGER,
   SKILL_PLEASURE_RHYTHM_MANAGER,
   SKILL_OUTLINE_ARCHITECT,
+  SKILL_OUTLINE_CREATION,
   SKILL_TEXT_POLISH,
   SKILL_PROJECT_INIT,
   SKILL_DRAFT_WRITING,
@@ -159,6 +160,7 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
   // 规划 skills
   const PLAN_SKILLS: Record<string, string> = {
     '技能_大纲构建.md': SKILL_OUTLINE_ARCHITECT,
+    '技能_大纲创建流程.md': SKILL_OUTLINE_CREATION,
     '技能_世界观构建.md': SKILL_WORLD_BUILDER,
     '技能_项目初始化.md': SKILL_PROJECT_INIT,
   };

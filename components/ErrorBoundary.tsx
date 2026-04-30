@@ -66,6 +66,13 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
+const CHUNK_RELOAD_SESSION_KEY = 'novelide:chunk-reload-attempted';
+
+function isChunkLoadError(error: Error) {
+  const text = `${error.name || ''} ${error.message || ''}`;
+  return /Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module|ChunkLoadError/i.test(text);
+}
+
 export default class ErrorBoundary extends React.Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -82,9 +89,21 @@ export default class ErrorBoundary extends React.Component<
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('[ErrorBoundary] Caught error:', error, errorInfo);
     this.props.onError?.(error, errorInfo);
+
+    if (
+      isChunkLoadError(error) &&
+      typeof window !== 'undefined' &&
+      window.sessionStorage.getItem(CHUNK_RELOAD_SESSION_KEY) !== 'true'
+    ) {
+      window.sessionStorage.setItem(CHUNK_RELOAD_SESSION_KEY, 'true');
+      window.location.reload();
+    }
   }
 
   resetErrorBoundary = () => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(CHUNK_RELOAD_SESSION_KEY);
+    }
     this.setState({ hasError: false, error: null });
   };
 

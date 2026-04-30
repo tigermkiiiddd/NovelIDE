@@ -1,4 +1,5 @@
 import { buildCompressedHistoryView } from '../../../domains/agentContext/contextCompression';
+import { createApiHistoryPreview } from '../../../domains/agentContext/windowing';
 import { ChatMessage } from '../../../types';
 
 const msg = (partial: Partial<ChatMessage> & Pick<ChatMessage, 'id' | 'role'>): ChatMessage => ({
@@ -168,5 +169,141 @@ describe('contextCompression', () => {
     )).toBe(true);
     expect(result.messages[0].text).toContain('最近编辑文档');
     expect(result.messages[0].text).toContain('05_正文草稿/第二章.md');
+  });
+
+  it('maps the synthetic system compression node to a user API message', () => {
+    const messages = [
+      ...userRound(0),
+      ...userRound(1),
+      ...userRound(2),
+      ...userRound(3),
+      ...userRound(4),
+      ...userRound(5),
+    ];
+
+    const result = buildCompressedHistoryView({
+      messages,
+      systemInstruction: 'system',
+      tools: [],
+      tokenLimit: 100,
+    });
+    const apiHistory = createApiHistoryPreview(result.messages);
+
+    expect(result.messages[0].role).toBe('system');
+    expect(apiHistory[0].role).toBe('user');
+    expect(apiHistory[0].parts).toEqual([{ text: result.messages[0].text }]);
+  });
+
+  it('does not compress when there are fewer than five user rounds to retain', () => {
+    const messages = [
+      ...userRound(0, '很长的早期要求'.repeat(200)),
+      ...userRound(1),
+      ...userRound(2),
+      ...userRound(3),
+    ];
+
+    const result = buildCompressedHistoryView({
+      messages,
+      systemInstruction: 'system',
+      tools: [],
+      tokenLimit: 100,
+    });
+
+    expect(result.compressed).toBe(false);
+    expect(result.messages).toBe(messages);
+  });
+
+  it('removes an isolated tool response at the start of retained history', () => {
+    const messages = [
+      ...userRound(0),
+      msg({ id: 'u1', role: 'user', text: '保留最近轮次 1' }),
+      msg({
+        id: 'r1',
+        role: 'system',
+        isToolOutput: true,
+        rawParts: [{ functionResponse: { name: 'read', id: 'missing-call', response: { result: 'orphan' } } }],
+      }),
+      ...userRound(2),
+      ...userRound(3),
+      ...userRound(4),
+      ...userRound(5),
+    ];
+
+    const result = buildCompressedHistoryView({
+      messages,
+      systemInstruction: 'system',
+      tools: [],
+      tokenLimit: 100,
+    });
+
+    expect(result.compressed).toBe(true);
+    expect(result.messages.map(m => m.id)).toContain('u1');
+    expect(result.messages.map(m => m.id)).not.toContain('r1');
+  });
+
+  it('keeps every compressed user quote in full and in order', () => {
+    const first = `第一条用户原话-${'完整保留'.repeat(80)}`;
+    const second = `第二条用户原话-${'不能截断'.repeat(80)}`;
+    const messages = [
+      ...userRound(0, first),
+      ...userRound(1, second),
+      ...userRound(2),
+      ...userRound(3),
+      ...userRound(4),
+      ...userRound(5),
+      ...userRound(6),
+    ];
+
+    const result = buildCompressedHistoryView({
+      messages,
+      systemInstruction: 'system',
+      tools: [],
+      tokenLimit: 100,
+    });
+    const text = result.messages[0].text || '';
+
+    expect(text).toContain(`1. ${first}`);
+    expect(text).toContain(`2. ${second}`);
+    expect(text.indexOf(first)).toBeLessThan(text.indexOf(second));
+  });
+
+  it('survives malformed tool args and extracts old/new file paths', () => {
+    const messages = [
+      msg({ id: 'u0', role: 'user', text: '整理文档路径' }),
+      msg({
+        id: 'c0',
+        role: 'model',
+        rawParts: [{ functionCall: { name: 'edit', id: 'bad-args', args: '{not json' } }],
+      }),
+      msg({ id: 'u1', role: 'user', text: '迁移文件' }),
+      msg({
+        id: 'c1',
+        role: 'model',
+        rawParts: [{
+          functionCall: {
+            name: 'moveFile',
+            id: 'move-1',
+            args: { oldPath: 'docs/旧.md', newPath: 'docs/新.md' },
+          },
+        }],
+      }),
+      ...userRound(2),
+      ...userRound(3),
+      ...userRound(4),
+      ...userRound(5),
+      ...userRound(6),
+    ];
+
+    const result = buildCompressedHistoryView({
+      messages,
+      systemInstruction: 'system',
+      tools: [],
+      tokenLimit: 100,
+    });
+
+    expect(result.compressed).toBe(true);
+    expect(result.debug.recentDocumentRefs.map(ref => ref.path)).toEqual(
+      expect.arrayContaining(['docs/旧.md', 'docs/新.md'])
+    );
   });
 });

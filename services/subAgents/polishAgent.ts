@@ -126,6 +126,13 @@ export interface PolishInput {
 
 export interface PolishContext {
   styleMemories?: string;
+  sliceInfo?: {
+    current: number;
+    total: number;
+    startOffset: number;
+    isFirst: boolean;
+    isLast: boolean;
+  };
 }
 
 export interface PolishOutput {
@@ -140,6 +147,63 @@ export interface PolishOutput {
   }>;
 }
 
+// --- 长文本切片常量与工具 ---
+const SLICE_SIZE = 1750;
+const SLICE_OVERLAP = 200;
+const SOFT_BOUNDARY_RADIUS = 120;
+
+interface ContentSlice {
+  text: string;
+  startOffset: number;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
+function findParagraphBoundary(content: string, targetIndex: number, radius: number): number {
+  const start = Math.max(0, targetIndex - radius);
+  const end = Math.min(content.length, targetIndex + radius);
+  const searchWindow = content.slice(start, end);
+
+  let best = -1;
+  const doubleNewline = searchWindow.lastIndexOf('\n\n');
+  if (doubleNewline !== -1) {
+    best = start + doubleNewline + 2;
+  } else {
+    const sentenceEnd = /[。！？\.\!\?][\s\n]/g;
+    let match: RegExpExecArray | null;
+    let lastMatchEnd = -1;
+    while ((match = sentenceEnd.exec(searchWindow)) !== null) {
+      lastMatchEnd = start + match.index + 1;
+    }
+    if (lastMatchEnd !== -1) {
+      best = lastMatchEnd;
+    }
+  }
+
+  return best !== -1 ? best : targetIndex;
+}
+
+function sliceContent(content: string, sliceSize: number, overlap: number): ContentSlice[] {
+  const slices: ContentSlice[] = [];
+  let start = 0;
+  while (start < content.length) {
+    const rawEnd = Math.min(start + sliceSize, content.length);
+    const end = rawEnd >= content.length ? rawEnd : findParagraphBoundary(content, rawEnd, SOFT_BOUNDARY_RADIUS);
+
+    slices.push({
+      text: content.slice(start, end),
+      startOffset: start,
+      isFirst: start === 0,
+      isLast: end >= content.length,
+    });
+
+    if (end >= content.length) break;
+    start = end - overlap;
+  }
+  return slices;
+}
+
+// --- SubAgent 配置 ---
 const polishSubAgentConfig: SubAgentConfig<PolishInput, PolishOutput, PolishContext> = {
   name: 'PolishSubAgent',
   maxLoops: 20,
@@ -147,11 +211,25 @@ const polishSubAgentConfig: SubAgentConfig<PolishInput, PolishOutput, PolishCont
   terminalToolName: 'polish_submitReport',
   temperature: 0.6,
 
-  getSystemPrompt: (input: PolishInput, context?: PolishContext) => `
+  getSystemPrompt: (input: PolishInput, context?: PolishContext) => {
+    const sliceInfo = context?.sliceInfo;
+    const sliceHeader = sliceInfo
+      ? [
+          '## 长文本切片处理',
+          `- 当前处理第 ${sliceInfo.current}/${sliceInfo.total} 片，起始偏移：${sliceInfo.startOffset}`,
+          `- 本片字符范围：${sliceInfo.startOffset} ~ ${sliceInfo.startOffset + input.fileContent.length}`,
+          ...(sliceInfo.isFirst ? [] : ['- **前200字为重叠区（已由上一片处理），禁止修改前200字**']),
+          '- 修改时请使用原文中精确复制的 oldContent，确保能匹配到本片范围内',
+          '',
+        ].join('\n')
+      : '';
+
+    return `
 # 【去AI文风润色专家】子代理
 
 你是专精于消除 AI 生成文本痕迹的润色专家。
 
+${sliceHeader}
 ## 目标文件
 \`${input.targetFile}\`
 
@@ -193,7 +271,8 @@ ${context?.styleMemories || '（无相关记忆）'}
 - **不删除伏笔**：关键伏笔必须保留
 - **必须逐段检查**：禁止抽样检查
 - **每批修改最多 20 个 edit**
-`,
+`;
+  },
 
   getInitialMessage: (input: PolishInput) => `
 请对文件 **${input.targetFile}** 进行去AI文风润色。
@@ -344,6 +423,38 @@ ${context?.styleMemories || '（无相关记忆）'}
   }
 };
 
+async function runPolishSingle(
+  aiService: AIService,
+  targetFile: string,
+  fileContent: string,
+  context?: PolishContext,
+  onLog?: (msg: string) => void,
+  signal?: AbortSignal
+): Promise<PolishOutput> {
+  const fullInput: PolishInput = {
+    targetFile,
+    fileContent
+  };
+
+  // 获取文风记忆（如果 context 中没有提供）
+  let styleMemories = context?.styleMemories;
+  if (styleMemories === undefined) {
+    const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
+    styleMemories = knowledgeNodes
+      .filter(n => n.category === '风格' || n.tags?.some((t: string) => t.includes('文风')))
+      .map(n => `- [${n.category || '记忆'}] ${n.detail || n.summary || n.name}`)
+      .join('\n') || undefined;
+  }
+
+  const finalContext: PolishContext = {
+    ...context,
+    styleMemories
+  };
+
+  const agent = new BaseSubAgent(polishSubAgentConfig);
+  return agent.run(aiService, fullInput, finalContext, onLog, signal);
+}
+
 export async function runPolishSubAgent(
   aiService: AIService,
   input: PolishInput,
@@ -351,27 +462,56 @@ export async function runPolishSubAgent(
   onLog?: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<PolishOutput> {
-  // 自动加载目标文件内容
+  // 自动加载目标文件内容（优先使用 input 中传入的）
   const files = useFileStore.getState().files;
   const node = findNodeByPath(files, input.targetFile);
-  const fileContent = node?.content || '';
+  const fileContent = input.fileContent || node?.content || '';
 
-  const fullInput: PolishInput = {
-    targetFile: input.targetFile,
-    fileContent
+  if (fileContent.length <= SLICE_SIZE) {
+    return runPolishSingle(aiService, input.targetFile, fileContent, context, onLog, signal);
+  }
+
+  // 长文本：切片串行处理
+  const slices = sliceContent(fileContent, SLICE_SIZE, SLICE_OVERLAP);
+  const allChanges: PolishOutput['changes'] = [];
+  const reports: string[] = [];
+
+  for (let i = 0; i < slices.length; i++) {
+    if (signal?.aborted) {
+      onLog?.('[Polish] 用户取消，中断处理');
+      break;
+    }
+
+    const slice = slices[i];
+    onLog?.(`[Polish] 处理切片 ${i + 1}/${slices.length} (偏移 ${slice.startOffset}-${slice.startOffset + slice.text.length})`);
+
+    const sliceContext: PolishContext = {
+      ...context,
+      sliceInfo: {
+        current: i + 1,
+        total: slices.length,
+        startOffset: slice.startOffset,
+        isFirst: slice.isFirst,
+        isLast: slice.isLast,
+      },
+    };
+
+    const result = await runPolishSingle(
+      aiService,
+      input.targetFile,
+      slice.text,
+      sliceContext,
+      onLog,
+      signal
+    );
+
+    allChanges.push(...result.changes);
+    reports.push(`[切片 ${i + 1}/${slices.length}] ${result.report}`);
+  }
+
+  return {
+    success: true,
+    report: `长文本润色完成（共 ${slices.length} 个切片）\n${reports.join('\n')}`,
+    changes: allChanges,
   };
-
-  // 获取文风记忆
-  const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
-  const styleMemories = knowledgeNodes
-    .filter(n => n.category === '风格' || n.tags?.some((t: string) => t.includes('文风')))
-    .map(n => `- [${n.category || '记忆'}] ${n.detail || n.summary || n.name}`)
-    .join('\n');
-
-  const finalContext: PolishContext = {
-    styleMemories: styleMemories || undefined
-  };
-
-  const agent = new BaseSubAgent(polishSubAgentConfig);
-  return agent.run(aiService, fullInput, finalContext, onLog, signal);
 }
