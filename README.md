@@ -46,6 +46,9 @@ For commercial licensing, please contact the project owner. See [LICENSE](./LICE
 - **创作类 / Writing**: 正文写作流程（端到端章节创作 pipeline）、正文扩写、对话写作、场景描写、情绪渲染、战斗场景、去AI化润色
 - **审核类 / Review**: 编辑审读（逻辑漏洞/OOC/注水检测）
 - **元技能 / Meta**: 深度思考方法论、快感节奏管理
+<img width="1746" height="1107" alt="image" src="https://github.com/user-attachments/assets/d6f882a0-3433-48ab-8fd2-a6bdbf5037c0" />
+<img width="1386" height="1069" alt="image" src="https://github.com/user-attachments/assets/08054683-ca97-400a-b820-80de805f5e8e" />
+<img width="1156" height="1107" alt="image" src="https://github.com/user-attachments/assets/f33d7094-fead-4b5c-ae8f-8b7b02908bd5" />
 
 Skills are progressively disclosed — the AI first sees names/descriptions, then loads full methodology on demand with auto-unlocked tool categories.
 
