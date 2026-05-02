@@ -19,7 +19,7 @@ import {
   getKnowledgeNodeDynamicState,
 } from '../../../utils/knowledgeIntelligence';
 import Fuse from 'fuse.js';
-import { semanticSearch } from '../../../domains/memory/vectorSearchService';
+import { semanticSearch, SearchResult } from '../../../domains/memory/vectorSearchService';
 import { semanticFileSearch } from '../../../domains/memory/fileSearchService';
 import { useFileStore } from '../../../stores/fileStore';
 import { getNodePath } from '../../../services/fileSystem';
@@ -76,8 +76,17 @@ export const queryKnowledgeTool: ToolDefinition = {
       type: 'object',
       properties: {
         query: {
+          oneOf: [
+            { type: 'string', description: '搜索关键词，会匹配名称、摘要和标签' },
+            { type: 'array', items: { type: 'string' }, description: '多个搜索关键词，分别召回后合并去重' },
+          ],
+          description: '搜索关键词（一个或多个），会匹配名称、摘要和标签',
+        },
+        output_mode: {
           type: 'string',
-          description: '搜索关键词，会匹配名称、摘要和标签',
+          enum: ['full', 'names', 'files_only', 'ids'],
+          default: 'full',
+          description: 'full=完整结果 | names=只返回name+path+score | files_only=只返回fileResults | ids=只返回id列表',
         },
         wing: {
           type: 'string',
@@ -446,18 +455,20 @@ export const traverseMemoryTool: ToolDefinition = {
 // ============================================
 
 export const executeQueryKnowledge = async (args: {
-  query?: string;
+  query?: string | string[];
   wing?: 'writing_rules' | 'world';
   room?: string;
   tags?: string[];
   sortBy?: 'relevance' | 'activation';
   limit?: number;
   offset?: number;
+  output_mode?: 'full' | 'names' | 'files_only' | 'ids';
 }) => {
   const store = useKnowledgeGraphStore.getState();
   await store.ensureInitialized();
 
-  const { query, wing, room, tags, sortBy = 'relevance', limit = 10, offset = 0 } = args;
+  const { query, wing, room, tags, sortBy = 'relevance', limit = 10, offset = 0, output_mode = 'full' } = args;
+  const queries = Array.isArray(query) ? query.filter(q => q?.trim()) : query?.trim() ? [query.trim()] : [];
 
   // 收集诊断信息
   const diagnostics: string[] = [];
@@ -474,67 +485,48 @@ export const executeQueryKnowledge = async (args: {
     nodes = nodes.filter((n) => n.room === room);
   }
 
-  // 按标签过滤
+  // 按标签过滤（不区分大小写）
   if (tags && tags.length > 0) {
-    nodes = nodes.filter((n) => tags.some((tag) => n.tags.includes(tag)));
+    const lowerTags = tags.map(t => t.toLowerCase());
+    nodes = nodes.filter((n) => n.tags.some((tag) => lowerTags.includes(tag.toLowerCase())));
   }
 
+  // 存储每个节点的检索分数
+  const nodeScores = new Map<string, number>();
+
   // 按关键词搜索预过滤：优先语义搜索，fallback Fuse.js
-  let fuseResults: { item: KnowledgeNode; score?: number }[] | null = null;
-  if (query && query.trim()) {
+  let allSemanticResults: SearchResult[] = [];
+  let fuseResults: { item: KnowledgeNode; score?: number }[] = [];
+  let allFileResults: Array<{ fileName: string; path: string; score: number; matchType: string }> = [];
+  let searchMode = 'memory';
+
+  if (queries.length > 0) {
     // 尝试语义搜索（如果 embedding 可用）
     const hasEmbeddings = nodes.some((n) => n.embedding && n.embedding.length > 0);
     if (hasEmbeddings) {
       try {
-        const semanticResults = await semanticSearch(query, nodes, limit);
-        if (semanticResults.length > 0) {
-          // 补充搜索文件（子串+语义）
-          let fileResults: Array<{ fileName: string; path: string; score: number; matchType: string }> = [];
-          let fileSearchError: string | undefined;
-          try {
-            const files = useFileStore.getState().files;
-            const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(query, files, limit);
-            const fileMap = new Map<string, { fileName: string; path: string; score: number; matchType: string }>();
-            for (const r of subFiles) {
-              const file = files.find(f => f.id === r.fileId);
-              fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+        for (const q of queries) {
+          const semanticResults = await semanticSearch(q, nodes, limit);
+          for (const r of semanticResults) {
+            const existing = allSemanticResults.find(x => x.node.id === r.node.id);
+            if (existing) {
+              existing.semanticScore = Math.max(existing.semanticScore, r.semanticScore);
+              existing.fuzzyScore = Math.max(existing.fuzzyScore, r.fuzzyScore);
+              existing.score = Math.max(existing.score, r.score);
+            } else {
+              allSemanticResults.push({ ...r });
             }
-            for (const r of semFiles) {
-              const file = files.find(f => f.id === r.fileId);
-              if (!fileMap.has(r.fileId)) {
-                fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
-              }
-            }
-            fileResults = Array.from(fileMap.values()).slice(0, limit);
-          } catch (e: any) {
-            fileSearchError = e?.message || String(e);
-            diagnostics.push(`文件搜索失败: ${fileSearchError}`);
           }
+        }
 
-          return JSON.stringify({
-            success: true,
-            total: semanticResults.length,
-            query,
-            sortBy,
-            results: semanticResults.slice(0, limit).map((r) => ({
-              id: r.node.id,
-              name: r.node.name,
-              category: r.node.category,
-              subCategory: r.node.subCategory,
-              summary: r.node.summary,
-              tags: r.node.tags,
-              importance: r.node.importance,
-              wing: r.node.wing,
-              room: r.node.room,
-              score: Math.round(r.score * 100),
-              activation: r.node.metadata?.activation?.toFixed(2),
-            })),
-            ...(fileResults.length > 0 ? { fileResults, mode: 'semantic+file' } : { mode: 'semantic' }),
-            ...(diagnostics.length > 0 ? { diagnostics } : {}),
-          });
+        if (allSemanticResults.length > 0) {
+          allSemanticResults.sort((a, b) => b.score - a.score);
+          searchMode = 'semantic';
+          for (const r of allSemanticResults) {
+            nodeScores.set(r.node.id, Math.round(r.score * 100));
+          }
         }
       } catch (e: any) {
-        // embedding 模型未就绪，fallback 到 Fuse.js
         diagnostics.push(`语义搜索失败: ${e?.message || String(e)}`);
         console.warn('[KnowledgeTools] 语义搜索失败，使用 Fuse.js:', e);
       }
@@ -542,106 +534,174 @@ export const executeQueryKnowledge = async (args: {
       diagnostics.push('知识节点尚无 embedding，已降级为 Fuse.js 模糊搜索');
     }
 
-    // Fuse.js 模糊搜索 fallback
-    const fuse = new Fuse(nodes, {
-      keys: [
-        { name: 'tags', weight: 0.4 },
-        { name: 'name', weight: 0.3 },
-        { name: 'summary', weight: 0.2 },
-        { name: 'detail', weight: 0.1 }
-      ],
-      includeScore: true,
-      threshold: 0.6,
-      ignoreLocation: true
-    });
-    fuseResults = fuse.search(query);
+    // Fuse.js 模糊搜索 fallback（语义搜索无结果时）
+    if (allSemanticResults.length === 0) {
+      for (const q of queries) {
+        const fuse = new Fuse(nodes, {
+          keys: [
+            { name: 'tags', weight: 0.4 },
+            { name: 'name', weight: 0.3 },
+            { name: 'summary', weight: 0.2 },
+            { name: 'detail', weight: 0.1 }
+          ],
+          includeScore: true,
+          threshold: 0.6,
+          ignoreLocation: true
+        });
+        const results = fuse.search(q);
+        for (const r of results) {
+          if (!fuseResults.some(x => x.item.id === r.item.id)) {
+            fuseResults.push(r);
+          }
+        }
+      }
+
+      if (fuseResults.length > 0) {
+        searchMode = 'fuse';
+        const now = Date.now();
+        for (const r of fuseResults) {
+          const baseScore = scoreKnowledgeNodeRecall(r.item, '', now);
+          const fuseLexical = (1 - (r.score || 0)) * 60;
+          const combined = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength;
+          nodeScores.set(r.item.id, Math.round(combined));
+        }
+      }
+    }
+
+    // 补充搜索文件（子串+语义）—— 所有查询路径都会执行
+    if (queries.length > 0) {
+      for (const q of queries) {
+        try {
+          const files = useFileStore.getState().files;
+          const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(q, files, limit);
+          const fileMap = new Map<string, { fileName: string; path: string; score: number; matchType: string }>();
+          for (const r of subFiles) {
+            const file = files.find(f => f.id === r.fileId);
+            fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+          }
+          for (const r of semFiles) {
+            const file = files.find(f => f.id === r.fileId);
+            if (!fileMap.has(r.fileId)) {
+              fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+            }
+          }
+          for (const [, v] of fileMap) {
+            const existing = allFileResults.find(x => x.path === v.path);
+            if (existing) {
+              existing.score = Math.max(existing.score, v.score);
+            } else {
+              allFileResults.push(v);
+            }
+          }
+        } catch (e: any) {
+          diagnostics.push(`文件搜索失败: ${e?.message || String(e)}`);
+        }
+      }
+      if (allFileResults.length > 0) {
+        searchMode += '+file';
+      }
+    }
   }
 
   // 排序
-  const now = Date.now();
-  switch (sortBy) {
-    case 'activation':
-      if (fuseResults) {
-        nodes = fuseResults
+  let finalNodes: KnowledgeNode[];
+  if (allSemanticResults.length > 0) {
+    finalNodes = allSemanticResults.map((r) => r.node);
+  } else if (fuseResults.length > 0) {
+    const now = Date.now();
+    switch (sortBy) {
+      case 'activation':
+        finalNodes = fuseResults
           .map((r) => r.item)
           .sort((a, b) => {
             const scoreA = scoreKnowledgeNodeRecall(a, '', now);
             const scoreB = scoreKnowledgeNodeRecall(b, '', now);
             return scoreB.activation - scoreA.activation;
           });
-      } else {
-        nodes = nodes.sort((a, b) => {
-          const scoreA = scoreKnowledgeNodeRecall(a, '', now);
-          const scoreB = scoreKnowledgeNodeRecall(b, '', now);
-          return scoreB.activation - scoreA.activation;
-        });
-      }
-      break;
-    default:
-      if (fuseResults) {
-        nodes = fuseResults
+        break;
+      default:
+        finalNodes = fuseResults
           .map((r) => {
             const baseScore = scoreKnowledgeNodeRecall(r.item, '', now);
-            const fuseLexical = (1 - (r.score || 0)) * 60; // 转化为 0~60 的分数
+            const fuseLexical = (1 - (r.score || 0)) * 60;
             const combined = fuseLexical + baseScore.importance + baseScore.activation + baseScore.strength;
             return { node: r.item, total: combined };
           })
           .sort((a, b) => b.total - a.total)
           .map((item) => item.node);
-      } else {
-        nodes = nodes
-          .map((n) => ({ node: n, score: scoreKnowledgeNodeRecall(n, '', now) }))
-          .sort((a, b) => b.score.total - a.score.total)
-          .map((item) => item.node);
-      }
-      break;
-  }
-
-  const results = nodes.slice(offset, offset + limit);
-  const hasMore = nodes.length > offset + limit;
-
-  // 补充搜索文件内容（子串+语义）
-  let fileResults: Array<{ fileName: string; path: string; score: number; matchType: string }> = [];
-  if (query) {
-    try {
-      const files = useFileStore.getState().files;
-      const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(query, files, limit);
-      const fileMap = new Map<string, { fileName: string; path: string; score: number; matchType: string }>();
-      for (const r of subFiles) {
-        const file = files.find(f => f.id === r.fileId);
-        fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
-      }
-      for (const r of semFiles) {
-        const file = files.find(f => f.id === r.fileId);
-        if (!fileMap.has(r.fileId)) {
-          fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
-        }
-      }
-      fileResults = Array.from(fileMap.values()).slice(0, limit);
-    } catch (e: any) {
-      diagnostics.push(`文件搜索失败: ${e?.message || String(e)}`);
+        break;
     }
+  } else {
+    const now = Date.now();
+    finalNodes = nodes
+      .map((n) => ({ node: n, score: scoreKnowledgeNodeRecall(n, '', now) }))
+      .sort((a, b) => b.score.total - a.score.total)
+      .map((item) => item.node);
   }
 
-  return JSON.stringify({
-    success: true,
-    count: results.length,
-    total: nodes.length,
-    offset,
-    limit,
-    hasMore,
-    results: results.map((n) => ({
-      id: n.id,
-      name: n.name,
-      summary: n.summary,
-      tags: n.tags,
-      importance: n.importance,
-      wing: n.wing,
-      room: n.room,
-    })),
-    ...(fileResults.length > 0 ? { fileResults, mode: 'memory+file' } : { mode: 'memory' }),
-    ...(diagnostics.length > 0 ? { diagnostics } : {}),
-  });
+  const results = finalNodes.slice(offset, offset + limit);
+  const hasMore = finalNodes.length > offset + limit;
+  allFileResults.sort((a, b) => b.score - a.score);
+  const slicedFileResults = allFileResults.slice(0, limit);
+
+  // 根据 output_mode 构建返回
+  switch (output_mode) {
+    case 'ids':
+      return JSON.stringify({
+        success: true,
+        nodeIds: results.map((n) => n.id),
+        filePaths: slicedFileResults.map((f) => f.path),
+        mode: searchMode,
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
+    case 'names':
+      return JSON.stringify({
+        success: true,
+        results: results.map((n) => ({
+          id: n.id,
+          name: n.name,
+          score: nodeScores.get(n.id) || 0,
+        })),
+        fileResults: slicedFileResults.map((f) => ({
+          fileName: f.fileName,
+          path: f.path,
+          score: f.score,
+        })),
+        mode: searchMode,
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
+    case 'files_only':
+      return JSON.stringify({
+        success: true,
+        fileResults: slicedFileResults,
+        mode: 'file',
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
+    default: // full
+      return JSON.stringify({
+        success: true,
+        count: results.length,
+        total: finalNodes.length,
+        offset,
+        limit,
+        hasMore,
+        results: results.map((n) => ({
+          id: n.id,
+          name: n.name,
+          category: n.category,
+          subCategory: n.subCategory,
+          summary: n.summary,
+          tags: n.tags,
+          importance: n.importance,
+          wing: n.wing,
+          room: n.room,
+          score: nodeScores.get(n.id) || 0,
+          activation: n.metadata?.activation?.toFixed(2),
+        })),
+        ...(slicedFileResults.length > 0 ? { fileResults: slicedFileResults, mode: searchMode } : { mode: searchMode }),
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      });
+  }
 };
 
 export const executeManageKnowledge = async (args: {
