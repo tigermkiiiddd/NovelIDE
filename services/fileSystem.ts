@@ -5,6 +5,7 @@ import {
   STYLE_GUIDE_TEMPLATE,
   CHARACTER_CARD_TEMPLATE,
   PROJECT_SOUL_TEMPLATE,
+  DEFAULT_SOUL,
   DEFAULT_PROTOCOL,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
@@ -20,6 +21,7 @@ import {
   SKILL_DRAFT_WRITING,
 } from './templates';
 import { GenrePreset } from './resources/presets';
+import { useGlobalSoulStore } from '../stores/globalSoulStore';
 
 // 生成唯一ID
 export const generateId = (): string => Math.random().toString(36).substring(2, 9);
@@ -225,7 +227,8 @@ export const createInitialFileSystem = (preset?: GenrePreset): FileNode[] => {
       version: 1,
     }, null, 2)),
 
-    // --- 98_技能配置/skills/核心/ (project soul override only; global Soul lives in settings) ---
+    // --- 98_技能配置/skills/核心/ ---
+    createFile('global-soul.md', coreCatFolder.id, useGlobalSoulStore.getState().soul || DEFAULT_SOUL),
     createFile('soul.md', coreCatFolder.id, PROJECT_SOUL_TEMPLATE),
   ];
 

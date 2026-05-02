@@ -76,7 +76,7 @@ import {
 
 // 自进化工具
 import { queryEvolutionTool, manageEvolutionTool } from './evolutionTools';
-import { manageGlobalSoulTool } from './globalSoulTools';
+
 
 // ==================== 一级工具（始终激活） ====================
 // 原则：简单、常用、Agent 几乎每轮都会用到
@@ -106,7 +106,7 @@ export const alwaysOnTools: ToolDefinition[] = [
   // 自进化记忆（始终可用，prompt 引用了这些工具）
   queryEvolutionTool,
   manageEvolutionTool,
-  manageGlobalSoulTool,
+
 ];
 
 // ==================== 二级工具（按类别 lazy 加载） ====================

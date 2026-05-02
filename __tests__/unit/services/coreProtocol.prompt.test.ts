@@ -65,6 +65,7 @@ describe('constructSystemPrompt', () => {
       folder('cfg', '98_技能配置'),
       folder('skills', 'skills', 'cfg'),
       folder('core', '核心', 'skills'),
+      file('globalSoul', 'global-soul.md', 'core', '## 全局 Soul\n\n- 用户喜欢直接结论。'),
       file('soul', 'soul.md', 'core', '## 当前项目 Soul 覆盖\n\n- 本项目使用冷峻克制的语气。'),
     ];
 
@@ -75,7 +76,6 @@ describe('constructSystemPrompt', () => {
       [],
       false,
       [],
-      '## 全局 Soul\n\n- 用户喜欢直接结论。',
     );
 
     expect(prompt).toContain('用户喜欢直接结论');
@@ -87,10 +87,11 @@ describe('constructSystemPrompt', () => {
       folder('cfg', '98_技能配置'),
       folder('skills', 'skills', 'cfg'),
       folder('core', '核心', 'skills'),
+      file('globalSoul', 'global-soul.md', 'core', '## 全局 Soul\n\n- 全局规则'),
       file('soul', 'soul.md', 'core', PROJECT_SOUL_TEMPLATE),
     ];
 
-    const prompt = constructSystemPrompt(files, undefined, [], [], false, [], '## 全局 Soul\n\n- 全局规则');
+    const prompt = constructSystemPrompt(files, undefined, [], [], false, []);
 
     expect(prompt).toContain('全局规则');
     expect(prompt).not.toContain('本文件只写当前项目的特殊人格/风格要求');
@@ -100,7 +101,7 @@ describe('constructSystemPrompt', () => {
     const prompt = constructSystemPrompt([], undefined, [], [], false, []);
 
     expect(prompt).toContain('## Soul 更新准则');
-    expect(prompt).toContain('更新全局 Soul 必须使用 manage_global_soul');
-    expect(prompt).toContain('项目 98_技能配置/skills/核心/soul.md');
+    expect(prompt).toContain('全局 Soul 直接编辑项目中的 98_技能配置/skills/核心/global-soul.md');
+    expect(prompt).toContain('项目 Soul 覆盖直接编辑项目中的 98_技能配置/skills/核心/soul.md');
   });
 });

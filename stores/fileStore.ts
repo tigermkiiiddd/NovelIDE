@@ -11,6 +11,7 @@ import { applyEdits } from '../utils/patchUtils';
 import { dataService } from '../services/dataService';
 import { useProjectStore } from './projectStore';
 import i18n from '../i18n';
+import { DEFAULT_SOUL } from '../services/resources/skills/coreProtocol';
 
 // Lazy-init FileService to avoid circular dependency issues
 let _fileService: FileService | null = null;
@@ -111,6 +112,23 @@ export const useFileStore = create<FileState>((set, get) => ({
         }
         return f;
     });
+
+    // Sync global-soul.md from IndexedDB (双向同步：加载时从 IndexedDB 注入最新内容)
+    const globalSoulFromDB = await dbAPI.getGlobalSoul();
+    const globalSoulContent = globalSoulFromDB?.trim() || DEFAULT_SOUL;
+    const globalSoulFileIndex = loadedFiles.findIndex(
+      f => f.name === 'global-soul.md' && f.type === FileType.FILE
+    );
+    if (globalSoulFileIndex >= 0) {
+      if (loadedFiles[globalSoulFileIndex].content?.trim() !== globalSoulContent) {
+        loadedFiles[globalSoulFileIndex] = {
+          ...loadedFiles[globalSoulFileIndex],
+          content: globalSoulContent,
+          lastModified: Date.now(),
+        };
+        hasChanges = true;
+      }
+    }
 
     if (hasChanges) {
        dbAPI.saveFiles(projectId, loadedFiles);
@@ -278,6 +296,11 @@ export const useFileStore = create<FileState>((set, get) => ({
     }));
     _saveToDB();
     get()._triggerEmbeddingIndex();
+
+    // 双向同步：global-soul.md 保存时同步写回 IndexedDB
+    if (file && file.name === 'global-soul.md') {
+      dbAPI.saveGlobalSoul(content).catch(() => {});
+    }
   },
 
   patchFile: (path, edits) => {

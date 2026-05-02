@@ -18,4 +18,4 @@ export * from './skillTools';
 export * from './searchTools';
 export * from './deepThinkingTools';
 export * from './evolutionTools';
-export * from './globalSoulTools';
+

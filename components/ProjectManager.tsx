@@ -10,7 +10,7 @@ import { getDisplayVersion } from '../utils/version';
 import { getPresetById } from '../services/resources/presets';
 import { Book, Plus, Trash2, Clock, FileText, Settings, Target, Download, Upload, Sparkles, Loader2, X, Info, Cpu, UserRound } from 'lucide-react';
 import AISettingsForm from './AISettingsForm';
-import GlobalSoulSettings from './GlobalSoulSettings';
+
 import ProjectMetaForm, { PleasureRhythm } from './ProjectMetaForm';
 import { useUiStore } from '../stores/uiStore';
 
@@ -35,7 +35,7 @@ const ProjectManager: React.FC<ProjectManagerProps> = ({ onSelectProject }) => {
 
   const [isCreating, setIsCreating] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'ai' | 'soul'>('ai');
+
 
   // Form State
   const [name, setName] = useState('');
@@ -643,39 +643,19 @@ ${polishInstruction || '(无额外指令)'}
                         {t('projectManager.globalSettings')}
                     </h2>
                     <div className="mb-5 flex rounded-lg border border-gray-800 bg-gray-950 p-1">
-                        <button
-                            type="button"
-                            onClick={() => setSettingsTab('ai')}
-                            className={`flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-md px-3 text-sm transition-colors ${
-                                settingsTab === 'ai' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-100'
-                            }`}
-                        >
+                        <div className="flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-md bg-gray-800 px-3 text-sm text-white">
                             <Cpu size={16} />
                             模型
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setSettingsTab('soul')}
-                            className={`flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-md px-3 text-sm transition-colors ${
-                                settingsTab === 'soul' ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-100'
-                            }`}
-                        >
-                            <UserRound size={16} />
-                            全局 Soul
-                        </button>
+                        </div>
                     </div>
 
-                    {settingsTab === 'ai' ? (
-                        <AISettingsForm
-                            config={aiConfig}
-                            onSave={(newConfig) => {
-                                setAiConfig(newConfig);
-                                setIsSettingsOpen(false);
-                            }}
-                        />
-                    ) : (
-                        <GlobalSoulSettings />
-                    )}
+                    <AISettingsForm
+                        config={aiConfig}
+                        onSave={(newConfig) => {
+                            setAiConfig(newConfig);
+                            setIsSettingsOpen(false);
+                        }}
+                    />
                 </div>
             </div>
         </div>

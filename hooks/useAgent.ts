@@ -12,7 +12,7 @@ import { useKnowledgeGraphStore } from '../stores/knowledgeGraphStore';
 import { useAgentStore } from '../stores/agentStore';
 import { useFileStore } from '../stores/fileStore';
 import { useSkillTriggerStore } from '../stores/skillTriggerStore';
-import { useGlobalSoulStore } from '../stores/globalSoulStore';
+
 import { findNodeByPath } from '../services/fileSystem';
 import { getWindowedMessages } from '../domains/agentContext/windowing';
 import i18n from '../i18n';
@@ -38,15 +38,10 @@ export const useAgent = (
     activeFile: FileNode | null,
     tools: AgentToolsImplementation
 ) => {
-  const globalSoul = useGlobalSoulStore(state => state.soul);
-  const loadGlobalSoul = useGlobalSoulStore(state => state.load);
+
   const usageRecords = useUsageStatsStore(state => state.records);
   const usageStatsLoaded = useUsageStatsStore(state => state.isLoaded);
   const loadUsageStats = useUsageStatsStore(state => state.loadRecords);
-
-  useEffect(() => {
-      loadGlobalSoul();
-  }, [loadGlobalSoul]);
 
   useEffect(() => {
       if (!usageStatsLoaded) loadUsageStats();
@@ -129,8 +124,7 @@ export const useAgent = (
         todos,
         msgs,
         planMode,
-        knowledgeNodes,
-        globalSoul
+        knowledgeNodes
       );
 
       const baseEstimate = estimatePromptTokens({
@@ -150,7 +144,7 @@ export const useAgent = (
           limit: limit,
           percent: parseFloat(percent.toFixed(2))
       };
-  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode, globalSoul, usageRecords]);
+  }, [aiConfig.modelName, aiConfig.baseUrl, files, project, todos, currentSession?.messages, planMode, usageRecords]);
 
   // --- 技能激活由 Agent 自主通过 activate_skill 工具决定 ---
   const triggerSkill = (_text: string) => {

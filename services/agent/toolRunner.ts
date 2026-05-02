@@ -29,7 +29,7 @@ import { executeDeepThinking, isVirtualThinkingPath, resolveVirtualFile, writeVi
 import { executeSearchTools } from './tools/searchTools';
 import { executeActivateSkill, executeSkillsList } from './tools/skillTools';
 import { executeQueryEvolution, executeManageEvolution } from './tools/evolutionTools';
-import { executeManageGlobalSoul } from './tools/globalSoulTools';
+
 
 import { useVersionStore } from '../../stores/versionStore';
 import { useAgentStore } from '../../stores/agentStore';
@@ -848,9 +848,7 @@ export const executeTool = async (
                 case 'manage_evolution':
                     result = await executeManageEvolution(args);
                     break;
-                case 'manage_global_soul':
-                    result = await executeManageGlobalSoul(args);
-                    break;
+
                 // --- REFLECTION TOOL (internal, silent) ---
                 case 'reflection':
                     result = `[REFLECTION] focus=${args.focus}, confidence=${args.confidence ?? 'N/A'}\n观察: ${args.observation?.slice(0, 200)}\n分析: ${args.analysis?.slice(0, 300)}\n结论: ${args.conclusion?.slice(0, 200)}`;

@@ -8,7 +8,7 @@ import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService'
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
-import { useGlobalSoulStore } from '../../stores/globalSoulStore';
+
 
 import { lifecycleManager } from '../../domains/agentContext/toolLifecycle';
 import { useAgentContext } from './useAgentContext';
@@ -162,16 +162,13 @@ export const useAgentEngine = ({
       // 3. 构建 System Prompt (LLM Input Part 1)
       // 获取记忆宫殿数据
       const knowledgeNodes = useKnowledgeGraphStore.getState().nodes;
-      await useGlobalSoulStore.getState().load();
-      const globalSoul = useGlobalSoulStore.getState().soul;
       const fullSystemInstruction = constructSystemPrompt(
         files,
         project,
         freshTodos,
         freshSession?.messages,  // 传递会话消息历史（用于 L2 按需话题检测）
         planMode,  // 传递 Plan 模式状态
-        knowledgeNodes,  // 传递记忆宫殿节点
-        globalSoul
+        knowledgeNodes  // 传递记忆宫殿节点
       );
 
       // 后台语义增强 L2（为下一轮准备，不阻塞当前轮）

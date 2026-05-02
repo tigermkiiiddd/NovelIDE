@@ -16,6 +16,7 @@ import { FileNode, FileType } from '../../types';
 import {
   PROJECT_SOUL_TEMPLATE,
   DEFAULT_PROTOCOL,
+  DEFAULT_SOUL,
   SKILL_WORLD_BUILDER,
   SKILL_CHARACTER_DESIGNER,
   SKILL_DRAFT_EXPANDER,
@@ -40,6 +41,7 @@ import {
   canDelete as canDeleteByLevel,
   canModifyContent as canModifyByLevel,
 } from './protectionRegistry';
+import { useGlobalSoulStore } from '../../stores/globalSoulStore';
 
 // 内联模板（用于世界线记录和伏笔记录）
 const withMeta = (content: string, summary: string, tags: string[] = []) => {
@@ -179,7 +181,11 @@ export class FileService {
     const reviewCatFolder = ensureFolder('审核', skillsFolder.id);
     const patchCatFolder = ensureFolder('补丁', skillsFolder.id);
 
-    // 2. 确保 核心 skill: soul.md (项目级覆盖；全局 Soul 由设置管理)
+    // 2. 确保核心 Soul 文件
+    // global-soul.md: 从全局 Soul 复制初始内容，作为项目中的显式全局 Soul 文件
+    const globalSoul = useGlobalSoulStore.getState().soul || DEFAULT_SOUL;
+    ensureFile('global-soul.md', coreCatFolder.id, globalSoul);
+    // soul.md: 项目 Soul 覆盖，初始为模板
     ensureFile('soul.md', coreCatFolder.id, PROJECT_SOUL_TEMPLATE);
 
     // 3. 确保 99_创作规范 文件夹（仅保留目录，不创建模板文件）
