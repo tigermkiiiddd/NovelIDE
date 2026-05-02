@@ -41,6 +41,7 @@ For commercial licensing, please contact the project owner. See [LICENSE](./LICE
 - **Granular Approval**: Fine-grained approval control for AI-suggested changes.
 - **Deep Thinking**: AI creates structured thinking workspace before design/planning tasks.
 - **Self Reflection**: AI self-reflects at key decision points for better output quality.
+- **Interactive Clarification**: When the AI encounters genuine ambiguity — conflicting user input, missing critical parameters, or divergent execution paths — it pauses to ask targeted single/multiple-choice questions via a questionnaire panel instead of guessing.
 
 ### Skill System
 19 specialized writing skills, loaded on demand, with auto-unlocked tool categories on activation:
@@ -82,6 +83,13 @@ Controls knowledge injection volume in the AI context window, loading by token b
 
 #### Cross-Project Evolution Memory
 AI agent's cross-project self-learning system, recording insights, patterns, corrections, user preferences, with importance rating and automatic expiration cleanup.
+
+### Global & Project Soul
+Configure the AI's creative personality and style at two independent levels:
+
+- **Global Soul**: App-level, cross-project preferences stored in your global settings. Carries long-term collaboration habits, communication style, reusable aesthetic tendencies, and high-importance corrections that follow you across all projects.
+- **Project Soul Override**: Project-level personality file (`soul.md`) that records the current project's special requirements — tone, POV, prose density, genre-specific constraints. Automatically overrides Global Soul when tension exists.
+- **Clean Separation**: Story facts, character voices, proper nouns, world rules, and plot state stay inside project assets; only style and collaboration preferences cross projects by default.
 
 ### Foreshadowing & Timeline
 - **World Timeline**: Absolute timestamp event management (day+hour), volume-chapter-event hierarchy.
