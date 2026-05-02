@@ -56,6 +56,14 @@ For commercial licensing, please contact the project owner. See [LICENSE](./LICE
 
 Skills are progressively disclosed — the AI first sees names/descriptions, then loads full methodology on demand with auto-unlocked tool categories.
 
+### Soft Workflow
+A control layer between raw prompting and hard tool calling. Authors define structured execution procedures — steps, checkpoints, anti-patterns — that guide the AI through complex creative tasks without exploding tool complexity.
+
+- **Step-by-Step Execution**: Breaks writing tasks into actionable phases (e.g., context recall → outline alignment → draft generation → quality check).
+- **Built-in Checkpoints**: Validates against story goals, character states, and foreshadowing status at each phase.
+- **Anti-Pattern Guards**: Prevents common failures like "telling instead of showing," dialogue without purpose, or unmotivated actions.
+- **Hybrid with Hard Tools**: Soft workflow orchestrates the creative flow; hard tools are unlocked only when data read/write is actually needed.
+
 ### Long-term Memory
 
 #### Memory Palace (Knowledge Graph)
@@ -129,6 +137,9 @@ All writing standards defined in separate files with genre extension support. Au
 
 ### 6. Semantic Search
 Browser-side vector generation with bge-small-zh-v1.5, hybrid retrieval (semantic + fuzzy + importance) for knowledge search and skill trigger matching.
+
+### 7. Soft Workflow
+Between raw prompting and rigid tool calling, soft workflow lets authors define *how* the AI executes — not just *what* it writes. Skills like the full chapter pipeline and expansion workflow are soft workflows: they provide clear trigger conditions, execution principles, checklists, and anti-patterns without requiring code-level tool invocations. This gives authors control over the AI's creative procedure itself.
 
 ## Tech Stack
 
