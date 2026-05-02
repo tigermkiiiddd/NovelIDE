@@ -22,6 +22,7 @@ import Fuse from 'fuse.js';
 import { semanticSearch } from '../../../domains/memory/vectorSearchService';
 import { semanticFileSearch } from '../../../domains/memory/fileSearchService';
 import { useFileStore } from '../../../stores/fileStore';
+import { getNodePath } from '../../../services/fileSystem';
 
 // ============================================
 // 工具定义
@@ -488,20 +489,20 @@ export const executeQueryKnowledge = async (args: {
         const semanticResults = await semanticSearch(query, nodes, limit);
         if (semanticResults.length > 0) {
           // 补充搜索文件（子串+语义）
-          let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
+          let fileResults: Array<{ fileName: string; path: string; score: number; matchType: string }> = [];
           let fileSearchError: string | undefined;
           try {
             const files = useFileStore.getState().files;
             const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(query, files, limit);
-            const fileMap = new Map<string, { fileName: string; score: number; matchType: string }>();
+            const fileMap = new Map<string, { fileName: string; path: string; score: number; matchType: string }>();
             for (const r of subFiles) {
               const file = files.find(f => f.id === r.fileId);
-              fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+              fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
             }
             for (const r of semFiles) {
               const file = files.find(f => f.id === r.fileId);
               if (!fileMap.has(r.fileId)) {
-                fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+                fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
               }
             }
             fileResults = Array.from(fileMap.values()).slice(0, limit);
@@ -600,20 +601,20 @@ export const executeQueryKnowledge = async (args: {
   const hasMore = nodes.length > offset + limit;
 
   // 补充搜索文件内容（子串+语义）
-  let fileResults: Array<{ fileName: string; score: number; matchType: string }> = [];
+  let fileResults: Array<{ fileName: string; path: string; score: number; matchType: string }> = [];
   if (query) {
     try {
       const files = useFileStore.getState().files;
       const { substring: subFiles, semantic: semFiles } = await semanticFileSearch(query, files, limit);
-      const fileMap = new Map<string, { fileName: string; score: number; matchType: string }>();
+      const fileMap = new Map<string, { fileName: string; path: string; score: number; matchType: string }>();
       for (const r of subFiles) {
         const file = files.find(f => f.id === r.fileId);
-        fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+        fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
       }
       for (const r of semFiles) {
         const file = files.find(f => f.id === r.fileId);
         if (!fileMap.has(r.fileId)) {
-          fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
+          fileMap.set(r.fileId, { fileName: file ? file.name : r.fileId, path: file ? getNodePath(file, files) : r.fileId, score: Math.round(r.score * 100), matchType: r.matchType });
         }
       }
       fileResults = Array.from(fileMap.values()).slice(0, limit);
