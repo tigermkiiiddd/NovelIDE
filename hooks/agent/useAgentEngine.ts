@@ -4,7 +4,7 @@ import { ChatMessage, ChatSession, FileNode, ProjectMeta, TodoItem, PlanNote, Co
 import { generateId } from '../../services/fileSystem';
 import { constructSystemPrompt } from '../../services/resources/skills/coreProtocol';
 import { getAllToolsForLLM } from '../../services/agent/tools/indexLazy';
-import { enhanceL2WithSemantics } from '../../domains/memory/memoryStackService';
+
 import { useAgentStore } from '../../stores/agentStore';
 import { usePlanStore } from '../../stores/planStore';
 import { useKnowledgeGraphStore } from '../../stores/knowledgeGraphStore';
@@ -171,11 +171,6 @@ export const useAgentEngine = ({
         knowledgeNodes  // 传递记忆宫殿节点
       );
 
-      // 后台语义增强 L2（为下一轮准备，不阻塞当前轮）
-      enhanceL2WithSemantics(
-        knowledgeNodes,
-        freshSession?.messages?.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '',
-      ).catch(() => {}); // 静默失败，不影响主流程
 
       let loopCount = 0;
       const MAX_LOOPS = 90;

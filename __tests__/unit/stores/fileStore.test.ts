@@ -297,8 +297,9 @@ describe('fileStore - Decoupled Behavior (Post-Refactoring)', () => {
       const { loadFiles } = useFileStore.getState();
       await loadFiles(projectId);
 
-      // Should fall back to initial file system
-      expect(useFileStore.getState().files.length).toBeGreaterThan(0);
+      // DB 读取失败时返回空数组（安全机制：不自动覆盖现有数据）
+      expect(useFileStore.getState().files.length).toBe(0);
+      expect(useFileStore.getState().currentProjectId).toBe(projectId);
     });
   });
 

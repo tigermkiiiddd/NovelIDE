@@ -33,16 +33,14 @@ describe('FileService - 文件系统域逻辑', () => {
 
   describe('系统文件保护', () => {
     it('应该识别系统保护文件', () => {
-      const systemFile = {
-        id: 'sys-1',
-        path: '/system/.gitkeep',
-        name: '.gitkeep',
-        type: FileType.FILE,
-        content: '',
-        lastModified: Date.now()
-      };
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'info-folder', parentId: 'root', name: '00_基础信息', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'memory', parentId: 'info-folder', name: '长期记忆.json', type: FileType.FILE, content: '{}', lastModified: Date.now() },
+      ];
+      const systemFile = allFiles[2];
 
-      const canDelete = fileService.canDeleteFile(systemFile);
+      const canDelete = fileService.canDeleteFile(systemFile, allFiles);
 
       expect(canDelete).toBe(false);
     });
@@ -63,16 +61,16 @@ describe('FileService - 文件系统域逻辑', () => {
     });
 
     it('应该识别受保护的文件夹', () => {
-      const protectedFolder = {
-        id: 'folder-1',
-        name: '98_技能配置',
-        type: FileType.FOLDER,
-        lastModified: Date.now()
-      };
+      const allFiles: FileNode[] = [
+        { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
+        { id: 'folder-1', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
+      ];
+      const protectedFolder = allFiles[1];
 
-      const canDelete = fileService.canDeleteFile(protectedFolder);
+      const canDelete = fileService.canDeleteFile(protectedFolder, allFiles);
 
-      expect(canDelete).toBe(false);
+      // 98_技能配置 现为 AUTO_REBUILD: 可删除，删除后自动恢复
+      expect(canDelete).toBe(true);
     });
 
     it('应该允许删除subskill下的技能文件（AUTO_REBUILD）', () => {
@@ -182,13 +180,13 @@ describe('FileService - 文件系统域逻辑', () => {
 
       const updatedFiles = fileService.restoreSystemFiles(existingFiles);
 
-      // 应该创建 agent_core.md 文件，使用真实的协议模板
-      const agentFile = updatedFiles.find(
-        f => f.name === 'agent_core.md' && f.parentId === 'folder-1'
+      // soul.md 现在位于 98_技能配置/skills/核心/ 下
+      const soulFile = updatedFiles.find(
+        f => f.name === 'soul.md'
       );
-      expect(agentFile).toBeDefined();
-      expect(agentFile?.type).toBe(FileType.FILE);
-      expect(agentFile?.content).toContain('你是 NovelGenie');
+      expect(soulFile).toBeDefined();
+      expect(soulFile?.type).toBe(FileType.FILE);
+      expect(soulFile?.content).toContain('当前项目 Soul 覆盖');
     });
 
     it('应该保留现有的系统文件', () => {
@@ -219,7 +217,7 @@ describe('FileService - 文件系统域逻辑', () => {
       expect(agentFile?.content).toBe('Existing content');
     });
 
-    it('应该创建嵌套的subskill文件夹', () => {
+    it('应该创建嵌套的skills分类文件夹', () => {
       const existingFiles: FileNode[] = [
         {
           id: 'skill-folder',
@@ -232,12 +230,19 @@ describe('FileService - 文件系统域逻辑', () => {
 
       const updatedFiles = fileService.restoreSystemFiles(existingFiles);
 
-      // 应该创建 subskill 子文件夹
-      const subskillFolder = updatedFiles.find(
-        f => f.name === 'subskill' && f.parentId === 'skill-folder'
+      // 应该创建 skills 子文件夹
+      const skillsFolder = updatedFiles.find(
+        f => f.name === 'skills' && f.parentId === 'skill-folder'
       );
-      expect(subskillFolder).toBeDefined();
-      expect(subskillFolder?.type).toBe(FileType.FOLDER);
+      expect(skillsFolder).toBeDefined();
+      expect(skillsFolder?.type).toBe(FileType.FOLDER);
+
+      // 应该创建 核心 分类子文件夹
+      const coreFolder = updatedFiles.find(
+        f => f.name === '核心' && f.parentId === skillsFolder?.id
+      );
+      expect(coreFolder).toBeDefined();
+      expect(coreFolder?.type).toBe(FileType.FOLDER);
     });
 
     it('应该返回所有文件包括新创建的', () => {
@@ -385,29 +390,32 @@ describe('FileService - 文件系统域逻辑', () => {
 
   describe('保护注册表 (protectionRegistry)', () => {
     describe('getProtectionLevel', () => {
-      it('98_技能配置 文件夹应为 IMMUTABLE', () => {
-        expect(getProtectionLevel('/98_技能配置', true)).toBe(ProtectionLevel.IMMUTABLE);
+      it('98_技能配置 文件夹应为 AUTO_REBUILD', () => {
+        expect(getProtectionLevel('/98_技能配置', true)).toBe(ProtectionLevel.AUTO_REBUILD);
       });
 
-      it('99_创作规范 文件夹应为 IMMUTABLE', () => {
-        expect(getProtectionLevel('/99_创作规范', true)).toBe(ProtectionLevel.IMMUTABLE);
+      it('99_创作规范 文件夹应为 NONE (不再受保护)', () => {
+        expect(getProtectionLevel('/99_创作规范', true)).toBe(ProtectionLevel.NONE);
       });
 
-      it('subskill 文件夹应为 IMMUTABLE', () => {
-        expect(getProtectionLevel('/98_技能配置/subskill', true)).toBe(ProtectionLevel.IMMUTABLE);
+      it('skills 分类子文件夹无单独保护', () => {
+        // 子文件夹没有单独的保护规则，继承父文件夹的 NONE 或不匹配任何规则
+        expect(getProtectionLevel('/98_技能配置/skills/核心', true)).toBe(ProtectionLevel.NONE);
+        expect(getProtectionLevel('/98_技能配置/skills/创作', true)).toBe(ProtectionLevel.NONE);
       });
 
-      it('agent_core.md 应为 AUTO_REBUILD', () => {
-        expect(getProtectionLevel('/98_技能配置/agent_core.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      it('agent_core.md 应为 NONE', () => {
+        expect(getProtectionLevel('/98_技能配置/skills/核心/agent_core.md', false)).toBe(ProtectionLevel.NONE);
       });
 
-      it('subskill下技能文件应为 AUTO_REBUILD', () => {
-        expect(getProtectionLevel('/98_技能配置/subskill/技能_大纲构建.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      it('skills下技能文件应为 AUTO_REBUILD', () => {
+        expect(getProtectionLevel('/98_技能配置/skills/规划/技能_大纲构建.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+        expect(getProtectionLevel('/98_技能配置/skills/创作/技能_正文扩写.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
       });
 
-      it('99_创作规范下文件应为 AUTO_REBUILD', () => {
-        expect(getProtectionLevel('/99_创作规范/指南_文风规范.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
-        expect(getProtectionLevel('/99_创作规范/模板_项目档案.md', false)).toBe(ProtectionLevel.AUTO_REBUILD);
+      it('99_创作规范下文件应为 NONE (不再受保护)', () => {
+        expect(getProtectionLevel('/99_创作规范/指南_文风规范.md', false)).toBe(ProtectionLevel.NONE);
+        expect(getProtectionLevel('/99_创作规范/模板_项目档案.md', false)).toBe(ProtectionLevel.NONE);
       });
 
       it('长期记忆.json 应为 PERSISTENT', () => {
@@ -455,16 +463,19 @@ describe('FileService - 文件系统域逻辑', () => {
   });
 
   describe('FileService canModifyContent', () => {
-    it('IMMUTABLE 文件不可修改内容', () => {
+    it('IMMUTABLE 级别文件不可修改内容', () => {
+      // 直接测试 protectionRegistry 的 canModifyContent 对 IMMUTABLE 的处理
+      expect(canModifyContent(ProtectionLevel.IMMUTABLE)).toBe(false);
+    });
+
+    it('AUTO_REBUILD 文件夹可修改内容', () => {
       const allFiles: FileNode[] = [
         { id: 'root', parentId: '', name: 'root', type: FileType.FOLDER, lastModified: Date.now() },
         { id: 'skill-folder', parentId: 'root', name: '98_技能配置', type: FileType.FOLDER, lastModified: Date.now() },
-        { id: 'agent-core', parentId: 'skill-folder', name: 'agent_core.md', type: FileType.FILE, content: 'core', lastModified: Date.now() },
       ];
-      // 98_技能配置 folder is IMMUTABLE - but it's a folder, not a file with content
-      // Let's test with the folder itself
       const skillFolder = allFiles[1];
-      expect(fileService.canModifyContent(skillFolder, allFiles)).toBe(false);
+      // 98_技能配置 folder is AUTO_REBUILD: can modify content
+      expect(fileService.canModifyContent(skillFolder, allFiles)).toBe(true);
     });
 
     it('PERSISTENT 文件可修改内容', () => {
